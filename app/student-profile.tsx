@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
 
 type StudentProfile = {
+  profilePhotoUrl: string;
   headline: string;
   about: string;
   skills: string[];
@@ -74,6 +75,14 @@ export default function StudentProfileScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Student Profile</Text>
       <Text style={styles.sub}>Profile completeness: {profile.profileCompleteness || 0}%</Text>
+
+      <Text style={styles.label}>Profile Photo URL</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="https://your-image-link.com/photo.jpg"
+        value={profile.profilePhotoUrl || ""}
+        onChangeText={(profilePhotoUrl) => setProfile((prev) => (prev ? { ...prev, profilePhotoUrl } : prev))}
+      />
 
       <Text style={styles.label}>Headline</Text>
       <TextInput

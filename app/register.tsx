@@ -3,6 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
+import { Ionicons } from "@expo/vector-icons";
 
 type Role = "student" | "mentor";
 
@@ -13,6 +14,7 @@ export default function RegisterScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<Role>("student");
   const [domain, setDomain] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -42,22 +44,38 @@ export default function RegisterScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.heading}>Create Account</Text>
-      <TextInput style={styles.input} placeholder="Full name" value={name} onChangeText={setName} />
+      <Text style={styles.label}>Full Name</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Full name"
+        placeholderTextColor="#6B7280"
+        value={name}
+        onChangeText={setName}
+      />
+      <Text style={styles.label}>Email</Text>
       <TextInput
         style={styles.input}
         placeholder="Email"
+        placeholderTextColor="#6B7280"
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
         onChangeText={setEmail}
       />
-      <TextInput
-        style={styles.input}
-        placeholder="Password (min 8 characters)"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+      <Text style={styles.label}>Password</Text>
+      <View style={styles.passwordWrap}>
+        <TextInput
+          style={styles.passwordInput}
+          placeholder="Password (min 8 characters)"
+          placeholderTextColor="#6B7280"
+          secureTextEntry={!showPassword}
+          value={password}
+          onChangeText={setPassword}
+        />
+        <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeButton}>
+          <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#0B3D2E" />
+        </TouchableOpacity>
+      </View>
 
       <Text style={styles.label}>Role</Text>
       <View style={styles.roleRow}>
@@ -83,6 +101,7 @@ export default function RegisterScreen() {
         <TextInput
           style={styles.input}
           placeholder="Mentor domain (e.g. Technology & AI)"
+          placeholderTextColor="#6B7280"
           value={domain}
           onChangeText={setDomain}
         />
@@ -148,6 +167,23 @@ const styles = StyleSheet.create({
   },
   roleButtonTextActive: {
     color: "#1F7A4C"
+  },
+  passwordWrap: {
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    borderColor: "#D0D5DD",
+    borderWidth: 1,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center"
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 13
+  },
+  eyeButton: {
+    paddingHorizontal: 12
   },
   button: {
     backgroundColor: "#1F7A4C",

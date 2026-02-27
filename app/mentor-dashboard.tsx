@@ -79,6 +79,14 @@ export default function MentorDashboard() {
     <View style={styles.container}>
       <Text style={styles.heading}>Mentor Dashboard</Text>
       <Text style={styles.subheading}>Manage incoming booking requests.</Text>
+      {user.status !== "approved" ? (
+        <View style={styles.pendingBanner}>
+          <Text style={styles.pendingText}>
+            Your mentor account is pending admin approval. You can view your dashboard, but students may not see your
+            public profile until approval.
+          </Text>
+        </View>
+      ) : null}
       <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/mentor-profile" as never)}>
         <Text style={styles.secondaryCtaText}>Edit LinkedIn-Style Profile</Text>
       </TouchableOpacity>
@@ -145,6 +153,19 @@ const styles = StyleSheet.create({
     marginBottom: 14
   },
   secondaryCtaText: { color: "#1F7A4C", fontWeight: "700" },
+  pendingBanner: {
+    backgroundColor: "#FFF4E5",
+    borderWidth: 1,
+    borderColor: "#F8D6A3",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12
+  },
+  pendingText: {
+    color: "#8A4B00",
+    fontWeight: "600",
+    lineHeight: 20
+  },
   card: {
     backgroundColor: "#fff",
     borderWidth: 1,

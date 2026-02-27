@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -20,6 +21,7 @@ type MentorProfileResponse = {
     domain?: string;
   };
   profile: {
+    profilePhotoUrl?: string;
     title?: string;
     company?: string;
     about?: string;
@@ -30,6 +32,10 @@ type MentorProfileResponse = {
     rankingTier?: string;
   } | null;
 };
+
+function avatarInitial(name: string) {
+  return name?.trim()?.charAt(0)?.toUpperCase() || "M";
+}
 
 type TimeSlot = {
   label: string;
@@ -146,6 +152,13 @@ export default function MentorProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
+      {mentor.profile?.profilePhotoUrl ? (
+        <Image source={{ uri: mentor.profile.profilePhotoUrl }} style={styles.profileImage} />
+      ) : (
+        <View style={styles.profileImageFallback}>
+          <Text style={styles.profileImageInitial}>{avatarInitial(mentor.user.name)}</Text>
+        </View>
+      )}
       <Text style={styles.heading}>{mentor.user.name}</Text>
       <Text style={styles.meta}>{mentor.user.email}</Text>
       <Text style={styles.domain}>{mentor.user.domain || "General"}</Text>
@@ -211,6 +224,28 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
     color: "#1E2B24"
+  },
+  profileImage: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 2,
+    borderColor: "#D0D5DD",
+    marginBottom: 12
+  },
+  profileImageFallback: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "#E6F4ED",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 12
+  },
+  profileImageInitial: {
+    color: "#0B3D2E",
+    fontSize: 34,
+    fontWeight: "700"
   },
   meta: {
     marginTop: 6,

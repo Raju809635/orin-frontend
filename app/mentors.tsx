@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, FlatList, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 
@@ -8,9 +8,16 @@ type Mentor = {
   name: string;
   email: string;
   domain?: string;
+  profilePhotoUrl?: string;
+  title?: string;
+  verifiedBadge?: boolean;
   role: "mentor";
   status: "approved";
 };
+
+function avatarInitial(name: string) {
+  return name?.trim()?.charAt(0)?.toUpperCase() || "M";
+}
 
 export default function MentorsScreen() {
   const router = useRouter();
@@ -82,9 +89,22 @@ export default function MentorsScreen() {
               style={styles.card}
               onPress={() => router.push(`/mentor/${item._id}` as never)}
             >
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.email}>{item.email}</Text>
-              <Text style={styles.domain}>{item.domain || "General"}</Text>
+              <View style={styles.row}>
+                {item.profilePhotoUrl ? (
+                  <Image source={{ uri: item.profilePhotoUrl }} style={styles.avatar} />
+                ) : (
+                  <View style={styles.avatarFallback}>
+                    <Text style={styles.avatarInitial}>{avatarInitial(item.name)}</Text>
+                  </View>
+                )}
+                <View style={styles.info}>
+                  <Text style={styles.name}>
+                    {item.name} {item.verifiedBadge ? "• Verified" : ""}
+                  </Text>
+                  <Text style={styles.email}>{item.email}</Text>
+                  <Text style={styles.domain}>{item.title || item.domain || "General Mentor"}</Text>
+                </View>
+              </View>
             </TouchableOpacity>
           )}
           ListEmptyComponent={
@@ -132,6 +152,34 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: "#EAECF0"
+  },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  info: {
+    flex: 1
+  },
+  avatar: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: "#D0D5DD"
+  },
+  avatarFallback: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: "#E6F4ED",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  avatarInitial: {
+    color: "#0B3D2E",
+    fontWeight: "700",
+    fontSize: 18
   },
   name: {
     fontSize: 16,

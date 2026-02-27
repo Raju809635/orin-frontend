@@ -3,6 +3,7 @@ import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View 
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
+import { Ionicons } from "@expo/vector-icons";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -10,6 +11,7 @@ export default function LoginScreen() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -31,21 +33,30 @@ export default function LoginScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>Login</Text>
+      <Text style={styles.label}>Email</Text>
       <TextInput
         style={styles.input}
         placeholder="Email"
+        placeholderTextColor="#6B7280"
         autoCapitalize="none"
         keyboardType="email-address"
         value={email}
         onChangeText={setEmail}
       />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-      />
+      <Text style={styles.label}>Password</Text>
+      <View style={styles.passwordWrap}>
+        <TextInput
+          style={styles.passwordInput}
+          placeholder="Password"
+          placeholderTextColor="#6B7280"
+          secureTextEntry={!showPassword}
+          value={password}
+          onChangeText={setPassword}
+        />
+        <TouchableOpacity onPress={() => setShowPassword((v) => !v)} style={styles.eyeButton}>
+          <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#0B3D2E" />
+        </TouchableOpacity>
+      </View>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <TouchableOpacity style={styles.button} onPress={handleLogin} disabled={isSubmitting}>
         {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Login</Text>}
@@ -70,6 +81,11 @@ const styles = StyleSheet.create({
     color: "#1E2B24",
     marginBottom: 16
   },
+  label: {
+    color: "#344054",
+    fontWeight: "600",
+    marginBottom: 6
+  },
   input: {
     backgroundColor: "#FFF",
     borderRadius: 12,
@@ -78,6 +94,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderColor: "#D0D5DD",
     borderWidth: 1
+  },
+  passwordWrap: {
+    backgroundColor: "#FFF",
+    borderRadius: 12,
+    borderColor: "#D0D5DD",
+    borderWidth: 1,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center"
+  },
+  passwordInput: {
+    flex: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 13
+  },
+  eyeButton: {
+    paddingHorizontal: 12
   },
   button: {
     backgroundColor: "#1F7A4C",
