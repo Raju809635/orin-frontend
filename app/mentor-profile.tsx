@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
+import { ORIN_CATEGORIES, PRIMARY_CATEGORIES } from "@/constants/categories";
 
 type MentorProfile = {
   profilePhotoUrl: string;
@@ -9,6 +10,10 @@ type MentorProfile = {
   company: string;
   experienceYears: number;
   expertiseDomains: string[];
+  primaryCategory: string;
+  subCategory: string;
+  sessionPrice: number;
+  weeklyAvailabilitySlots: Array<{ day: string; startTime: string; endTime: string }>;
   about: string;
   achievements: string[];
   linkedInUrl: string;
@@ -17,6 +22,7 @@ type MentorProfile = {
 
 export default function MentorProfileScreen() {
   const [profile, setProfile] = useState<MentorProfile | null>(null);
+  const [availabilityText, setAvailabilityText] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,7 +32,13 @@ export default function MentorProfileScreen() {
     (async () => {
       try {
         const { data } = await api.get("/api/profiles/mentor/me");
-        if (mounted) setProfile(data.profile);
+        if (mounted) {
+          setProfile(data.profile);
+          const text = (data.profile.weeklyAvailabilitySlots || [])
+            .map((slot: any) => `${slot.day} ${slot.startTime}-${slot.endTime}`)
+            .join(", ");
+          setAvailabilityText(text);
+        }
       } catch (e: any) {
         if (mounted) setError(e?.response?.data?.message || "Failed to load profile");
       } finally {
@@ -43,7 +55,25 @@ export default function MentorProfileScreen() {
     try {
       setSaving(true);
       setError(null);
-      const { data } = await api.patch("/api/profiles/mentor/me", profile);
+      const weeklyAvailabilitySlots = availabilityText
+        .split(",")
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+        .map((entry) => {
+          const [dayPart, timePart] = entry.split(" ");
+          const [startTime, endTime] = (timePart || "").split("-");
+          return {
+            day: dayPart || "",
+            startTime: startTime || "",
+            endTime: endTime || ""
+          };
+        })
+        .filter((slot) => slot.day && slot.startTime && slot.endTime);
+
+      const { data } = await api.patch("/api/profiles/mentor/me", {
+        ...profile,
+        weeklyAvailabilitySlots
+      });
       setProfile(data.profile);
       notify("Mentor profile updated");
     } catch (e: any) {
@@ -68,6 +98,8 @@ export default function MentorProfileScreen() {
       </View>
     );
   }
+
+  const subCategories = ORIN_CATEGORIES[profile.primaryCategory] || [];
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -106,23 +138,90 @@ export default function MentorProfileScreen() {
         }
       />
 
-      <Text style={styles.label}>Expertise Domains (comma separated)</Text>
+      <Text style={styles.label}>Primary Category</Text>
+      <View style={styles.domainWrap}>
+        {PRIMARY_CATEGORIES.map((domain) => {
+          const selected = profile.primaryCategory === domain;
+          return (
+            <TouchableOpacity
+              key={domain}
+              style={[styles.domainChip, selected && styles.domainChipActive]}
+              onPress={() =>
+                setProfile((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        primaryCategory: domain,
+                        subCategory: ORIN_CATEGORIES[domain]?.[0] || "",
+                        expertiseDomains: []
+                      }
+                    : prev
+                )
+              }
+            >
+              <Text style={[styles.domainChipText, selected && styles.domainChipTextActive]}>{domain}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <Text style={styles.label}>Subcategory</Text>
+      <View style={styles.domainWrap}>
+        {subCategories.map((item) => {
+          const selected = profile.subCategory === item;
+          return (
+            <TouchableOpacity
+              key={item}
+              style={[styles.domainChip, selected && styles.domainChipActive]}
+              onPress={() => setProfile((prev) => (prev ? { ...prev, subCategory: item } : prev))}
+            >
+              <Text style={[styles.domainChipText, selected && styles.domainChipTextActive]}>{item}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <Text style={styles.label}>Specializations</Text>
+      <View style={styles.domainWrap}>
+        {subCategories.map((domain) => {
+          const selected = (profile.expertiseDomains || []).includes(domain);
+          return (
+            <TouchableOpacity
+              key={domain}
+              style={[styles.domainChip, selected && styles.domainChipActive]}
+              onPress={() =>
+                setProfile((prev) => {
+                  if (!prev) return prev;
+                  const current = prev.expertiseDomains || [];
+                  const next = current.includes(domain)
+                    ? current.filter((item) => item !== domain)
+                    : [...current, domain];
+                  return { ...prev, expertiseDomains: next };
+                })
+              }
+            >
+              <Text style={[styles.domainChipText, selected && styles.domainChipTextActive]}>{domain}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <Text style={styles.label}>Session Price (INR)</Text>
       <TextInput
         style={styles.input}
-        value={(profile.expertiseDomains || []).join(", ")}
+        keyboardType="numeric"
+        value={String(profile.sessionPrice || 0)}
         onChangeText={(val) =>
-          setProfile((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  expertiseDomains: val
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean)
-                }
-              : prev
-          )
+          setProfile((prev) => (prev ? { ...prev, sessionPrice: Number(val || 0) } : prev))
         }
+      />
+
+      <Text style={styles.label}>Availability Schedule</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Mon 18:00-20:00, Tue 19:00-21:00"
+        value={availabilityText}
+        onChangeText={setAvailabilityText}
       />
 
       <Text style={styles.label}>About</Text>
@@ -173,6 +272,32 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: "700", color: "#0B3D2E" },
   sub: { marginTop: 6, marginBottom: 16, color: "#475467" },
   label: { marginTop: 10, marginBottom: 6, fontWeight: "600", color: "#1E2B24" },
+  domainWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 4
+  },
+  domainChip: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#fff"
+  },
+  domainChipActive: {
+    borderColor: "#0B3D2E",
+    backgroundColor: "#E8F5EE"
+  },
+  domainChipText: {
+    color: "#344054",
+    fontWeight: "600",
+    fontSize: 13
+  },
+  domainChipTextActive: {
+    color: "#0B3D2E"
+  },
   input: {
     backgroundColor: "#fff",
     borderRadius: 12,

@@ -9,8 +9,8 @@ type PendingMentor = {
   _id: string;
   name: string;
   email: string;
-  domain?: string;
-  status: "pending" | "approved";
+  primaryCategory?: string;
+  approvalStatus: "pending" | "approved" | "rejected";
 };
 
 export default function AdminDashboard() {
@@ -54,7 +54,7 @@ export default function AdminDashboard() {
     }
   }
 
-  if (user?.role !== "admin") {
+  if (!user?.isAdmin) {
     return (
       <View style={styles.centered}>
         <Text style={styles.error}>Access denied for current role.</Text>
@@ -84,7 +84,7 @@ export default function AdminDashboard() {
             <View style={styles.card}>
               <Text style={styles.title}>{item.name}</Text>
               <Text style={styles.meta}>{item.email}</Text>
-              <Text style={styles.meta}>Domain: {item.domain || "Not set"}</Text>
+              <Text style={styles.meta}>Primary Category: {item.primaryCategory || "Not set"}</Text>
               <TouchableOpacity style={styles.approveButton} onPress={() => approveMentor(item._id)}>
                 <Text style={styles.approveText}>Approve</Text>
               </TouchableOpacity>

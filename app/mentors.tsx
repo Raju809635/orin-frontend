@@ -7,7 +7,9 @@ type Mentor = {
   _id: string;
   name: string;
   email: string;
-  domain?: string;
+  primaryCategory?: string;
+  subCategory?: string;
+  specializations?: string[];
   profilePhotoUrl?: string;
   title?: string;
   verifiedBadge?: boolean;
@@ -21,8 +23,10 @@ function avatarInitial(name: string) {
 
 export default function MentorsScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ domain?: string }>();
-  const domain = useMemo(() => (params.domain || "").trim(), [params.domain]);
+  const params = useLocalSearchParams<{ primary?: string; sub?: string; spec?: string }>();
+  const primary = useMemo(() => (params.primary || "").trim(), [params.primary]);
+  const sub = useMemo(() => (params.sub || "").trim(), [params.sub]);
+  const spec = useMemo(() => (params.spec || "").trim(), [params.spec]);
 
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,8 +36,8 @@ export default function MentorsScreen() {
     let isMounted = true;
 
     async function fetchMentors() {
-      if (!domain) {
-        setErrorMessage("Domain not provided.");
+      if (!primary && !sub && !spec) {
+        setErrorMessage("Please choose at least one filter.");
         setIsLoading(false);
         return;
       }
@@ -41,7 +45,13 @@ export default function MentorsScreen() {
       try {
         setIsLoading(true);
         setErrorMessage(null);
-        const response = await api.get<Mentor[]>(`/api/mentors/by-domain/${encodeURIComponent(domain)}`);
+        const response = await api.get<Mentor[]>("/api/mentors/filter", {
+          params: {
+            primary,
+            sub,
+            spec
+          }
+        });
         if (isMounted) {
           setMentors(response.data);
         }
@@ -61,11 +71,11 @@ export default function MentorsScreen() {
     return () => {
       isMounted = false;
     };
-  }, [domain]);
+  }, [primary, sub, spec]);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>{domain || "Mentors"}</Text>
+      <Text style={styles.heading}>{primary || "Mentors"}</Text>
 
       {isLoading ? (
         <View style={styles.centered}>
@@ -102,14 +112,14 @@ export default function MentorsScreen() {
                     {item.name} {item.verifiedBadge ? "• Verified" : ""}
                   </Text>
                   <Text style={styles.email}>{item.email}</Text>
-                  <Text style={styles.domain}>{item.title || item.domain || "General Mentor"}</Text>
+                  <Text style={styles.domain}>{item.title || item.subCategory || item.primaryCategory || "Mentor"}</Text>
                 </View>
               </View>
             </TouchableOpacity>
           )}
           ListEmptyComponent={
             <View style={styles.centered}>
-              <Text style={styles.statusText}>No approved mentors found for this domain.</Text>
+              <Text style={styles.statusText}>No approved mentors found for selected filters.</Text>
             </View>
           }
         />

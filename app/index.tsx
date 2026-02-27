@@ -29,11 +29,11 @@ export default function HomeScreen() {
   }, [scaleAnim]);
 
   const dashboardRoute =
-    user?.role === "admin"
-      ? "/admin-dashboard"
-      : user?.role === "mentor"
+    user?.role === "mentor"
+      ? user?.approvalStatus === "approved"
         ? "/mentor-dashboard"
-        : "/student-dashboard";
+        : "/mentor-pending"
+      : "/student-dashboard";
 
   return (
     <View style={styles.container}>

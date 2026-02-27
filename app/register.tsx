@@ -16,7 +16,6 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<Role>("student");
-  const [domain, setDomain] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,11 +27,14 @@ export default function RegisterScreen() {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
-        role,
-        domain: role === "mentor" ? domain.trim() : undefined
+        role
       });
-      notify("Registration successful. Please login.");
-      router.replace("/login" as never);
+      if (role === "mentor") {
+        router.replace("/mentor-awaiting" as never);
+      } else {
+        notify("Registration successful. Please login.");
+        router.replace("/login" as never);
+      }
     } catch (e: any) {
       const message = e?.response?.data?.message || "Registration failed.";
       setError(message);
@@ -98,13 +100,11 @@ export default function RegisterScreen() {
       </View>
 
       {role === "mentor" ? (
-        <TextInput
-          style={styles.input}
-          placeholder="Mentor domain (e.g. Technology & AI)"
-          placeholderTextColor="#6B7280"
-          value={domain}
-          onChangeText={setDomain}
-        />
+        <View style={styles.infoCard}>
+          <Text style={styles.infoText}>
+            Mentor registrations are reviewed by admin. You can complete category and specialization after approval.
+          </Text>
+        </View>
       ) : null}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -167,6 +167,19 @@ const styles = StyleSheet.create({
   },
   roleButtonTextActive: {
     color: "#1F7A4C"
+  },
+  infoCard: {
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: "#EEF7F2",
+    borderWidth: 1,
+    borderColor: "#CFE4D8"
+  },
+  infoText: {
+    color: "#0B3D2E",
+    fontWeight: "600",
+    lineHeight: 20
   },
   passwordWrap: {
     backgroundColor: "#FFF",

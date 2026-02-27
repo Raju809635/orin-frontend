@@ -18,7 +18,10 @@ type MentorProfileResponse = {
     _id: string;
     name: string;
     email: string;
-    domain?: string;
+    primaryCategory?: string;
+    subCategory?: string;
+    specializations?: string[];
+    sessionPrice?: number;
   };
   profile: {
     profilePhotoUrl?: string;
@@ -161,7 +164,8 @@ export default function MentorProfileScreen() {
       )}
       <Text style={styles.heading}>{mentor.user.name}</Text>
       <Text style={styles.meta}>{mentor.user.email}</Text>
-      <Text style={styles.domain}>{mentor.user.domain || "General"}</Text>
+      <Text style={styles.domain}>{mentor.user.subCategory || mentor.user.primaryCategory || "General"}</Text>
+      {mentor.user.sessionPrice ? <Text style={styles.meta}>Session Price: INR {mentor.user.sessionPrice}</Text> : null}
       <Text style={styles.meta}>{mentor.profile?.title || "Mentor"}</Text>
       <Text style={styles.bio}>{mentor.profile?.about?.trim() || "No bio added yet."}</Text>
 

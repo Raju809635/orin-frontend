@@ -7,9 +7,12 @@ export type AuthUser = {
   id: string;
   name: string;
   email: string;
-  role: "student" | "mentor" | "admin";
-  status?: "pending" | "approved";
-  domain?: string;
+  role: "student" | "mentor";
+  isAdmin?: boolean;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  primaryCategory?: string;
+  subCategory?: string;
+  specializations?: string[];
 };
 
 export async function saveAuthSession(token: string, user: AuthUser) {

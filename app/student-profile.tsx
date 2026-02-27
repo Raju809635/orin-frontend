@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
+import { PRIMARY_CATEGORIES } from "@/constants/categories";
 
 type StudentProfile = {
   profilePhotoUrl: string;
@@ -9,6 +10,11 @@ type StudentProfile = {
   about: string;
   skills: string[];
   careerGoals: string;
+  educationLevel: string;
+  targetExam: string;
+  interestedCategories: string[];
+  preferredLanguage: string;
+  goals: string;
   profileCompleteness: number;
   resumeUrl: string;
 };
@@ -24,7 +30,16 @@ export default function StudentProfileScreen() {
     (async () => {
       try {
         const { data } = await api.get("/api/profiles/student/me");
-        if (mounted) setProfile(data.profile);
+        if (mounted) {
+          setProfile({
+            ...data.profile,
+            educationLevel: data.user?.educationLevel || "",
+            targetExam: data.user?.targetExam || "",
+            interestedCategories: data.user?.interestedCategories || [],
+            preferredLanguage: data.user?.preferredLanguage || "",
+            goals: data.user?.goals || ""
+          });
+        }
       } catch (e: any) {
         if (mounted) setError(e?.response?.data?.message || "Failed to load profile");
       } finally {
@@ -125,6 +140,57 @@ export default function StudentProfileScreen() {
         onChangeText={(careerGoals) => setProfile((prev) => (prev ? { ...prev, careerGoals } : prev))}
       />
 
+      <Text style={styles.label}>Education Level</Text>
+      <TextInput
+        style={styles.input}
+        value={profile.educationLevel || ""}
+        onChangeText={(educationLevel) => setProfile((prev) => (prev ? { ...prev, educationLevel } : prev))}
+      />
+
+      <Text style={styles.label}>Target Exam</Text>
+      <TextInput
+        style={styles.input}
+        value={profile.targetExam || ""}
+        onChangeText={(targetExam) => setProfile((prev) => (prev ? { ...prev, targetExam } : prev))}
+      />
+
+      <Text style={styles.label}>Interested Categories</Text>
+      <View style={styles.chipWrap}>
+        {PRIMARY_CATEGORIES.map((category) => {
+          const selected = (profile.interestedCategories || []).includes(category);
+          return (
+            <TouchableOpacity
+              key={category}
+              style={[styles.chip, selected && styles.chipActive]}
+              onPress={() =>
+                setProfile((prev) => {
+                  if (!prev) return prev;
+                  const current = prev.interestedCategories || [];
+                  const next = selected ? current.filter((item) => item !== category) : [...current, category];
+                  return { ...prev, interestedCategories: next };
+                })
+              }
+            >
+              <Text style={[styles.chipText, selected && styles.chipTextActive]}>{category}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <Text style={styles.label}>Preferred Language</Text>
+      <TextInput
+        style={styles.input}
+        value={profile.preferredLanguage || ""}
+        onChangeText={(preferredLanguage) => setProfile((prev) => (prev ? { ...prev, preferredLanguage } : prev))}
+      />
+
+      <Text style={styles.label}>Goals</Text>
+      <TextInput
+        style={[styles.input, styles.multiline]}
+        value={profile.goals || ""}
+        onChangeText={(goals) => setProfile((prev) => (prev ? { ...prev, goals } : prev))}
+      />
+
       <Text style={styles.label}>Resume URL</Text>
       <TextInput
         style={styles.input}
@@ -146,6 +212,18 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: "700", color: "#0B3D2E" },
   sub: { marginTop: 6, marginBottom: 16, color: "#475467" },
   label: { marginTop: 10, marginBottom: 6, fontWeight: "600", color: "#1E2B24" },
+  chipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 4 },
+  chip: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#fff"
+  },
+  chipActive: { borderColor: "#0B3D2E", backgroundColor: "#E8F5EE" },
+  chipText: { color: "#344054", fontWeight: "600", fontSize: 13 },
+  chipTextActive: { color: "#0B3D2E" },
   input: {
     backgroundColor: "#fff",
     borderRadius: 12,
