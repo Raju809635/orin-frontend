@@ -63,6 +63,9 @@ export default function StudentDashboard() {
       <TouchableOpacity style={styles.cta} onPress={() => router.push("/domains")}>
         <Text style={styles.ctaText}>Find Mentors</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/student-profile" as never)}>
+        <Text style={styles.secondaryCtaText}>Edit LinkedIn-Style Profile</Text>
+      </TouchableOpacity>
 
       {isLoading ? (
         <View style={styles.centered}>
@@ -102,6 +105,15 @@ const styles = StyleSheet.create({
   subheading: { marginTop: 4, marginBottom: 12, color: "#475467" },
   cta: { backgroundColor: "#1F7A4C", padding: 12, borderRadius: 12, alignItems: "center", marginBottom: 14 },
   ctaText: { color: "#fff", fontWeight: "700" },
+  secondaryCta: {
+    borderColor: "#1F7A4C",
+    borderWidth: 1.5,
+    padding: 11,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 14
+  },
+  secondaryCtaText: { color: "#1F7A4C", fontWeight: "700" },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   card: {
     backgroundColor: "#fff",

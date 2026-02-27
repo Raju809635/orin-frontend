@@ -9,6 +9,7 @@ import {
   View
 } from "react-native";
 import { useFocusEffect } from "expo-router";
+import { useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
@@ -25,6 +26,7 @@ type Booking = {
 };
 
 export default function MentorDashboard() {
+  const router = useRouter();
   const { user, logout } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -77,6 +79,9 @@ export default function MentorDashboard() {
     <View style={styles.container}>
       <Text style={styles.heading}>Mentor Dashboard</Text>
       <Text style={styles.subheading}>Manage incoming booking requests.</Text>
+      <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/mentor-profile" as never)}>
+        <Text style={styles.secondaryCtaText}>Edit LinkedIn-Style Profile</Text>
+      </TouchableOpacity>
 
       {isLoading ? (
         <View style={styles.centered}>
@@ -131,6 +136,15 @@ const styles = StyleSheet.create({
   heading: { fontSize: 24, fontWeight: "700", color: "#1E2B24" },
   subheading: { marginTop: 4, marginBottom: 12, color: "#475467" },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
+  secondaryCta: {
+    borderColor: "#1F7A4C",
+    borderWidth: 1.5,
+    padding: 11,
+    borderRadius: 12,
+    alignItems: "center",
+    marginBottom: 14
+  },
+  secondaryCtaText: { color: "#1F7A4C", fontWeight: "700" },
   card: {
     backgroundColor: "#fff",
     borderWidth: 1,

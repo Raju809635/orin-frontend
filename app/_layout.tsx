@@ -26,6 +26,7 @@ function RootDrawer() {
       pathname.startsWith("/domains") ||
       pathname.startsWith("/mentors") ||
       pathname.startsWith("/mentor/") ||
+      pathname.startsWith("/settings") ||
       pathname.startsWith("/student-dashboard") ||
       pathname.startsWith("/mentor-dashboard") ||
       pathname.startsWith("/admin-dashboard");
@@ -63,15 +64,24 @@ function RootDrawer() {
   return (
     <Drawer
       screenOptions={{
-        headerStyle: { backgroundColor: "#1F7A4C" },
+        headerStyle: { backgroundColor: "#0B3D2E" },
         headerTintColor: "#fff",
-        drawerActiveTintColor: "#1F7A4C"
+        drawerActiveTintColor: "#0B3D2E",
+        drawerStyle: { backgroundColor: "#F4FBF7" }
       }}
     >
       <Drawer.Screen name="index" options={{ title: "Home", drawerLabel: "Home" }} />
       <Drawer.Screen name="login" options={{ title: "Login", drawerLabel: "Login" }} />
       <Drawer.Screen name="register" options={{ title: "Register", drawerLabel: "Register" }} />
       <Drawer.Screen name="domains" options={{ title: "Domains", drawerLabel: "Domains" }} />
+      <Drawer.Screen
+        name="settings"
+        options={{
+          title: "Settings",
+          drawerLabel: "Settings",
+          drawerItemStyle: user ? undefined : { display: "none" }
+        }}
+      />
 
       <Drawer.Screen
         name="student-dashboard"
@@ -82,10 +92,26 @@ function RootDrawer() {
         }}
       />
       <Drawer.Screen
+        name="student-profile"
+        options={{
+          title: "Student Profile",
+          drawerLabel: "My Profile",
+          drawerItemStyle: user?.role === "student" ? undefined : { display: "none" }
+        }}
+      />
+      <Drawer.Screen
         name="mentor-dashboard"
         options={{
           title: "Mentor Dashboard",
           drawerLabel: "Mentor Dashboard",
+          drawerItemStyle: user?.role === "mentor" ? undefined : { display: "none" }
+        }}
+      />
+      <Drawer.Screen
+        name="mentor-profile"
+        options={{
+          title: "Mentor Profile",
+          drawerLabel: "My Profile",
           drawerItemStyle: user?.role === "mentor" ? undefined : { display: "none" }
         }}
       />

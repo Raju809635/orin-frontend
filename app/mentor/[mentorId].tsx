@@ -12,13 +12,23 @@ import { useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
 
-type MentorProfile = {
-  _id: string;
-  name: string;
-  email: string;
-  domain?: string;
-  bio?: string;
-  expertise?: string[];
+type MentorProfileResponse = {
+  user: {
+    _id: string;
+    name: string;
+    email: string;
+    domain?: string;
+  };
+  profile: {
+    title?: string;
+    company?: string;
+    about?: string;
+    expertiseDomains?: string[];
+    achievements?: string[];
+    linkedInUrl?: string;
+    verifiedBadge?: boolean;
+    rankingTier?: string;
+  } | null;
 };
 
 type TimeSlot = {
@@ -51,7 +61,7 @@ export default function MentorProfileScreen() {
   const mentorId = useMemo(() => (params.mentorId || "").trim(), [params.mentorId]);
   const slots = useMemo(() => buildTimeSlots(), []);
 
-  const [mentor, setMentor] = useState<MentorProfile | null>(null);
+  const [mentor, setMentor] = useState<MentorProfileResponse | null>(null);
   const [selectedSlot, setSelectedSlot] = useState(slots[0]?.iso || "");
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -71,7 +81,7 @@ export default function MentorProfileScreen() {
       try {
         setIsLoading(true);
         setError(null);
-        const { data } = await api.get<MentorProfile>(`/api/mentors/${mentorId}`);
+        const { data } = await api.get<MentorProfileResponse>(`/api/profiles/mentor/${mentorId}`);
         if (mounted) {
           setMentor(data);
         }
@@ -136,14 +146,15 @@ export default function MentorProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.heading}>{mentor.name}</Text>
-      <Text style={styles.meta}>{mentor.email}</Text>
-      <Text style={styles.domain}>{mentor.domain || "General"}</Text>
-      <Text style={styles.bio}>{mentor.bio?.trim() || "No bio added yet."}</Text>
+      <Text style={styles.heading}>{mentor.user.name}</Text>
+      <Text style={styles.meta}>{mentor.user.email}</Text>
+      <Text style={styles.domain}>{mentor.user.domain || "General"}</Text>
+      <Text style={styles.meta}>{mentor.profile?.title || "Mentor"}</Text>
+      <Text style={styles.bio}>{mentor.profile?.about?.trim() || "No bio added yet."}</Text>
 
       <Text style={styles.sectionTitle}>Expertise</Text>
       <View style={styles.chipWrap}>
-        {(mentor.expertise?.length ? mentor.expertise : ["Mentorship"]).map((item) => (
+        {(mentor.profile?.expertiseDomains?.length ? mentor.profile.expertiseDomains : ["Mentorship"]).map((item) => (
           <View key={item} style={styles.chip}>
             <Text style={styles.chipText}>{item}</Text>
           </View>
