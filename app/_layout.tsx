@@ -22,6 +22,7 @@ function RootDrawer() {
 
     const isAuthScreen = pathname === "/login" || pathname === "/register";
     const isProtected =
+      pathname.startsWith("/ai-assistant") ||
       pathname.startsWith("/complaints") ||
       pathname.startsWith("/chat") ||
       pathname.startsWith("/collaborate") ||
@@ -78,6 +79,14 @@ function RootDrawer() {
         options={{
           title: "Messages",
           drawerLabel: "Messages",
+          drawerItemStyle: user ? undefined : { display: "none" }
+        }}
+      />
+      <Drawer.Screen
+        name="ai-assistant"
+        options={{
+          title: "AI Assistant",
+          drawerLabel: "AI Assistant",
           drawerItemStyle: user ? undefined : { display: "none" }
         }}
       />

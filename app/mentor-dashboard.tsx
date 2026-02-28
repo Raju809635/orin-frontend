@@ -126,6 +126,9 @@ export default function MentorDashboard() {
       <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/chat" as never)}>
         <Text style={styles.secondaryCtaText}>Open Student Messages</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/ai-assistant" as never)}>
+        <Text style={styles.secondaryCtaText}>Ask AI Assistant</Text>
+      </TouchableOpacity>
 
       {isLoading ? (
         <View style={styles.centered}>
