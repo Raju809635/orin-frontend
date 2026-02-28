@@ -22,6 +22,7 @@ function RootDrawer() {
 
     const isAuthScreen = pathname === "/login" || pathname === "/register";
     const isProtected =
+      pathname.startsWith("/chat") ||
       pathname.startsWith("/collaborate") ||
       pathname.startsWith("/domains") ||
       pathname.startsWith("/mentors") ||
@@ -71,6 +72,14 @@ function RootDrawer() {
       <Drawer.Screen name="login" options={{ title: "Login", drawerLabel: "Login" }} />
       <Drawer.Screen name="register" options={{ title: "Register", drawerLabel: "Register" }} />
       <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerLabel: "Collaborate" }} />
+      <Drawer.Screen
+        name="chat"
+        options={{
+          title: "Messages",
+          drawerLabel: "Messages",
+          drawerItemStyle: user ? undefined : { display: "none" }
+        }}
+      />
       <Drawer.Screen name="domains" options={{ title: "Domains", drawerLabel: "Domains" }} />
       <Drawer.Screen
         name="settings"

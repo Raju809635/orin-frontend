@@ -8,9 +8,10 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
+import { useAuth } from "@/context/AuthContext";
 
 type MentorProfileResponse = {
   user: {
@@ -59,6 +60,8 @@ function buildTimeSlots(): TimeSlot[] {
 }
 
 export default function MentorProfileScreen() {
+  const router = useRouter();
+  const { user } = useAuth();
   const params = useLocalSearchParams<{ mentorId?: string }>();
   const mentorId = useMemo(() => (params.mentorId || "").trim(), [params.mentorId]);
   const slots = useMemo(() => buildTimeSlots(), []);
@@ -201,6 +204,15 @@ export default function MentorProfileScreen() {
       <TouchableOpacity style={styles.button} onPress={handleBookSession} disabled={isSubmitting}>
         {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Book Session</Text>}
       </TouchableOpacity>
+
+      {user?.role === "student" ? (
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={() => router.push(`/chat?userId=${mentorId}` as never)}
+        >
+          <Text style={styles.secondaryButtonText}>Message Mentor</Text>
+        </TouchableOpacity>
+      ) : null}
     </ScrollView>
   );
 }
@@ -304,6 +316,19 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "700",
     fontSize: 16
+  },
+  secondaryButton: {
+    marginTop: 10,
+    borderColor: "#1F7A4C",
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: "center"
+  },
+  secondaryButtonText: {
+    color: "#1F7A4C",
+    fontWeight: "700",
+    fontSize: 15
   },
   error: {
     marginTop: 10,

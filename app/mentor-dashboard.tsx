@@ -123,6 +123,9 @@ export default function MentorDashboard() {
       <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/mentor-profile" as never)}>
         <Text style={styles.secondaryCtaText}>Edit LinkedIn-Style Profile</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/chat" as never)}>
+        <Text style={styles.secondaryCtaText}>Open Student Messages</Text>
+      </TouchableOpacity>
 
       {isLoading ? (
         <View style={styles.centered}>
