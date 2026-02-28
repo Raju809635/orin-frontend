@@ -5,10 +5,10 @@ import { Drawer } from "expo-router/drawer";
 import { usePathname, useRouter } from "expo-router";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 
-function defaultRouteByRole(role: "student" | "mentor", approvalStatus?: "pending" | "approved" | "rejected") {
+function defaultRouteByRole(role: "student" | "mentor" | "admin") {
   if (role === "student") return "/student-dashboard";
-  if (role === "mentor" && approvalStatus !== "approved") return "/mentor-pending";
-  return "/mentor-dashboard";
+  if (role === "mentor") return "/mentor-dashboard";
+  return "/admin-dashboard";
 }
 
 function RootDrawer() {
@@ -27,10 +27,9 @@ function RootDrawer() {
       pathname.startsWith("/mentors") ||
       pathname.startsWith("/mentor/") ||
       pathname.startsWith("/settings") ||
-      pathname.startsWith("/collaborate") ||
-      pathname.startsWith("/mentor-pending") ||
       pathname.startsWith("/student-dashboard") ||
-      pathname.startsWith("/mentor-dashboard");
+      pathname.startsWith("/mentor-dashboard") ||
+      pathname.startsWith("/admin-dashboard");
 
     if (!isAuthenticated && isProtected) {
       router.replace("/login" as never);
@@ -38,20 +37,17 @@ function RootDrawer() {
     }
 
     if (isAuthenticated && user && isAuthScreen) {
-      router.replace(defaultRouteByRole(user.role, user.approvalStatus) as never);
+      router.replace(defaultRouteByRole(user.role) as never);
       return;
     }
 
     if (isAuthenticated && user) {
-      if (pathname.startsWith("/mentor-dashboard") && user.role !== "mentor") {
-        router.replace(defaultRouteByRole(user.role, user.approvalStatus) as never);
+      if (pathname.startsWith("/admin-dashboard") && user.role !== "admin") {
+        router.replace(defaultRouteByRole(user.role) as never);
+      } else if (pathname.startsWith("/mentor-dashboard") && user.role !== "mentor") {
+        router.replace(defaultRouteByRole(user.role) as never);
       } else if (pathname.startsWith("/student-dashboard") && user.role !== "student") {
-        router.replace(defaultRouteByRole(user.role, user.approvalStatus) as never);
-      } else if (user.role === "mentor" && user.approvalStatus !== "approved") {
-        const blockedMentorArea = pathname.startsWith("/mentor-dashboard") || pathname.startsWith("/mentor-profile");
-        if (blockedMentorArea) {
-          router.replace("/mentor-pending" as never);
-        }
+        router.replace(defaultRouteByRole(user.role) as never);
       }
     }
   }, [isBootstrapping, isAuthenticated, pathname, router, user]);
@@ -68,16 +64,14 @@ function RootDrawer() {
   return (
     <Drawer
       screenOptions={{
-        headerStyle: { backgroundColor: "#0B3D2E" },
+        headerStyle: { backgroundColor: "#1F7A4C" },
         headerTintColor: "#fff",
-        drawerActiveTintColor: "#0B3D2E",
-        drawerStyle: { backgroundColor: "#F4FBF7" }
+        drawerActiveTintColor: "#1F7A4C"
       }}
     >
       <Drawer.Screen name="index" options={{ title: "Home", drawerLabel: "Home" }} />
       <Drawer.Screen name="login" options={{ title: "Login", drawerLabel: "Login" }} />
       <Drawer.Screen name="register" options={{ title: "Register", drawerLabel: "Register" }} />
-      <Drawer.Screen name="mentor-awaiting" options={{ title: "Awaiting Approval", drawerItemStyle: { display: "none" } }} />
       <Drawer.Screen name="domains" options={{ title: "Domains", drawerLabel: "Domains" }} />
       <Drawer.Screen
         name="settings"
@@ -85,14 +79,6 @@ function RootDrawer() {
           title: "Settings",
           drawerLabel: "Settings",
           drawerItemStyle: user ? undefined : { display: "none" }
-        }}
-      />
-
-      <Drawer.Screen
-        name="collaborate"
-        options={{
-          title: "Collaborate With Us",
-          drawerLabel: "Collaborate With Us"
         }}
       />
 
@@ -117,7 +103,7 @@ function RootDrawer() {
         options={{
           title: "Mentor Dashboard",
           drawerLabel: "Mentor Dashboard",
-          drawerItemStyle: user?.role === "mentor" && user?.approvalStatus === "approved" ? undefined : { display: "none" }
+          drawerItemStyle: user?.role === "mentor" ? undefined : { display: "none" }
         }}
       />
       <Drawer.Screen
@@ -125,15 +111,15 @@ function RootDrawer() {
         options={{
           title: "Mentor Profile",
           drawerLabel: "My Profile",
-          drawerItemStyle: user?.role === "mentor" && user?.approvalStatus === "approved" ? undefined : { display: "none" }
+          drawerItemStyle: user?.role === "mentor" ? undefined : { display: "none" }
         }}
       />
       <Drawer.Screen
-        name="mentor-pending"
+        name="admin-dashboard"
         options={{
-          title: "Approval Status",
-          drawerLabel: "Approval Status",
-          drawerItemStyle: user?.role === "mentor" && user?.approvalStatus !== "approved" ? undefined : { display: "none" }
+          title: "Admin Dashboard",
+          drawerLabel: "Admin Dashboard",
+          drawerItemStyle: user?.role === "admin" ? undefined : { display: "none" }
         }}
       />
 

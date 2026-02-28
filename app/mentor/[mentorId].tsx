@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -18,27 +17,21 @@ type MentorProfileResponse = {
     _id: string;
     name: string;
     email: string;
-    primaryCategory?: string;
-    subCategory?: string;
-    specializations?: string[];
-    sessionPrice?: number;
   };
   profile: {
-    profilePhotoUrl?: string;
     title?: string;
     company?: string;
     about?: string;
     expertiseDomains?: string[];
     achievements?: string[];
     linkedInUrl?: string;
+    primaryCategory?: string;
+    subCategory?: string;
+    specializations?: string[];
     verifiedBadge?: boolean;
     rankingTier?: string;
   } | null;
 };
-
-function avatarInitial(name: string) {
-  return name?.trim()?.charAt(0)?.toUpperCase() || "M";
-}
 
 type TimeSlot = {
   label: string;
@@ -155,23 +148,23 @@ export default function MentorProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {mentor.profile?.profilePhotoUrl ? (
-        <Image source={{ uri: mentor.profile.profilePhotoUrl }} style={styles.profileImage} />
-      ) : (
-        <View style={styles.profileImageFallback}>
-          <Text style={styles.profileImageInitial}>{avatarInitial(mentor.user.name)}</Text>
-        </View>
-      )}
       <Text style={styles.heading}>{mentor.user.name}</Text>
       <Text style={styles.meta}>{mentor.user.email}</Text>
-      <Text style={styles.domain}>{mentor.user.subCategory || mentor.user.primaryCategory || "General"}</Text>
-      {mentor.user.sessionPrice ? <Text style={styles.meta}>Session Price: INR {mentor.user.sessionPrice}</Text> : null}
+      <Text style={styles.domain}>
+        {[mentor.profile?.primaryCategory, mentor.profile?.subCategory].filter(Boolean).join(" > ") || "General"}
+      </Text>
       <Text style={styles.meta}>{mentor.profile?.title || "Mentor"}</Text>
       <Text style={styles.bio}>{mentor.profile?.about?.trim() || "No bio added yet."}</Text>
 
       <Text style={styles.sectionTitle}>Expertise</Text>
       <View style={styles.chipWrap}>
-        {(mentor.profile?.expertiseDomains?.length ? mentor.profile.expertiseDomains : ["Mentorship"]).map((item) => (
+        {(
+          mentor.profile?.specializations?.length
+            ? mentor.profile.specializations
+            : mentor.profile?.expertiseDomains?.length
+              ? mentor.profile.expertiseDomains
+              : ["Mentorship"]
+        ).map((item) => (
           <View key={item} style={styles.chip}>
             <Text style={styles.chipText}>{item}</Text>
           </View>
@@ -228,28 +221,6 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: "700",
     color: "#1E2B24"
-  },
-  profileImage: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 2,
-    borderColor: "#D0D5DD",
-    marginBottom: 12
-  },
-  profileImageFallback: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: "#E6F4ED",
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 12
-  },
-  profileImageInitial: {
-    color: "#0B3D2E",
-    fontSize: 34,
-    fontWeight: "700"
   },
   meta: {
     marginTop: 6,
