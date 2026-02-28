@@ -66,6 +66,9 @@ export default function StudentDashboard() {
       <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/chat" as never)}>
         <Text style={styles.secondaryCtaText}>Open Messages</Text>
       </TouchableOpacity>
+      <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/complaints" as never)}>
+        <Text style={styles.secondaryCtaText}>Raise Complaint</Text>
+      </TouchableOpacity>
       <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/student-profile" as never)}>
         <Text style={styles.secondaryCtaText}>Edit LinkedIn-Style Profile</Text>
       </TouchableOpacity>

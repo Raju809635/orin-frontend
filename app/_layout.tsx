@@ -22,6 +22,7 @@ function RootDrawer() {
 
     const isAuthScreen = pathname === "/login" || pathname === "/register";
     const isProtected =
+      pathname.startsWith("/complaints") ||
       pathname.startsWith("/chat") ||
       pathname.startsWith("/collaborate") ||
       pathname.startsWith("/domains") ||
@@ -78,6 +79,14 @@ function RootDrawer() {
           title: "Messages",
           drawerLabel: "Messages",
           drawerItemStyle: user ? undefined : { display: "none" }
+        }}
+      />
+      <Drawer.Screen
+        name="complaints"
+        options={{
+          title: "Complaints",
+          drawerLabel: "Complaints",
+          drawerItemStyle: user?.role === "student" ? undefined : { display: "none" }
         }}
       />
       <Drawer.Screen name="domains" options={{ title: "Domains", drawerLabel: "Domains" }} />
