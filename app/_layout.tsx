@@ -5,10 +5,9 @@ import { Drawer } from "expo-router/drawer";
 import { usePathname, useRouter } from "expo-router";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 
-function defaultRouteByRole(role: "student" | "mentor" | "admin") {
+function defaultRouteByRole(role: "student" | "mentor") {
   if (role === "student") return "/student-dashboard";
-  if (role === "mentor") return "/mentor-dashboard";
-  return "/admin-dashboard";
+  return "/mentor-dashboard";
 }
 
 function RootDrawer() {
@@ -23,6 +22,7 @@ function RootDrawer() {
 
     const isAuthScreen = pathname === "/login" || pathname === "/register";
     const isProtected =
+      pathname.startsWith("/collaborate") ||
       pathname.startsWith("/domains") ||
       pathname.startsWith("/mentors") ||
       pathname.startsWith("/mentor/") ||
@@ -42,9 +42,7 @@ function RootDrawer() {
     }
 
     if (isAuthenticated && user) {
-      if (pathname.startsWith("/admin-dashboard") && user.role !== "admin") {
-        router.replace(defaultRouteByRole(user.role) as never);
-      } else if (pathname.startsWith("/mentor-dashboard") && user.role !== "mentor") {
+      if (pathname.startsWith("/mentor-dashboard") && user.role !== "mentor") {
         router.replace(defaultRouteByRole(user.role) as never);
       } else if (pathname.startsWith("/student-dashboard") && user.role !== "student") {
         router.replace(defaultRouteByRole(user.role) as never);
@@ -72,6 +70,7 @@ function RootDrawer() {
       <Drawer.Screen name="index" options={{ title: "Home", drawerLabel: "Home" }} />
       <Drawer.Screen name="login" options={{ title: "Login", drawerLabel: "Login" }} />
       <Drawer.Screen name="register" options={{ title: "Register", drawerLabel: "Register" }} />
+      <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerLabel: "Collaborate" }} />
       <Drawer.Screen name="domains" options={{ title: "Domains", drawerLabel: "Domains" }} />
       <Drawer.Screen
         name="settings"
@@ -114,15 +113,6 @@ function RootDrawer() {
           drawerItemStyle: user?.role === "mentor" ? undefined : { display: "none" }
         }}
       />
-      <Drawer.Screen
-        name="admin-dashboard"
-        options={{
-          title: "Admin Dashboard",
-          drawerLabel: "Admin Dashboard",
-          drawerItemStyle: user?.role === "admin" ? undefined : { display: "none" }
-        }}
-      />
-
       <Drawer.Screen name="mentors" options={{ title: "Mentors", drawerItemStyle: { display: "none" } }} />
       <Drawer.Screen
         name="mentor/[mentorId]"
