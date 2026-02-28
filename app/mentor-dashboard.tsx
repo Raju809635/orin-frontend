@@ -26,6 +26,20 @@ type Booking = {
   };
 };
 
+type Session = {
+  _id: string;
+  date: string;
+  time: string;
+  amount: number;
+  paymentStatus: "pending" | "paid";
+  sessionStatus: "booked" | "confirmed" | "completed";
+  meetingLink?: string;
+  studentId?: {
+    name?: string;
+    email?: string;
+  };
+};
+
 type DirectMessage = {
   _id: string;
   title: string;
@@ -39,6 +53,8 @@ export default function MentorDashboard() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
+  const [meetingLinks, setMeetingLinks] = useState<Record<string, string>>({});
   const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [chatTitle, setChatTitle] = useState("Mentor Support");
   const [chatMessage, setChatMessage] = useState("");
@@ -55,12 +71,14 @@ export default function MentorDashboard() {
         setIsLoading(true);
       }
       setError(null);
-      const [bookingRes, messageRes] = await Promise.all([
+      const [bookingRes, messageRes, sessionRes] = await Promise.all([
         api.get<Booking[]>("/api/bookings/mentor"),
-        api.get<DirectMessage[]>("/api/messages/me")
+        api.get<DirectMessage[]>("/api/messages/me"),
+        api.get<Session[]>("/api/sessions/mentor/me")
       ]);
       setBookings(bookingRes.data);
       setMessages(messageRes.data);
+      setSessions(sessionRes.data);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load mentor bookings.");
     } finally {
@@ -105,6 +123,21 @@ export default function MentorDashboard() {
       setError(e?.response?.data?.message || "Failed to send message to admin.");
     } finally {
       setSendingMessage(false);
+    }
+  }
+
+  async function saveMeetingLink(sessionId: string) {
+    try {
+      const meetingLink = (meetingLinks[sessionId] || "").trim();
+      if (!meetingLink) {
+        setError("Meeting link is required.");
+        return;
+      }
+      await api.patch(`/api/sessions/${sessionId}/meeting-link`, { meetingLink });
+      notify("Meeting link updated.");
+      await fetchBookings(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to update meeting link.");
     }
   }
 
@@ -177,6 +210,43 @@ export default function MentorDashboard() {
                       <Text style={styles.meta}>
                         {msg.sentBy?.name || "Unknown"} • {new Date(msg.createdAt).toLocaleString()}
                       </Text>
+                    </View>
+                  ))
+                )}
+              </View>
+
+              <View style={styles.card}>
+                <Text style={styles.title}>Confirmed Paid Sessions</Text>
+                {sessions.length === 0 ? (
+                  <Text style={styles.empty}>No sessions yet.</Text>
+                ) : (
+                  sessions.map((session) => (
+                    <View key={session._id} style={styles.sessionRow}>
+                      <Text style={styles.metaStrong}>{session.studentId?.name || "Student"}</Text>
+                      <Text style={styles.meta}>
+                        {session.date} {session.time} | INR {session.amount}
+                      </Text>
+                      <Text style={styles.meta}>
+                        Payment: {session.paymentStatus} | Session: {session.sessionStatus}
+                      </Text>
+                      {session.paymentStatus === "paid" && session.sessionStatus === "confirmed" ? (
+                        <>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="https://meet.google.com/..."
+                            value={meetingLinks[session._id] ?? session.meetingLink ?? ""}
+                            onChangeText={(value) =>
+                              setMeetingLinks((prev) => ({ ...prev, [session._id]: value }))
+                            }
+                          />
+                          <TouchableOpacity
+                            style={styles.approveButton}
+                            onPress={() => saveMeetingLink(session._id)}
+                          >
+                            <Text style={styles.actionText}>Save Meet Link</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : null}
                     </View>
                   ))
                 )}
@@ -264,6 +334,7 @@ const styles = StyleSheet.create({
   },
   messageInput: { minHeight: 84, textAlignVertical: "top" },
   messageRow: { marginTop: 10, borderTopWidth: 1, borderTopColor: "#EEF2F0", paddingTop: 10 },
+  sessionRow: { marginTop: 10, borderTopWidth: 1, borderTopColor: "#EEF2F0", paddingTop: 10 },
   metaStrong: { color: "#1E2B24", fontWeight: "700" },
   logout: { marginTop: 8, padding: 12, alignItems: "center" },
   logoutText: { color: "#7A271A", fontWeight: "600" }

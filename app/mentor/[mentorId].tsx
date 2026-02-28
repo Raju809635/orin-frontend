@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,6 +14,16 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
 import { useAuth } from "@/context/AuthContext";
+
+let RazorpayCheckout: any = null;
+if (Platform.OS !== "web") {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    RazorpayCheckout = require("react-native-razorpay").default;
+  } catch {
+    RazorpayCheckout = null;
+  }
+}
 
 type MentorProfileResponse = {
   user: {
@@ -113,19 +125,58 @@ export default function MentorProfileScreen() {
       setError("Please select a valid time slot.");
       return;
     }
+    if (!RazorpayCheckout) {
+      setError("Razorpay SDK unavailable. Build a dev/prod APK to use payments.");
+      return;
+    }
 
     try {
       setIsSubmitting(true);
       setError(null);
-      await api.post("/api/bookings", {
+      const dateObj = new Date(selectedSlot);
+      const date = dateObj.toISOString().slice(0, 10);
+      const time = dateObj.toISOString().slice(11, 16);
+
+      const { data } = await api.post("/api/sessions/create-order", {
         mentorId,
-        scheduledAt: selectedSlot,
+        date,
+        time,
+        durationMinutes: 60,
         notes
       });
+
+      const options = {
+        description: "ORIN Mentorship Session",
+        image: "",
+        currency: data.order.currency || "INR",
+        key: data.razorpayKeyId,
+        amount: data.order.amount,
+        name: "ORIN",
+        order_id: data.order.id,
+        prefill: {
+          email: "",
+          contact: "",
+          name: ""
+        },
+        theme: { color: "#1F7A4C" }
+      };
+
+      const paymentResult = await RazorpayCheckout.open(options);
+      await api.post("/api/sessions/verify-payment", {
+        sessionId: data.session._id,
+        razorpay_order_id: paymentResult.razorpay_order_id,
+        razorpay_payment_id: paymentResult.razorpay_payment_id,
+        razorpay_signature: paymentResult.razorpay_signature
+      });
+
       setNotes("");
-      notify("Booking request sent.");
+      notify("Payment successful. Session confirmed.");
+      Alert.alert("Session Confirmed", "Your payment is verified and session is confirmed.");
     } catch (e: any) {
-      const apiMessage = e?.response?.data?.message || "Booking failed.";
+      const apiMessage =
+        e?.response?.data?.message ||
+        e?.description ||
+        "Payment or booking failed.";
       setError(apiMessage);
       notify(apiMessage);
     } finally {

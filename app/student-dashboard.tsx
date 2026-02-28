@@ -1,5 +1,14 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Linking,
+  RefreshControl,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -16,10 +25,25 @@ type Booking = {
   };
 };
 
+type Session = {
+  _id: string;
+  date: string;
+  time: string;
+  amount: number;
+  paymentStatus: "pending" | "paid";
+  sessionStatus: "booked" | "confirmed" | "completed";
+  meetingLink?: string;
+  mentorId?: {
+    name?: string;
+    email?: string;
+  };
+};
+
 export default function StudentDashboard() {
   const router = useRouter();
   const { user, logout } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,8 +56,12 @@ export default function StudentDashboard() {
         setIsLoading(true);
       }
       setError(null);
-      const { data } = await api.get<Booking[]>("/api/bookings/student");
-      setBookings(data);
+      const [bookingsRes, sessionsRes] = await Promise.all([
+        api.get<Booking[]>("/api/bookings/student"),
+        api.get<Session[]>("/api/sessions/student/me")
+      ]);
+      setBookings(bookingsRes.data);
+      setSessions(sessionsRes.data);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load your bookings.");
     } finally {
@@ -89,7 +117,38 @@ export default function StudentDashboard() {
           data={bookings}
           keyExtractor={(item) => item._id}
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchBookings(true)} />}
-          ListEmptyComponent={<Text style={styles.empty}>No bookings yet.</Text>}
+          ListHeaderComponent={
+            <View>
+              <Text style={styles.sectionTitle}>Paid Sessions</Text>
+              {sessions.length === 0 ? (
+                <Text style={styles.empty}>No paid sessions yet.</Text>
+              ) : (
+                sessions.map((session) => (
+                  <View key={session._id} style={styles.card}>
+                    <Text style={styles.title}>{session.mentorId?.name || "Mentor"}</Text>
+                    <Text style={styles.meta}>
+                      {session.date} {session.time} | Amount: INR {session.amount}
+                    </Text>
+                    <Text style={styles.status}>
+                      Payment: {session.paymentStatus} | Session: {session.sessionStatus}
+                    </Text>
+                    {session.meetingLink && session.paymentStatus === "paid" ? (
+                      <TouchableOpacity
+                        style={styles.joinButton}
+                        onPress={() => Linking.openURL(session.meetingLink as string)}
+                      >
+                        <Text style={styles.joinButtonText}>Join Session</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={styles.meta}>Meeting link will appear after mentor updates.</Text>
+                    )}
+                  </View>
+                ))
+              )}
+              <Text style={styles.sectionTitle}>Legacy Booking Requests</Text>
+            </View>
+          }
+          ListEmptyComponent={<Text style={styles.empty}>No booking requests yet.</Text>}
           renderItem={({ item }) => (
             <View style={styles.card}>
               <Text style={styles.title}>{item.mentor?.name || "Mentor"}</Text>
@@ -135,6 +194,21 @@ const styles = StyleSheet.create({
   title: { fontWeight: "700", color: "#1E2B24", fontSize: 16 },
   meta: { color: "#667085", marginTop: 4 },
   status: { marginTop: 8, fontWeight: "600", color: "#1F7A4C" },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1E2B24",
+    marginBottom: 8,
+    marginTop: 4
+  },
+  joinButton: {
+    marginTop: 10,
+    backgroundColor: "#1F7A4C",
+    borderRadius: 10,
+    alignItems: "center",
+    paddingVertical: 10
+  },
+  joinButtonText: { color: "#fff", fontWeight: "700" },
   error: { color: "#B42318", marginBottom: 8 },
   empty: { color: "#667085", textAlign: "center", marginTop: 14 },
   logout: { marginTop: 8, padding: 12, alignItems: "center" },
