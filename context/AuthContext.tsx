@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, setApiAuthToken } from "@/lib/api";
 import {
   AuthUser,
@@ -33,13 +33,21 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 type LoginResponse = {
   token: string;
+  refreshToken: string;
   user: AuthUser;
+};
+
+type RefreshResponse = {
+  token: string;
+  refreshToken: string;
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
+  const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [isBootstrapping, setIsBootstrapping] = useState(true);
+  const refreshRequestRef = useRef<Promise<string> | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -52,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
 
         setToken(session.token);
+        setRefreshToken(session.refreshToken);
         setUser(session.user);
         setApiAuthToken(session.token);
       } finally {
@@ -68,24 +77,90 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  async function login(payload: LoginPayload) {
-    const { data } = await api.post<LoginResponse>("/api/auth/login", payload);
-    setToken(data.token);
-    setUser(data.user);
-    setApiAuthToken(data.token);
-    await saveAuthSession(data.token, data.user);
-  }
-
-  async function register(payload: RegisterPayload) {
-    await api.post("/api/auth/register", payload);
-  }
-
-  async function logout() {
+  const logout = useCallback(async () => {
     setToken(null);
+    setRefreshToken(null);
     setUser(null);
     setApiAuthToken(null);
     await clearAuthSession();
-  }
+  }, []);
+
+  const login = useCallback(async (payload: LoginPayload) => {
+    const { data } = await api.post<LoginResponse>("/api/auth/login", payload);
+    setToken(data.token);
+    setRefreshToken(data.refreshToken);
+    setUser(data.user);
+    setApiAuthToken(data.token);
+    await saveAuthSession(data.token, data.refreshToken, data.user);
+  }, []);
+
+  const register = useCallback(async (payload: RegisterPayload) => {
+    await api.post("/api/auth/register", payload);
+  }, []);
+
+  useEffect(() => {
+    const interceptorId = api.interceptors.response.use(
+      (response) => response,
+      async (error) => {
+        const originalRequest = error?.config as
+          | (Record<string, any> & { url?: string; headers?: Record<string, string>; _retry?: boolean })
+          | undefined;
+        const status = error?.response?.status;
+        const message = (error?.response?.data?.message || "").toString().toLowerCase();
+
+        const isRefreshCall = (originalRequest?.url || "").includes("/api/auth/refresh");
+        const shouldTryRefresh =
+          status === 401 &&
+          !isRefreshCall &&
+          !originalRequest?._retry &&
+          !!refreshToken &&
+          (message.includes("jwt expired") ||
+            message.includes("token expired") ||
+            message.includes("invalid token") ||
+            message.includes("no token provided"));
+
+        if (!shouldTryRefresh || !originalRequest) {
+          return Promise.reject(error);
+        }
+
+        originalRequest._retry = true;
+
+        try {
+          if (!refreshRequestRef.current) {
+            refreshRequestRef.current = (async () => {
+              const { data } = await api.post<RefreshResponse>("/api/auth/refresh", { refreshToken });
+              const nextToken = data.token;
+              const nextRefreshToken = data.refreshToken || refreshToken;
+
+              setToken(nextToken);
+              setRefreshToken(nextRefreshToken);
+              setApiAuthToken(nextToken);
+
+              if (user) {
+                await saveAuthSession(nextToken, nextRefreshToken, user);
+              }
+
+              return nextToken;
+            })().finally(() => {
+              refreshRequestRef.current = null;
+            });
+          }
+
+          const nextToken = await refreshRequestRef.current;
+          originalRequest.headers = originalRequest.headers || {};
+          originalRequest.headers.Authorization = `Bearer ${nextToken}`;
+          return api.request(originalRequest);
+        } catch (refreshError) {
+          await logout();
+          return Promise.reject(refreshError);
+        }
+      }
+    );
+
+    return () => {
+      api.interceptors.response.eject(interceptorId);
+    };
+  }, [logout, refreshToken, user]);
 
   const value = useMemo(
     () => ({
@@ -97,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       register,
       logout
     }),
-    [user, token, isBootstrapping]
+    [user, token, isBootstrapping, login, register, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
