@@ -107,6 +107,15 @@ export default function StudentDashboard() {
       onPress: () => router.push("/student-profile" as never)
     },
     {
+      key: "domain-guide",
+      label: "Domain Guide",
+      icon: "book",
+      tint: "#1F7A4C",
+      bg: "#E7F5EE",
+      border: "#D5E9DB",
+      onPress: () => router.push("/domain-guide" as never)
+    },
+    {
       key: "support",
       label: "Support",
       icon: "help-buoy",
@@ -124,6 +133,12 @@ export default function StudentDashboard() {
       border: "#DCE3EA",
       onPress: () => router.push("/settings" as never)
     }
+  ] as const;
+  const domainHighlights = [
+    { name: "Academic", icon: "school", color: "#2563EB", note: "School, Intermediate, Engineering, MBA, Law" },
+    { name: "Competitive Exams", icon: "trophy", color: "#B45309", note: "JEE, NEET, UPSC, SSC, TGPSC, Banking" },
+    { name: "Technology & AI", icon: "hardware-chip", color: "#0369A1", note: "Web, Data Science, AI/ML tracks" },
+    { name: "Career & Placements", icon: "briefcase", color: "#9333EA", note: "Resume, Interviews, Roadmaps" }
   ] as const;
 
   const fetchDashboard = useCallback(async (refresh = false) => {
@@ -160,6 +175,7 @@ export default function StudentDashboard() {
       sessions.filter(
         (session) =>
           session.paymentMode === "manual" &&
+          session.status !== "cancelled" &&
           (session.paymentStatus === "pending" || session.paymentStatus === "rejected")
       ),
     [sessions]
@@ -168,7 +184,10 @@ export default function StudentDashboard() {
   const waitingVerificationSessions = useMemo(
     () =>
       sessions.filter(
-        (session) => session.paymentMode === "manual" && session.paymentStatus === "waiting_verification"
+        (session) =>
+          session.paymentMode === "manual" &&
+          session.status !== "cancelled" &&
+          session.paymentStatus === "waiting_verification"
       ),
     [sessions]
   );
@@ -260,6 +279,21 @@ export default function StudentDashboard() {
       );
     });
   }, [bookings, searchQuery]);
+
+  const normalizedQuery = searchQuery.trim();
+  const totalSearchMatches = useMemo(
+    () =>
+      filteredPendingPaymentSessions.length +
+      filteredWaitingVerificationSessions.length +
+      filteredConfirmedSessions.length +
+      filteredBookings.length,
+    [
+      filteredPendingPaymentSessions.length,
+      filteredWaitingVerificationSessions.length,
+      filteredConfirmedSessions.length,
+      filteredBookings.length
+    ]
+  );
 
   async function submitManualProof(session: Session) {
     const transactionReference = (transactionRefBySession[session._id] || "").trim();
@@ -363,6 +397,13 @@ export default function StudentDashboard() {
           onChangeText={setSearchQuery}
         />
       </View>
+      {normalizedQuery ? (
+        <Text style={styles.searchMeta}>
+          {totalSearchMatches > 0
+            ? `Search results: ${totalSearchMatches} match${totalSearchMatches > 1 ? "es" : ""}`
+            : "No results for your search"}
+        </Text>
+      ) : null}
 
       <View style={styles.heroBanner}>
         <Text style={styles.heroEyebrow}>Student Space</Text>
@@ -400,6 +441,27 @@ export default function StudentDashboard() {
           <Text style={styles.featureCopy}>Get study plans, interview prep ideas, and guidance instantly.</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      <Text style={styles.sectionHeader}>Domain Guide</Text>
+      <View style={styles.domainGuideInlineCard}>
+        <Text style={styles.domainGuideIntro}>
+          Understand every domain, sub-domain, and what to choose based on your goal.
+        </Text>
+        <View style={styles.domainMiniGrid}>
+          {domainHighlights.map((item) => (
+            <View key={item.name} style={styles.domainMiniTile}>
+              <View style={[styles.domainMiniIcon, { backgroundColor: `${item.color}22` }]}>
+                <Ionicons name={item.icon} size={16} color={item.color} />
+              </View>
+              <Text style={styles.domainMiniTitle}>{item.name}</Text>
+              <Text style={styles.domainMiniNote}>{item.note}</Text>
+            </View>
+          ))}
+        </View>
+        <TouchableOpacity style={styles.domainGuideButton} onPress={() => router.push("/domain-guide" as never)}>
+          <Text style={styles.domainGuideButtonText}>Open Full Domain Guide</Text>
+        </TouchableOpacity>
+      </View>
 
       {isLoading ? (
         <View style={styles.centered}>
@@ -574,6 +636,13 @@ const styles = StyleSheet.create({
     gap: 8
   },
   searchInput: { flex: 1, color: "#1E2B24", fontWeight: "500" },
+  searchMeta: {
+    marginTop: -4,
+    marginBottom: 10,
+    color: "#475467",
+    fontWeight: "600",
+    fontSize: 12
+  },
   heroBanner: {
     backgroundColor: "#F7FBFF",
     borderRadius: 24,
@@ -629,6 +698,43 @@ const styles = StyleSheet.create({
   },
   featureTitle: { fontSize: 18, fontWeight: "800", color: "#13251E" },
   featureCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
+  domainGuideInlineCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D7E6F6",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 8
+  },
+  domainGuideIntro: { color: "#475467", lineHeight: 19, marginBottom: 10, fontWeight: "500" },
+  domainMiniGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  domainMiniTile: {
+    width: "48.8%",
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 9
+  },
+  domainMiniIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  domainMiniTitle: { marginTop: 6, color: "#1E2B24", fontWeight: "700", fontSize: 12 },
+  domainMiniNote: { marginTop: 3, color: "#667085", fontSize: 11, lineHeight: 15 },
+  domainGuideButton: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#165DFF",
+    borderRadius: 10,
+    paddingVertical: 9,
+    alignItems: "center",
+    backgroundColor: "#EFF4FF"
+  },
+  domainGuideButtonText: { color: "#165DFF", fontWeight: "700" },
   centered: { alignItems: "center", justifyContent: "center", minHeight: 140 },
   panel: { marginTop: 8 },
   panelTitle: { fontSize: 17, fontWeight: "800", color: "#1E2B24", marginBottom: 8 },

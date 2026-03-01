@@ -153,9 +153,30 @@ function RootDrawer() {
         drawerActiveTintColor: "#1F7A4C"
       }}
     >
-      <Drawer.Screen name="index" options={{ title: "Home", drawerLabel: "Home" }} />
-      <Drawer.Screen name="login" options={{ title: "Login", drawerLabel: "Login" }} />
-      <Drawer.Screen name="register" options={{ title: "Register", drawerLabel: "Register" }} />
+      <Drawer.Screen
+        name="index"
+        options={{
+          title: "Home",
+          drawerLabel: "Home",
+          drawerItemStyle: user ? { display: "none" } : undefined
+        }}
+      />
+      <Drawer.Screen
+        name="login"
+        options={{
+          title: "Login",
+          drawerLabel: "Login",
+          drawerItemStyle: user ? { display: "none" } : undefined
+        }}
+      />
+      <Drawer.Screen
+        name="register"
+        options={{
+          title: "Register",
+          drawerLabel: "Register",
+          drawerItemStyle: user ? { display: "none" } : undefined
+        }}
+      />
       <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerLabel: "Collaborate" }} />
       <Drawer.Screen
         name="chat"
@@ -182,6 +203,14 @@ function RootDrawer() {
         }}
       />
       <Drawer.Screen name="domains" options={{ title: "Domains", drawerLabel: "Domains" }} />
+      <Drawer.Screen
+        name="domain-guide"
+        options={{
+          title: "Domain Guide",
+          drawerLabel: "Domain Guide",
+          drawerItemStyle: user?.role === "student" ? undefined : { display: "none" }
+        }}
+      />
       <Drawer.Screen
         name="about"
         options={{

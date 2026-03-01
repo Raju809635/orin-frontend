@@ -265,6 +265,12 @@ export default function MentorDashboard() {
     return messages.filter((msg) => msg.text.toLowerCase().includes(query));
   }, [messages, searchQuery]);
 
+  const normalizedQuery = searchQuery.trim();
+  const totalSearchMatches = useMemo(
+    () => filteredConfirmedPaidSessions.length + filteredBookings.length + filteredMessages.length,
+    [filteredConfirmedPaidSessions.length, filteredBookings.length, filteredMessages.length]
+  );
+
   function canSetMeetingLink(session: Session) {
     const start = session.scheduledStart ? new Date(session.scheduledStart).getTime() : NaN;
     if (!Number.isFinite(start)) return true;
@@ -409,9 +415,21 @@ export default function MentorDashboard() {
           placeholder="Search students, sessions or chat"
           placeholderTextColor="#98A2B3"
           value={searchQuery}
-          onChangeText={setSearchQuery}
+          onChangeText={(value) => {
+            setSearchQuery(value);
+            if (value.trim() && ["overview", "pricing", "availability"].includes(activeSection)) {
+              setActiveSection("sessions");
+            }
+          }}
         />
       </View>
+      {normalizedQuery ? (
+        <Text style={styles.searchMeta}>
+          {totalSearchMatches > 0
+            ? `Search results: ${totalSearchMatches} match${totalSearchMatches > 1 ? "es" : ""}`
+            : "No results for your search"}
+        </Text>
+      ) : null}
 
       <View style={styles.heroBanner}>
         <Text style={styles.heroEyebrow}>Mentor Workspace</Text>
@@ -721,6 +739,13 @@ const styles = StyleSheet.create({
     gap: 8
   },
   searchInput: { flex: 1, color: "#1E2B24", fontWeight: "500" },
+  searchMeta: {
+    marginTop: -4,
+    marginBottom: 10,
+    color: "#475467",
+    fontWeight: "600",
+    fontSize: 12
+  },
   heroBanner: {
     backgroundColor: "#F7FBFF",
     borderRadius: 24,

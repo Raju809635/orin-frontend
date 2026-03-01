@@ -107,18 +107,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           | (Record<string, any> & { url?: string; headers?: Record<string, string>; _retry?: boolean })
           | undefined;
         const status = error?.response?.status;
-        const message = (error?.response?.data?.message || "").toString().toLowerCase();
+        const url = (originalRequest?.url || "").toString();
 
-        const isRefreshCall = (originalRequest?.url || "").includes("/api/auth/refresh");
+        const isRefreshCall = url.includes("/api/auth/refresh");
+        const isAuthPublicCall =
+          url.includes("/api/auth/login") ||
+          url.includes("/api/auth/register") ||
+          url.includes("/api/auth/forgot-password") ||
+          url.includes("/api/auth/reset-password");
         const shouldTryRefresh =
           status === 401 &&
           !isRefreshCall &&
+          !isAuthPublicCall &&
           !originalRequest?._retry &&
-          !!refreshToken &&
-          (message.includes("jwt expired") ||
-            message.includes("token expired") ||
-            message.includes("invalid token") ||
-            message.includes("no token provided"));
+          !!refreshToken;
 
         if (!shouldTryRefresh || !originalRequest) {
           return Promise.reject(error);
