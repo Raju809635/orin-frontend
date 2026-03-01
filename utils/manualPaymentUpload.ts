@@ -1,58 +1,54 @@
-import { api } from "@/lib/api";
 import { NativeModulesProxy } from "expo-modules-core";
+import { api } from "@/lib/api";
 
-type UploadResponse = {
-  message: string;
-  url: string;
-  path: string;
-};
-
-export async function pickAndUploadProfilePhoto(): Promise<string | null> {
+export async function submitManualPaymentWithPicker(sessionId: string, transactionReference = "") {
   const hasNativeImagePicker = Boolean((NativeModulesProxy as Record<string, unknown>)?.ExpoImagePicker);
   if (!hasNativeImagePicker) {
-    throw new Error("This APK does not support image upload yet. Please install the latest APK build.");
+    throw new Error("This APK does not support screenshot upload yet. Please install the latest APK build.");
   }
 
   let ImagePicker: any;
   try {
     ImagePicker = await import("expo-image-picker");
   } catch {
-    throw new Error("Image upload requires latest app build. Please install updated APK.");
+    throw new Error("Image picker not available. Please install latest APK build.");
   }
 
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
-    return null;
+    throw new Error("Gallery permission is required to upload payment screenshot.");
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
-    quality: 0.8,
-    allowsEditing: true,
-    aspect: [1, 1]
+    quality: 0.85,
+    allowsEditing: false
   });
 
   if (result.canceled || !result.assets?.length) {
-    return null;
+    return { cancelled: true };
   }
 
   const asset = result.assets[0];
   const uri = asset.uri;
-  const fileName = asset.fileName || `profile-${Date.now()}.jpg`;
+  const fileName = asset.fileName || `payment-${Date.now()}.jpg`;
   const mimeType = asset.mimeType || "image/jpeg";
 
   const formData = new FormData();
-  formData.append("file", {
+  formData.append("paymentScreenshotFile", {
     uri,
     name: fileName,
     type: mimeType
   } as any);
+  if (transactionReference.trim()) {
+    formData.append("transactionReference", transactionReference.trim());
+  }
 
-  const { data } = await api.post<UploadResponse>("/api/uploads/profile-photo", formData, {
+  await api.post(`/api/sessions/${sessionId}/manual-payment`, formData, {
     headers: {
       "Content-Type": "multipart/form-data"
     }
   });
 
-  return data.url;
+  return { cancelled: false };
 }

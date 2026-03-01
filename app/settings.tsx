@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
@@ -33,6 +34,7 @@ const defaultPrefs: Preferences = {
 };
 
 export default function SettingsScreen() {
+  const router = useRouter();
   const { logout } = useAuth();
   const [prefs, setPrefs] = useState<Preferences>(defaultPrefs);
   const [loading, setLoading] = useState(true);
@@ -199,6 +201,22 @@ export default function SettingsScreen() {
       </TouchableOpacity>
 
       <View style={styles.card}>
+        <Text style={styles.section}>Legal & Support</Text>
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/about" as never)}>
+          <Text style={styles.linkText}>About ORIN</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/privacy" as never)}>
+          <Text style={styles.linkText}>Privacy Policy</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/terms" as never)}>
+          <Text style={styles.linkText}>Terms of Use</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/help" as never)}>
+          <Text style={styles.linkText}>Help & Support</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.section}>Change Password</Text>
         <TextInput
           style={styles.input}
@@ -297,5 +315,15 @@ const styles = StyleSheet.create({
   logoutButtonText: { color: "#1E2B24", fontWeight: "700" },
   deleteButton: { backgroundColor: "#FEE4E2", borderRadius: 12, paddingVertical: 12, alignItems: "center" },
   deleteButtonText: { color: "#B42318", fontWeight: "700" },
-  error: { marginTop: 10, color: "#B42318", textAlign: "center" }
+  error: { marginTop: 10, color: "#B42318", textAlign: "center" },
+  linkRow: {
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+    backgroundColor: "#F9FAFB"
+  },
+  linkText: { color: "#1E2B24", fontWeight: "600" }
 });

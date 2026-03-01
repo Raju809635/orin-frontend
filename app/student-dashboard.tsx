@@ -15,6 +15,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
+import { submitManualPaymentWithPicker } from "@/utils/manualPaymentUpload";
 
 type Booking = {
   _id: string;
@@ -58,7 +59,6 @@ export default function StudentDashboard() {
   const { user, logout } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [paymentScreenshotBySession, setPaymentScreenshotBySession] = useState<Record<string, string>>({});
   const [transactionRefBySession, setTransactionRefBySession] = useState<Record<string, string>>({});
   const [submittingBySession, setSubmittingBySession] = useState<Record<string, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
@@ -125,22 +125,17 @@ export default function StudentDashboard() {
   );
 
   async function submitManualProof(session: Session) {
-    const screenshot = (paymentScreenshotBySession[session._id] || "").trim();
     const transactionReference = (transactionRefBySession[session._id] || "").trim();
-    if (!screenshot) {
-      setError("Please provide payment screenshot URL.");
-      return;
-    }
 
     try {
       setSubmittingBySession((prev) => ({ ...prev, [session._id]: true }));
       setError(null);
-      await api.post(`/api/sessions/${session._id}/manual-payment`, {
-        paymentScreenshot: screenshot,
-        transactionReference
-      });
+      const result = await submitManualPaymentWithPicker(session._id, transactionReference);
+      if (result.cancelled) {
+        setSubmittingBySession((prev) => ({ ...prev, [session._id]: false }));
+        return;
+      }
       notify("Payment submitted. Awaiting admin verification.");
-      setPaymentScreenshotBySession((prev) => ({ ...prev, [session._id]: "" }));
       setTransactionRefBySession((prev) => ({ ...prev, [session._id]: "" }));
       await fetchDashboard(true);
     } catch (e: any) {
@@ -244,14 +239,6 @@ export default function StudentDashboard() {
                       {instructions?.dueAt ? new Date(instructions.dueAt).toLocaleString() : "No due time set"}
                     </Text>
                     <TextInput
-                      style={[styles.input, styles.inputTall]}
-                      placeholder="Payment screenshot URL"
-                      value={paymentScreenshotBySession[session._id] || ""}
-                      onChangeText={(value) =>
-                        setPaymentScreenshotBySession((prev) => ({ ...prev, [session._id]: value }))
-                      }
-                    />
-                    <TextInput
                       style={styles.input}
                       placeholder="Transaction reference (optional)"
                       value={transactionRefBySession[session._id] || ""}
@@ -264,7 +251,7 @@ export default function StudentDashboard() {
                       onPress={() => submitManualProof(session)}
                       disabled={isSubmitting}
                     >
-                      <Text style={styles.joinButtonText}>{isSubmitting ? "Submitting..." : "Submit Payment Proof"}</Text>
+                      <Text style={styles.joinButtonText}>{isSubmitting ? "Submitting..." : "Upload Screenshot & Submit"}</Text>
                     </TouchableOpacity>
                   </View>
                 );

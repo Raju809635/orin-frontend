@@ -15,6 +15,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
 import { useAuth } from "@/context/AuthContext";
+import { submitManualPaymentWithPicker } from "@/utils/manualPaymentUpload";
 
 let RazorpayCheckout: any = null;
 if (Platform.OS !== "web") {
@@ -93,7 +94,6 @@ export default function MentorProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [manualSessionId, setManualSessionId] = useState("");
   const [manualInstructions, setManualInstructions] = useState<ManualPaymentInstructions | null>(null);
-  const [paymentScreenshotUrl, setPaymentScreenshotUrl] = useState("");
   const [transactionReference, setTransactionReference] = useState("");
   const [submittingProof, setSubmittingProof] = useState(false);
 
@@ -223,20 +223,20 @@ export default function MentorProfileScreen() {
   }
 
   async function submitManualProof() {
-    if (!manualSessionId || !paymentScreenshotUrl.trim()) {
-      setError("Please provide payment screenshot URL.");
+    if (!manualSessionId) {
+      setError("Session not ready for payment submission.");
       return;
     }
 
     try {
       setSubmittingProof(true);
       setError(null);
-      await api.post(`/api/sessions/${manualSessionId}/manual-payment`, {
-        paymentScreenshot: paymentScreenshotUrl.trim(),
-        transactionReference: transactionReference.trim()
-      });
+      const result = await submitManualPaymentWithPicker(manualSessionId, transactionReference.trim());
+      if (result.cancelled) {
+        setSubmittingProof(false);
+        return;
+      }
       notify("Payment submitted. Awaiting admin verification.");
-      setPaymentScreenshotUrl("");
       setTransactionReference("");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to submit payment screenshot.");
@@ -345,12 +345,6 @@ export default function MentorProfileScreen() {
           )}
           <Text style={styles.meta}>Pay before: {new Date(manualInstructions.dueAt).toLocaleString()}</Text>
 
-          <TextInput
-            style={[styles.input, { marginTop: 10 }]}
-            placeholder="Payment screenshot URL"
-            value={paymentScreenshotUrl}
-            onChangeText={setPaymentScreenshotUrl}
-          />
           <TextInput
             style={styles.input}
             placeholder="Transaction reference (optional)"

@@ -31,6 +31,9 @@ function RootDrawer() {
       pathname.startsWith("/collaborate") ||
       pathname.startsWith("/domains") ||
       pathname.startsWith("/about") ||
+      pathname.startsWith("/privacy") ||
+      pathname.startsWith("/terms") ||
+      pathname.startsWith("/help") ||
       pathname.startsWith("/mentors") ||
       pathname.startsWith("/mentor/") ||
       pathname.startsWith("/settings") ||
@@ -172,6 +175,30 @@ function RootDrawer() {
         options={{
           title: "About ORIN",
           drawerLabel: "About ORIN",
+          drawerItemStyle: user ? undefined : { display: "none" }
+        }}
+      />
+      <Drawer.Screen
+        name="privacy"
+        options={{
+          title: "Privacy Policy",
+          drawerLabel: "Privacy Policy",
+          drawerItemStyle: user ? undefined : { display: "none" }
+        }}
+      />
+      <Drawer.Screen
+        name="terms"
+        options={{
+          title: "Terms of Use",
+          drawerLabel: "Terms of Use",
+          drawerItemStyle: user ? undefined : { display: "none" }
+        }}
+      />
+      <Drawer.Screen
+        name="help"
+        options={{
+          title: "Help & Support",
+          drawerLabel: "Help & Support",
           drawerItemStyle: user ? undefined : { display: "none" }
         }}
       />
