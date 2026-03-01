@@ -1,8 +1,9 @@
 import "react-native-gesture-handler";
-import React, { useEffect } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { ActivityIndicator, Alert, AppState, AppStateStatus, Platform, StyleSheet, Text, View } from "react-native";
 import { Drawer } from "expo-router/drawer";
 import { usePathname, useRouter } from "expo-router";
+import * as Updates from "expo-updates";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 
 function defaultRouteByRole(role: "student" | "mentor") {
@@ -14,6 +15,8 @@ function RootDrawer() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, isAuthenticated, isBootstrapping } = useAuth();
+  const isCheckingUpdateRef = useRef(false);
+  const hasPromptedReloadRef = useRef(false);
 
   useEffect(() => {
     if (isBootstrapping) {
@@ -58,6 +61,64 @@ function RootDrawer() {
       }
     }
   }, [isBootstrapping, isAuthenticated, pathname, router, user]);
+
+  useEffect(() => {
+    if (__DEV__ || Platform.OS === "web") {
+      return;
+    }
+
+    async function checkForUpdates() {
+      if (isCheckingUpdateRef.current || hasPromptedReloadRef.current) {
+        return;
+      }
+
+      try {
+        isCheckingUpdateRef.current = true;
+        const update = await Updates.checkForUpdateAsync();
+
+        if (!update.isAvailable) {
+          return;
+        }
+
+        await Updates.fetchUpdateAsync();
+        hasPromptedReloadRef.current = true;
+
+        Alert.alert("Update Available", "A new update is ready. Restart now?", [
+          {
+            text: "Later",
+            style: "cancel",
+            onPress: () => {
+              hasPromptedReloadRef.current = false;
+            }
+          },
+          {
+            text: "Restart",
+            onPress: () => {
+              Updates.reloadAsync().catch(() => {
+                hasPromptedReloadRef.current = false;
+              });
+            }
+          }
+        ]);
+      } catch {
+        // Ignore OTA check failures silently to avoid blocking app usage.
+      } finally {
+        isCheckingUpdateRef.current = false;
+      }
+    }
+
+    checkForUpdates();
+
+    const sub = AppState.addEventListener("change", (nextState: AppStateStatus) => {
+      if (nextState === "active") {
+        checkForUpdates();
+      }
+    });
+
+    return () => {
+      sub.remove();
+    };
+  }, []);
 
   if (isBootstrapping) {
     return (
