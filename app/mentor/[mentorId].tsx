@@ -73,37 +73,20 @@ type CreateOrderResponse = {
 type TimeSlot = {
   label: string;
   iso: string;
+  date: string;
+  time: string;
+  isBooked: boolean;
 };
-
-function buildTimeSlots(): TimeSlot[] {
-  const slots: TimeSlot[] = [];
-  const offsets = [1, 2, 3, 4, 5];
-  const hours = [10, 14, 18];
-
-  offsets.forEach((dayOffset) => {
-    hours.forEach((hour) => {
-      const date = new Date();
-      date.setDate(date.getDate() + dayOffset);
-      date.setHours(hour, 0, 0, 0);
-      slots.push({
-        label: date.toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "numeric" }),
-        iso: date.toISOString()
-      });
-    });
-  });
-
-  return slots;
-}
 
 export default function MentorProfileScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const params = useLocalSearchParams<{ mentorId?: string }>();
   const mentorId = useMemo(() => (params.mentorId || "").trim(), [params.mentorId]);
-  const slots = useMemo(() => buildTimeSlots(), []);
 
   const [mentor, setMentor] = useState<MentorProfileResponse | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState(slots[0]?.iso || "");
+  const [slots, setSlots] = useState<TimeSlot[]>([]);
+  const [selectedSlot, setSelectedSlot] = useState("");
   const [notes, setNotes] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -127,9 +110,27 @@ export default function MentorProfileScreen() {
       try {
         setIsLoading(true);
         setError(null);
-        const { data } = await api.get<MentorProfileResponse>(`/api/profiles/mentor/${mentorId}`);
+        const [profileRes, availabilityRes] = await Promise.all([
+          api.get<MentorProfileResponse>(`/api/profiles/mentor/${mentorId}`),
+          api.get<{ upcomingSlots: TimeSlot[] }>(`/api/availability/mentor/${mentorId}`)
+        ]);
+
+        const nextSlots = (availabilityRes.data?.upcomingSlots || []).map((slot) => ({
+          label: slot.label,
+          iso: slot.iso,
+          date: slot.date,
+          time: slot.time,
+          isBooked: Boolean(slot.isBooked)
+        }));
+
         if (mounted) {
-          setMentor(data);
+          setMentor(profileRes.data);
+          setSlots(nextSlots);
+          setSelectedSlot((prev) => {
+            if (prev) return prev;
+            const firstOpen = nextSlots.find((slot) => !slot.isBooked);
+            return firstOpen?.iso || "";
+          });
         }
       } catch (e: any) {
         if (mounted) {
@@ -291,13 +292,27 @@ export default function MentorProfileScreen() {
           return (
             <TouchableOpacity
               key={slot.iso}
-              style={[styles.slotButton, isSelected && styles.slotButtonSelected]}
-              onPress={() => setSelectedSlot(slot.iso)}
+              style={[
+                styles.slotButton,
+                isSelected && styles.slotButtonSelected,
+                slot.isBooked && styles.slotButtonBooked
+              ]}
+              onPress={() => !slot.isBooked && setSelectedSlot(slot.iso)}
+              disabled={slot.isBooked}
             >
-              <Text style={[styles.slotText, isSelected && styles.slotTextSelected]}>{slot.label}</Text>
+              <Text
+                style={[
+                  styles.slotText,
+                  isSelected && styles.slotTextSelected,
+                  slot.isBooked && styles.slotTextBooked
+                ]}
+              >
+                {slot.isBooked ? `${slot.label} (Booked)` : slot.label}
+              </Text>
             </TouchableOpacity>
           );
         })}
+        {slots.length === 0 ? <Text style={styles.meta}>Mentor has not set availability for next 7 days yet.</Text> : null}
       </View>
 
       <Text style={styles.sectionTitle}>Session Note (Optional)</Text>
@@ -433,12 +448,20 @@ const styles = StyleSheet.create({
     borderColor: "#1F7A4C",
     backgroundColor: "#E8F5EE"
   },
+  slotButtonBooked: {
+    borderColor: "#B42318",
+    backgroundColor: "#FEE4E2"
+  },
   slotText: {
     color: "#344054",
     fontWeight: "500"
   },
   slotTextSelected: {
     color: "#1F7A4C",
+    fontWeight: "700"
+  },
+  slotTextBooked: {
+    color: "#B42318",
     fontWeight: "700"
   },
   input: {

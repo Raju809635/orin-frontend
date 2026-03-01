@@ -49,6 +49,14 @@ type DirectMessage = {
   recipient?: { _id?: string; name?: string; role?: string };
 };
 
+type AvailabilitySlot = {
+  _id: string;
+  day: "Mon" | "Tue" | "Wed" | "Thu" | "Fri" | "Sat" | "Sun";
+  startTime: string;
+  endTime: string;
+  sessionDurationMinutes: 30 | 60;
+};
+
 export default function MentorDashboard() {
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -56,6 +64,12 @@ export default function MentorDashboard() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [meetingLinks, setMeetingLinks] = useState<Record<string, string>>({});
   const [messages, setMessages] = useState<DirectMessage[]>([]);
+  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
+  const [newSlotDay, setNewSlotDay] = useState<AvailabilitySlot["day"]>("Mon");
+  const [newSlotStartTime, setNewSlotStartTime] = useState("10:00");
+  const [newSlotEndTime, setNewSlotEndTime] = useState("11:00");
+  const [newSlotDuration, setNewSlotDuration] = useState<30 | 60>(60);
+  const [creatingSlot, setCreatingSlot] = useState(false);
   const [chatTitle, setChatTitle] = useState("Mentor Support");
   const [chatMessage, setChatMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -76,6 +90,10 @@ export default function MentorDashboard() {
         api.get<DirectMessage[]>("/api/messages/me"),
         api.get<Session[]>("/api/sessions/mentor/me")
       ]);
+      if (user?.id) {
+        const availabilityRes = await api.get<{ weeklySlots: AvailabilitySlot[] }>(`/api/availability/mentor/${user.id}`);
+        setAvailabilitySlots(availabilityRes.data.weeklySlots || []);
+      }
       setBookings(bookingRes.data);
       setMessages(messageRes.data);
       setSessions(sessionRes.data);
@@ -85,7 +103,26 @@ export default function MentorDashboard() {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [user?.id]);
+
+  async function createAvailabilitySlot() {
+    try {
+      setCreatingSlot(true);
+      setError(null);
+      await api.post("/api/availability", {
+        day: newSlotDay,
+        startTime: newSlotStartTime,
+        endTime: newSlotEndTime,
+        sessionDurationMinutes: newSlotDuration
+      });
+      notify("Availability slot added.");
+      await fetchBookings(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to add availability slot.");
+    } finally {
+      setCreatingSlot(false);
+    }
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -178,6 +215,68 @@ export default function MentorDashboard() {
           refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchBookings(true)} />}
           ListHeaderComponent={
             <View>
+              <View style={styles.card}>
+                <Text style={styles.title}>Set Weekly Availability</Text>
+                <Text style={styles.meta}>
+                  Students can only book these timings for upcoming 7 days.
+                </Text>
+
+                <View style={styles.rowWrap}>
+                  {(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const).map((day) => {
+                    const active = newSlotDay === day;
+                    return (
+                      <TouchableOpacity
+                        key={day}
+                        style={[styles.dayChip, active && styles.dayChipActive]}
+                        onPress={() => setNewSlotDay(day)}
+                      >
+                        <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{day}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <TextInput
+                  style={styles.input}
+                  placeholder="Start Time (HH:MM)"
+                  value={newSlotStartTime}
+                  onChangeText={setNewSlotStartTime}
+                />
+                <TextInput
+                  style={styles.input}
+                  placeholder="End Time (HH:MM)"
+                  value={newSlotEndTime}
+                  onChangeText={setNewSlotEndTime}
+                />
+                <View style={styles.rowWrap}>
+                  {[30, 60].map((mins) => {
+                    const active = newSlotDuration === mins;
+                    return (
+                      <TouchableOpacity
+                        key={mins}
+                        style={[styles.dayChip, active && styles.dayChipActive]}
+                        onPress={() => setNewSlotDuration(mins as 30 | 60)}
+                      >
+                        <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{mins} min</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <TouchableOpacity style={styles.approveButton} onPress={createAvailabilitySlot} disabled={creatingSlot}>
+                  <Text style={styles.actionText}>{creatingSlot ? "Saving..." : "Add Availability Slot"}</Text>
+                </TouchableOpacity>
+
+                {availabilitySlots.length === 0 ? (
+                  <Text style={styles.empty}>No availability slots set yet.</Text>
+                ) : (
+                  availabilitySlots.map((slot) => (
+                    <Text key={slot._id} style={styles.meta}>
+                      {slot.day}: {slot.startTime} - {slot.endTime} ({slot.sessionDurationMinutes} min)
+                    </Text>
+                  ))
+                )}
+              </View>
+
               <View style={styles.card}>
                 <Text style={styles.title}>Chat With Admin</Text>
                 <TextInput
@@ -339,6 +438,18 @@ const styles = StyleSheet.create({
   messageRow: { marginTop: 10, borderTopWidth: 1, borderTopColor: "#EEF2F0", paddingTop: 10 },
   sessionRow: { marginTop: 10, borderTopWidth: 1, borderTopColor: "#EEF2F0", paddingTop: 10 },
   metaStrong: { color: "#1E2B24", fontWeight: "700" },
+  rowWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  dayChip: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 999,
+    backgroundColor: "#fff",
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  dayChipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
+  dayChipText: { color: "#344054", fontWeight: "600" },
+  dayChipTextActive: { color: "#1F7A4C" },
   logout: { marginTop: 8, padding: 12, alignItems: "center" },
   logoutText: { color: "#7A271A", fontWeight: "600" }
 });
