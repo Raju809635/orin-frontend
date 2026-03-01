@@ -49,6 +49,12 @@ function RootDrawer() {
         router.replace(defaultRouteByRole(user.role) as never);
       } else if (pathname.startsWith("/student-dashboard") && user.role !== "student") {
         router.replace(defaultRouteByRole(user.role) as never);
+      } else if (pathname.startsWith("/admin-dashboard")) {
+        router.replace(defaultRouteByRole(user.role) as never);
+      } else if (pathname.startsWith("/mentor-awaiting") || pathname.startsWith("/mentor-pending")) {
+        if (user.role !== "mentor" || user.approvalStatus === "approved") {
+          router.replace(defaultRouteByRole(user.role) as never);
+        }
       }
     }
   }, [isBootstrapping, isAuthenticated, pathname, router, user]);
@@ -144,6 +150,15 @@ function RootDrawer() {
       <Drawer.Screen
         name="mentor/[mentorId]"
         options={{ title: "Mentor Profile", drawerItemStyle: { display: "none" } }}
+      />
+      <Drawer.Screen name="mentor-pending" options={{ title: "Mentor Pending", drawerItemStyle: { display: "none" } }} />
+      <Drawer.Screen
+        name="mentor-awaiting"
+        options={{ title: "Mentor Awaiting", drawerItemStyle: { display: "none" } }}
+      />
+      <Drawer.Screen
+        name="admin-dashboard"
+        options={{ title: "Admin Dashboard", drawerItemStyle: { display: "none" } }}
       />
     </Drawer>
   );
