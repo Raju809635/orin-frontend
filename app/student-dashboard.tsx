@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   Linking,
   RefreshControl,
@@ -131,9 +132,19 @@ export default function StudentDashboard() {
     if (!query) return pendingPaymentSessions;
     return pendingPaymentSessions.filter((session) => {
       const mentorName = (session.mentorId?.name || "").toLowerCase();
+      const mentorEmail = (session.mentorId?.email || "").toLowerCase();
       const date = (session.date || "").toLowerCase();
       const time = (session.time || "").toLowerCase();
-      return mentorName.includes(query) || date.includes(query) || time.includes(query);
+      const paymentStatus = (session.paymentStatus || "").toLowerCase();
+      const sessionStatus = (session.status || "").toLowerCase();
+      return (
+        mentorName.includes(query) ||
+        mentorEmail.includes(query) ||
+        date.includes(query) ||
+        time.includes(query) ||
+        paymentStatus.includes(query) ||
+        sessionStatus.includes(query)
+      );
     });
   }, [pendingPaymentSessions, searchQuery]);
 
@@ -142,9 +153,17 @@ export default function StudentDashboard() {
     if (!query) return waitingVerificationSessions;
     return waitingVerificationSessions.filter((session) => {
       const mentorName = (session.mentorId?.name || "").toLowerCase();
+      const mentorEmail = (session.mentorId?.email || "").toLowerCase();
       const date = (session.date || "").toLowerCase();
       const time = (session.time || "").toLowerCase();
-      return mentorName.includes(query) || date.includes(query) || time.includes(query);
+      const paymentStatus = (session.paymentStatus || "").toLowerCase();
+      return (
+        mentorName.includes(query) ||
+        mentorEmail.includes(query) ||
+        date.includes(query) ||
+        time.includes(query) ||
+        paymentStatus.includes(query)
+      );
     });
   }, [waitingVerificationSessions, searchQuery]);
 
@@ -153,9 +172,19 @@ export default function StudentDashboard() {
     if (!query) return confirmedSessions;
     return confirmedSessions.filter((session) => {
       const mentorName = (session.mentorId?.name || "").toLowerCase();
+      const mentorEmail = (session.mentorId?.email || "").toLowerCase();
       const date = (session.date || "").toLowerCase();
       const time = (session.time || "").toLowerCase();
-      return mentorName.includes(query) || date.includes(query) || time.includes(query);
+      const paymentStatus = (session.paymentStatus || "").toLowerCase();
+      const sessionStatus = (session.sessionStatus || "").toLowerCase();
+      return (
+        mentorName.includes(query) ||
+        mentorEmail.includes(query) ||
+        date.includes(query) ||
+        time.includes(query) ||
+        paymentStatus.includes(query) ||
+        sessionStatus.includes(query)
+      );
     });
   }, [confirmedSessions, searchQuery]);
 
@@ -165,8 +194,14 @@ export default function StudentDashboard() {
     return bookings.filter((booking) => {
       const mentorName = (booking.mentor?.name || "").toLowerCase();
       const mentorEmail = (booking.mentor?.email || "").toLowerCase();
+      const scheduledAt = new Date(booking.scheduledAt).toLocaleString().toLowerCase();
       const status = (booking.status || "").toLowerCase();
-      return mentorName.includes(query) || mentorEmail.includes(query) || status.includes(query);
+      return (
+        mentorName.includes(query) ||
+        mentorEmail.includes(query) ||
+        status.includes(query) ||
+        scheduledAt.includes(query)
+      );
     });
   }, [bookings, searchQuery]);
 
@@ -189,6 +224,33 @@ export default function StudentDashboard() {
     } finally {
       setSubmittingBySession((prev) => ({ ...prev, [session._id]: false }));
     }
+  }
+
+  function cancelPendingSession(session: Session) {
+    Alert.alert(
+      "Cancel session?",
+      "You can cancel this pending payment session now. This action cannot be undone.",
+      [
+        { text: "Keep", style: "cancel" },
+        {
+          text: "Cancel Session",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setSubmittingBySession((prev) => ({ ...prev, [session._id]: true }));
+              setError(null);
+              await api.patch(`/api/sessions/${session._id}/cancel`);
+              notify("Session cancelled.");
+              await fetchDashboard(true);
+            } catch (e: any) {
+              setError(e?.response?.data?.message || "Failed to cancel session.");
+            } finally {
+              setSubmittingBySession((prev) => ({ ...prev, [session._id]: false }));
+            }
+          }
+        }
+      ]
+    );
   }
 
   if (user?.role !== "student") {
@@ -324,13 +386,24 @@ export default function StudentDashboard() {
                         setTransactionRefBySession((prev) => ({ ...prev, [session._id]: value }))
                       }
                     />
-                    <TouchableOpacity
-                      style={styles.joinButton}
-                      onPress={() => submitManualProof(session)}
-                      disabled={isSubmitting}
-                    >
-                      <Text style={styles.joinButtonText}>{isSubmitting ? "Submitting..." : "Upload Screenshot & Submit"}</Text>
-                    </TouchableOpacity>
+                    <View style={styles.paymentActionsRow}>
+                      <TouchableOpacity
+                        style={[styles.joinButton, styles.paymentPrimaryAction]}
+                        onPress={() => submitManualProof(session)}
+                        disabled={isSubmitting}
+                      >
+                        <Text style={styles.joinButtonText}>
+                          {isSubmitting ? "Submitting..." : "Upload Screenshot & Submit"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.cancelButton, isSubmitting && styles.disabledButton]}
+                        onPress={() => cancelPendingSession(session)}
+                        disabled={isSubmitting}
+                      >
+                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 );
               })
@@ -496,6 +569,20 @@ const styles = StyleSheet.create({
     paddingVertical: 10
   },
   joinButtonText: { color: "#fff", fontWeight: "700" },
+  paymentActionsRow: { flexDirection: "row", gap: 10, marginTop: 10 },
+  paymentPrimaryAction: { flex: 1, marginTop: 0 },
+  cancelButton: {
+    flex: 0.5,
+    borderWidth: 1.5,
+    borderColor: "#B42318",
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    backgroundColor: "#fff"
+  },
+  cancelButtonText: { color: "#B42318", fontWeight: "700" },
+  disabledButton: { opacity: 0.6 },
   qrImage: {
     width: "100%",
     height: 180,

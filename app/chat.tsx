@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   StyleSheet,
   Text,
   TextInput,
@@ -18,6 +19,7 @@ type CounterpartUser = {
   email: string;
   role: "student" | "mentor";
   status?: "pending" | "approved";
+  profilePhotoUrl?: string;
 };
 
 type Conversation = {
@@ -36,12 +38,25 @@ type ChatMessage = {
   createdAt: string;
 };
 
+type StudentSession = {
+  _id: string;
+  paymentStatus?: "pending" | "waiting_verification" | "verified" | "rejected" | "paid";
+  sessionStatus?: "booked" | "confirmed" | "completed";
+  mentorId?: {
+    _id?: string;
+    name?: string;
+    email?: string;
+    profilePhotoUrl?: string;
+  };
+};
+
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ userId?: string }>();
   const requestedUserId = useMemo(() => (params.userId || "").trim(), [params.userId]);
   const { user } = useAuth();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [confirmedMentors, setConfirmedMentors] = useState<CounterpartUser[]>([]);
   const [activeUserId, setActiveUserId] = useState<string>("");
   const [activeUser, setActiveUser] = useState<CounterpartUser | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -63,9 +78,45 @@ export default function ChatScreen() {
       try {
         setLoading(true);
         setError(null);
-        const { data } = await api.get<Conversation[]>("/api/chat/conversations");
+        const [conversationRes, sessionsRes] = await Promise.all([
+          api.get<Conversation[]>("/api/chat/conversations"),
+          user?.role === "student"
+            ? api.get<StudentSession[]>("/api/sessions/student/me")
+            : Promise.resolve({ data: [] as StudentSession[] })
+        ]);
+
+        const data = conversationRes.data;
+
         if (!mounted) return;
         setConversations(data);
+
+        if (user?.role === "student") {
+          const sessionData = sessionsRes.data || [];
+          const mentorMap = new Map<string, CounterpartUser>();
+
+          sessionData.forEach((session) => {
+            const mentor = session.mentorId;
+            if (!mentor?._id) return;
+
+            const isConfirmedSession = session.sessionStatus === "confirmed";
+            const isPaid = session.paymentStatus === "paid" || session.paymentStatus === "verified";
+            if (!isConfirmedSession || !isPaid) return;
+
+            mentorMap.set(mentor._id, {
+              _id: mentor._id,
+              name: mentor.name || "Mentor",
+              email: mentor.email || "",
+              role: "mentor",
+              status: "approved",
+              profilePhotoUrl: mentor.profilePhotoUrl || ""
+            });
+          });
+
+          setConfirmedMentors(Array.from(mentorMap.values()));
+        } else {
+          setConfirmedMentors([]);
+        }
+
         if (!activeUserId && data.length > 0) {
           setActiveUserId(data[0].counterpartId);
         }
@@ -84,7 +135,7 @@ export default function ChatScreen() {
     return () => {
       mounted = false;
     };
-  }, [activeUserId]);
+  }, [activeUserId, user?.role]);
 
   useEffect(() => {
     let mounted = true;
@@ -159,6 +210,40 @@ export default function ChatScreen() {
       <Text style={styles.heading}>Messages</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
+      {user?.role === "student" ? (
+        <>
+          <Text style={styles.subTitle}>Confirmed Mentors</Text>
+          <FlatList
+            horizontal
+            data={confirmedMentors}
+            keyExtractor={(item) => item._id}
+            style={styles.confirmedList}
+            showsHorizontalScrollIndicator={false}
+            renderItem={({ item }) => (
+              <TouchableOpacity style={styles.mentorProfileCard} onPress={() => setActiveUserId(item._id)}>
+                {item.profilePhotoUrl ? (
+                  <Image source={{ uri: item.profilePhotoUrl }} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarFallback]}>
+                    <Text style={styles.avatarText}>{item.name?.charAt(0)?.toUpperCase() || "M"}</Text>
+                  </View>
+                )}
+                <Text style={styles.mentorName} numberOfLines={1}>
+                  {item.name}
+                </Text>
+                <Text style={styles.mentorMail} numberOfLines={1}>
+                  {item.email || "Confirmed Mentor"}
+                </Text>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={
+              <Text style={styles.empty}>No confirmed mentors yet. Book and confirm a session to chat.</Text>
+            }
+          />
+        </>
+      ) : null}
+
+      <Text style={styles.subTitle}>Conversations</Text>
       <FlatList
         horizontal
         data={conversations}
@@ -225,7 +310,24 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F9F6", padding: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F4F9F6" },
   heading: { fontSize: 24, fontWeight: "700", color: "#1E2B24", marginBottom: 8 },
+  subTitle: { fontSize: 14, color: "#475467", fontWeight: "700", marginBottom: 6 },
   error: { color: "#B42318", marginBottom: 8 },
+  confirmedList: { maxHeight: 120, marginBottom: 10 },
+  mentorProfileCard: {
+    width: 130,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    marginRight: 8,
+    padding: 10,
+    alignItems: "center"
+  },
+  avatar: { width: 46, height: 46, borderRadius: 23, borderWidth: 1, borderColor: "#D0D5DD" },
+  avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
+  avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 18 },
+  mentorName: { marginTop: 8, color: "#1E2B24", fontWeight: "700", fontSize: 13 },
+  mentorMail: { marginTop: 2, color: "#667085", fontSize: 11, textAlign: "center" },
   conversationList: { maxHeight: 58, marginBottom: 8 },
   conversationChip: {
     borderWidth: 1,

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Animated, Dimensions, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { LinearGradient } from "expo-linear-gradient";
@@ -35,6 +35,12 @@ export default function HomeScreen() {
         : "/mentor-pending"
       : "/student-dashboard";
 
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      router.replace(dashboardRoute as never);
+    }
+  }, [dashboardRoute, isAuthenticated, router, user]);
+
   return (
     <View style={styles.container}>
       <LinearGradient colors={["#E6F6EE", "#F8FCFA", "#FFFFFF"]} style={StyleSheet.absoluteFillObject} />
@@ -46,12 +52,8 @@ export default function HomeScreen() {
 
         {isAuthenticated ? (
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.button} onPress={() => router.push(dashboardRoute as never)}>
-              <Text style={styles.buttonText}>Open Dashboard</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryButton} onPress={() => router.push("/domains")}>
-              <Text style={styles.secondaryButtonText}>Find Mentors</Text>
-            </TouchableOpacity>
+            <ActivityIndicator color="#0B3D2E" />
+            <Text style={styles.redirectText}>Opening your dashboard...</Text>
             <TouchableOpacity style={styles.ghostButton} onPress={logout}>
               <Text style={styles.ghostButtonText}>Logout</Text>
             </TouchableOpacity>
@@ -149,6 +151,13 @@ const styles = StyleSheet.create({
   ghostButtonText: {
     color: "#7A271A",
     fontSize: 14,
+    fontWeight: "600"
+  },
+  redirectText: {
+    color: "#264D3F",
+    textAlign: "center",
+    marginTop: 10,
+    marginBottom: 6,
     fontWeight: "600"
   }
 });

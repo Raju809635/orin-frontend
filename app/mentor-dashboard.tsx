@@ -171,11 +171,15 @@ export default function MentorDashboard() {
       const studentEmail = (session.studentId?.email || "").toLowerCase();
       const date = (session.date || "").toLowerCase();
       const time = (session.time || "").toLowerCase();
+      const paymentStatus = (session.paymentStatus || "").toLowerCase();
+      const sessionStatus = (session.sessionStatus || "").toLowerCase();
       return (
         studentName.includes(query) ||
         studentEmail.includes(query) ||
         date.includes(query) ||
-        time.includes(query)
+        time.includes(query) ||
+        paymentStatus.includes(query) ||
+        sessionStatus.includes(query)
       );
     });
   }, [confirmedPaidSessions, searchQuery]);
@@ -186,8 +190,16 @@ export default function MentorDashboard() {
     return bookings.filter((booking) => {
       const studentName = (booking.student?.name || "").toLowerCase();
       const studentEmail = (booking.student?.email || "").toLowerCase();
+      const scheduledAt = new Date(booking.scheduledAt).toLocaleString().toLowerCase();
       const status = (booking.status || "").toLowerCase();
-      return studentName.includes(query) || studentEmail.includes(query) || status.includes(query);
+      const notes = (booking.notes || "").toLowerCase();
+      return (
+        studentName.includes(query) ||
+        studentEmail.includes(query) ||
+        status.includes(query) ||
+        notes.includes(query) ||
+        scheduledAt.includes(query)
+      );
     });
   }, [bookings, searchQuery]);
 
