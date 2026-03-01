@@ -1,5 +1,4 @@
 import { api } from "@/lib/api";
-import { NativeModulesProxy } from "expo-modules-core";
 
 type UploadResponse = {
   message: string;
@@ -8,14 +7,6 @@ type UploadResponse = {
 };
 
 export async function pickAndUploadProfilePhoto(): Promise<string | null> {
-  const nativeModules = NativeModulesProxy as Record<string, unknown>;
-  const hasNativeImagePicker = Boolean(
-    nativeModules?.ExpoImagePicker || nativeModules?.ExponentImagePicker
-  );
-  if (!hasNativeImagePicker) {
-    throw new Error("This APK does not support image upload yet. Please install the latest APK build.");
-  }
-
   let ImagePicker: any;
   try {
     ImagePicker = await import("expo-image-picker");
@@ -36,7 +27,6 @@ export async function pickAndUploadProfilePhoto(): Promise<string | null> {
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ["images"],
     quality: 0.8,
     allowsEditing: true,
     aspect: [1, 1]

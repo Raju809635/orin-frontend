@@ -1,7 +1,10 @@
 export const CATEGORY_OPTIONS = [
-  "Startups & Entrepreneurship",
-  "Technology & AI",
+  "Academic",
+  "Competitive Exams",
+  "Professional Courses",
   "Career & Placements",
+  "Technology & AI",
+  "Startups & Entrepreneurship",
   "Finance & Investing",
   "Creative & Design",
   "Personal Development"

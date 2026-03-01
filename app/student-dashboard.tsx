@@ -12,6 +12,7 @@ import {
   View
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
@@ -66,6 +67,7 @@ export default function StudentDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
@@ -124,6 +126,50 @@ export default function StudentDashboard() {
     [sessions]
   );
 
+  const filteredPendingPaymentSessions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return pendingPaymentSessions;
+    return pendingPaymentSessions.filter((session) => {
+      const mentorName = (session.mentorId?.name || "").toLowerCase();
+      const date = (session.date || "").toLowerCase();
+      const time = (session.time || "").toLowerCase();
+      return mentorName.includes(query) || date.includes(query) || time.includes(query);
+    });
+  }, [pendingPaymentSessions, searchQuery]);
+
+  const filteredWaitingVerificationSessions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return waitingVerificationSessions;
+    return waitingVerificationSessions.filter((session) => {
+      const mentorName = (session.mentorId?.name || "").toLowerCase();
+      const date = (session.date || "").toLowerCase();
+      const time = (session.time || "").toLowerCase();
+      return mentorName.includes(query) || date.includes(query) || time.includes(query);
+    });
+  }, [waitingVerificationSessions, searchQuery]);
+
+  const filteredConfirmedSessions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return confirmedSessions;
+    return confirmedSessions.filter((session) => {
+      const mentorName = (session.mentorId?.name || "").toLowerCase();
+      const date = (session.date || "").toLowerCase();
+      const time = (session.time || "").toLowerCase();
+      return mentorName.includes(query) || date.includes(query) || time.includes(query);
+    });
+  }, [confirmedSessions, searchQuery]);
+
+  const filteredBookings = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return bookings;
+    return bookings.filter((booking) => {
+      const mentorName = (booking.mentor?.name || "").toLowerCase();
+      const mentorEmail = (booking.mentor?.email || "").toLowerCase();
+      const status = (booking.status || "").toLowerCase();
+      return mentorName.includes(query) || mentorEmail.includes(query) || status.includes(query);
+    });
+  }, [bookings, searchQuery]);
+
   async function submitManualProof(session: Session) {
     const transactionReference = (transactionRefBySession[session._id] || "").trim();
 
@@ -158,45 +204,77 @@ export default function StudentDashboard() {
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchDashboard(true)} />}
     >
-      <Text style={styles.heading}>Student Dashboard</Text>
-      <Text style={styles.subheading}>Welcome back, {user.name}</Text>
-      <View style={styles.profileMenuWrap}>
-        <TouchableOpacity style={styles.avatarButton} onPress={() => setShowProfileMenu((prev) => !prev)}>
-          {profilePhotoUrl ? (
-            <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
-          ) : (
-            <View style={[styles.avatarImage, styles.avatarFallback]}>
-              <Text style={styles.avatarText}>{user.name?.charAt(0)?.toUpperCase() || "S"}</Text>
+      <View style={styles.topRow}>
+        <View>
+          <Text style={styles.heading}>Home</Text>
+          <Text style={styles.subheading}>Welcome back, {user.name}</Text>
+        </View>
+        <View style={styles.profileMenuWrap}>
+          <TouchableOpacity style={styles.avatarButton} onPress={() => setShowProfileMenu((prev) => !prev)}>
+            {profilePhotoUrl ? (
+              <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={[styles.avatarImage, styles.avatarFallback]}>
+                <Text style={styles.avatarText}>{user.name?.charAt(0)?.toUpperCase() || "S"}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          {showProfileMenu ? (
+            <View style={styles.profileMenuCard}>
+              <TouchableOpacity onPress={() => router.push("/student-profile" as never)}>
+                <Text style={styles.profileMenuItem}>Edit Profile</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push("/settings" as never)}>
+                <Text style={styles.profileMenuItem}>Settings</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push("/about" as never)}>
+                <Text style={styles.profileMenuItem}>About ORIN</Text>
+              </TouchableOpacity>
             </View>
-          )}
-        </TouchableOpacity>
-        {showProfileMenu ? (
-          <View style={styles.profileMenuCard}>
-            <TouchableOpacity onPress={() => router.push("/student-profile" as never)}>
-              <Text style={styles.profileMenuItem}>Edit Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push("/settings" as never)}>
-              <Text style={styles.profileMenuItem}>Settings</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push("/about" as never)}>
-              <Text style={styles.profileMenuItem}>About ORIN</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
+          ) : null}
+        </View>
       </View>
 
-      <View style={styles.quickActions}>
-        <TouchableOpacity style={styles.cta} onPress={() => router.push("/domains")}>
-          <Text style={styles.ctaText}>Find Mentors</Text>
+      <View style={styles.searchBox}>
+        <Ionicons name="search" size={18} color="#667085" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search mentors, dates or sessions"
+          placeholderTextColor="#98A2B3"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+
+      <View style={styles.sectionGrid}>
+        <TouchableOpacity style={styles.sectionTilePrimary} onPress={() => router.push("/ai-assistant" as never)}>
+          <Ionicons name="sparkles" size={20} color="#fff" />
+          <Text style={styles.sectionTilePrimaryTitle}>AI Bot</Text>
+          <Text style={styles.sectionTilePrimarySub}>Ask ORIN AI for guidance</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/chat" as never)}>
-          <Text style={styles.secondaryCtaText}>Messages</Text>
+
+        <TouchableOpacity style={styles.sectionTilePrimary} onPress={() => router.push("/domains")}>
+          <Ionicons name="people" size={20} color="#fff" />
+          <Text style={styles.sectionTilePrimaryTitle}>Find Mentors</Text>
+          <Text style={styles.sectionTilePrimarySub}>Browse by domain</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/student-profile" as never)}>
-          <Text style={styles.secondaryCtaText}>My Profile</Text>
+
+        <TouchableOpacity style={styles.sectionTile} onPress={() => router.push("/chat" as never)}>
+          <Ionicons name="chatbubble-ellipses" size={20} color="#1F7A4C" />
+          <Text style={styles.sectionTileTitle}>Messages</Text>
+          <Text style={styles.sectionTileSub}>Open chats</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/complaints" as never)}>
-          <Text style={styles.secondaryCtaText}>Support</Text>
+
+        <TouchableOpacity style={styles.sectionTile} onPress={() => router.push("/student-profile" as never)}>
+          <Ionicons name="person-circle" size={20} color="#1F7A4C" />
+          <Text style={styles.sectionTileTitle}>My Profile</Text>
+          <Text style={styles.sectionTileSub}>Update details</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.sectionTile} onPress={() => router.push("/complaints" as never)}>
+          <Ionicons name="help-buoy" size={20} color="#1F7A4C" />
+          <Text style={styles.sectionTileTitle}>Support</Text>
+          <Text style={styles.sectionTileSub}>Raise issue</Text>
         </TouchableOpacity>
       </View>
 
@@ -212,10 +290,10 @@ export default function StudentDashboard() {
         <>
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Pending Payments</Text>
-            {pendingPaymentSessions.length === 0 ? (
+            {filteredPendingPaymentSessions.length === 0 ? (
               <Text style={styles.empty}>No pending manual payments.</Text>
             ) : (
-              pendingPaymentSessions.map((session) => {
+              filteredPendingPaymentSessions.map((session) => {
                 const instructions = session.paymentInstructions;
                 const isSubmitting = Boolean(submittingBySession[session._id]);
                 return (
@@ -261,10 +339,10 @@ export default function StudentDashboard() {
 
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Awaiting Verification</Text>
-            {waitingVerificationSessions.length === 0 ? (
+            {filteredWaitingVerificationSessions.length === 0 ? (
               <Text style={styles.empty}>No sessions waiting for verification.</Text>
             ) : (
-              waitingVerificationSessions.map((session) => (
+              filteredWaitingVerificationSessions.map((session) => (
                 <View key={session._id} style={styles.card}>
                   <Text style={styles.title}>{session.mentorId?.name || "Mentor"}</Text>
                   <Text style={styles.meta}>
@@ -278,10 +356,10 @@ export default function StudentDashboard() {
 
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Confirmed Sessions</Text>
-            {confirmedSessions.length === 0 ? (
+            {filteredConfirmedSessions.length === 0 ? (
               <Text style={styles.empty}>No confirmed sessions yet.</Text>
             ) : (
-              confirmedSessions.map((session) => (
+              filteredConfirmedSessions.map((session) => (
                 <View key={session._id} style={styles.card}>
                   <Text style={styles.title}>{session.mentorId?.name || "Mentor"}</Text>
                   <Text style={styles.meta}>
@@ -302,10 +380,10 @@ export default function StudentDashboard() {
 
           <View style={styles.panel}>
             <Text style={styles.panelTitle}>Legacy Booking Requests</Text>
-            {bookings.length === 0 ? (
+            {filteredBookings.length === 0 ? (
               <Text style={styles.empty}>No booking requests yet.</Text>
             ) : (
-              bookings.map((item) => (
+              filteredBookings.map((item) => (
                 <View key={item._id} style={styles.card}>
                   <Text style={styles.title}>{item.mentor?.name || "Mentor"}</Text>
                   <Text style={styles.meta}>{item.mentor?.email}</Text>
@@ -329,13 +407,17 @@ const styles = StyleSheet.create({
   container: { backgroundColor: "#F4F9F6", padding: 20, paddingBottom: 30 },
   heading: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   subheading: { marginTop: 6, marginBottom: 14, color: "#475467", fontWeight: "500" },
-  profileMenuWrap: { alignItems: "flex-end", marginTop: -52, marginBottom: 18 },
+  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  profileMenuWrap: { alignItems: "flex-end", position: "relative", zIndex: 2 },
   avatarButton: { width: 48, height: 48, borderRadius: 24, overflow: "hidden", borderWidth: 2, borderColor: "#CFE4D8" },
   avatarImage: { width: "100%", height: "100%" },
   avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
   avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 18 },
   profileMenuCard: {
-    marginTop: 8,
+    marginTop: 10,
+    position: "absolute",
+    top: 48,
+    right: 0,
     backgroundColor: "#fff",
     borderColor: "#D0D5DD",
     borderWidth: 1,
@@ -344,19 +426,42 @@ const styles = StyleSheet.create({
     paddingVertical: 8
   },
   profileMenuItem: { paddingHorizontal: 12, paddingVertical: 9, color: "#1E2B24", fontWeight: "600" },
-  quickActions: { marginBottom: 12 },
-  cta: { backgroundColor: "#1F7A4C", padding: 12, borderRadius: 12, alignItems: "center", marginBottom: 10 },
-  ctaText: { color: "#fff", fontWeight: "700" },
-  secondaryCta: {
-    borderColor: "#1F7A4C",
-    borderWidth: 1.5,
-    padding: 10,
-    borderRadius: 12,
+  searchBox: {
+    marginTop: 4,
+    marginBottom: 14,
+    backgroundColor: "#fff",
+    borderColor: "#D0D5DD",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    height: 46,
+    flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
-    backgroundColor: "#fff"
+    gap: 8
   },
-  secondaryCtaText: { color: "#1F7A4C", fontWeight: "700" },
+  searchInput: { flex: 1, color: "#1E2B24", fontWeight: "500" },
+  sectionGrid: { marginBottom: 12 },
+  sectionTilePrimary: {
+    backgroundColor: "#1F7A4C",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10
+  },
+  sectionTilePrimaryTitle: { marginTop: 6, color: "#fff", fontWeight: "800", fontSize: 16 },
+  sectionTilePrimarySub: { marginTop: 4, color: "#E6F4EC", fontWeight: "500" },
+  sectionTile: {
+    backgroundColor: "#fff",
+    borderColor: "#DCE4DF",
+    borderWidth: 1.5,
+    padding: 12,
+    borderRadius: 14,
+    marginBottom: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  sectionTileTitle: { color: "#1E2B24", fontWeight: "700", fontSize: 15 },
+  sectionTileSub: { color: "#667085", fontWeight: "500", marginLeft: "auto" },
   centered: { alignItems: "center", justifyContent: "center", minHeight: 140 },
   panel: { marginTop: 8 },
   panelTitle: { fontSize: 17, fontWeight: "800", color: "#1E2B24", marginBottom: 8 },

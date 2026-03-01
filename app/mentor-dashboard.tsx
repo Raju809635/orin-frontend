@@ -11,6 +11,7 @@ import {
   View
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
@@ -65,7 +66,7 @@ type MentorProfilePayload = {
 
 type SectionId = "overview" | "pricing" | "availability" | "sessions" | "requests" | "adminChat";
 
-const sectionOrder: Array<{ id: SectionId; label: string }> = [
+const sectionOrder: { id: SectionId; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "pricing", label: "Profile & Pricing" },
   { id: "availability", label: "Availability" },
@@ -98,6 +99,7 @@ export default function MentorDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
@@ -160,6 +162,40 @@ export default function MentorDashboard() {
       ),
     [sessions]
   );
+
+  const filteredConfirmedPaidSessions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return confirmedPaidSessions;
+    return confirmedPaidSessions.filter((session) => {
+      const studentName = (session.studentId?.name || "").toLowerCase();
+      const studentEmail = (session.studentId?.email || "").toLowerCase();
+      const date = (session.date || "").toLowerCase();
+      const time = (session.time || "").toLowerCase();
+      return (
+        studentName.includes(query) ||
+        studentEmail.includes(query) ||
+        date.includes(query) ||
+        time.includes(query)
+      );
+    });
+  }, [confirmedPaidSessions, searchQuery]);
+
+  const filteredBookings = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return bookings;
+    return bookings.filter((booking) => {
+      const studentName = (booking.student?.name || "").toLowerCase();
+      const studentEmail = (booking.student?.email || "").toLowerCase();
+      const status = (booking.status || "").toLowerCase();
+      return studentName.includes(query) || studentEmail.includes(query) || status.includes(query);
+    });
+  }, [bookings, searchQuery]);
+
+  const filteredMessages = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return messages;
+    return messages.filter((msg) => msg.text.toLowerCase().includes(query));
+  }, [messages, searchQuery]);
 
   function canSetMeetingLink(session: Session) {
     const start = session.scheduledStart ? new Date(session.scheduledStart).getTime() : NaN;
@@ -267,42 +303,78 @@ export default function MentorDashboard() {
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchDashboard(true)} />}
     >
-      <Text style={styles.heading}>Mentor Dashboard</Text>
-      <Text style={styles.subheading}>Manage profile, pricing, availability and sessions.</Text>
-      <View style={styles.profileMenuWrap}>
-        <TouchableOpacity style={styles.avatarButton} onPress={() => setShowProfileMenu((prev) => !prev)}>
-          {profilePhotoUrl ? (
-            <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
-          ) : (
-            <View style={[styles.avatarImage, styles.avatarFallback]}>
-              <Text style={styles.avatarText}>{user.name?.charAt(0)?.toUpperCase() || "M"}</Text>
+      <View style={styles.topRow}>
+        <View>
+          <Text style={styles.heading}>Mentor Home</Text>
+          <Text style={styles.subheading}>Manage profile, pricing, timings and sessions.</Text>
+        </View>
+        <View style={styles.profileMenuWrap}>
+          <TouchableOpacity style={styles.avatarButton} onPress={() => setShowProfileMenu((prev) => !prev)}>
+            {profilePhotoUrl ? (
+              <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
+            ) : (
+              <View style={[styles.avatarImage, styles.avatarFallback]}>
+                <Text style={styles.avatarText}>{user.name?.charAt(0)?.toUpperCase() || "M"}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          {showProfileMenu ? (
+            <View style={styles.profileMenuCard}>
+              <TouchableOpacity onPress={() => router.push("/mentor-profile" as never)}>
+                <Text style={styles.profileMenuItem}>Edit Profile</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push("/settings" as never)}>
+                <Text style={styles.profileMenuItem}>Settings</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push("/about" as never)}>
+                <Text style={styles.profileMenuItem}>About ORIN</Text>
+              </TouchableOpacity>
             </View>
-          )}
-        </TouchableOpacity>
-        {showProfileMenu ? (
-          <View style={styles.profileMenuCard}>
-            <TouchableOpacity onPress={() => router.push("/mentor-profile" as never)}>
-              <Text style={styles.profileMenuItem}>Edit Profile</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push("/settings" as never)}>
-              <Text style={styles.profileMenuItem}>Settings</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => router.push("/about" as never)}>
-              <Text style={styles.profileMenuItem}>About ORIN</Text>
-            </TouchableOpacity>
-          </View>
-        ) : null}
+          ) : null}
+        </View>
       </View>
 
-      <View style={styles.quickLinks}>
-        <TouchableOpacity style={styles.actionPill} onPress={() => router.push("/mentor-profile" as never)}>
-          <Text style={styles.actionPillText}>Open Full Profile</Text>
+      <View style={styles.searchBox}>
+        <Ionicons name="search" size={18} color="#667085" />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search students, sessions or chat"
+          placeholderTextColor="#98A2B3"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+        />
+      </View>
+
+      <View style={styles.quickGrid}>
+        <TouchableOpacity style={styles.primaryTile} onPress={() => router.push("/ai-assistant" as never)}>
+          <Ionicons name="sparkles" size={20} color="#fff" />
+          <Text style={styles.primaryTileTitle}>AI Bot</Text>
+          <Text style={styles.primaryTileSub}>Ask for bio, message or planning help</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionPill} onPress={() => router.push("/chat" as never)}>
-          <Text style={styles.actionPillText}>Student Messages</Text>
+
+        <TouchableOpacity style={styles.quickTile} onPress={() => setActiveSection("availability")}>
+          <Ionicons name="calendar" size={20} color="#1F7A4C" />
+          <Text style={styles.quickTileTitle}>Availability</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.actionPill} onPress={() => router.push("/ai-assistant" as never)}>
-          <Text style={styles.actionPillText}>AI Assistant</Text>
+
+        <TouchableOpacity style={styles.quickTile} onPress={() => setActiveSection("sessions")}>
+          <Ionicons name="videocam" size={20} color="#1F7A4C" />
+          <Text style={styles.quickTileTitle}>Sessions</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.quickTile} onPress={() => router.push("/chat" as never)}>
+          <Ionicons name="chatbubble-ellipses" size={20} color="#1F7A4C" />
+          <Text style={styles.quickTileTitle}>Student Chats</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.quickTile} onPress={() => setActiveSection("pricing")}>
+          <Ionicons name="cash" size={20} color="#1F7A4C" />
+          <Text style={styles.quickTileTitle}>Profile & Pricing</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.quickTile} onPress={() => setActiveSection("adminChat")}>
+          <Ionicons name="shield-checkmark" size={20} color="#1F7A4C" />
+          <Text style={styles.quickTileTitle}>Admin Chat</Text>
         </TouchableOpacity>
       </View>
 
@@ -437,10 +509,10 @@ export default function MentorDashboard() {
       {!isLoading && activeSection === "sessions" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Confirmed Paid Sessions</Text>
-          {confirmedPaidSessions.length === 0 ? (
+          {filteredConfirmedPaidSessions.length === 0 ? (
             <Text style={styles.empty}>No confirmed sessions yet.</Text>
           ) : (
-            confirmedPaidSessions.map((session) => (
+            filteredConfirmedPaidSessions.map((session) => (
               <View key={session._id} style={styles.card}>
                 <Text style={styles.title}>{session.studentId?.name || "Student"}</Text>
                 <Text style={styles.meta}>
@@ -474,10 +546,10 @@ export default function MentorDashboard() {
       {!isLoading && activeSection === "requests" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Booking Requests</Text>
-          {bookings.length === 0 ? (
+          {filteredBookings.length === 0 ? (
             <Text style={styles.empty}>No booking requests yet.</Text>
           ) : (
-            bookings.map((booking) => (
+            filteredBookings.map((booking) => (
               <View key={booking._id} style={styles.card}>
                 <Text style={styles.title}>{booking.student?.name || "Student"}</Text>
                 <Text style={styles.meta}>{booking.student?.email}</Text>
@@ -518,10 +590,10 @@ export default function MentorDashboard() {
           <TouchableOpacity style={styles.primaryButton} onPress={sendMessageToAdmin} disabled={sendingMessage}>
             <Text style={styles.primaryButtonText}>{sendingMessage ? "Sending..." : "Send To Admin"}</Text>
           </TouchableOpacity>
-          {messages.length === 0 ? (
+          {filteredMessages.length === 0 ? (
             <Text style={styles.empty}>No admin messages yet.</Text>
           ) : (
-            messages.slice(0, 20).map((msg) => (
+            filteredMessages.slice(0, 20).map((msg) => (
               <View key={msg._id} style={styles.card}>
                 <Text style={styles.metaStrong}>{msg.sender === user?.id ? "You" : "Admin"}</Text>
                 <Text style={styles.meta}>{msg.text}</Text>
@@ -543,13 +615,17 @@ const styles = StyleSheet.create({
   container: { backgroundColor: "#F4F9F6", padding: 20, paddingBottom: 30 },
   heading: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   subheading: { marginTop: 6, marginBottom: 12, color: "#475467", fontWeight: "500" },
-  profileMenuWrap: { alignItems: "flex-end", marginTop: -52, marginBottom: 18 },
+  topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  profileMenuWrap: { alignItems: "flex-end", position: "relative", zIndex: 2 },
   avatarButton: { width: 48, height: 48, borderRadius: 24, overflow: "hidden", borderWidth: 2, borderColor: "#CFE4D8" },
   avatarImage: { width: "100%", height: "100%" },
   avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
   avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 18 },
   profileMenuCard: {
-    marginTop: 8,
+    marginTop: 10,
+    position: "absolute",
+    top: 48,
+    right: 0,
     backgroundColor: "#fff",
     borderColor: "#D0D5DD",
     borderWidth: 1,
@@ -559,17 +635,41 @@ const styles = StyleSheet.create({
   },
   profileMenuItem: { paddingHorizontal: 12, paddingVertical: 9, color: "#1E2B24", fontWeight: "600" },
   centered: { alignItems: "center", justifyContent: "center", minHeight: 140 },
-  quickLinks: { marginBottom: 10 },
-  actionPill: {
+  searchBox: {
+    marginTop: 4,
+    marginBottom: 12,
+    backgroundColor: "#fff",
+    borderColor: "#D0D5DD",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    height: 46,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  searchInput: { flex: 1, color: "#1E2B24", fontWeight: "500" },
+  quickGrid: { marginBottom: 10 },
+  primaryTile: {
+    backgroundColor: "#1F7A4C",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10
+  },
+  primaryTileTitle: { marginTop: 6, color: "#fff", fontWeight: "800", fontSize: 16 },
+  primaryTileSub: { marginTop: 4, color: "#E6F4EC", fontWeight: "500" },
+  quickTile: {
+    backgroundColor: "#fff",
     borderColor: "#1F7A4C",
     borderWidth: 1.5,
-    padding: 10,
-    borderRadius: 12,
-    alignItems: "center",
+    padding: 12,
+    borderRadius: 14,
     marginBottom: 10,
-    backgroundColor: "#fff"
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
   },
-  actionPillText: { color: "#1F7A4C", fontWeight: "700" },
+  quickTileTitle: { color: "#1F7A4C", fontWeight: "700", fontSize: 15 },
   sectionNav: { marginBottom: 10 },
   sectionNavRow: { flexDirection: "row", gap: 8 },
   sectionChip: {

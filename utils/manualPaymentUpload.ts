@@ -1,15 +1,6 @@
-import { NativeModulesProxy } from "expo-modules-core";
 import { api } from "@/lib/api";
 
 export async function submitManualPaymentWithPicker(sessionId: string, transactionReference = "") {
-  const nativeModules = NativeModulesProxy as Record<string, unknown>;
-  const hasNativeImagePicker = Boolean(
-    nativeModules?.ExpoImagePicker || nativeModules?.ExponentImagePicker
-  );
-  if (!hasNativeImagePicker) {
-    throw new Error("This APK does not support screenshot upload yet. Please install the latest APK build.");
-  }
-
   let ImagePicker: any;
   try {
     ImagePicker = await import("expo-image-picker");
@@ -30,7 +21,6 @@ export async function submitManualPaymentWithPicker(sessionId: string, transacti
   }
 
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ["images"],
     quality: 0.85,
     allowsEditing: false
   });

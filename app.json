@@ -30,6 +30,13 @@
     "plugins": [
       "expo-router",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow ORIN to access your photos for profile and payment screenshot uploads.",
+          "cameraPermission": "Allow ORIN to access camera when needed for uploads."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/images/splash-icon.png",
