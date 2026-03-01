@@ -101,6 +101,14 @@ export default function MentorDashboard() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
+  function openAiFromSearch() {
+    const query = searchQuery.trim();
+    const target = query
+      ? `/ai-assistant?q=${encodeURIComponent(query)}`
+      : "/ai-assistant";
+    router.push(target as never);
+  }
+
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
       if (refresh) setIsRefreshing(true);
@@ -354,7 +362,12 @@ export default function MentorDashboard() {
           placeholderTextColor="#98A2B3"
           value={searchQuery}
           onChangeText={setSearchQuery}
+          returnKeyType="search"
+          onSubmitEditing={openAiFromSearch}
         />
+        <TouchableOpacity style={styles.aiSearchButton} onPress={openAiFromSearch}>
+          <Ionicons name="sparkles" size={17} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.quickGrid}>
@@ -661,6 +674,14 @@ const styles = StyleSheet.create({
     gap: 8
   },
   searchInput: { flex: 1, color: "#1E2B24", fontWeight: "500" },
+  aiSearchButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#1F7A4C",
+    alignItems: "center",
+    justifyContent: "center"
+  },
   quickGrid: { marginBottom: 10 },
   primaryTile: {
     backgroundColor: "#1F7A4C",

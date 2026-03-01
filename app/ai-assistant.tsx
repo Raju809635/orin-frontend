@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 
@@ -19,10 +20,18 @@ type ChatItem = {
 
 export default function AiAssistantScreen() {
   const { user } = useAuth();
+  const params = useLocalSearchParams<{ q?: string }>();
   const [prompt, setPrompt] = useState("");
   const [items, setItems] = useState<ChatItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const q = (params.q || "").toString().trim();
+    if (q) {
+      setPrompt(q);
+    }
+  }, [params.q]);
 
   async function askAi() {
     if (!prompt.trim() || isLoading) return;

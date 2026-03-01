@@ -33,7 +33,7 @@ export default function DomainScreen() {
   }, []);
 
   return (
-    <View style={styles.container}>
+    <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.heading}>Choose Your Domain</Text>
       <Text style={styles.subheading}>Explore approved mentors and book a session.</Text>
       <Text style={styles.sectionTitle}>Browse by Category</Text>
@@ -81,15 +81,15 @@ export default function DomainScreen() {
           ))}
         </ScrollView>
       )}
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     backgroundColor: "#F4F9F6",
-    padding: 20
+    padding: 20,
+    paddingBottom: 30
   },
   heading: {
     fontSize: 24,
