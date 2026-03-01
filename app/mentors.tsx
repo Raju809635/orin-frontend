@@ -17,6 +17,8 @@ type Mentor = {
   _id: string;
   name: string;
   email: string;
+  bio?: string;
+  expertise?: string;
   primaryCategory?: string;
   subCategory?: string;
   specializations?: string[];
@@ -128,21 +130,23 @@ export default function MentorsScreen() {
               style={styles.card}
               onPress={() => router.push(`/mentor/${item._id}` as never)}
             >
-              <View style={styles.headerRow}>
-                {item.profilePhotoUrl ? (
-                  <Image source={{ uri: item.profilePhotoUrl }} style={styles.avatar} />
-                ) : (
-                  <View style={[styles.avatar, styles.avatarFallback]}>
-                    <Text style={styles.avatarText}>{item.name?.charAt(0)?.toUpperCase() || "M"}</Text>
-                  </View>
-                )}
-                <View style={styles.headerText}>
-                  <Text style={styles.name}>{item.name}</Text>
-                  <Text style={styles.email}>{item.email}</Text>
+              {item.profilePhotoUrl ? (
+                <Image source={{ uri: item.profilePhotoUrl }} style={styles.heroImage} />
+              ) : (
+                <View style={[styles.heroImage, styles.avatarFallback]}>
+                  <Text style={styles.avatarText}>{item.name?.charAt(0)?.toUpperCase() || "M"}</Text>
                 </View>
-              </View>
+              )}
+              <Text style={styles.name}>{item.name}</Text>
+              <Text style={styles.email}>{item.email}</Text>
               <Text style={styles.domain}>
                 {[item.primaryCategory, item.subCategory].filter(Boolean).join(" > ") || "General"}
+              </Text>
+              <Text style={styles.aboutLabel}>About</Text>
+              <Text style={styles.aboutText}>
+                {item.bio?.trim() ||
+                  item.expertise?.trim() ||
+                  (item.specializations?.length ? item.specializations.join(", ") : "Mentor profile available.")}
               </Text>
               {!!item.specializations?.length ? (
                 <Text style={styles.specs}>{item.specializations.join(", ")}</Text>
@@ -224,17 +228,23 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: "#FFFFFF",
     borderRadius: 14,
-    padding: 16,
+    padding: 12,
     marginBottom: 12,
     borderWidth: 1,
     borderColor: "#EAECF0"
   },
-  headerRow: { flexDirection: "row", alignItems: "center" },
-  headerText: { marginLeft: 10, flex: 1 },
-  avatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: "#D0D5DD" },
+  heroImage: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#F4F6F8"
+  },
   avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
-  avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 18 },
+  avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 42 },
   name: {
+    marginTop: 10,
     fontSize: 16,
     fontWeight: "700",
     color: "#1E2B24"
@@ -249,8 +259,19 @@ const styles = StyleSheet.create({
     color: "#1F7A4C",
     fontWeight: "600"
   },
+  aboutLabel: {
+    marginTop: 10,
+    color: "#1E2B24",
+    fontWeight: "700"
+  },
+  aboutText: {
+    marginTop: 4,
+    color: "#475467",
+    lineHeight: 19
+  },
   specs: {
     marginTop: 6,
-    color: "#475467"
+    color: "#667085",
+    fontSize: 12
   }
 });

@@ -101,12 +101,60 @@ export default function MentorDashboard() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const mentorServices = [
-    { key: "ai", label: "AI Bot", icon: "sparkles", onPress: () => router.push("/ai-assistant" as never) },
-    { key: "availability", label: "Availability", icon: "calendar", onPress: () => setActiveSection("availability") },
-    { key: "sessions", label: "Sessions", icon: "videocam", onPress: () => setActiveSection("sessions") },
-    { key: "chat", label: "Student Chats", icon: "chatbubble-ellipses", onPress: () => router.push("/chat" as never) },
-    { key: "pricing", label: "Pricing", icon: "cash", onPress: () => setActiveSection("pricing") },
-    { key: "admin", label: "Admin Chat", icon: "shield-checkmark", onPress: () => setActiveSection("adminChat") }
+    {
+      key: "ai",
+      label: "AI Bot",
+      icon: "sparkles",
+      tint: "#7C3AED",
+      bg: "#F0E9FF",
+      border: "#E1D5FF",
+      onPress: () => router.push("/ai-assistant" as never)
+    },
+    {
+      key: "availability",
+      label: "Availability",
+      icon: "calendar",
+      tint: "#165DFF",
+      bg: "#EAF2FF",
+      border: "#D7E6FF",
+      onPress: () => setActiveSection("availability")
+    },
+    {
+      key: "sessions",
+      label: "Sessions",
+      icon: "videocam",
+      tint: "#0F766E",
+      bg: "#E7F9F6",
+      border: "#CDEEE8",
+      onPress: () => setActiveSection("sessions")
+    },
+    {
+      key: "chat",
+      label: "Student Chats",
+      icon: "chatbubble-ellipses",
+      tint: "#0369A1",
+      bg: "#E8F5FF",
+      border: "#D3EAFA",
+      onPress: () => router.push("/chat" as never)
+    },
+    {
+      key: "pricing",
+      label: "Pricing",
+      icon: "cash",
+      tint: "#B45309",
+      bg: "#FFF4E5",
+      border: "#F8E2C2",
+      onPress: () => setActiveSection("pricing")
+    },
+    {
+      key: "admin",
+      label: "Admin Chat",
+      icon: "shield-checkmark",
+      tint: "#475467",
+      bg: "#EEF2F6",
+      border: "#DCE3EA",
+      onPress: () => setActiveSection("adminChat")
+    }
   ] as const;
 
   const fetchDashboard = useCallback(async (refresh = false) => {
@@ -374,9 +422,9 @@ export default function MentorDashboard() {
       <Text style={styles.sectionHeader}>Services</Text>
       <View style={styles.quickGrid}>
         {mentorServices.map((item) => (
-          <TouchableOpacity key={item.key} style={styles.quickTile} onPress={item.onPress}>
-            <View style={styles.iconBadge}>
-              <Ionicons name={item.icon} size={18} color="#1F7A4C" />
+          <TouchableOpacity key={item.key} style={[styles.quickTile, { borderColor: item.border }]} onPress={item.onPress}>
+            <View style={[styles.iconBadge, { backgroundColor: item.bg }]}>
+              <Ionicons name={item.icon} size={18} color={item.tint} />
             </View>
             <Text style={styles.quickTileTitle}>{item.label}</Text>
           </TouchableOpacity>
@@ -636,7 +684,7 @@ export default function MentorDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: "#EEF3F0", padding: 20, paddingBottom: 30 },
+  container: { backgroundColor: "#F3F5F7", padding: 20, paddingBottom: 30 },
   heading: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   subheading: { marginTop: 6, marginBottom: 12, color: "#475467", fontWeight: "500" },
   topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
@@ -674,14 +722,14 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, color: "#1E2B24", fontWeight: "500" },
   heroBanner: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F7FBFF",
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#D7E5DE",
+    borderColor: "#D7E6F6",
     marginBottom: 14
   },
-  heroEyebrow: { color: "#1F7A4C", fontWeight: "700", marginBottom: 6 },
+  heroEyebrow: { color: "#165DFF", fontWeight: "700", marginBottom: 6 },
   heroTitle: { color: "#11261E", fontSize: 28, fontWeight: "900", lineHeight: 34 },
   heroSubTitle: { marginTop: 8, color: "#4A5B53", fontWeight: "500", lineHeight: 20 },
   sectionHeader: { fontSize: 16, fontWeight: "800", color: "#1E2B24", marginBottom: 10 },
@@ -701,8 +749,7 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#E7F5EE"
+    justifyContent: "center"
   },
   quickTileTitle: { color: "#1E2B24", fontWeight: "700", fontSize: 13, textAlign: "center" },
   featuredRow: { paddingBottom: 4, gap: 10, marginBottom: 8 },

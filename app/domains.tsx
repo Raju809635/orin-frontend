@@ -7,8 +7,12 @@ import { api } from "@/lib/api";
 type MentorPreview = {
   _id: string;
   name: string;
+  email?: string;
+  bio?: string;
+  expertise?: string;
   primaryCategory?: string;
   subCategory?: string;
+  specializations?: string[];
   profilePhotoUrl?: string;
 };
 
@@ -67,15 +71,22 @@ export default function DomainScreen() {
               onPress={() => router.push(`/mentor/${mentor._id}` as never)}
             >
               {mentor.profilePhotoUrl ? (
-                <Image source={{ uri: mentor.profilePhotoUrl }} style={styles.avatar} />
+                <Image source={{ uri: mentor.profilePhotoUrl }} style={styles.heroImage} />
               ) : (
-                <View style={[styles.avatar, styles.avatarFallback]}>
+                <View style={[styles.heroImage, styles.avatarFallback]}>
                   <Text style={styles.avatarText}>{mentor.name?.charAt(0)?.toUpperCase() || "M"}</Text>
                 </View>
               )}
               <Text style={styles.mentorName} numberOfLines={1}>{mentor.name}</Text>
+              <Text style={styles.mentorEmail} numberOfLines={1}>{mentor.email || "Mentor"}</Text>
               <Text style={styles.mentorDomain} numberOfLines={1}>
                 {[mentor.primaryCategory, mentor.subCategory].filter(Boolean).join(" > ") || "General"}
+              </Text>
+              <Text style={styles.aboutLabel}>About</Text>
+              <Text style={styles.aboutText} numberOfLines={3}>
+                {mentor.bio?.trim() ||
+                  mentor.expertise?.trim() ||
+                  (mentor.specializations?.length ? mentor.specializations.join(", ") : "Mentor profile available.")}
               </Text>
             </TouchableOpacity>
           ))}
@@ -139,19 +150,27 @@ const styles = StyleSheet.create({
   },
   loadingBox: { paddingVertical: 16, alignItems: "center" },
   mentorCard: {
-    width: 128,
+    width: 250,
     marginRight: 10,
     marginTop: 2,
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#E4E7EC",
     borderRadius: 12,
-    padding: 10,
-    alignItems: "center"
+    padding: 10
   },
-  avatar: { width: 58, height: 58, borderRadius: 29, borderWidth: 1, borderColor: "#D0D5DD" },
+  heroImage: {
+    width: "100%",
+    aspectRatio: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#D0D5DD"
+  },
   avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
-  avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 20 },
-  mentorName: { marginTop: 8, color: "#1E2B24", fontWeight: "700", fontSize: 13 },
-  mentorDomain: { marginTop: 2, color: "#667085", fontSize: 11, textAlign: "center" }
+  avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 42 },
+  mentorName: { marginTop: 8, color: "#1E2B24", fontWeight: "700", fontSize: 15 },
+  mentorEmail: { marginTop: 2, color: "#667085", fontSize: 12 },
+  mentorDomain: { marginTop: 4, color: "#1F7A4C", fontSize: 12, fontWeight: "600" },
+  aboutLabel: { marginTop: 8, color: "#1E2B24", fontWeight: "700", fontSize: 12 },
+  aboutText: { marginTop: 3, color: "#667085", fontSize: 12, lineHeight: 16 }
 });

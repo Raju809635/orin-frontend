@@ -70,12 +70,60 @@ export default function StudentDashboard() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const quickServices = [
-    { key: "mentors", label: "Mentors", icon: "people", onPress: () => router.push("/domains") },
-    { key: "messages", label: "Messages", icon: "chatbubble-ellipses", onPress: () => router.push("/chat" as never) },
-    { key: "ai", label: "AI Coach", icon: "sparkles", onPress: () => router.push("/ai-assistant" as never) },
-    { key: "profile", label: "Profile", icon: "person-circle", onPress: () => router.push("/student-profile" as never) },
-    { key: "support", label: "Support", icon: "help-buoy", onPress: () => router.push("/complaints" as never) },
-    { key: "settings", label: "Settings", icon: "settings", onPress: () => router.push("/settings" as never) }
+    {
+      key: "mentors",
+      label: "Mentors",
+      icon: "people",
+      tint: "#165DFF",
+      bg: "#EAF2FF",
+      border: "#D7E6FF",
+      onPress: () => router.push("/domains")
+    },
+    {
+      key: "messages",
+      label: "Messages",
+      icon: "chatbubble-ellipses",
+      tint: "#0F766E",
+      bg: "#E7F9F6",
+      border: "#CDEEE8",
+      onPress: () => router.push("/chat" as never)
+    },
+    {
+      key: "ai",
+      label: "AI Coach",
+      icon: "sparkles",
+      tint: "#7C3AED",
+      bg: "#F0E9FF",
+      border: "#E1D5FF",
+      onPress: () => router.push("/ai-assistant" as never)
+    },
+    {
+      key: "profile",
+      label: "Profile",
+      icon: "person-circle",
+      tint: "#0369A1",
+      bg: "#E8F5FF",
+      border: "#D3EAFA",
+      onPress: () => router.push("/student-profile" as never)
+    },
+    {
+      key: "support",
+      label: "Support",
+      icon: "help-buoy",
+      tint: "#B45309",
+      bg: "#FFF4E5",
+      border: "#F8E2C2",
+      onPress: () => router.push("/complaints" as never)
+    },
+    {
+      key: "settings",
+      label: "Settings",
+      icon: "settings",
+      tint: "#475467",
+      bg: "#EEF2F6",
+      border: "#DCE3EA",
+      onPress: () => router.push("/settings" as never)
+    }
   ] as const;
 
   const fetchDashboard = useCallback(async (refresh = false) => {
@@ -325,9 +373,9 @@ export default function StudentDashboard() {
       <Text style={styles.sectionHeader}>Services</Text>
       <View style={styles.sectionGrid}>
         {quickServices.map((item) => (
-          <TouchableOpacity key={item.key} style={styles.sectionTile} onPress={item.onPress}>
-            <View style={styles.iconBadge}>
-              <Ionicons name={item.icon} size={18} color="#1F7A4C" />
+          <TouchableOpacity key={item.key} style={[styles.sectionTile, { borderColor: item.border }]} onPress={item.onPress}>
+            <View style={[styles.iconBadge, { backgroundColor: item.bg }]}>
+              <Ionicons name={item.icon} size={18} color={item.tint} />
             </View>
             <Text style={styles.sectionTileTitle}>{item.label}</Text>
           </TouchableOpacity>
@@ -490,7 +538,7 @@ export default function StudentDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: "#EEF3F0", padding: 20, paddingBottom: 30 },
+  container: { backgroundColor: "#F3F5F7", padding: 20, paddingBottom: 30 },
   heading: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   subheading: { marginTop: 6, marginBottom: 14, color: "#475467", fontWeight: "500" },
   topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
@@ -527,14 +575,14 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, color: "#1E2B24", fontWeight: "500" },
   heroBanner: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#F7FBFF",
     borderRadius: 24,
     padding: 18,
     borderWidth: 1,
-    borderColor: "#D7E5DE",
+    borderColor: "#D7E6F6",
     marginBottom: 14
   },
-  heroEyebrow: { color: "#1F7A4C", fontWeight: "700", marginBottom: 6 },
+  heroEyebrow: { color: "#165DFF", fontWeight: "700", marginBottom: 6 },
   heroTitle: { color: "#11261E", fontSize: 28, fontWeight: "900", lineHeight: 34 },
   heroSubTitle: { marginTop: 8, color: "#4A5B53", fontWeight: "500", lineHeight: 20 },
   sectionHeader: { fontSize: 16, fontWeight: "800", color: "#1E2B24", marginBottom: 10 },
@@ -554,8 +602,7 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#E7F5EE"
+    justifyContent: "center"
   },
   sectionTileTitle: { color: "#1E2B24", fontWeight: "700", fontSize: 13, textAlign: "center" },
   featuredRow: { paddingBottom: 4, gap: 10, marginBottom: 6 },
