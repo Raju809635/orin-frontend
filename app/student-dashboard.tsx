@@ -69,14 +69,14 @@ export default function StudentDashboard() {
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-
-  function openAiFromSearch() {
-    const query = searchQuery.trim();
-    const target = query
-      ? `/ai-assistant?q=${encodeURIComponent(query)}`
-      : "/ai-assistant";
-    router.push(target as never);
-  }
+  const quickServices = [
+    { key: "mentors", label: "Mentors", icon: "people", onPress: () => router.push("/domains") },
+    { key: "messages", label: "Messages", icon: "chatbubble-ellipses", onPress: () => router.push("/chat" as never) },
+    { key: "ai", label: "AI Coach", icon: "sparkles", onPress: () => router.push("/ai-assistant" as never) },
+    { key: "profile", label: "Profile", icon: "person-circle", onPress: () => router.push("/student-profile" as never) },
+    { key: "support", label: "Support", icon: "help-buoy", onPress: () => router.push("/complaints" as never) },
+    { key: "settings", label: "Settings", icon: "settings", onPress: () => router.push("/settings" as never) }
+  ] as const;
 
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
@@ -313,45 +313,45 @@ export default function StudentDashboard() {
           placeholderTextColor="#98A2B3"
           value={searchQuery}
           onChangeText={setSearchQuery}
-          returnKeyType="search"
-          onSubmitEditing={openAiFromSearch}
         />
-        <TouchableOpacity style={styles.aiSearchButton} onPress={openAiFromSearch}>
-          <Ionicons name="sparkles" size={17} color="#fff" />
-        </TouchableOpacity>
       </View>
 
+      <View style={styles.heroBanner}>
+        <Text style={styles.heroEyebrow}>Student Space</Text>
+        <Text style={styles.heroTitle}>Unlock Your Mentorship Journey</Text>
+        <Text style={styles.heroSubTitle}>Explore mentors, track sessions, and grow faster with ORIN.</Text>
+      </View>
+
+      <Text style={styles.sectionHeader}>Services</Text>
       <View style={styles.sectionGrid}>
-        <TouchableOpacity style={styles.sectionTilePrimary} onPress={() => router.push("/ai-assistant" as never)}>
-          <Ionicons name="sparkles" size={20} color="#fff" />
-          <Text style={styles.sectionTilePrimaryTitle}>AI Bot</Text>
-          <Text style={styles.sectionTilePrimarySub}>Ask ORIN AI for guidance</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.sectionTilePrimary} onPress={() => router.push("/domains")}>
-          <Ionicons name="people" size={20} color="#fff" />
-          <Text style={styles.sectionTilePrimaryTitle}>Find Mentors</Text>
-          <Text style={styles.sectionTilePrimarySub}>Browse by domain</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.sectionTile} onPress={() => router.push("/chat" as never)}>
-          <Ionicons name="chatbubble-ellipses" size={20} color="#1F7A4C" />
-          <Text style={styles.sectionTileTitle}>Messages</Text>
-          <Text style={styles.sectionTileSub}>Open chats</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.sectionTile} onPress={() => router.push("/student-profile" as never)}>
-          <Ionicons name="person-circle" size={20} color="#1F7A4C" />
-          <Text style={styles.sectionTileTitle}>My Profile</Text>
-          <Text style={styles.sectionTileSub}>Update details</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.sectionTile} onPress={() => router.push("/complaints" as never)}>
-          <Ionicons name="help-buoy" size={20} color="#1F7A4C" />
-          <Text style={styles.sectionTileTitle}>Support</Text>
-          <Text style={styles.sectionTileSub}>Raise issue</Text>
-        </TouchableOpacity>
+        {quickServices.map((item) => (
+          <TouchableOpacity key={item.key} style={styles.sectionTile} onPress={item.onPress}>
+            <View style={styles.iconBadge}>
+              <Ionicons name={item.icon} size={18} color="#1F7A4C" />
+            </View>
+            <Text style={styles.sectionTileTitle}>{item.label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
+
+      <Text style={styles.sectionHeader}>Featured</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardOne]} onPress={() => router.push("/domains")}>
+          <Text style={styles.featurePill}>Discover</Text>
+          <Text style={styles.featureTitle}>Top Mentor Domains</Text>
+          <Text style={styles.featureCopy}>Browse all approved mentors by category and specialization.</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo]} onPress={() => router.push("/chat" as never)}>
+          <Text style={styles.featurePill}>Connect</Text>
+          <Text style={styles.featureTitle}>Session Conversations</Text>
+          <Text style={styles.featureCopy}>Message confirmed mentors and prepare before live sessions.</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardThree]} onPress={() => router.push("/ai-assistant" as never)}>
+          <Text style={styles.featurePill}>Boost</Text>
+          <Text style={styles.featureTitle}>AI Career Coach</Text>
+          <Text style={styles.featureCopy}>Get study plans, interview prep ideas, and guidance instantly.</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
       {isLoading ? (
         <View style={styles.centered}>
@@ -490,7 +490,7 @@ export default function StudentDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: "#F4F9F6", padding: 20, paddingBottom: 30 },
+  container: { backgroundColor: "#EEF3F0", padding: 20, paddingBottom: 30 },
   heading: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   subheading: { marginTop: 6, marginBottom: 14, color: "#475467", fontWeight: "500" },
   topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
   profileMenuItem: { paddingHorizontal: 12, paddingVertical: 9, color: "#1E2B24", fontWeight: "600" },
   searchBox: {
     marginTop: 4,
-    marginBottom: 14,
+    marginBottom: 12,
     backgroundColor: "#fff",
     borderColor: "#D0D5DD",
     borderWidth: 1,
@@ -526,36 +526,62 @@ const styles = StyleSheet.create({
     gap: 8
   },
   searchInput: { flex: 1, color: "#1E2B24", fontWeight: "500" },
-  aiSearchButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#1F7A4C",
-    alignItems: "center",
-    justifyContent: "center"
+  heroBanner: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#D7E5DE",
+    marginBottom: 14
   },
-  sectionGrid: { marginBottom: 12 },
-  sectionTilePrimary: {
-    backgroundColor: "#1F7A4C",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10
-  },
-  sectionTilePrimaryTitle: { marginTop: 6, color: "#fff", fontWeight: "800", fontSize: 16 },
-  sectionTilePrimarySub: { marginTop: 4, color: "#E6F4EC", fontWeight: "500" },
+  heroEyebrow: { color: "#1F7A4C", fontWeight: "700", marginBottom: 6 },
+  heroTitle: { color: "#11261E", fontSize: 28, fontWeight: "900", lineHeight: 34 },
+  heroSubTitle: { marginTop: 8, color: "#4A5B53", fontWeight: "500", lineHeight: 20 },
+  sectionHeader: { fontSize: 16, fontWeight: "800", color: "#1E2B24", marginBottom: 10 },
+  sectionGrid: { marginBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 },
   sectionTile: {
     backgroundColor: "#fff",
-    borderColor: "#DCE4DF",
-    borderWidth: 1.5,
+    borderColor: "#D8E4DE",
+    borderWidth: 1,
     padding: 12,
     borderRadius: 14,
-    marginBottom: 10,
-    flexDirection: "row",
+    width: "31%",
     alignItems: "center",
-    gap: 10
+    gap: 7
   },
-  sectionTileTitle: { color: "#1E2B24", fontWeight: "700", fontSize: 15 },
-  sectionTileSub: { color: "#667085", fontWeight: "500", marginLeft: "auto" },
+  iconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E7F5EE"
+  },
+  sectionTileTitle: { color: "#1E2B24", fontWeight: "700", fontSize: 13, textAlign: "center" },
+  featuredRow: { paddingBottom: 4, gap: 10, marginBottom: 6 },
+  featureCard: {
+    width: 250,
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1
+  },
+  featureCardOne: { backgroundColor: "#F8FBFF", borderColor: "#D9E8FF" },
+  featureCardTwo: { backgroundColor: "#F5FAF6", borderColor: "#D4E8D8" },
+  featureCardThree: { backgroundColor: "#FFF9F2", borderColor: "#F2DEC0" },
+  featurePill: {
+    alignSelf: "flex-start",
+    backgroundColor: "#fff",
+    color: "#1E2B24",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontSize: 11,
+    overflow: "hidden",
+    marginBottom: 8,
+    fontWeight: "700"
+  },
+  featureTitle: { fontSize: 18, fontWeight: "800", color: "#13251E" },
+  featureCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
   centered: { alignItems: "center", justifyContent: "center", minHeight: 140 },
   panel: { marginTop: 8 },
   panelTitle: { fontSize: 17, fontWeight: "800", color: "#1E2B24", marginBottom: 8 },

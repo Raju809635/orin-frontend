@@ -100,14 +100,14 @@ export default function MentorDashboard() {
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-
-  function openAiFromSearch() {
-    const query = searchQuery.trim();
-    const target = query
-      ? `/ai-assistant?q=${encodeURIComponent(query)}`
-      : "/ai-assistant";
-    router.push(target as never);
-  }
+  const mentorServices = [
+    { key: "ai", label: "AI Bot", icon: "sparkles", onPress: () => router.push("/ai-assistant" as never) },
+    { key: "availability", label: "Availability", icon: "calendar", onPress: () => setActiveSection("availability") },
+    { key: "sessions", label: "Sessions", icon: "videocam", onPress: () => setActiveSection("sessions") },
+    { key: "chat", label: "Student Chats", icon: "chatbubble-ellipses", onPress: () => router.push("/chat" as never) },
+    { key: "pricing", label: "Pricing", icon: "cash", onPress: () => setActiveSection("pricing") },
+    { key: "admin", label: "Admin Chat", icon: "shield-checkmark", onPress: () => setActiveSection("adminChat") }
+  ] as const;
 
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
@@ -362,46 +362,45 @@ export default function MentorDashboard() {
           placeholderTextColor="#98A2B3"
           value={searchQuery}
           onChangeText={setSearchQuery}
-          returnKeyType="search"
-          onSubmitEditing={openAiFromSearch}
         />
-        <TouchableOpacity style={styles.aiSearchButton} onPress={openAiFromSearch}>
-          <Ionicons name="sparkles" size={17} color="#fff" />
-        </TouchableOpacity>
       </View>
 
+      <View style={styles.heroBanner}>
+        <Text style={styles.heroEyebrow}>Mentor Workspace</Text>
+        <Text style={styles.heroTitle}>Build Sessions That Students Trust</Text>
+        <Text style={styles.heroSubTitle}>Manage pricing, availability, chat, and live links in one place.</Text>
+      </View>
+
+      <Text style={styles.sectionHeader}>Services</Text>
       <View style={styles.quickGrid}>
-        <TouchableOpacity style={styles.primaryTile} onPress={() => router.push("/ai-assistant" as never)}>
-          <Ionicons name="sparkles" size={20} color="#fff" />
-          <Text style={styles.primaryTileTitle}>AI Bot</Text>
-          <Text style={styles.primaryTileSub}>Ask for bio, message or planning help</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.quickTile} onPress={() => setActiveSection("availability")}>
-          <Ionicons name="calendar" size={20} color="#1F7A4C" />
-          <Text style={styles.quickTileTitle}>Availability</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.quickTile} onPress={() => setActiveSection("sessions")}>
-          <Ionicons name="videocam" size={20} color="#1F7A4C" />
-          <Text style={styles.quickTileTitle}>Sessions</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.quickTile} onPress={() => router.push("/chat" as never)}>
-          <Ionicons name="chatbubble-ellipses" size={20} color="#1F7A4C" />
-          <Text style={styles.quickTileTitle}>Student Chats</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.quickTile} onPress={() => setActiveSection("pricing")}>
-          <Ionicons name="cash" size={20} color="#1F7A4C" />
-          <Text style={styles.quickTileTitle}>Profile & Pricing</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.quickTile} onPress={() => setActiveSection("adminChat")}>
-          <Ionicons name="shield-checkmark" size={20} color="#1F7A4C" />
-          <Text style={styles.quickTileTitle}>Admin Chat</Text>
-        </TouchableOpacity>
+        {mentorServices.map((item) => (
+          <TouchableOpacity key={item.key} style={styles.quickTile} onPress={item.onPress}>
+            <View style={styles.iconBadge}>
+              <Ionicons name={item.icon} size={18} color="#1F7A4C" />
+            </View>
+            <Text style={styles.quickTileTitle}>{item.label}</Text>
+          </TouchableOpacity>
+        ))}
       </View>
+
+      <Text style={styles.sectionHeader}>Featured</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardOne]} onPress={() => setActiveSection("availability")}>
+          <Text style={styles.featurePill}>Plan</Text>
+          <Text style={styles.featureTitle}>Weekly Slot Planning</Text>
+          <Text style={styles.featureCopy}>Publish only the timings you want students to book.</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo]} onPress={() => setActiveSection("pricing")}>
+          <Text style={styles.featurePill}>Earn</Text>
+          <Text style={styles.featureTitle}>Smart Pricing Control</Text>
+          <Text style={styles.featureCopy}>Set your profile title and session fee with full flexibility.</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardThree]} onPress={() => setActiveSection("sessions")}>
+          <Text style={styles.featurePill}>Deliver</Text>
+          <Text style={styles.featureTitle}>Meet Link Workflow</Text>
+          <Text style={styles.featureCopy}>Attach session links at the right time and keep delivery clean.</Text>
+        </TouchableOpacity>
+      </ScrollView>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectionNav}>
         <View style={styles.sectionNavRow}>
@@ -637,7 +636,7 @@ export default function MentorDashboard() {
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: "#F4F9F6", padding: 20, paddingBottom: 30 },
+  container: { backgroundColor: "#EEF3F0", padding: 20, paddingBottom: 30 },
   heading: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   subheading: { marginTop: 6, marginBottom: 12, color: "#475467", fontWeight: "500" },
   topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
@@ -674,36 +673,63 @@ const styles = StyleSheet.create({
     gap: 8
   },
   searchInput: { flex: 1, color: "#1E2B24", fontWeight: "500" },
-  aiSearchButton: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "#1F7A4C",
-    alignItems: "center",
-    justifyContent: "center"
+  heroBanner: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#D7E5DE",
+    marginBottom: 14
   },
-  quickGrid: { marginBottom: 10 },
-  primaryTile: {
-    backgroundColor: "#1F7A4C",
-    borderRadius: 14,
-    padding: 14,
-    marginBottom: 10
-  },
-  primaryTileTitle: { marginTop: 6, color: "#fff", fontWeight: "800", fontSize: 16 },
-  primaryTileSub: { marginTop: 4, color: "#E6F4EC", fontWeight: "500" },
+  heroEyebrow: { color: "#1F7A4C", fontWeight: "700", marginBottom: 6 },
+  heroTitle: { color: "#11261E", fontSize: 28, fontWeight: "900", lineHeight: 34 },
+  heroSubTitle: { marginTop: 8, color: "#4A5B53", fontWeight: "500", lineHeight: 20 },
+  sectionHeader: { fontSize: 16, fontWeight: "800", color: "#1E2B24", marginBottom: 10 },
+  quickGrid: { marginBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 },
   quickTile: {
     backgroundColor: "#fff",
-    borderColor: "#1F7A4C",
-    borderWidth: 1.5,
+    borderColor: "#D8E4DE",
+    borderWidth: 1,
     padding: 12,
     borderRadius: 14,
-    marginBottom: 10,
-    flexDirection: "row",
+    width: "31%",
     alignItems: "center",
-    gap: 10
+    gap: 7
   },
-  quickTileTitle: { color: "#1F7A4C", fontWeight: "700", fontSize: 15 },
-  sectionNav: { marginBottom: 10 },
+  iconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#E7F5EE"
+  },
+  quickTileTitle: { color: "#1E2B24", fontWeight: "700", fontSize: 13, textAlign: "center" },
+  featuredRow: { paddingBottom: 4, gap: 10, marginBottom: 8 },
+  featureCard: {
+    width: 250,
+    borderRadius: 20,
+    padding: 14,
+    borderWidth: 1
+  },
+  featureCardOne: { backgroundColor: "#F8FBFF", borderColor: "#D9E8FF" },
+  featureCardTwo: { backgroundColor: "#F5FAF6", borderColor: "#D4E8D8" },
+  featureCardThree: { backgroundColor: "#FFF9F2", borderColor: "#F2DEC0" },
+  featurePill: {
+    alignSelf: "flex-start",
+    backgroundColor: "#fff",
+    color: "#1E2B24",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    fontSize: 11,
+    overflow: "hidden",
+    marginBottom: 8,
+    fontWeight: "700"
+  },
+  featureTitle: { fontSize: 18, fontWeight: "800", color: "#13251E" },
+  featureCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
+  sectionNav: { marginBottom: 10, marginTop: 2 },
   sectionNavRow: { flexDirection: "row", gap: 8 },
   sectionChip: {
     paddingHorizontal: 12,

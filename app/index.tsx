@@ -8,7 +8,7 @@ const { width } = Dimensions.get("window");
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { user, isAuthenticated, logout } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -41,6 +41,14 @@ export default function HomeScreen() {
     }
   }, [dashboardRoute, isAuthenticated, router, user]);
 
+  if (isAuthenticated && user) {
+    return (
+      <View style={styles.container}>
+        <ActivityIndicator color="#0B3D2E" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <LinearGradient colors={["#E6F6EE", "#F8FCFA", "#FFFFFF"]} style={StyleSheet.absoluteFillObject} />
@@ -50,15 +58,7 @@ export default function HomeScreen() {
         <Text style={styles.title}>ORIN</Text>
         <Text style={styles.subtitle}>Direction eliminates distraction.</Text>
 
-        {isAuthenticated ? (
-          <View style={styles.actions}>
-            <ActivityIndicator color="#0B3D2E" />
-            <Text style={styles.redirectText}>Opening your dashboard...</Text>
-            <TouchableOpacity style={styles.ghostButton} onPress={logout}>
-              <Text style={styles.ghostButtonText}>Logout</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
+        {!isAuthenticated ? (
           <View style={styles.actions}>
             <TouchableOpacity style={styles.button} onPress={() => router.push("/login" as never)}>
               <Text style={styles.buttonText}>Login</Text>
@@ -67,7 +67,7 @@ export default function HomeScreen() {
               <Text style={styles.secondaryButtonText}>Create Account</Text>
             </TouchableOpacity>
           </View>
-        )}
+        ) : null}
       </View>
     </View>
   );

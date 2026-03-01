@@ -11,6 +11,13 @@ function defaultRouteByRole(role: "student" | "mentor") {
   return "/mentor-dashboard";
 }
 
+function homeRouteForUser(user: { role: "student" | "mentor"; approvalStatus?: "pending" | "approved" | "rejected" }) {
+  if (user.role === "mentor" && user.approvalStatus !== "approved") {
+    return "/mentor-pending";
+  }
+  return defaultRouteByRole(user.role);
+}
+
 function RootDrawer() {
   const router = useRouter();
   const pathname = usePathname();
@@ -46,21 +53,26 @@ function RootDrawer() {
       return;
     }
 
+    if (isAuthenticated && user && pathname === "/") {
+      router.replace(homeRouteForUser(user) as never);
+      return;
+    }
+
     if (isAuthenticated && user && isAuthScreen) {
-      router.replace(defaultRouteByRole(user.role) as never);
+      router.replace(homeRouteForUser(user) as never);
       return;
     }
 
     if (isAuthenticated && user) {
       if (pathname.startsWith("/mentor-dashboard") && user.role !== "mentor") {
-        router.replace(defaultRouteByRole(user.role) as never);
+        router.replace(homeRouteForUser(user) as never);
       } else if (pathname.startsWith("/student-dashboard") && user.role !== "student") {
-        router.replace(defaultRouteByRole(user.role) as never);
+        router.replace(homeRouteForUser(user) as never);
       } else if (pathname.startsWith("/admin-dashboard")) {
-        router.replace(defaultRouteByRole(user.role) as never);
+        router.replace(homeRouteForUser(user) as never);
       } else if (pathname.startsWith("/mentor-awaiting") || pathname.startsWith("/mentor-pending")) {
         if (user.role !== "mentor" || user.approvalStatus === "approved") {
-          router.replace(defaultRouteByRole(user.role) as never);
+          router.replace(homeRouteForUser(user) as never);
         }
       }
     }
