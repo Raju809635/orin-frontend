@@ -30,7 +30,7 @@ type Session = {
   date: string;
   time: string;
   amount: number;
-  paymentStatus: "pending" | "paid";
+  paymentStatus: "pending" | "waiting_verification" | "verified" | "rejected" | "paid";
   sessionStatus: "booked" | "confirmed" | "completed";
   meetingLink?: string;
   mentorId?: {
@@ -132,7 +132,7 @@ export default function StudentDashboard() {
                     <Text style={styles.status}>
                       Payment: {session.paymentStatus} | Session: {session.sessionStatus}
                     </Text>
-                    {session.meetingLink && session.paymentStatus === "paid" ? (
+                    {session.meetingLink && (session.paymentStatus === "paid" || session.paymentStatus === "verified") ? (
                       <TouchableOpacity
                         style={styles.joinButton}
                         onPress={() => Linking.openURL(session.meetingLink as string)}

@@ -31,7 +31,7 @@ type Session = {
   date: string;
   time: string;
   amount: number;
-  paymentStatus: "pending" | "paid";
+  paymentStatus: "pending" | "waiting_verification" | "verified" | "rejected" | "paid";
   sessionStatus: "booked" | "confirmed" | "completed";
   meetingLink?: string;
   studentId?: {
@@ -217,10 +217,12 @@ export default function MentorDashboard() {
 
               <View style={styles.card}>
                 <Text style={styles.title}>Confirmed Paid Sessions</Text>
-                {sessions.length === 0 ? (
+                {sessions.filter((s) => s.sessionStatus === "confirmed" && (s.paymentStatus === "paid" || s.paymentStatus === "verified")).length === 0 ? (
                   <Text style={styles.empty}>No sessions yet.</Text>
                 ) : (
-                  sessions.map((session) => (
+                  sessions
+                    .filter((session) => session.sessionStatus === "confirmed" && (session.paymentStatus === "paid" || session.paymentStatus === "verified"))
+                    .map((session) => (
                     <View key={session._id} style={styles.sessionRow}>
                       <Text style={styles.metaStrong}>{session.studentId?.name || "Student"}</Text>
                       <Text style={styles.meta}>
@@ -229,7 +231,8 @@ export default function MentorDashboard() {
                       <Text style={styles.meta}>
                         Payment: {session.paymentStatus} | Session: {session.sessionStatus}
                       </Text>
-                      {session.paymentStatus === "paid" && session.sessionStatus === "confirmed" ? (
+                      {(session.paymentStatus === "paid" || session.paymentStatus === "verified") &&
+                      session.sessionStatus === "confirmed" ? (
                         <>
                           <TextInput
                             style={styles.input}

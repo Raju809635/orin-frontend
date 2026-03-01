@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Platform,
   ScrollView,
   StyleSheet,
@@ -46,6 +47,29 @@ type MentorProfileResponse = {
   } | null;
 };
 
+type ManualPaymentInstructions = {
+  upiId: string;
+  qrImageUrl: string;
+  amount: number;
+  currency: string;
+  dueAt: string;
+};
+
+type CreateOrderResponse = {
+  mode: "manual" | "razorpay";
+  message: string;
+  session: {
+    _id: string;
+  };
+  order?: {
+    id: string;
+    amount: number;
+    currency: string;
+  };
+  razorpayKeyId?: string;
+  paymentInstructions?: ManualPaymentInstructions;
+};
+
 type TimeSlot = {
   label: string;
   iso: string;
@@ -84,6 +108,11 @@ export default function MentorProfileScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [manualSessionId, setManualSessionId] = useState("");
+  const [manualInstructions, setManualInstructions] = useState<ManualPaymentInstructions | null>(null);
+  const [paymentScreenshotUrl, setPaymentScreenshotUrl] = useState("");
+  const [transactionReference, setTransactionReference] = useState("");
+  const [submittingProof, setSubmittingProof] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -137,7 +166,7 @@ export default function MentorProfileScreen() {
       const date = dateObj.toISOString().slice(0, 10);
       const time = dateObj.toISOString().slice(11, 16);
 
-      const { data } = await api.post("/api/sessions/create-order", {
+      const { data } = await api.post<CreateOrderResponse>("/api/sessions/create-order", {
         mentorId,
         date,
         time,
@@ -145,14 +174,21 @@ export default function MentorProfileScreen() {
         notes
       });
 
+      if (data.mode === "manual") {
+        setManualSessionId(data.session._id);
+        setManualInstructions(data.paymentInstructions || null);
+        notify("Session created. Complete manual payment and submit screenshot.");
+        return;
+      }
+
       const options = {
         description: "ORIN Mentorship Session",
         image: "",
-        currency: data.order.currency || "INR",
+        currency: data.order?.currency || "INR",
         key: data.razorpayKeyId,
-        amount: data.order.amount,
+        amount: data.order?.amount || 0,
         name: "ORIN",
-        order_id: data.order.id,
+        order_id: data.order?.id,
         prefill: {
           email: "",
           contact: "",
@@ -181,6 +217,29 @@ export default function MentorProfileScreen() {
       notify(apiMessage);
     } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  async function submitManualProof() {
+    if (!manualSessionId || !paymentScreenshotUrl.trim()) {
+      setError("Please provide payment screenshot URL.");
+      return;
+    }
+
+    try {
+      setSubmittingProof(true);
+      setError(null);
+      await api.post(`/api/sessions/${manualSessionId}/manual-payment`, {
+        paymentScreenshot: paymentScreenshotUrl.trim(),
+        transactionReference: transactionReference.trim()
+      });
+      notify("Payment submitted. Awaiting admin verification.");
+      setPaymentScreenshotUrl("");
+      setTransactionReference("");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to submit payment screenshot.");
+    } finally {
+      setSubmittingProof(false);
     }
   }
 
@@ -255,6 +314,42 @@ export default function MentorProfileScreen() {
       <TouchableOpacity style={styles.button} onPress={handleBookSession} disabled={isSubmitting}>
         {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Book Session</Text>}
       </TouchableOpacity>
+
+      {manualInstructions ? (
+        <View style={styles.manualCard}>
+          <Text style={styles.manualTitle}>Complete Your Payment</Text>
+          <Text style={styles.meta}>
+            Amount: {manualInstructions.currency} {manualInstructions.amount}
+          </Text>
+          <Text style={styles.meta}>UPI ID: {manualInstructions.upiId || "Not configured"}</Text>
+          {manualInstructions.qrImageUrl ? (
+            <Image source={{ uri: manualInstructions.qrImageUrl }} style={styles.qrImage} resizeMode="contain" />
+          ) : (
+            <Text style={styles.meta}>QR image not configured by admin.</Text>
+          )}
+          <Text style={styles.meta}>Pay before: {new Date(manualInstructions.dueAt).toLocaleString()}</Text>
+
+          <TextInput
+            style={[styles.input, { marginTop: 10 }]}
+            placeholder="Payment screenshot URL"
+            value={paymentScreenshotUrl}
+            onChangeText={setPaymentScreenshotUrl}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Transaction reference (optional)"
+            value={transactionReference}
+            onChangeText={setTransactionReference}
+          />
+          <TouchableOpacity style={styles.button} onPress={submitManualProof} disabled={submittingProof}>
+            {submittingProof ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>Upload Payment Screenshot</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      ) : null}
 
       {user?.role === "student" ? (
         <TouchableOpacity
@@ -385,5 +480,25 @@ const styles = StyleSheet.create({
     marginTop: 10,
     color: "#B42318",
     textAlign: "center"
+  },
+  manualCard: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: "#1F7A4C",
+    borderRadius: 12,
+    backgroundColor: "#EEF8F2",
+    padding: 12
+  },
+  manualTitle: {
+    color: "#0F5132",
+    fontWeight: "700",
+    fontSize: 16
+  },
+  qrImage: {
+    width: "100%",
+    height: 220,
+    marginTop: 10,
+    backgroundColor: "#fff",
+    borderRadius: 8
   }
 });
