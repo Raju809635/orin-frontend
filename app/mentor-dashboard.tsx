@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -154,6 +154,54 @@ export default function MentorDashboard() {
       bg: "#EEF2F6",
       border: "#DCE3EA",
       onPress: () => setActiveSection("adminChat")
+    },
+    {
+      key: "policy",
+      label: "Mentor Policy",
+      icon: "document-text",
+      tint: "#9A3412",
+      bg: "#FFF3ED",
+      border: "#F7DCCB",
+      onPress: () => router.push("/mentor-policy" as never)
+    }
+  ] as const;
+  const mentorDeepMaps = [
+    {
+      title: "Academic Mentoring Depth",
+      icon: "school",
+      tint: "#1D4ED8",
+      bg: "#EEF4FF",
+      sections: [
+        {
+          name: "Intermediate",
+          tracks: [
+            { name: "MPC", topics: ["Maths", "Physics", "Chemistry"] },
+            { name: "BiPC", topics: ["Botany", "Zoology", "Physics", "Chemistry"] }
+          ]
+        },
+        {
+          name: "Engineering",
+          tracks: [
+            { name: "CSE", topics: ["DSA", "Web", "System Design"] },
+            { name: "ECE", topics: ["Signals", "Embedded", "Communication"] }
+          ]
+        }
+      ]
+    },
+    {
+      title: "Exam Mentoring Depth",
+      icon: "trophy",
+      tint: "#B45309",
+      bg: "#FFF7ED",
+      sections: [
+        {
+          name: "UPSC",
+          tracks: [
+            { name: "Prelims", topics: ["Polity", "History", "Economy"] },
+            { name: "Mains", topics: ["Geography", "Law", "Ethics", "Society"] }
+          ]
+        }
+      ]
     }
   ] as const;
 
@@ -270,6 +318,34 @@ export default function MentorDashboard() {
     () => filteredConfirmedPaidSessions.length + filteredBookings.length + filteredMessages.length,
     [filteredConfirmedPaidSessions.length, filteredBookings.length, filteredMessages.length]
   );
+  const searchBreakdown = useMemo(() => {
+    const parts: string[] = [];
+    if (filteredConfirmedPaidSessions.length) parts.push(`Sessions (${filteredConfirmedPaidSessions.length})`);
+    if (filteredBookings.length) parts.push(`Booking Requests (${filteredBookings.length})`);
+    if (filteredMessages.length) parts.push(`Admin Chat (${filteredMessages.length})`);
+    return parts.join(" | ");
+  }, [filteredConfirmedPaidSessions.length, filteredBookings.length, filteredMessages.length]);
+
+  useEffect(() => {
+    if (!normalizedQuery) return;
+    if (filteredConfirmedPaidSessions.length > 0 && activeSection !== "sessions") {
+      setActiveSection("sessions");
+      return;
+    }
+    if (filteredBookings.length > 0 && activeSection !== "requests") {
+      setActiveSection("requests");
+      return;
+    }
+    if (filteredMessages.length > 0 && activeSection !== "adminChat") {
+      setActiveSection("adminChat");
+    }
+  }, [
+    normalizedQuery,
+    filteredConfirmedPaidSessions.length,
+    filteredBookings.length,
+    filteredMessages.length,
+    activeSection
+  ]);
 
   function canSetMeetingLink(session: Session) {
     const start = session.scheduledStart ? new Date(session.scheduledStart).getTime() : NaN;
@@ -415,20 +491,18 @@ export default function MentorDashboard() {
           placeholder="Search students, sessions or chat"
           placeholderTextColor="#98A2B3"
           value={searchQuery}
-          onChangeText={(value) => {
-            setSearchQuery(value);
-            if (value.trim() && ["overview", "pricing", "availability"].includes(activeSection)) {
-              setActiveSection("sessions");
-            }
-          }}
+          onChangeText={setSearchQuery}
         />
       </View>
       {normalizedQuery ? (
-        <Text style={styles.searchMeta}>
-          {totalSearchMatches > 0
-            ? `Search results: ${totalSearchMatches} match${totalSearchMatches > 1 ? "es" : ""}`
-            : "No results for your search"}
-        </Text>
+        <>
+          <Text style={styles.searchMeta}>
+            {totalSearchMatches > 0
+              ? `Search results: ${totalSearchMatches} match${totalSearchMatches > 1 ? "es" : ""}`
+              : "No results for your search"}
+          </Text>
+          {totalSearchMatches > 0 ? <Text style={styles.searchMetaDetail}>Matched in: {searchBreakdown}</Text> : null}
+        </>
       ) : null}
 
       <View style={styles.heroBanner}>
@@ -468,6 +542,37 @@ export default function MentorDashboard() {
         </TouchableOpacity>
       </ScrollView>
 
+      <Text style={styles.sectionHeader}>Deep Subsections</Text>
+      <View style={styles.mentorMapWrap}>
+        {mentorDeepMaps.map((map) => (
+          <View key={map.title} style={[styles.mentorMapCard, { backgroundColor: map.bg, borderColor: `${map.tint}44` }]}>
+            <View style={styles.mentorMapHead}>
+              <View style={[styles.mentorMapIcon, { backgroundColor: `${map.tint}22` }]}>
+                <Ionicons name={map.icon} size={16} color={map.tint} />
+              </View>
+              <Text style={[styles.mentorMapTitle, { color: map.tint }]}>{map.title}</Text>
+            </View>
+            {map.sections.map((section) => (
+              <View key={`${map.title}-${section.name}`} style={styles.mentorMapSectionCard}>
+                <Text style={styles.mentorMapSectionName}>{section.name}</Text>
+                {section.tracks.map((track) => (
+                  <View key={`${section.name}-${track.name}`} style={styles.mentorMapTrackRow}>
+                    <Text style={styles.mentorMapTrackName}>{track.name}</Text>
+                    <View style={styles.mentorMapTopicWrap}>
+                      {track.topics.map((topic) => (
+                        <Text key={`${track.name}-${topic}`} style={[styles.mentorMapTopicChip, { borderColor: `${map.tint}55` }]}>
+                          {topic}
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectionNav}>
         <View style={styles.sectionNavRow}>
           {sectionOrder.map((section) => {
@@ -494,8 +599,8 @@ export default function MentorDashboard() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {!isLoading && activeSection === "overview" ? (
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Overview</Text>
+        <View style={[styles.panel, styles.panelOverview]}>
+          <Text style={[styles.panelTitle, styles.panelTitleOverview]}>Overview</Text>
           <View style={styles.metricsRow}>
             <View style={styles.metricCard}>
               <Text style={styles.metricValue}>{pendingRequests.length}</Text>
@@ -515,8 +620,8 @@ export default function MentorDashboard() {
       ) : null}
 
       {!isLoading && activeSection === "pricing" ? (
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Profile & Pricing</Text>
+        <View style={[styles.panel, styles.panelPricing]}>
+          <Text style={[styles.panelTitle, styles.panelTitlePricing]}>Profile & Pricing</Text>
           <Text style={styles.meta}>Set your title and per-session amount students pay.</Text>
           <TextInput
             style={styles.input}
@@ -538,8 +643,8 @@ export default function MentorDashboard() {
       ) : null}
 
       {!isLoading && activeSection === "availability" ? (
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Weekly Availability</Text>
+        <View style={[styles.panel, styles.panelAvailability]}>
+          <Text style={[styles.panelTitle, styles.panelTitleAvailability]}>Weekly Availability</Text>
           <Text style={styles.meta}>Students can only book these timings for next 7 days.</Text>
           <View style={styles.rowWrap}>
             {(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const).map((day) => {
@@ -597,13 +702,13 @@ export default function MentorDashboard() {
       ) : null}
 
       {!isLoading && activeSection === "sessions" ? (
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Confirmed Paid Sessions</Text>
+        <View style={[styles.panel, styles.panelSessions]}>
+          <Text style={[styles.panelTitle, styles.panelTitleSessions]}>Confirmed Paid Sessions</Text>
           {filteredConfirmedPaidSessions.length === 0 ? (
             <Text style={styles.empty}>No confirmed sessions yet.</Text>
           ) : (
             filteredConfirmedPaidSessions.map((session) => (
-              <View key={session._id} style={styles.card}>
+              <View key={session._id} style={[styles.card, styles.cardSessions]}>
                 <Text style={styles.title}>{session.studentId?.name || "Student"}</Text>
                 <Text style={styles.meta}>
                   {session.date} {session.time} | INR {session.amount}
@@ -634,13 +739,13 @@ export default function MentorDashboard() {
       ) : null}
 
       {!isLoading && activeSection === "requests" ? (
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Booking Requests</Text>
+        <View style={[styles.panel, styles.panelRequests]}>
+          <Text style={[styles.panelTitle, styles.panelTitleRequests]}>Booking Requests</Text>
           {filteredBookings.length === 0 ? (
             <Text style={styles.empty}>No booking requests yet.</Text>
           ) : (
             filteredBookings.map((booking) => (
-              <View key={booking._id} style={styles.card}>
+              <View key={booking._id} style={[styles.card, styles.cardRequests]}>
                 <Text style={styles.title}>{booking.student?.name || "Student"}</Text>
                 <Text style={styles.meta}>{booking.student?.email}</Text>
                 <Text style={styles.meta}>{new Date(booking.scheduledAt).toLocaleString()}</Text>
@@ -668,8 +773,8 @@ export default function MentorDashboard() {
       ) : null}
 
       {!isLoading && activeSection === "adminChat" ? (
-        <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Admin Chat</Text>
+        <View style={[styles.panel, styles.panelAdminChat]}>
+          <Text style={[styles.panelTitle, styles.panelTitleAdminChat]}>Admin Chat</Text>
           <TextInput
             style={[styles.input, styles.inputTall]}
             value={chatMessage}
@@ -684,7 +789,7 @@ export default function MentorDashboard() {
             <Text style={styles.empty}>No admin messages yet.</Text>
           ) : (
             filteredMessages.slice(0, 20).map((msg) => (
-              <View key={msg._id} style={styles.card}>
+              <View key={msg._id} style={[styles.card, styles.cardAdminChat]}>
                 <Text style={styles.metaStrong}>{msg.sender === user?.id ? "You" : "Admin"}</Text>
                 <Text style={styles.meta}>{msg.text}</Text>
                 <Text style={styles.meta}>{new Date(msg.createdAt).toLocaleString()}</Text>
@@ -741,8 +846,14 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, color: "#1E2B24", fontWeight: "500" },
   searchMeta: {
     marginTop: -4,
-    marginBottom: 10,
+    marginBottom: 3,
     color: "#475467",
+    fontWeight: "600",
+    fontSize: 12
+  },
+  searchMetaDetail: {
+    marginBottom: 10,
+    color: "#344054",
     fontWeight: "600",
     fontSize: 12
   },
@@ -801,6 +912,44 @@ const styles = StyleSheet.create({
   },
   featureTitle: { fontSize: 18, fontWeight: "800", color: "#13251E" },
   featureCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
+  mentorMapWrap: { gap: 10, marginBottom: 8 },
+  mentorMapCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12
+  },
+  mentorMapHead: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  mentorMapIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8
+  },
+  mentorMapTitle: { fontSize: 15, fontWeight: "800" },
+  mentorMapSectionCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    padding: 9,
+    marginTop: 8
+  },
+  mentorMapSectionName: { color: "#1E2B24", fontWeight: "800", fontSize: 13 },
+  mentorMapTrackRow: { marginTop: 7 },
+  mentorMapTrackName: { color: "#344054", fontWeight: "700", fontSize: 12 },
+  mentorMapTopicWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 5 },
+  mentorMapTopicChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 11,
+    color: "#475467",
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden"
+  },
   sectionNav: { marginBottom: 10, marginTop: 2 },
   sectionNavRow: { flexDirection: "row", gap: 8 },
   sectionChip: {
@@ -814,8 +963,20 @@ const styles = StyleSheet.create({
   sectionChipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
   sectionChipText: { color: "#344054", fontWeight: "600" },
   sectionChipTextActive: { color: "#1F7A4C", fontWeight: "700" },
-  panel: { marginTop: 8 },
+  panel: { marginTop: 8, borderRadius: 14, padding: 12, borderWidth: 1 },
+  panelOverview: { backgroundColor: "#EFF8FF", borderColor: "#CFE3F6" },
+  panelPricing: { backgroundColor: "#FFF7ED", borderColor: "#F7D8B3" },
+  panelAvailability: { backgroundColor: "#ECFDF3", borderColor: "#CBECD9" },
+  panelSessions: { backgroundColor: "#EEF4FF", borderColor: "#D4E2FF" },
+  panelRequests: { backgroundColor: "#FDF2FA", borderColor: "#F7D0E8" },
+  panelAdminChat: { backgroundColor: "#F5F3FF", borderColor: "#DED8FF" },
   panelTitle: { fontSize: 18, fontWeight: "800", color: "#1E2B24", marginBottom: 8 },
+  panelTitleOverview: { color: "#175CD3" },
+  panelTitlePricing: { color: "#B54708" },
+  panelTitleAvailability: { color: "#067647" },
+  panelTitleSessions: { color: "#1849A9" },
+  panelTitleRequests: { color: "#C11574" },
+  panelTitleAdminChat: { color: "#5925DC" },
   metricsRow: { flexDirection: "row", gap: 8 },
   metricCard: {
     flex: 1,
@@ -836,6 +997,9 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10
   },
+  cardSessions: { backgroundColor: "#F8FAFF", borderColor: "#DCE7FF" },
+  cardRequests: { backgroundColor: "#FFF9FC", borderColor: "#F8DCEE" },
+  cardAdminChat: { backgroundColor: "#FBFAFF", borderColor: "#E5E0FF" },
   title: { fontWeight: "700", color: "#1E2B24", fontSize: 16 },
   meta: { color: "#667085", marginTop: 4 },
   metaStrong: { color: "#1E2B24", fontWeight: "700" },

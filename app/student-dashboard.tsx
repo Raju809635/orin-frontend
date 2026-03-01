@@ -140,6 +140,38 @@ export default function StudentDashboard() {
     { name: "Technology & AI", icon: "hardware-chip", color: "#0369A1", note: "Web, Data Science, AI/ML tracks" },
     { name: "Career & Placements", icon: "briefcase", color: "#9333EA", note: "Resume, Interviews, Roadmaps" }
   ] as const;
+  const deepDomainMaps = [
+    {
+      title: "Academic",
+      icon: "school",
+      tint: "#1D4ED8",
+      bg: "#EEF4FF",
+      sections: [
+        {
+          name: "Intermediate",
+          tracks: [
+            { name: "MPC", topics: ["Maths", "Physics", "Chemistry"] },
+            { name: "BiPC", topics: ["Botany", "Zoology", "Physics", "Chemistry"] }
+          ]
+        }
+      ]
+    },
+    {
+      title: "Competitive Exams",
+      icon: "trophy",
+      tint: "#B45309",
+      bg: "#FFF7ED",
+      sections: [
+        {
+          name: "UPSC",
+          tracks: [
+            { name: "Prelims", topics: ["Polity", "History", "Economy", "Current Affairs"] },
+            { name: "Mains", topics: ["Geography", "Law", "Ethics", "Society", "IR"] }
+          ]
+        }
+      ]
+    }
+  ] as const;
 
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
@@ -294,6 +326,19 @@ export default function StudentDashboard() {
       filteredBookings.length
     ]
   );
+  const searchBreakdown = useMemo(() => {
+    const parts: string[] = [];
+    if (filteredPendingPaymentSessions.length) parts.push(`Pending Payments (${filteredPendingPaymentSessions.length})`);
+    if (filteredWaitingVerificationSessions.length) parts.push(`Awaiting Verification (${filteredWaitingVerificationSessions.length})`);
+    if (filteredConfirmedSessions.length) parts.push(`Confirmed Sessions (${filteredConfirmedSessions.length})`);
+    if (filteredBookings.length) parts.push(`Legacy Requests (${filteredBookings.length})`);
+    return parts.join(" | ");
+  }, [
+    filteredPendingPaymentSessions.length,
+    filteredWaitingVerificationSessions.length,
+    filteredConfirmedSessions.length,
+    filteredBookings.length
+  ]);
 
   async function submitManualProof(session: Session) {
     const transactionReference = (transactionRefBySession[session._id] || "").trim();
@@ -398,11 +443,14 @@ export default function StudentDashboard() {
         />
       </View>
       {normalizedQuery ? (
-        <Text style={styles.searchMeta}>
-          {totalSearchMatches > 0
-            ? `Search results: ${totalSearchMatches} match${totalSearchMatches > 1 ? "es" : ""}`
-            : "No results for your search"}
-        </Text>
+        <>
+          <Text style={styles.searchMeta}>
+            {totalSearchMatches > 0
+              ? `Search results: ${totalSearchMatches} match${totalSearchMatches > 1 ? "es" : ""}`
+              : "No results for your search"}
+          </Text>
+          {totalSearchMatches > 0 ? <Text style={styles.searchMetaDetail}>Matched in: {searchBreakdown}</Text> : null}
+        </>
       ) : null}
 
       <View style={styles.heroBanner}>
@@ -463,6 +511,37 @@ export default function StudentDashboard() {
         </TouchableOpacity>
       </View>
 
+      <Text style={styles.sectionHeader}>Deep Subsections</Text>
+      <View style={styles.deepMapWrap}>
+        {deepDomainMaps.map((map) => (
+          <View key={map.title} style={[styles.deepMapCard, { backgroundColor: map.bg, borderColor: `${map.tint}44` }]}>
+            <View style={styles.deepMapHead}>
+              <View style={[styles.deepMapIcon, { backgroundColor: `${map.tint}22` }]}>
+                <Ionicons name={map.icon} size={16} color={map.tint} />
+              </View>
+              <Text style={[styles.deepMapTitle, { color: map.tint }]}>{map.title}</Text>
+            </View>
+            {map.sections.map((section) => (
+              <View key={`${map.title}-${section.name}`} style={styles.deepSectionCard}>
+                <Text style={styles.deepSectionName}>{section.name}</Text>
+                {section.tracks.map((track) => (
+                  <View key={`${section.name}-${track.name}`} style={styles.deepTrackRow}>
+                    <Text style={styles.deepTrackName}>{track.name}</Text>
+                    <View style={styles.deepTopicWrap}>
+                      {track.topics.map((topic) => (
+                        <Text key={`${track.name}-${topic}`} style={[styles.deepTopicChip, { borderColor: `${map.tint}55` }]}>
+                          {topic}
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ))}
+          </View>
+        ))}
+      </View>
+
       {isLoading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#1F7A4C" />
@@ -474,7 +553,7 @@ export default function StudentDashboard() {
       {!isLoading ? (
         <>
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Pending Payments</Text>
+            <Text style={[styles.panelTitle, styles.panelTitlePending]}>Pending Payments</Text>
             {filteredPendingPaymentSessions.length === 0 ? (
               <Text style={styles.empty}>No pending manual payments.</Text>
             ) : (
@@ -482,7 +561,7 @@ export default function StudentDashboard() {
                 const instructions = session.paymentInstructions;
                 const isSubmitting = Boolean(submittingBySession[session._id]);
                 return (
-                  <View key={session._id} style={styles.card}>
+                  <View key={session._id} style={[styles.card, styles.cardPending]}>
                     <Text style={styles.title}>{session.mentorId?.name || "Mentor"}</Text>
                     <Text style={styles.meta}>
                       {session.date} {session.time} | {session.currency || "INR"} {session.amount}
@@ -534,12 +613,12 @@ export default function StudentDashboard() {
           </View>
 
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Awaiting Verification</Text>
+            <Text style={[styles.panelTitle, styles.panelTitleWaiting]}>Awaiting Verification</Text>
             {filteredWaitingVerificationSessions.length === 0 ? (
               <Text style={styles.empty}>No sessions waiting for verification.</Text>
             ) : (
               filteredWaitingVerificationSessions.map((session) => (
-                <View key={session._id} style={styles.card}>
+                <View key={session._id} style={[styles.card, styles.cardWaiting]}>
                   <Text style={styles.title}>{session.mentorId?.name || "Mentor"}</Text>
                   <Text style={styles.meta}>
                     {session.date} {session.time} | {session.currency || "INR"} {session.amount}
@@ -551,12 +630,12 @@ export default function StudentDashboard() {
           </View>
 
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Confirmed Sessions</Text>
+            <Text style={[styles.panelTitle, styles.panelTitleConfirmed]}>Confirmed Sessions</Text>
             {filteredConfirmedSessions.length === 0 ? (
               <Text style={styles.empty}>No confirmed sessions yet.</Text>
             ) : (
               filteredConfirmedSessions.map((session) => (
-                <View key={session._id} style={styles.card}>
+                <View key={session._id} style={[styles.card, styles.cardConfirmed]}>
                   <Text style={styles.title}>{session.mentorId?.name || "Mentor"}</Text>
                   <Text style={styles.meta}>
                     {session.date} {session.time} | Amount: {session.currency || "INR"} {session.amount}
@@ -575,12 +654,12 @@ export default function StudentDashboard() {
           </View>
 
           <View style={styles.panel}>
-            <Text style={styles.panelTitle}>Legacy Booking Requests</Text>
+            <Text style={[styles.panelTitle, styles.panelTitleLegacy]}>Legacy Booking Requests</Text>
             {filteredBookings.length === 0 ? (
               <Text style={styles.empty}>No booking requests yet.</Text>
             ) : (
               filteredBookings.map((item) => (
-                <View key={item._id} style={styles.card}>
+                <View key={item._id} style={[styles.card, styles.cardLegacy]}>
                   <Text style={styles.title}>{item.mentor?.name || "Mentor"}</Text>
                   <Text style={styles.meta}>{item.mentor?.email}</Text>
                   <Text style={styles.meta}>{new Date(item.scheduledAt).toLocaleString()}</Text>
@@ -638,8 +717,14 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, color: "#1E2B24", fontWeight: "500" },
   searchMeta: {
     marginTop: -4,
-    marginBottom: 10,
+    marginBottom: 3,
     color: "#475467",
+    fontWeight: "600",
+    fontSize: 12
+  },
+  searchMetaDetail: {
+    marginBottom: 10,
+    color: "#344054",
     fontWeight: "600",
     fontSize: 12
   },
@@ -735,9 +820,51 @@ const styles = StyleSheet.create({
     backgroundColor: "#EFF4FF"
   },
   domainGuideButtonText: { color: "#165DFF", fontWeight: "700" },
+  deepMapWrap: { gap: 10, marginBottom: 8 },
+  deepMapCard: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12
+  },
+  deepMapHead: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  deepMapIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 8
+  },
+  deepMapTitle: { fontSize: 15, fontWeight: "800" },
+  deepSectionCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 10,
+    padding: 9,
+    marginTop: 8
+  },
+  deepSectionName: { color: "#1E2B24", fontWeight: "800", fontSize: 13 },
+  deepTrackRow: { marginTop: 7 },
+  deepTrackName: { color: "#344054", fontWeight: "700", fontSize: 12 },
+  deepTopicWrap: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 5 },
+  deepTopicChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    fontSize: 11,
+    color: "#475467",
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden"
+  },
   centered: { alignItems: "center", justifyContent: "center", minHeight: 140 },
   panel: { marginTop: 8 },
   panelTitle: { fontSize: 17, fontWeight: "800", color: "#1E2B24", marginBottom: 8 },
+  panelTitlePending: { color: "#B54708" },
+  panelTitleWaiting: { color: "#1849A9" },
+  panelTitleConfirmed: { color: "#067647" },
+  panelTitleLegacy: { color: "#6941C6" },
   card: {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -746,6 +873,10 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10
   },
+  cardPending: { backgroundColor: "#FFF8F1", borderColor: "#F9DBAF" },
+  cardWaiting: { backgroundColor: "#F5F8FF", borderColor: "#D6E4FF" },
+  cardConfirmed: { backgroundColor: "#F2FBF4", borderColor: "#C9E9D2" },
+  cardLegacy: { backgroundColor: "#F8F5FF", borderColor: "#DDD2FE" },
   title: { fontWeight: "700", color: "#1E2B24", fontSize: 16 },
   meta: { color: "#667085", marginTop: 4, lineHeight: 18 },
   status: { marginTop: 8, fontWeight: "700", color: "#1F7A4C" },

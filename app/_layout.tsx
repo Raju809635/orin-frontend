@@ -157,8 +157,7 @@ function RootDrawer() {
         name="index"
         options={{
           title: "Home",
-          drawerLabel: "Home",
-          drawerItemStyle: user ? { display: "none" } : undefined
+          drawerLabel: "Home"
         }}
       />
       <Drawer.Screen
