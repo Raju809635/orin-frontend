@@ -8,7 +8,10 @@ type UploadResponse = {
 };
 
 export async function pickAndUploadProfilePhoto(): Promise<string | null> {
-  const hasNativeImagePicker = Boolean((NativeModulesProxy as Record<string, unknown>)?.ExpoImagePicker);
+  const nativeModules = NativeModulesProxy as Record<string, unknown>;
+  const hasNativeImagePicker = Boolean(
+    nativeModules?.ExpoImagePicker || nativeModules?.ExponentImagePicker
+  );
   if (!hasNativeImagePicker) {
     throw new Error("This APK does not support image upload yet. Please install the latest APK build.");
   }
@@ -18,6 +21,13 @@ export async function pickAndUploadProfilePhoto(): Promise<string | null> {
     ImagePicker = await import("expo-image-picker");
   } catch {
     throw new Error("Image upload requires latest app build. Please install updated APK.");
+  }
+
+  if (
+    typeof ImagePicker?.requestMediaLibraryPermissionsAsync !== "function" ||
+    typeof ImagePicker?.launchImageLibraryAsync !== "function"
+  ) {
+    throw new Error("Image picker is not available in this build. Please install latest APK.");
   }
 
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
