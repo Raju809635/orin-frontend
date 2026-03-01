@@ -18,6 +18,7 @@ type MentorProfile = {
   phoneNumber: string;
   company: string;
   experienceYears: number;
+  sessionPrice: number;
   about: string;
   achievements: string[];
   linkedInUrl: string;
@@ -71,6 +72,7 @@ export default function MentorProfileScreen() {
           phoneNumber: profilePayload.phoneNumber || "",
           company: profilePayload.company || "",
           experienceYears: Number(profilePayload.experienceYears || 0),
+          sessionPrice: Number(profilePayload.sessionPrice || 0),
           about: profilePayload.about || "",
           achievements: Array.isArray(profilePayload.achievements) ? profilePayload.achievements : [],
           linkedInUrl: profilePayload.linkedInUrl || "",
@@ -217,6 +219,16 @@ export default function MentorProfileScreen() {
         value={String(profile.experienceYears || 0)}
         onChangeText={(val) =>
           setProfile((prev) => (prev ? { ...prev, experienceYears: Number(val || 0) } : prev))
+        }
+      />
+
+      <Text style={styles.label}>Session Price (INR)</Text>
+      <TextInput
+        style={styles.input}
+        keyboardType="numeric"
+        value={String(profile.sessionPrice || 0)}
+        onChangeText={(val) =>
+          setProfile((prev) => (prev ? { ...prev, sessionPrice: Number(val || 0) } : prev))
         }
       />
 
