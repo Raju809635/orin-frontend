@@ -1,4 +1,3 @@
-import * as ImagePicker from "expo-image-picker";
 import { api } from "@/lib/api";
 
 type UploadResponse = {
@@ -8,6 +7,13 @@ type UploadResponse = {
 };
 
 export async function pickAndUploadProfilePhoto(): Promise<string | null> {
+  let ImagePicker: any;
+  try {
+    ImagePicker = await import("expo-image-picker");
+  } catch {
+    throw new Error("Image upload requires latest app build. Please install updated APK.");
+  }
+
   const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
   if (!permission.granted) {
     return null;
