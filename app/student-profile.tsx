@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
+import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
 
 type StudentProfile = {
+  profilePhotoUrl: string;
   headline: string;
   about: string;
   skills: string[];
@@ -16,6 +18,7 @@ export default function StudentProfileScreen() {
   const [profile, setProfile] = useState<StudentProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -23,7 +26,18 @@ export default function StudentProfileScreen() {
     (async () => {
       try {
         const { data } = await api.get("/api/profiles/student/me");
-        if (mounted) setProfile(data.profile);
+        if (mounted) {
+          const profileData = data.profile || {};
+          setProfile({
+            profilePhotoUrl: profileData.profilePhotoUrl || "",
+            headline: profileData.headline || "",
+            about: profileData.about || "",
+            skills: Array.isArray(profileData.skills) ? profileData.skills : [],
+            careerGoals: profileData.careerGoals || "",
+            profileCompleteness: Number(profileData.profileCompleteness || 0),
+            resumeUrl: profileData.resumeUrl || ""
+          });
+        }
       } catch (e: any) {
         if (mounted) setError(e?.response?.data?.message || "Failed to load profile");
       } finally {
@@ -54,6 +68,21 @@ export default function StudentProfileScreen() {
     }
   }
 
+  async function uploadPhoto() {
+    try {
+      setUploadingPhoto(true);
+      setError(null);
+      const uploadedUrl = await pickAndUploadProfilePhoto();
+      if (!uploadedUrl) return;
+      setProfile((prev) => (prev ? { ...prev, profilePhotoUrl: uploadedUrl } : prev));
+      notify("Profile photo uploaded. Save profile to apply.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to upload profile photo");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -74,6 +103,21 @@ export default function StudentProfileScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Student Profile</Text>
       <Text style={styles.sub}>Profile completeness: {profile.profileCompleteness || 0}%</Text>
+
+      <View style={styles.photoWrap}>
+        {profile.profilePhotoUrl ? (
+          <Image source={{ uri: profile.profilePhotoUrl }} style={styles.photo} />
+        ) : (
+          <View style={[styles.photo, styles.photoFallback]}>
+            <Text style={styles.photoFallbackText}>
+              {(profile.headline || "S").trim().charAt(0).toUpperCase() || "S"}
+            </Text>
+          </View>
+        )}
+        <TouchableOpacity style={styles.uploadBtn} onPress={uploadPhoto} disabled={uploadingPhoto}>
+          <Text style={styles.uploadBtnText}>{uploadingPhoto ? "Uploading..." : "Upload Profile Picture"}</Text>
+        </TouchableOpacity>
+      </View>
 
       <Text style={styles.label}>Headline</Text>
       <TextInput
@@ -148,5 +192,11 @@ const styles = StyleSheet.create({
   multiline: { minHeight: 110, textAlignVertical: "top" },
   button: { marginTop: 18, backgroundColor: "#0B3D2E", borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  error: { marginTop: 10, color: "#B42318" }
+  error: { marginTop: 10, color: "#B42318" },
+  photoWrap: { alignItems: "center", marginBottom: 10 },
+  photo: { width: 92, height: 92, borderRadius: 46, borderWidth: 2, borderColor: "#D0D5DD" },
+  photoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
+  photoFallbackText: { color: "#0B3D2E", fontSize: 30, fontWeight: "700" },
+  uploadBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#0B3D2E" },
+  uploadBtnText: { color: "#0B3D2E", fontWeight: "700" }
 });

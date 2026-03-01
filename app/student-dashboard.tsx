@@ -64,6 +64,8 @@ export default function StudentDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
@@ -71,13 +73,15 @@ export default function StudentDashboard() {
       else setIsLoading(true);
 
       setError(null);
-      const [bookingsRes, sessionsRes] = await Promise.all([
+      const [bookingsRes, sessionsRes, profileRes] = await Promise.all([
         api.get<Booking[]>("/api/bookings/student"),
-        api.get<Session[]>("/api/sessions/student/me")
+        api.get<Session[]>("/api/sessions/student/me"),
+        api.get<{ profile?: { profilePhotoUrl?: string } }>("/api/profiles/student/me")
       ]);
 
       setBookings(bookingsRes.data || []);
       setSessions(sessionsRes.data || []);
+      setProfilePhotoUrl(profileRes.data?.profile?.profilePhotoUrl || "");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load your dashboard.");
     } finally {
@@ -161,6 +165,30 @@ export default function StudentDashboard() {
     >
       <Text style={styles.heading}>Student Dashboard</Text>
       <Text style={styles.subheading}>Welcome back, {user.name}</Text>
+      <View style={styles.profileMenuWrap}>
+        <TouchableOpacity style={styles.avatarButton} onPress={() => setShowProfileMenu((prev) => !prev)}>
+          {profilePhotoUrl ? (
+            <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
+          ) : (
+            <View style={[styles.avatarImage, styles.avatarFallback]}>
+              <Text style={styles.avatarText}>{user.name?.charAt(0)?.toUpperCase() || "S"}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        {showProfileMenu ? (
+          <View style={styles.profileMenuCard}>
+            <TouchableOpacity onPress={() => router.push("/student-profile" as never)}>
+              <Text style={styles.profileMenuItem}>Edit Profile</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push("/settings" as never)}>
+              <Text style={styles.profileMenuItem}>Settings</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push("/about" as never)}>
+              <Text style={styles.profileMenuItem}>About ORIN</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
 
       <View style={styles.quickActions}>
         <TouchableOpacity style={styles.cta} onPress={() => router.push("/domains")}>
@@ -314,6 +342,21 @@ const styles = StyleSheet.create({
   container: { backgroundColor: "#F4F9F6", padding: 20, paddingBottom: 30 },
   heading: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   subheading: { marginTop: 6, marginBottom: 14, color: "#475467", fontWeight: "500" },
+  profileMenuWrap: { alignItems: "flex-end", marginTop: -52, marginBottom: 18 },
+  avatarButton: { width: 48, height: 48, borderRadius: 24, overflow: "hidden", borderWidth: 2, borderColor: "#CFE4D8" },
+  avatarImage: { width: "100%", height: "100%" },
+  avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
+  avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 18 },
+  profileMenuCard: {
+    marginTop: 8,
+    backgroundColor: "#fff",
+    borderColor: "#D0D5DD",
+    borderWidth: 1,
+    borderRadius: 12,
+    minWidth: 150,
+    paddingVertical: 8
+  },
+  profileMenuItem: { paddingHorizontal: 12, paddingVertical: 9, color: "#1E2B24", fontWeight: "600" },
   quickActions: { marginBottom: 12 },
   cta: { backgroundColor: "#1F7A4C", padding: 12, borderRadius: 12, alignItems: "center", marginBottom: 10 },
   ctaText: { color: "#fff", fontWeight: "700" },

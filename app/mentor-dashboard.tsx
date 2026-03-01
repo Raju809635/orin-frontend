@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -29,6 +30,7 @@ type Session = {
   _id: string;
   date: string;
   time: string;
+  scheduledStart?: string;
   amount: number;
   paymentStatus: "pending" | "waiting_verification" | "verified" | "rejected" | "paid";
   sessionStatus: "booked" | "confirmed" | "completed";
@@ -58,6 +60,7 @@ type AvailabilitySlot = {
 type MentorProfilePayload = {
   title?: string;
   sessionPrice?: number;
+  profilePhotoUrl?: string;
 };
 
 type SectionId = "overview" | "pricing" | "availability" | "sessions" | "requests" | "adminChat";
@@ -93,6 +96,8 @@ export default function MentorDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
@@ -126,6 +131,7 @@ export default function MentorDashboard() {
       setMessages(adminMessages);
       setSessionPrice(String(Number(profileRes.data?.profile?.sessionPrice || 0) || 499));
       setMentorTitle(profileRes.data?.profile?.title || "");
+      setProfilePhotoUrl(profileRes.data?.profile?.profilePhotoUrl || "");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load mentor dashboard.");
     } finally {
@@ -154,6 +160,12 @@ export default function MentorDashboard() {
       ),
     [sessions]
   );
+
+  function canSetMeetingLink(session: Session) {
+    const start = session.scheduledStart ? new Date(session.scheduledStart).getTime() : NaN;
+    if (!Number.isFinite(start)) return true;
+    return Date.now() >= start - 5 * 60 * 1000;
+  }
 
   async function createAvailabilitySlot() {
     try {
@@ -257,6 +269,30 @@ export default function MentorDashboard() {
     >
       <Text style={styles.heading}>Mentor Dashboard</Text>
       <Text style={styles.subheading}>Manage profile, pricing, availability and sessions.</Text>
+      <View style={styles.profileMenuWrap}>
+        <TouchableOpacity style={styles.avatarButton} onPress={() => setShowProfileMenu((prev) => !prev)}>
+          {profilePhotoUrl ? (
+            <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
+          ) : (
+            <View style={[styles.avatarImage, styles.avatarFallback]}>
+              <Text style={styles.avatarText}>{user.name?.charAt(0)?.toUpperCase() || "M"}</Text>
+            </View>
+          )}
+        </TouchableOpacity>
+        {showProfileMenu ? (
+          <View style={styles.profileMenuCard}>
+            <TouchableOpacity onPress={() => router.push("/mentor-profile" as never)}>
+              <Text style={styles.profileMenuItem}>Edit Profile</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push("/settings" as never)}>
+              <Text style={styles.profileMenuItem}>Settings</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => router.push("/about" as never)}>
+              <Text style={styles.profileMenuItem}>About ORIN</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
 
       <View style={styles.quickLinks}>
         <TouchableOpacity style={styles.actionPill} onPress={() => router.push("/mentor-profile" as never)}>
@@ -413,13 +449,20 @@ export default function MentorDashboard() {
                 <Text style={styles.status}>
                   Payment: {session.paymentStatus} | Session: {session.sessionStatus}
                 </Text>
+                {!canSetMeetingLink(session) ? (
+                  <Text style={styles.meta}>Meeting link can be added only in last 5 minutes before start time.</Text>
+                ) : null}
                 <TextInput
                   style={styles.input}
                   placeholder="https://meet.google.com/..."
                   value={meetingLinks[session._id] ?? session.meetingLink ?? ""}
                   onChangeText={(value) => setMeetingLinks((prev) => ({ ...prev, [session._id]: value }))}
                 />
-                <TouchableOpacity style={styles.primaryButton} onPress={() => saveMeetingLink(session._id)}>
+                <TouchableOpacity
+                  style={[styles.primaryButton, !canSetMeetingLink(session) && styles.disabledButton]}
+                  onPress={() => saveMeetingLink(session._id)}
+                  disabled={!canSetMeetingLink(session)}
+                >
                   <Text style={styles.primaryButtonText}>Save Meet Link</Text>
                 </TouchableOpacity>
               </View>
@@ -500,6 +543,21 @@ const styles = StyleSheet.create({
   container: { backgroundColor: "#F4F9F6", padding: 20, paddingBottom: 30 },
   heading: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   subheading: { marginTop: 6, marginBottom: 12, color: "#475467", fontWeight: "500" },
+  profileMenuWrap: { alignItems: "flex-end", marginTop: -52, marginBottom: 18 },
+  avatarButton: { width: 48, height: 48, borderRadius: 24, overflow: "hidden", borderWidth: 2, borderColor: "#CFE4D8" },
+  avatarImage: { width: "100%", height: "100%" },
+  avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
+  avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 18 },
+  profileMenuCard: {
+    marginTop: 8,
+    backgroundColor: "#fff",
+    borderColor: "#D0D5DD",
+    borderWidth: 1,
+    borderRadius: 12,
+    minWidth: 150,
+    paddingVertical: 8
+  },
+  profileMenuItem: { paddingHorizontal: 12, paddingVertical: 9, color: "#1E2B24", fontWeight: "600" },
   centered: { alignItems: "center", justifyContent: "center", minHeight: 140 },
   quickLinks: { marginBottom: 10 },
   actionPill: {
@@ -580,6 +638,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 11
   },
+  disabledButton: { opacity: 0.5 },
   primaryButtonText: { color: "#fff", fontWeight: "700" },
   actions: { flexDirection: "row", gap: 10, marginTop: 10 },
   actionButton: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center" },

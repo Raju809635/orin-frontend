@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Animated,
+  Image,
   PanResponder,
   ScrollView,
   StyleSheet,
@@ -12,8 +13,10 @@ import {
 } from "react-native";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
+import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
 
 type MentorProfile = {
+  profilePhotoUrl: string;
   title: string;
   phoneNumber: string;
   company: string;
@@ -52,6 +55,7 @@ export default function MentorProfileScreen() {
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const dragOffset = useRef(new Animated.Value(0)).current;
@@ -68,6 +72,7 @@ export default function MentorProfileScreen() {
         if (!mounted) return;
         const profilePayload = profileData.profile || {};
         setProfile({
+          profilePhotoUrl: profilePayload.profilePhotoUrl || "",
           title: profilePayload.title || "",
           phoneNumber: profilePayload.phoneNumber || "",
           company: profilePayload.company || "",
@@ -177,6 +182,21 @@ export default function MentorProfileScreen() {
     }
   }
 
+  async function uploadPhoto() {
+    try {
+      setUploadingPhoto(true);
+      setError(null);
+      const uploadedUrl = await pickAndUploadProfilePhoto();
+      if (!uploadedUrl) return;
+      setProfile((prev) => (prev ? { ...prev, profilePhotoUrl: uploadedUrl } : prev));
+      notify("Profile photo uploaded. Save profile to apply.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to upload profile photo");
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -197,6 +217,20 @@ export default function MentorProfileScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Mentor Profile</Text>
       <Text style={styles.sub}>Profile completeness: {profile.profileCompleteness || 0}%</Text>
+      <View style={styles.photoWrap}>
+        {profile.profilePhotoUrl ? (
+          <Image source={{ uri: profile.profilePhotoUrl }} style={styles.photo} />
+        ) : (
+          <View style={[styles.photo, styles.photoFallback]}>
+            <Text style={styles.photoFallbackText}>
+              {(profile.title || "M").trim().charAt(0).toUpperCase() || "M"}
+            </Text>
+          </View>
+        )}
+        <TouchableOpacity style={styles.uploadBtn} onPress={uploadPhoto} disabled={uploadingPhoto}>
+          <Text style={styles.uploadBtnText}>{uploadingPhoto ? "Uploading..." : "Upload Profile Picture"}</Text>
+        </TouchableOpacity>
+      </View>
 
       <Text style={styles.label}>Title</Text>
       <TextInput
@@ -427,5 +461,11 @@ const styles = StyleSheet.create({
   dragText: { color: "#1E2B24", fontWeight: "600" },
   button: { marginTop: 18, backgroundColor: "#0B3D2E", borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-  error: { marginTop: 10, color: "#B42318" }
+  error: { marginTop: 10, color: "#B42318" },
+  photoWrap: { alignItems: "center", marginBottom: 12 },
+  photo: { width: 96, height: 96, borderRadius: 48, borderWidth: 2, borderColor: "#D0D5DD" },
+  photoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
+  photoFallbackText: { color: "#0B3D2E", fontSize: 30, fontWeight: "700" },
+  uploadBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#0B3D2E" },
+  uploadBtnText: { color: "#0B3D2E", fontWeight: "700" }
 });

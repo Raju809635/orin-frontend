@@ -30,6 +30,7 @@ function RootDrawer() {
       pathname.startsWith("/chat") ||
       pathname.startsWith("/collaborate") ||
       pathname.startsWith("/domains") ||
+      pathname.startsWith("/about") ||
       pathname.startsWith("/mentors") ||
       pathname.startsWith("/mentor/") ||
       pathname.startsWith("/settings") ||
@@ -166,6 +167,14 @@ function RootDrawer() {
         }}
       />
       <Drawer.Screen name="domains" options={{ title: "Domains", drawerLabel: "Domains" }} />
+      <Drawer.Screen
+        name="about"
+        options={{
+          title: "About ORIN",
+          drawerLabel: "About ORIN",
+          drawerItemStyle: user ? undefined : { display: "none" }
+        }}
+      />
       <Drawer.Screen
         name="settings"
         options={{

@@ -1,10 +1,36 @@
-import React from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useState } from "react";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import { CATEGORY_OPTIONS } from "@/constants/categories";
+import { api } from "@/lib/api";
+
+type MentorPreview = {
+  _id: string;
+  name: string;
+  primaryCategory?: string;
+  subCategory?: string;
+  profilePhotoUrl?: string;
+};
 
 export default function DomainScreen() {
   const router = useRouter();
+  const [mentors, setMentors] = useState<MentorPreview[]>([]);
+  const [loadingMentors, setLoadingMentors] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const { data } = await api.get<MentorPreview[]>("/api/mentors");
+        if (mounted) setMentors(data.slice(0, 8));
+      } finally {
+        if (mounted) setLoadingMentors(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -26,6 +52,35 @@ export default function DomainScreen() {
         <Text style={styles.allTitle}>View All Mentor Profiles</Text>
         <Text style={styles.allSubtext}>See every approved mentor in one list.</Text>
       </TouchableOpacity>
+
+      <Text style={styles.sectionTitle}>Featured Mentors</Text>
+      {loadingMentors ? (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color="#1F7A4C" />
+        </View>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+          {mentors.map((mentor) => (
+            <TouchableOpacity
+              key={mentor._id}
+              style={styles.mentorCard}
+              onPress={() => router.push(`/mentor/${mentor._id}` as never)}
+            >
+              {mentor.profilePhotoUrl ? (
+                <Image source={{ uri: mentor.profilePhotoUrl }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarFallback]}>
+                  <Text style={styles.avatarText}>{mentor.name?.charAt(0)?.toUpperCase() || "M"}</Text>
+                </View>
+              )}
+              <Text style={styles.mentorName} numberOfLines={1}>{mentor.name}</Text>
+              <Text style={styles.mentorDomain} numberOfLines={1}>
+                {[mentor.primaryCategory, mentor.subCategory].filter(Boolean).join(" > ") || "General"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -81,5 +136,22 @@ const styles = StyleSheet.create({
   allSubtext: {
     marginTop: 6,
     color: "#1E2B24"
-  }
+  },
+  loadingBox: { paddingVertical: 16, alignItems: "center" },
+  mentorCard: {
+    width: 128,
+    marginRight: 10,
+    marginTop: 2,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    borderRadius: 12,
+    padding: 10,
+    alignItems: "center"
+  },
+  avatar: { width: 58, height: 58, borderRadius: 29, borderWidth: 1, borderColor: "#D0D5DD" },
+  avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
+  avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 20 },
+  mentorName: { marginTop: 8, color: "#1E2B24", fontWeight: "700", fontSize: 13 },
+  mentorDomain: { marginTop: 2, color: "#667085", fontSize: 11, textAlign: "center" }
 });

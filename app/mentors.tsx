@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -23,6 +24,7 @@ type Mentor = {
   rating?: number;
   role: "mentor";
   status: "approved";
+  profilePhotoUrl?: string;
 };
 
 export default function MentorsScreen() {
@@ -126,8 +128,19 @@ export default function MentorsScreen() {
               style={styles.card}
               onPress={() => router.push(`/mentor/${item._id}` as never)}
             >
-              <Text style={styles.name}>{item.name}</Text>
-              <Text style={styles.email}>{item.email}</Text>
+              <View style={styles.headerRow}>
+                {item.profilePhotoUrl ? (
+                  <Image source={{ uri: item.profilePhotoUrl }} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.avatarFallback]}>
+                    <Text style={styles.avatarText}>{item.name?.charAt(0)?.toUpperCase() || "M"}</Text>
+                  </View>
+                )}
+                <View style={styles.headerText}>
+                  <Text style={styles.name}>{item.name}</Text>
+                  <Text style={styles.email}>{item.email}</Text>
+                </View>
+              </View>
               <Text style={styles.domain}>
                 {[item.primaryCategory, item.subCategory].filter(Boolean).join(" > ") || "General"}
               </Text>
@@ -216,6 +229,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#EAECF0"
   },
+  headerRow: { flexDirection: "row", alignItems: "center" },
+  headerText: { marginLeft: 10, flex: 1 },
+  avatar: { width: 48, height: 48, borderRadius: 24, borderWidth: 1, borderColor: "#D0D5DD" },
+  avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
+  avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 18 },
   name: {
     fontSize: 16,
     fontWeight: "700",
