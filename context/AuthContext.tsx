@@ -12,6 +12,7 @@ type RegisterPayload = {
   email: string;
   password: string;
   role: "student" | "mentor";
+  phoneNumber?: string;
 };
 
 type LoginPayload = {

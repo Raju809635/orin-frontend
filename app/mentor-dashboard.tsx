@@ -1,16 +1,15 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from "react-native";
-import { useFocusEffect } from "expo-router";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
@@ -40,13 +39,12 @@ type Session = {
   };
 };
 
-type DirectMessage = {
+type AdminChatMessage = {
   _id: string;
-  title: string;
-  message: string;
+  sender: string;
+  recipient: string;
+  text: string;
   createdAt: string;
-  sentBy?: { _id?: string; name?: string; role?: string };
-  recipient?: { _id?: string; name?: string; role?: string };
 };
 
 type AvailabilitySlot = {
@@ -57,53 +55,105 @@ type AvailabilitySlot = {
   sessionDurationMinutes: 30 | 60;
 };
 
+type MentorProfilePayload = {
+  title?: string;
+  sessionPrice?: number;
+};
+
+type SectionId = "overview" | "pricing" | "availability" | "sessions" | "requests" | "adminChat";
+
+const sectionOrder: Array<{ id: SectionId; label: string }> = [
+  { id: "overview", label: "Overview" },
+  { id: "pricing", label: "Profile & Pricing" },
+  { id: "availability", label: "Availability" },
+  { id: "sessions", label: "Sessions" },
+  { id: "requests", label: "Booking Requests" },
+  { id: "adminChat", label: "Admin Chat" }
+];
+
 export default function MentorDashboard() {
   const router = useRouter();
   const { user, logout } = useAuth();
+  const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [meetingLinks, setMeetingLinks] = useState<Record<string, string>>({});
-  const [messages, setMessages] = useState<DirectMessage[]>([]);
+  const [messages, setMessages] = useState<AdminChatMessage[]>([]);
   const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
   const [newSlotDay, setNewSlotDay] = useState<AvailabilitySlot["day"]>("Mon");
   const [newSlotStartTime, setNewSlotStartTime] = useState("10:00");
   const [newSlotEndTime, setNewSlotEndTime] = useState("11:00");
   const [newSlotDuration, setNewSlotDuration] = useState<30 | 60>(60);
   const [creatingSlot, setCreatingSlot] = useState(false);
-  const [chatTitle, setChatTitle] = useState("Mentor Support");
+  const [sessionPrice, setSessionPrice] = useState("499");
+  const [mentorTitle, setMentorTitle] = useState("");
+  const [savingProfile, setSavingProfile] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
+  const [meetingLinks, setMeetingLinks] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchBookings = useCallback(async (refresh = false) => {
+  const fetchDashboard = useCallback(async (refresh = false) => {
     try {
-      if (refresh) {
-        setIsRefreshing(true);
-      } else {
-        setIsLoading(true);
-      }
+      if (refresh) setIsRefreshing(true);
+      else setIsLoading(true);
+
       setError(null);
-      const [bookingRes, messageRes, sessionRes] = await Promise.all([
+      const [bookingRes, sessionRes, profileRes] = await Promise.all([
         api.get<Booking[]>("/api/bookings/mentor"),
-        api.get<DirectMessage[]>("/api/messages/me"),
-        api.get<Session[]>("/api/sessions/mentor/me")
+        api.get<Session[]>("/api/sessions/mentor/me"),
+        api.get<{ profile?: MentorProfilePayload }>("/api/profiles/mentor/me")
       ]);
+
+      let adminMessages: AdminChatMessage[] = [];
+      try {
+        const chatRes = await api.get<{ messages: AdminChatMessage[] }>("/api/chat/messages/admin");
+        adminMessages = chatRes.data.messages || [];
+      } catch {
+        adminMessages = [];
+      }
+
       if (user?.id) {
-        const availabilityRes = await api.get<{ weeklySlots: AvailabilitySlot[] }>(`/api/availability/mentor/${user.id}`);
+        const availabilityRes = await api.get<{ weeklySlots: AvailabilitySlot[] }>(
+          `/api/availability/mentor/${user.id}`
+        );
         setAvailabilitySlots(availabilityRes.data.weeklySlots || []);
       }
-      setBookings(bookingRes.data);
-      setMessages(messageRes.data);
-      setSessions(sessionRes.data);
+
+      setBookings(bookingRes.data || []);
+      setSessions(sessionRes.data || []);
+      setMessages(adminMessages);
+      setSessionPrice(String(Number(profileRes.data?.profile?.sessionPrice || 0) || 499));
+      setMentorTitle(profileRes.data?.profile?.title || "");
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load mentor bookings.");
+      setError(e?.response?.data?.message || "Failed to load mentor dashboard.");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
   }, [user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboard();
+    }, [fetchDashboard])
+  );
+
+  const pendingRequests = useMemo(
+    () => bookings.filter((booking) => booking.status === "pending"),
+    [bookings]
+  );
+
+  const confirmedPaidSessions = useMemo(
+    () =>
+      sessions.filter(
+        (session) =>
+          session.sessionStatus === "confirmed" &&
+          (session.paymentStatus === "paid" || session.paymentStatus === "verified")
+      ),
+    [sessions]
+  );
 
   async function createAvailabilitySlot() {
     try {
@@ -116,7 +166,7 @@ export default function MentorDashboard() {
         sessionDurationMinutes: newSlotDuration
       });
       notify("Availability slot added.");
-      await fetchBookings(true);
+      await fetchDashboard(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to add availability slot.");
     } finally {
@@ -124,42 +174,37 @@ export default function MentorDashboard() {
     }
   }
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchBookings();
-    }, [fetchBookings])
-  );
-
-  async function updateBookingStatus(bookingId: string, status: "approved" | "rejected") {
-    try {
-      await api.patch(`/api/bookings/${bookingId}/status`, { status });
-      notify(`Booking ${status}.`);
-      await fetchBookings(true);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update booking status.");
-    }
-  }
-
-  async function sendMessageToAdmin() {
-    if (!chatTitle.trim() || !chatMessage.trim()) {
-      setError("Title and message are required for admin chat.");
+  async function saveMentorProfilePricing() {
+    const parsedPrice = Number(sessionPrice || 0);
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+      setError("Please enter valid session price.");
       return;
     }
 
     try {
-      setSendingMessage(true);
+      setSavingProfile(true);
       setError(null);
-      await api.post("/api/messages/admin", {
-        title: chatTitle.trim(),
-        message: chatMessage.trim()
+      await api.patch("/api/profiles/mentor/me", {
+        title: mentorTitle,
+        sessionPrice: parsedPrice
       });
-      setChatMessage("");
-      notify("Message sent to admin.");
-      await fetchBookings(true);
+      notify("Profile & pricing updated.");
+      await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to send message to admin.");
+      setError(e?.response?.data?.message || "Failed to save mentor profile.");
     } finally {
-      setSendingMessage(false);
+      setSavingProfile(false);
+    }
+  }
+
+  async function updateBookingStatus(bookingId: string, status: "approved" | "rejected") {
+    try {
+      setError(null);
+      await api.patch(`/api/bookings/${bookingId}/status`, { status });
+      notify(`Booking ${status}.`);
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to update booking status.");
     }
   }
 
@@ -172,9 +217,28 @@ export default function MentorDashboard() {
       }
       await api.patch(`/api/sessions/${sessionId}/meeting-link`, { meetingLink });
       notify("Meeting link updated.");
-      await fetchBookings(true);
+      await fetchDashboard(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to update meeting link.");
+    }
+  }
+
+  async function sendMessageToAdmin() {
+    if (!chatMessage.trim()) {
+      setError("Message is required for admin chat.");
+      return;
+    }
+    try {
+      setSendingMessage(true);
+      setError(null);
+      await api.post("/api/chat/messages/admin", { text: chatMessage.trim() });
+      setChatMessage("");
+      notify("Message sent to admin.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to send message to admin.");
+    } finally {
+      setSendingMessage(false);
     }
   }
 
@@ -187,18 +251,41 @@ export default function MentorDashboard() {
   }
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchDashboard(true)} />}
+    >
       <Text style={styles.heading}>Mentor Dashboard</Text>
-      <Text style={styles.subheading}>Manage incoming booking requests.</Text>
-      <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/mentor-profile" as never)}>
-        <Text style={styles.secondaryCtaText}>Edit LinkedIn-Style Profile</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/chat" as never)}>
-        <Text style={styles.secondaryCtaText}>Open Student Messages</Text>
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.secondaryCta} onPress={() => router.push("/ai-assistant" as never)}>
-        <Text style={styles.secondaryCtaText}>Ask AI Assistant</Text>
-      </TouchableOpacity>
+      <Text style={styles.subheading}>Manage profile, pricing, availability and sessions.</Text>
+
+      <View style={styles.quickLinks}>
+        <TouchableOpacity style={styles.actionPill} onPress={() => router.push("/mentor-profile" as never)}>
+          <Text style={styles.actionPillText}>Open Full Profile</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionPill} onPress={() => router.push("/chat" as never)}>
+          <Text style={styles.actionPillText}>Student Messages</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.actionPill} onPress={() => router.push("/ai-assistant" as never)}>
+          <Text style={styles.actionPillText}>AI Assistant</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectionNav}>
+        <View style={styles.sectionNavRow}>
+          {sectionOrder.map((section) => {
+            const active = activeSection === section.id;
+            return (
+              <TouchableOpacity
+                key={section.id}
+                style={[styles.sectionChip, active && styles.sectionChipActive]}
+                onPress={() => setActiveSection(section.id)}
+              >
+                <Text style={[styles.sectionChipText, active && styles.sectionChipTextActive]}>{section.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </ScrollView>
 
       {isLoading ? (
         <View style={styles.centered}>
@@ -208,204 +295,250 @@ export default function MentorDashboard() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {!isLoading ? (
-        <FlatList
-          data={bookings}
-          keyExtractor={(item) => item._id}
-          refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchBookings(true)} />}
-          ListHeaderComponent={
-            <View>
-              <View style={styles.card}>
-                <Text style={styles.title}>Set Weekly Availability</Text>
-                <Text style={styles.meta}>
-                  Students can only book these timings for upcoming 7 days.
-                </Text>
-
-                <View style={styles.rowWrap}>
-                  {(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const).map((day) => {
-                    const active = newSlotDay === day;
-                    return (
-                      <TouchableOpacity
-                        key={day}
-                        style={[styles.dayChip, active && styles.dayChipActive]}
-                        onPress={() => setNewSlotDay(day)}
-                      >
-                        <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{day}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                <TextInput
-                  style={styles.input}
-                  placeholder="Start Time (HH:MM)"
-                  value={newSlotStartTime}
-                  onChangeText={setNewSlotStartTime}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="End Time (HH:MM)"
-                  value={newSlotEndTime}
-                  onChangeText={setNewSlotEndTime}
-                />
-                <View style={styles.rowWrap}>
-                  {[30, 60].map((mins) => {
-                    const active = newSlotDuration === mins;
-                    return (
-                      <TouchableOpacity
-                        key={mins}
-                        style={[styles.dayChip, active && styles.dayChipActive]}
-                        onPress={() => setNewSlotDuration(mins as 30 | 60)}
-                      >
-                        <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{mins} min</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-                <TouchableOpacity style={styles.approveButton} onPress={createAvailabilitySlot} disabled={creatingSlot}>
-                  <Text style={styles.actionText}>{creatingSlot ? "Saving..." : "Add Availability Slot"}</Text>
-                </TouchableOpacity>
-
-                {availabilitySlots.length === 0 ? (
-                  <Text style={styles.empty}>No availability slots set yet.</Text>
-                ) : (
-                  availabilitySlots.map((slot) => (
-                    <Text key={slot._id} style={styles.meta}>
-                      {slot.day}: {slot.startTime} - {slot.endTime} ({slot.sessionDurationMinutes} min)
-                    </Text>
-                  ))
-                )}
-              </View>
-
-              <View style={styles.card}>
-                <Text style={styles.title}>Chat With Admin</Text>
-                <TextInput
-                  style={styles.input}
-                  value={chatTitle}
-                  onChangeText={setChatTitle}
-                  placeholder="Title"
-                />
-                <TextInput
-                  style={[styles.input, styles.messageInput]}
-                  value={chatMessage}
-                  onChangeText={setChatMessage}
-                  placeholder="Write your message to admin"
-                  multiline
-                />
-                <TouchableOpacity style={styles.approveButton} onPress={sendMessageToAdmin} disabled={sendingMessage}>
-                  <Text style={styles.actionText}>{sendingMessage ? "Sending..." : "Send To Admin"}</Text>
-                </TouchableOpacity>
-              </View>
-
-              <View style={styles.card}>
-                <Text style={styles.title}>Recent Admin Messages</Text>
-                {messages.length === 0 ? (
-                  <Text style={styles.empty}>No admin messages yet.</Text>
-                ) : (
-                  messages.slice(0, 8).map((msg) => (
-                    <View key={msg._id} style={styles.messageRow}>
-                      <Text style={styles.metaStrong}>{msg.title}</Text>
-                      <Text style={styles.meta}>{msg.message}</Text>
-                      <Text style={styles.meta}>
-                        {msg.sentBy?.name || "Unknown"} • {new Date(msg.createdAt).toLocaleString()}
-                      </Text>
-                    </View>
-                  ))
-                )}
-              </View>
-
-              <View style={styles.card}>
-                <Text style={styles.title}>Confirmed Paid Sessions</Text>
-                {sessions.filter((s) => s.sessionStatus === "confirmed" && (s.paymentStatus === "paid" || s.paymentStatus === "verified")).length === 0 ? (
-                  <Text style={styles.empty}>No sessions yet.</Text>
-                ) : (
-                  sessions
-                    .filter((session) => session.sessionStatus === "confirmed" && (session.paymentStatus === "paid" || session.paymentStatus === "verified"))
-                    .map((session) => (
-                    <View key={session._id} style={styles.sessionRow}>
-                      <Text style={styles.metaStrong}>{session.studentId?.name || "Student"}</Text>
-                      <Text style={styles.meta}>
-                        {session.date} {session.time} | INR {session.amount}
-                      </Text>
-                      <Text style={styles.meta}>
-                        Payment: {session.paymentStatus} | Session: {session.sessionStatus}
-                      </Text>
-                      {(session.paymentStatus === "paid" || session.paymentStatus === "verified") &&
-                      session.sessionStatus === "confirmed" ? (
-                        <>
-                          <TextInput
-                            style={styles.input}
-                            placeholder="https://meet.google.com/..."
-                            value={meetingLinks[session._id] ?? session.meetingLink ?? ""}
-                            onChangeText={(value) =>
-                              setMeetingLinks((prev) => ({ ...prev, [session._id]: value }))
-                            }
-                          />
-                          <TouchableOpacity
-                            style={styles.approveButton}
-                            onPress={() => saveMeetingLink(session._id)}
-                          >
-                            <Text style={styles.actionText}>Save Meet Link</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : null}
-                    </View>
-                  ))
-                )}
-              </View>
-
-              <Text style={styles.sectionHeader}>Booking Requests</Text>
+      {!isLoading && activeSection === "overview" ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Overview</Text>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricValue}>{pendingRequests.length}</Text>
+              <Text style={styles.metricLabel}>Pending Requests</Text>
             </View>
-          }
-          ListEmptyComponent={<Text style={styles.empty}>No booking requests yet.</Text>}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Text style={styles.title}>{item.student?.name || "Student"}</Text>
-              <Text style={styles.meta}>{item.student?.email}</Text>
-              <Text style={styles.meta}>{new Date(item.scheduledAt).toLocaleString()}</Text>
-              <Text style={styles.status}>Status: {item.status}</Text>
-              {item.status === "pending" ? (
-                <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.approveButton]}
-                    onPress={() => updateBookingStatus(item._id, "approved")}
-                  >
-                    <Text style={styles.actionText}>Approve</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.actionButton, styles.rejectButton]}
-                    onPress={() => updateBookingStatus(item._id, "rejected")}
-                  >
-                    <Text style={styles.actionText}>Reject</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : null}
+            <View style={styles.metricCard}>
+              <Text style={styles.metricValue}>{confirmedPaidSessions.length}</Text>
+              <Text style={styles.metricLabel}>Confirmed Sessions</Text>
             </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricValue}>{messages.length}</Text>
+              <Text style={styles.metricLabel}>Admin Messages</Text>
+            </View>
+          </View>
+          <Text style={styles.meta}>Use sections above to update price, timings and session actions quickly.</Text>
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "pricing" ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Profile & Pricing</Text>
+          <Text style={styles.meta}>Set your title and per-session amount students pay.</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Mentor title (e.g. Senior SDE)"
+            value={mentorTitle}
+            onChangeText={setMentorTitle}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Session price in INR"
+            keyboardType="numeric"
+            value={sessionPrice}
+            onChangeText={setSessionPrice}
+          />
+          <TouchableOpacity style={styles.primaryButton} onPress={saveMentorProfilePricing} disabled={savingProfile}>
+            <Text style={styles.primaryButtonText}>{savingProfile ? "Saving..." : "Save Profile & Price"}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "availability" ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Weekly Availability</Text>
+          <Text style={styles.meta}>Students can only book these timings for next 7 days.</Text>
+          <View style={styles.rowWrap}>
+            {(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const).map((day) => {
+              const active = newSlotDay === day;
+              return (
+                <TouchableOpacity
+                  key={day}
+                  style={[styles.dayChip, active && styles.dayChipActive]}
+                  onPress={() => setNewSlotDay(day)}
+                >
+                  <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{day}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <TextInput
+            style={styles.input}
+            placeholder="Start Time (HH:MM)"
+            value={newSlotStartTime}
+            onChangeText={setNewSlotStartTime}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="End Time (HH:MM)"
+            value={newSlotEndTime}
+            onChangeText={setNewSlotEndTime}
+          />
+          <View style={styles.rowWrap}>
+            {[30, 60].map((mins) => {
+              const active = newSlotDuration === mins;
+              return (
+                <TouchableOpacity
+                  key={mins}
+                  style={[styles.dayChip, active && styles.dayChipActive]}
+                  onPress={() => setNewSlotDuration(mins as 30 | 60)}
+                >
+                  <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{mins} min</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <TouchableOpacity style={styles.primaryButton} onPress={createAvailabilitySlot} disabled={creatingSlot}>
+            <Text style={styles.primaryButtonText}>{creatingSlot ? "Saving..." : "Add Availability Slot"}</Text>
+          </TouchableOpacity>
+          {availabilitySlots.length === 0 ? (
+            <Text style={styles.empty}>No availability slots set yet.</Text>
+          ) : (
+            availabilitySlots.map((slot) => (
+              <Text key={slot._id} style={styles.meta}>
+                {slot.day}: {slot.startTime} - {slot.endTime} ({slot.sessionDurationMinutes} min)
+              </Text>
+            ))
           )}
-        />
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "sessions" ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Confirmed Paid Sessions</Text>
+          {confirmedPaidSessions.length === 0 ? (
+            <Text style={styles.empty}>No confirmed sessions yet.</Text>
+          ) : (
+            confirmedPaidSessions.map((session) => (
+              <View key={session._id} style={styles.card}>
+                <Text style={styles.title}>{session.studentId?.name || "Student"}</Text>
+                <Text style={styles.meta}>
+                  {session.date} {session.time} | INR {session.amount}
+                </Text>
+                <Text style={styles.status}>
+                  Payment: {session.paymentStatus} | Session: {session.sessionStatus}
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="https://meet.google.com/..."
+                  value={meetingLinks[session._id] ?? session.meetingLink ?? ""}
+                  onChangeText={(value) => setMeetingLinks((prev) => ({ ...prev, [session._id]: value }))}
+                />
+                <TouchableOpacity style={styles.primaryButton} onPress={() => saveMeetingLink(session._id)}>
+                  <Text style={styles.primaryButtonText}>Save Meet Link</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "requests" ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Booking Requests</Text>
+          {bookings.length === 0 ? (
+            <Text style={styles.empty}>No booking requests yet.</Text>
+          ) : (
+            bookings.map((booking) => (
+              <View key={booking._id} style={styles.card}>
+                <Text style={styles.title}>{booking.student?.name || "Student"}</Text>
+                <Text style={styles.meta}>{booking.student?.email}</Text>
+                <Text style={styles.meta}>{new Date(booking.scheduledAt).toLocaleString()}</Text>
+                <Text style={styles.status}>Status: {booking.status}</Text>
+                {booking.status === "pending" ? (
+                  <View style={styles.actions}>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.approveButton]}
+                      onPress={() => updateBookingStatus(booking._id, "approved")}
+                    >
+                      <Text style={styles.actionText}>Approve</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.actionButton, styles.rejectButton]}
+                      onPress={() => updateBookingStatus(booking._id, "rejected")}
+                    >
+                      <Text style={styles.actionText}>Reject</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
+            ))
+          )}
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "adminChat" ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Admin Chat</Text>
+          <TextInput
+            style={[styles.input, styles.inputTall]}
+            value={chatMessage}
+            onChangeText={setChatMessage}
+            placeholder="Write your message to admin"
+            multiline
+          />
+          <TouchableOpacity style={styles.primaryButton} onPress={sendMessageToAdmin} disabled={sendingMessage}>
+            <Text style={styles.primaryButtonText}>{sendingMessage ? "Sending..." : "Send To Admin"}</Text>
+          </TouchableOpacity>
+          {messages.length === 0 ? (
+            <Text style={styles.empty}>No admin messages yet.</Text>
+          ) : (
+            messages.slice(0, 20).map((msg) => (
+              <View key={msg._id} style={styles.card}>
+                <Text style={styles.metaStrong}>{msg.sender === user?.id ? "You" : "Admin"}</Text>
+                <Text style={styles.meta}>{msg.text}</Text>
+                <Text style={styles.meta}>{new Date(msg.createdAt).toLocaleString()}</Text>
+              </View>
+            ))
+          )}
+        </View>
       ) : null}
 
       <TouchableOpacity style={styles.logout} onPress={logout}>
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F4F9F6", padding: 20 },
-  heading: { fontSize: 24, fontWeight: "700", color: "#1E2B24" },
-  subheading: { marginTop: 4, marginBottom: 12, color: "#475467" },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  secondaryCta: {
+  container: { backgroundColor: "#F4F9F6", padding: 20, paddingBottom: 30 },
+  heading: { fontSize: 28, fontWeight: "800", color: "#11261E" },
+  subheading: { marginTop: 6, marginBottom: 12, color: "#475467", fontWeight: "500" },
+  centered: { alignItems: "center", justifyContent: "center", minHeight: 140 },
+  quickLinks: { marginBottom: 10 },
+  actionPill: {
     borderColor: "#1F7A4C",
     borderWidth: 1.5,
-    padding: 11,
+    padding: 10,
     borderRadius: 12,
     alignItems: "center",
-    marginBottom: 14
+    marginBottom: 10,
+    backgroundColor: "#fff"
   },
-  secondaryCtaText: { color: "#1F7A4C", fontWeight: "700" },
+  actionPillText: { color: "#1F7A4C", fontWeight: "700" },
+  sectionNav: { marginBottom: 10 },
+  sectionNavRow: { flexDirection: "row", gap: 8 },
+  sectionChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#fff"
+  },
+  sectionChipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
+  sectionChipText: { color: "#344054", fontWeight: "600" },
+  sectionChipTextActive: { color: "#1F7A4C", fontWeight: "700" },
+  panel: { marginTop: 8 },
+  panelTitle: { fontSize: 18, fontWeight: "800", color: "#1E2B24", marginBottom: 8 },
+  metricsRow: { flexDirection: "row", gap: 8 },
+  metricCard: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    padding: 12,
+    alignItems: "center"
+  },
+  metricValue: { fontSize: 24, fontWeight: "800", color: "#1F7A4C" },
+  metricLabel: { marginTop: 2, color: "#667085", fontWeight: "600", textAlign: "center", fontSize: 12 },
   card: {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -416,15 +549,8 @@ const styles = StyleSheet.create({
   },
   title: { fontWeight: "700", color: "#1E2B24", fontSize: 16 },
   meta: { color: "#667085", marginTop: 4 },
-  status: { marginTop: 8, fontWeight: "600", color: "#1F7A4C" },
-  actions: { flexDirection: "row", gap: 10, marginTop: 10 },
-  actionButton: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
-  approveButton: { backgroundColor: "#1F7A4C" },
-  rejectButton: { backgroundColor: "#B42318" },
-  actionText: { color: "#fff", fontWeight: "700" },
-  error: { color: "#B42318", marginBottom: 8 },
-  empty: { color: "#667085", textAlign: "center", marginTop: 14 },
-  sectionHeader: { marginTop: 4, marginBottom: 8, color: "#1E2B24", fontWeight: "700", fontSize: 16 },
+  metaStrong: { color: "#1E2B24", fontWeight: "700" },
+  status: { marginTop: 8, fontWeight: "700", color: "#1F7A4C" },
   input: {
     marginTop: 8,
     backgroundColor: "#fff",
@@ -434,10 +560,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 10
   },
-  messageInput: { minHeight: 84, textAlignVertical: "top" },
-  messageRow: { marginTop: 10, borderTopWidth: 1, borderTopColor: "#EEF2F0", paddingTop: 10 },
-  sessionRow: { marginTop: 10, borderTopWidth: 1, borderTopColor: "#EEF2F0", paddingTop: 10 },
-  metaStrong: { color: "#1E2B24", fontWeight: "700" },
+  inputTall: { minHeight: 90, textAlignVertical: "top" },
   rowWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
   dayChip: {
     borderWidth: 1,
@@ -450,6 +573,21 @@ const styles = StyleSheet.create({
   dayChipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
   dayChipText: { color: "#344054", fontWeight: "600" },
   dayChipTextActive: { color: "#1F7A4C" },
-  logout: { marginTop: 8, padding: 12, alignItems: "center" },
-  logoutText: { color: "#7A271A", fontWeight: "600" }
+  primaryButton: {
+    marginTop: 10,
+    backgroundColor: "#1F7A4C",
+    borderRadius: 10,
+    alignItems: "center",
+    paddingVertical: 11
+  },
+  primaryButtonText: { color: "#fff", fontWeight: "700" },
+  actions: { flexDirection: "row", gap: 10, marginTop: 10 },
+  actionButton: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
+  approveButton: { backgroundColor: "#1F7A4C" },
+  rejectButton: { backgroundColor: "#B42318" },
+  actionText: { color: "#fff", fontWeight: "700" },
+  error: { color: "#B42318", marginBottom: 8 },
+  empty: { color: "#667085", marginTop: 8 },
+  logout: { marginTop: 14, padding: 12, alignItems: "center" },
+  logoutText: { color: "#7A271A", fontWeight: "700" }
 });

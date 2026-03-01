@@ -13,6 +13,7 @@ export default function RegisterScreen() {
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<Role>("student");
@@ -20,6 +21,12 @@ export default function RegisterScreen() {
   const [error, setError] = useState<string | null>(null);
 
   async function handleRegister() {
+    const normalizedPhone = phoneNumber.trim();
+    if (role === "mentor" && normalizedPhone.length < 8) {
+      setError("Phone number is required for mentor signup.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       setError(null);
@@ -27,7 +34,8 @@ export default function RegisterScreen() {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
-        role
+        role,
+        phoneNumber: role === "mentor" ? normalizedPhone : ""
       });
       if (role === "mentor") {
         router.replace("/mentor-awaiting" as never);
@@ -100,11 +108,22 @@ export default function RegisterScreen() {
       </View>
 
       {role === "mentor" ? (
-        <View style={styles.infoCard}>
-          <Text style={styles.infoText}>
-            Mentor registrations are reviewed by admin. You can complete category and specialization after approval.
-          </Text>
-        </View>
+        <>
+          <Text style={styles.label}>Phone Number</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Mentor phone number"
+            placeholderTextColor="#6B7280"
+            keyboardType="phone-pad"
+            value={phoneNumber}
+            onChangeText={setPhoneNumber}
+          />
+          <View style={styles.infoCard}>
+            <Text style={styles.infoText}>
+              Mentor registrations are reviewed by admin. You can complete category and specialization after approval.
+            </Text>
+          </View>
+        </>
       ) : null}
 
       {error ? <Text style={styles.error}>{error}</Text> : null}

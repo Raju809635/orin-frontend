@@ -155,10 +155,6 @@ export default function MentorProfileScreen() {
       setError("Please select a valid time slot.");
       return;
     }
-    if (!RazorpayCheckout) {
-      setError("Razorpay SDK unavailable. Build a dev/prod APK to use payments.");
-      return;
-    }
 
     try {
       setIsSubmitting(true);
@@ -179,6 +175,11 @@ export default function MentorProfileScreen() {
         setManualSessionId(data.session._id);
         setManualInstructions(data.paymentInstructions || null);
         notify("Session created. Complete manual payment and submit screenshot.");
+        return;
+      }
+
+      if (!RazorpayCheckout) {
+        setError("Razorpay SDK unavailable. Build a dev/prod APK to use Razorpay.");
         return;
       }
 
