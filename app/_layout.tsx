@@ -3,7 +3,6 @@ import React, { useEffect, useRef } from "react";
 import { ActivityIndicator, Alert, AppState, AppStateStatus, Platform, StyleSheet, Text, View } from "react-native";
 import { Drawer } from "expo-router/drawer";
 import { usePathname, useRouter } from "expo-router";
-import * as Updates from "expo-updates";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 
 function defaultRouteByRole(role: "student" | "mentor") {
@@ -91,6 +90,7 @@ function RootDrawer() {
 
       try {
         isCheckingUpdateRef.current = true;
+        const Updates = await import("expo-updates");
         const update = await Updates.checkForUpdateAsync();
 
         if (!update.isAvailable) {
