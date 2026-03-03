@@ -9,6 +9,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "lint": "expo lint",
+    "check:playstore": "node ./scripts/playstore-preflight.js",
     "build:apk": "eas build -p android --profile preview",
     "build:aab": "eas build -p android --profile production",
     "update:preview": "eas update --channel preview --message \"preview update\"",
