@@ -26,7 +26,7 @@ type AuthContextType = {
   isBootstrapping: boolean;
   isAuthenticated: boolean;
   login: (payload: LoginPayload) => Promise<void>;
-  register: (payload: RegisterPayload) => Promise<void>;
+  register: (payload: RegisterPayload) => Promise<RegisterResponse>;
   logout: () => Promise<void>;
 };
 
@@ -41,6 +41,14 @@ type LoginResponse = {
 type RefreshResponse = {
   token: string;
   refreshToken: string;
+};
+
+type RegisterResponse = {
+  message: string;
+  requiresEmailVerification?: boolean;
+  email?: string;
+  role?: "student" | "mentor";
+  otpExpiresAt?: string;
 };
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -96,7 +104,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const register = useCallback(async (payload: RegisterPayload) => {
-    await api.post("/api/auth/register", payload);
+    const { data } = await api.post<RegisterResponse>("/api/auth/register", payload);
+    return data;
   }, []);
 
   useEffect(() => {
@@ -113,6 +122,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const isAuthPublicCall =
           url.includes("/api/auth/login") ||
           url.includes("/api/auth/register") ||
+          url.includes("/api/auth/verify-email-otp") ||
+          url.includes("/api/auth/resend-email-otp") ||
           url.includes("/api/auth/forgot-password") ||
           url.includes("/api/auth/reset-password");
         const shouldTryRefresh =

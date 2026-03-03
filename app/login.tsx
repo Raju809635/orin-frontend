@@ -25,6 +25,10 @@ export default function LoginScreen() {
     } catch (e: any) {
       const message = e?.response?.data?.message || "Login failed. Please check your credentials.";
       setError(message);
+      if (message.toLowerCase().includes("email not verified")) {
+        const normalizedEmail = encodeURIComponent(email.trim().toLowerCase());
+        router.push(`/verify-email?email=${normalizedEmail}` as never);
+      }
     } finally {
       setIsSubmitting(false);
     }

@@ -89,6 +89,15 @@ export default function StudentDashboard() {
       onPress: () => router.push("/chat" as never)
     },
     {
+      key: "notifications",
+      label: "Alerts",
+      icon: "notifications",
+      tint: "#C11574",
+      bg: "#FCE7F6",
+      border: "#FBCFE8",
+      onPress: () => router.push("/notifications" as never)
+    },
+    {
       key: "ai",
       label: "AI Coach",
       icon: "sparkles",
@@ -139,6 +148,32 @@ export default function StudentDashboard() {
     { name: "Competitive Exams", icon: "trophy", color: "#B45309", note: "JEE, NEET, UPSC, SSC, TGPSC, Banking" },
     { name: "Technology & AI", icon: "hardware-chip", color: "#0369A1", note: "Web, Data Science, AI/ML tracks" },
     { name: "Career & Placements", icon: "briefcase", color: "#9333EA", note: "Resume, Interviews, Roadmaps" }
+  ] as const;
+  const studentBanners = [
+    {
+      key: "banner-growth",
+      tag: "Growth",
+      title: "Track progress with confirmed sessions",
+      copy: "Use pending, verification, and confirmed cards to stay on top of every booking.",
+      bg: "#EEF4FF",
+      border: "#D6E4FF"
+    },
+    {
+      key: "banner-policy",
+      tag: "Policy",
+      title: "Pay only through official ORIN flow",
+      copy: "Upload payment proof in-app and wait for admin verification before session confirmation.",
+      bg: "#FFF7ED",
+      border: "#F7DCCB"
+    },
+    {
+      key: "banner-support",
+      tag: "Support",
+      title: "Use notifications for real-time updates",
+      copy: "Payment verification, session confirmations, and mentor actions are pushed to your alerts page.",
+      bg: "#ECFDF3",
+      border: "#CBECD9"
+    }
   ] as const;
   const deepDomainMaps = [
     {
@@ -490,6 +525,17 @@ export default function StudentDashboard() {
         </TouchableOpacity>
       </ScrollView>
 
+      <Text style={styles.sectionHeader}>Live Banners</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bannerRow}>
+        {studentBanners.map((banner) => (
+          <View key={banner.key} style={[styles.bannerCard, { backgroundColor: banner.bg, borderColor: banner.border }]}>
+            <Text style={styles.bannerTag}>{banner.tag}</Text>
+            <Text style={styles.bannerTitle}>{banner.title}</Text>
+            <Text style={styles.bannerCopy}>{banner.copy}</Text>
+          </View>
+        ))}
+      </ScrollView>
+
       <Text style={styles.sectionHeader}>Domain Guide</Text>
       <View style={styles.domainGuideInlineCard}>
         <Text style={styles.domainGuideIntro}>
@@ -783,6 +829,27 @@ const styles = StyleSheet.create({
   },
   featureTitle: { fontSize: 18, fontWeight: "800", color: "#13251E" },
   featureCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
+  bannerRow: { gap: 10, marginBottom: 10 },
+  bannerCard: {
+    width: 258,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12
+  },
+  bannerTag: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    backgroundColor: "#FFFFFF",
+    color: "#1E2B24",
+    fontWeight: "700",
+    fontSize: 11,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    overflow: "hidden",
+    marginBottom: 8
+  },
+  bannerTitle: { fontSize: 16, color: "#13251E", fontWeight: "800", lineHeight: 20 },
+  bannerCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
   domainGuideInlineCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,

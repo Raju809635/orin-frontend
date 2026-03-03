@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
-import { notify } from "@/utils/notify";
 import { Ionicons } from "@expo/vector-icons";
 
 type Role = "student" | "mentor";
@@ -30,19 +29,16 @@ export default function RegisterScreen() {
     try {
       setIsSubmitting(true);
       setError(null);
-      await register({
+      const response = await register({
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
         role,
         phoneNumber: role === "mentor" ? normalizedPhone : ""
       });
-      if (role === "mentor") {
-        router.replace("/mentor-awaiting" as never);
-      } else {
-        notify("Registration successful. Please login.");
-        router.replace("/login" as never);
-      }
+      const nextEmail = encodeURIComponent(response?.email || email.trim().toLowerCase());
+      const nextRole = encodeURIComponent(response?.role || role);
+      router.replace(`/verify-email?email=${nextEmail}&role=${nextRole}` as never);
     } catch (e: any) {
       const message = e?.response?.data?.message || "Registration failed.";
       setError(message);
@@ -120,7 +116,8 @@ export default function RegisterScreen() {
           />
           <View style={styles.infoCard}>
             <Text style={styles.infoText}>
-              Mentor registrations are reviewed by admin. You can complete category and specialization after approval.
+              Mentor registrations are reviewed by admin after email OTP verification. You can complete category and
+              specialization after approval.
             </Text>
           </View>
         </>

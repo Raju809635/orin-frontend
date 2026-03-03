@@ -102,6 +102,15 @@ export default function MentorDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const mentorServices = [
     {
+      key: "notifications",
+      label: "Alerts",
+      icon: "notifications",
+      tint: "#C11574",
+      bg: "#FCE7F6",
+      border: "#FBCFE8",
+      onPress: () => router.push("/notifications" as never)
+    },
+    {
       key: "ai",
       label: "AI Bot",
       icon: "sparkles",
@@ -202,6 +211,32 @@ export default function MentorDashboard() {
           ]
         }
       ]
+    }
+  ] as const;
+  const mentorBanners = [
+    {
+      key: "mentor-banner-ops",
+      tag: "Operations",
+      title: "Keep slots, price, and profile updated weekly",
+      copy: "Students trust mentors with clear availability, clear pricing, and consistent communication.",
+      bg: "#EEF4FF",
+      border: "#D6E4FF"
+    },
+    {
+      key: "mentor-banner-delivery",
+      tag: "Delivery",
+      title: "Share meet link near session time",
+      copy: "Confirmed paid sessions become smoother when mentors update links on time.",
+      bg: "#ECFDF3",
+      border: "#CBECD9"
+    },
+    {
+      key: "mentor-banner-policy",
+      tag: "Policy",
+      title: "Review mentor policy and payout terms",
+      copy: "Use Mentor Policy and Admin Chat for commission and payout clarifications.",
+      bg: "#FFF7ED",
+      border: "#F7DCCB"
     }
   ] as const;
 
@@ -540,6 +575,17 @@ export default function MentorDashboard() {
           <Text style={styles.featureTitle}>Meet Link Workflow</Text>
           <Text style={styles.featureCopy}>Attach session links at the right time and keep delivery clean.</Text>
         </TouchableOpacity>
+      </ScrollView>
+
+      <Text style={styles.sectionHeader}>Live Banners</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bannerRow}>
+        {mentorBanners.map((banner) => (
+          <View key={banner.key} style={[styles.bannerCard, { backgroundColor: banner.bg, borderColor: banner.border }]}>
+            <Text style={styles.bannerTag}>{banner.tag}</Text>
+            <Text style={styles.bannerTitle}>{banner.title}</Text>
+            <Text style={styles.bannerCopy}>{banner.copy}</Text>
+          </View>
+        ))}
       </ScrollView>
 
       <Text style={styles.sectionHeader}>Deep Subsections</Text>
@@ -912,6 +958,27 @@ const styles = StyleSheet.create({
   },
   featureTitle: { fontSize: 18, fontWeight: "800", color: "#13251E" },
   featureCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
+  bannerRow: { gap: 10, marginBottom: 10 },
+  bannerCard: {
+    width: 258,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12
+  },
+  bannerTag: {
+    alignSelf: "flex-start",
+    borderRadius: 999,
+    backgroundColor: "#FFFFFF",
+    color: "#1E2B24",
+    fontWeight: "700",
+    fontSize: 11,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    overflow: "hidden",
+    marginBottom: 8
+  },
+  bannerTitle: { fontSize: 16, color: "#13251E", fontWeight: "800", lineHeight: 20 },
+  bannerCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
   mentorMapWrap: { gap: 10, marginBottom: 8 },
   mentorMapCard: {
     borderWidth: 1,

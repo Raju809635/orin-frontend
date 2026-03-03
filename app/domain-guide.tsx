@@ -383,48 +383,50 @@ export default function DomainGuideScreen() {
       </View>
 
       <Text style={styles.sectionTitle}>All Domains and Deep Subsections</Text>
-      {DOMAIN_GUIDE.map((item) => (
-        <View key={item.domain} style={[styles.domainCard, { borderColor: `${item.color}33`, backgroundColor: item.softBg }]}>
-          <View style={styles.domainHead}>
-            <View style={[styles.domainIconWrap, { backgroundColor: `${item.color}22` }]}>
-              <Ionicons name={item.icon} size={20} color={item.color} />
-            </View>
-            <Text style={[styles.domainTitle, { color: item.color }]}>{item.domain}</Text>
-          </View>
-
-          <Text style={[styles.label, styles.labelSub]}>Sub-Domains</Text>
-          <View style={styles.subGrid}>
-            {item.subDomains.map((sub) => (
-              <View
-                key={`${item.domain}-${sub.name}`}
-                style={[styles.subSquare, { borderColor: `${sub.color}33`, backgroundColor: `${sub.color}11` }]}
-              >
-                <View style={[styles.subIconWrap, { backgroundColor: `${sub.color}22` }]}>
-                  <Ionicons name={sub.icon} size={16} color={sub.color} />
-                </View>
-                <Text style={[styles.subName, { color: sub.color }]}>{sub.name}</Text>
-                {sub.tracks.map((track) => (
-                  <View key={`${sub.name}-${track.name}`} style={styles.trackWrap}>
-                    <Text style={styles.trackName}>{track.name}</Text>
-                    <View style={styles.topicWrap}>
-                      {track.topics.map((topic) => (
-                        <Text key={`${track.name}-${topic}`} style={[styles.topicChip, { borderColor: `${sub.color}55` }]}>
-                          {topic}
-                        </Text>
-                      ))}
-                    </View>
-                  </View>
-                ))}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.domainRow}>
+        {DOMAIN_GUIDE.map((item) => (
+          <View key={item.domain} style={[styles.domainCard, { borderColor: `${item.color}33`, backgroundColor: item.softBg }]}>
+            <View style={styles.domainHead}>
+              <View style={[styles.domainIconWrap, { backgroundColor: `${item.color}22` }]}>
+                <Ionicons name={item.icon} size={20} color={item.color} />
               </View>
-            ))}
-          </View>
+              <Text style={[styles.domainTitle, { color: item.color }]}>{item.domain}</Text>
+            </View>
 
-          <Text style={[styles.label, styles.labelFocus]}>Focus</Text>
-          <Text style={styles.value}>{item.focus}</Text>
-          <Text style={[styles.label, styles.labelOutcome]}>Expected Outcomes</Text>
-          <Text style={styles.value}>{item.outcomes.join(" | ")}</Text>
-        </View>
-      ))}
+            <Text style={[styles.label, styles.labelSub]}>Sub-Domains</Text>
+            <View style={styles.subGrid}>
+              {item.subDomains.map((sub) => (
+                <View
+                  key={`${item.domain}-${sub.name}`}
+                  style={[styles.subSquare, { borderColor: `${sub.color}33`, backgroundColor: `${sub.color}11` }]}
+                >
+                  <View style={[styles.subIconWrap, { backgroundColor: `${sub.color}22` }]}>
+                    <Ionicons name={sub.icon} size={16} color={sub.color} />
+                  </View>
+                  <Text style={[styles.subName, { color: sub.color }]}>{sub.name}</Text>
+                  {sub.tracks.map((track) => (
+                    <View key={`${sub.name}-${track.name}`} style={styles.trackWrap}>
+                      <Text style={styles.trackName}>{track.name}</Text>
+                      <View style={styles.topicWrap}>
+                        {track.topics.map((topic) => (
+                          <Text key={`${track.name}-${topic}`} style={[styles.topicChip, { borderColor: `${sub.color}55` }]}>
+                            {topic}
+                          </Text>
+                        ))}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
+
+            <Text style={[styles.label, styles.labelFocus]}>Focus</Text>
+            <Text style={styles.value}>{item.focus}</Text>
+            <Text style={[styles.label, styles.labelOutcome]}>Expected Outcomes</Text>
+            <Text style={styles.value}>{item.outcomes.join(" | ")}</Text>
+          </View>
+        ))}
+      </ScrollView>
     </ScrollView>
   );
 }
@@ -471,10 +473,15 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   domainCard: {
+    width: 320,
     borderWidth: 1,
     borderRadius: 16,
     padding: 14,
     marginBottom: 10
+  },
+  domainRow: {
+    gap: 10,
+    paddingRight: 8
   },
   domainHead: {
     flexDirection: "row",

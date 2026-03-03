@@ -30,7 +30,7 @@ function RootDrawer() {
       return;
     }
 
-    const isAuthScreen = pathname === "/login" || pathname === "/register";
+    const isAuthScreen = pathname === "/login" || pathname === "/register" || pathname === "/verify-email";
     const isProtected =
       pathname.startsWith("/ai-assistant") ||
       pathname.startsWith("/complaints") ||
@@ -44,6 +44,7 @@ function RootDrawer() {
       pathname.startsWith("/mentors") ||
       pathname.startsWith("/mentor/") ||
       pathname.startsWith("/settings") ||
+      pathname.startsWith("/notifications") ||
       pathname.startsWith("/student-dashboard") ||
       pathname.startsWith("/mentor-dashboard") ||
       pathname.startsWith("/admin-dashboard");
@@ -176,6 +177,14 @@ function RootDrawer() {
           drawerItemStyle: user ? { display: "none" } : undefined
         }}
       />
+      <Drawer.Screen
+        name="verify-email"
+        options={{
+          title: "Verify Email",
+          drawerLabel: "Verify Email",
+          drawerItemStyle: user ? { display: "none" } : undefined
+        }}
+      />
       <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerLabel: "Collaborate" }} />
       <Drawer.Screen
         name="chat"
@@ -247,6 +256,14 @@ function RootDrawer() {
         options={{
           title: "Settings",
           drawerLabel: "Settings",
+          drawerItemStyle: user ? undefined : { display: "none" }
+        }}
+      />
+      <Drawer.Screen
+        name="notifications"
+        options={{
+          title: "Notifications",
+          drawerLabel: "Notifications",
           drawerItemStyle: user ? undefined : { display: "none" }
         }}
       />
