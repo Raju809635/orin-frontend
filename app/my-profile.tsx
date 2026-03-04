@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -38,6 +38,9 @@ type FeedPost = {
 };
 
 type PublicProfileLite = {
+  profile?: {
+    profilePhotoUrl?: string;
+  };
   social?: {
     followers?: number;
     following?: number;
@@ -56,6 +59,8 @@ export default function MyProfileScreen() {
   const [connections, setConnections] = useState<ConnectionRow[]>([]);
   const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
   const [socialPreview, setSocialPreview] = useState<PublicProfileLite["socialPreview"] | null>(null);
+  const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
+  const [activeList, setActiveList] = useState<"posts" | "followers" | "following" | "connections">("posts");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
@@ -84,6 +89,7 @@ export default function MyProfileScreen() {
       setConnections(connectionData);
       setMyPosts(feedData.filter((post) => String(post?.authorId?._id || "") === String(user?.id || "")));
       setSocialPreview(socialRes.status === "fulfilled" ? socialRes.value.data?.socialPreview || null : null);
+      setProfilePhotoUrl(socialRes.status === "fulfilled" ? socialRes.value.data?.profile?.profilePhotoUrl || "" : "");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load profile.");
     } finally {
@@ -133,26 +139,30 @@ export default function MyProfileScreen() {
     >
       <View style={styles.headerCard}>
         <View style={styles.headerTop}>
-          <View style={styles.avatarWrap}>
-            <Text style={styles.avatarText}>{(user?.name || "O").charAt(0).toUpperCase()}</Text>
-          </View>
+          {profilePhotoUrl ? (
+            <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
+          ) : (
+            <View style={styles.avatarWrap}>
+              <Text style={styles.avatarText}>{(user?.name || "O").charAt(0).toUpperCase()}</Text>
+            </View>
+          )}
           <View style={styles.statsRow}>
-            <View style={styles.statCard}>
+            <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("posts")}>
               <Text style={styles.statValue}>{myPosts.length}</Text>
-              <Text style={styles.statLabel}>Posts</Text>
-            </View>
-            <View style={styles.statCard}>
+              <Text style={[styles.statLabel, activeList === "posts" && styles.statLabelActive]}>Posts</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("followers")}>
               <Text style={styles.statValue}>{overview?.follow?.followers ?? 0}</Text>
-              <Text style={styles.statLabel}>Followers</Text>
-            </View>
-            <View style={styles.statCard}>
+              <Text style={[styles.statLabel, activeList === "followers" && styles.statLabelActive]}>Followers</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("following")}>
               <Text style={styles.statValue}>{overview?.follow?.following ?? 0}</Text>
-              <Text style={styles.statLabel}>Following</Text>
-            </View>
-            <View style={styles.statCard}>
+              <Text style={[styles.statLabel, activeList === "following" && styles.statLabelActive]}>Following</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("connections")}>
               <Text style={styles.statValue}>{overview?.connections?.accepted ?? 0}</Text>
-              <Text style={styles.statLabel}>Connections</Text>
-            </View>
+              <Text style={[styles.statLabel, activeList === "connections" && styles.statLabelActive]}>Connections</Text>
+            </TouchableOpacity>
           </View>
         </View>
         <Text style={styles.name}>{user?.name || "ORIN User"}</Text>
@@ -176,82 +186,90 @@ export default function MyProfileScreen() {
         <Text style={styles.meta}>Tag: {overview?.reputation?.levelTag || "Starter"}</Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>My Connections</Text>
-        {connections.length === 0 ? (
-          <Text style={styles.meta}>No accepted connections yet.</Text>
-        ) : (
-          connections.slice(0, 20).map((item) => {
-            const isRequester = String(item.requesterId?._id || "") === String(user?.id || "");
-            const other = isRequester ? item.recipientId : item.requesterId;
-            return (
-              <TouchableOpacity
-                key={item._id}
-                style={styles.rowItem}
-                onPress={() => (other?._id ? router.push(`/public-profile/${other._id}` as never) : undefined)}
-                disabled={!other?._id}
-              >
-                <Text style={styles.rowName}>{other?.name || "Connection"}</Text>
-                <Text style={styles.rowRole}>{other?.role || "member"}</Text>
-              </TouchableOpacity>
-            );
-          })
-        )}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Followers</Text>
-        {(socialPreview?.followers || []).length === 0 ? (
-          <Text style={styles.meta}>No followers yet.</Text>
-        ) : (
-          (socialPreview?.followers || []).slice(0, 20).map((item, idx) => (
-            <TouchableOpacity key={`${item._id || idx}-f`} style={styles.rowItem} onPress={() => item._id ? router.push(`/public-profile/${item._id}` as never) : undefined}>
-              <Text style={styles.rowName}>{item.name || "User"}</Text>
-              <Text style={styles.rowRole}>{item.role || "member"}</Text>
-            </TouchableOpacity>
-          ))
-        )}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Following</Text>
-        {(socialPreview?.following || []).length === 0 ? (
-          <Text style={styles.meta}>Not following anyone yet.</Text>
-        ) : (
-          (socialPreview?.following || []).slice(0, 20).map((item, idx) => (
-            <TouchableOpacity key={`${item._id || idx}-g`} style={styles.rowItem} onPress={() => item._id ? router.push(`/public-profile/${item._id}` as never) : undefined}>
-              <Text style={styles.rowName}>{item.name || "User"}</Text>
-              <Text style={styles.rowRole}>{item.role || "member"}</Text>
-            </TouchableOpacity>
-          ))
-        )}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>My Posts</Text>
-        {myPosts.length === 0 ? (
-          <Text style={styles.meta}>No posts yet.</Text>
-        ) : (
-          myPosts.map((post) => (
-            <View key={post._id} style={styles.postCard}>
-              <View style={styles.postTop}>
-                <Ionicons name="apps" size={18} color="#475467" />
+      {activeList === "connections" ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Connections</Text>
+          {connections.length === 0 ? (
+            <Text style={styles.meta}>No accepted connections yet.</Text>
+          ) : (
+            connections.slice(0, 20).map((item) => {
+              const isRequester = String(item.requesterId?._id || "") === String(user?.id || "");
+              const other = isRequester ? item.recipientId : item.requesterId;
+              return (
                 <TouchableOpacity
-                  style={styles.deleteBtn}
-                  onPress={() => confirmDelete(post._id)}
-                  disabled={deletingPostId === post._id}
+                  key={item._id}
+                  style={styles.rowItem}
+                  onPress={() => (other?._id ? router.push(`/public-profile/${other._id}` as never) : undefined)}
+                  disabled={!other?._id}
                 >
-                  <Text style={styles.deleteBtnText}>{deletingPostId === post._id ? "Deleting..." : "Delete"}</Text>
+                  <Text style={styles.rowName}>{other?.name || "Connection"}</Text>
+                  <Text style={styles.rowRole}>{other?.role || "member"}</Text>
                 </TouchableOpacity>
+              );
+            })
+          )}
+        </View>
+      ) : null}
+
+      {activeList === "followers" ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Followers</Text>
+          {(socialPreview?.followers || []).length === 0 ? (
+            <Text style={styles.meta}>No followers yet.</Text>
+          ) : (
+            (socialPreview?.followers || []).slice(0, 20).map((item, idx) => (
+              <TouchableOpacity key={`${item._id || idx}-f`} style={styles.rowItem} onPress={() => item._id ? router.push(`/public-profile/${item._id}` as never) : undefined}>
+                <Text style={styles.rowName}>{item.name || "User"}</Text>
+                <Text style={styles.rowRole}>{item.role || "member"}</Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      ) : null}
+
+      {activeList === "following" ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Following</Text>
+          {(socialPreview?.following || []).length === 0 ? (
+            <Text style={styles.meta}>Not following anyone yet.</Text>
+          ) : (
+            (socialPreview?.following || []).slice(0, 20).map((item, idx) => (
+              <TouchableOpacity key={`${item._id || idx}-g`} style={styles.rowItem} onPress={() => item._id ? router.push(`/public-profile/${item._id}` as never) : undefined}>
+                <Text style={styles.rowName}>{item.name || "User"}</Text>
+                <Text style={styles.rowRole}>{item.role || "member"}</Text>
+              </TouchableOpacity>
+            ))
+          )}
+        </View>
+      ) : null}
+
+      {activeList === "posts" ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Posts</Text>
+          {myPosts.length === 0 ? (
+            <Text style={styles.meta}>No posts yet.</Text>
+          ) : (
+            myPosts.map((post) => (
+              <View key={post._id} style={styles.postCard}>
+                <View style={styles.postTop}>
+                  <Ionicons name="apps" size={18} color="#475467" />
+                  <TouchableOpacity
+                    style={styles.deleteBtn}
+                    onPress={() => confirmDelete(post._id)}
+                    disabled={deletingPostId === post._id}
+                  >
+                    <Text style={styles.deleteBtnText}>{deletingPostId === post._id ? "Deleting..." : "Delete"}</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.postText}>{post.content}</Text>
+                <Text style={styles.meta}>
+                  {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0} | Shares {post.shareCount || 0}
+                </Text>
               </View>
-              <Text style={styles.postText}>{post.content}</Text>
-              <Text style={styles.meta}>
-                {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0} | Shares {post.shareCount || 0}
-              </Text>
-            </View>
-          ))
-        )}
-      </View>
+            ))
+          )}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -267,6 +285,13 @@ const styles = StyleSheet.create({
     padding: 14
   },
   headerTop: { flexDirection: "row", alignItems: "center" },
+  avatarImage: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    borderWidth: 2,
+    borderColor: "#CDE7D8"
+  },
   avatarWrap: {
     width: 78,
     height: 78,
@@ -302,17 +327,10 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: "#344054", fontWeight: "700" },
   error: { marginTop: 8, color: "#B42318" },
   statsRow: { flexDirection: "row", gap: 8, marginLeft: 10, flex: 1 },
-  statCard: {
-    flex: 1,
-    backgroundColor: "#F8FAFC",
-    borderWidth: 1,
-    borderColor: "#E4E7EC",
-    borderRadius: 12,
-    paddingVertical: 8,
-    alignItems: "center"
-  },
+  statPlain: { flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 4 },
   statValue: { fontSize: 16, fontWeight: "800", color: "#1E2B24" },
   statLabel: { marginTop: 2, color: "#667085", fontWeight: "600", fontSize: 11 },
+  statLabelActive: { color: "#1F7A4C" },
   card: {
     marginTop: 12,
     backgroundColor: "#fff",
