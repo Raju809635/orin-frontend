@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -13,6 +13,7 @@ import {
 import { useFocusEffect } from "expo-router";
 import { api } from "@/lib/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getStoredNewsLanguage, NEWS_LANGUAGES, NewsLanguageCode, setStoredNewsLanguage } from "@/utils/newsLanguage";
 
 type NewsCategoryKey = "tech" | "edtech" | "exams" | "scholarships" | "opportunities";
 
@@ -35,6 +36,8 @@ const tabs: { key: NewsCategoryKey; label: string }[] = [
 
 export default function NewsUpdatesScreen() {
   const insets = useSafeAreaInsets();
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
+  const [language, setLanguage] = useState<NewsLanguageCode>("en");
   const [activeTab, setActiveTab] = useState<NewsCategoryKey>("tech");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -47,12 +50,24 @@ export default function NewsUpdatesScreen() {
     opportunities: []
   });
 
+  useEffect(() => {
+    let mounted = true;
+    getStoredNewsLanguage().then((lang) => {
+      if (mounted) setLanguage(lang);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const loadCategory = useCallback(async (category: NewsCategoryKey, refresh = false) => {
     try {
       if (refresh) setRefreshing(true);
       else setLoading((prev) => (articlesByTab[category]?.length ? prev : true));
       setError(null);
-      const { data } = await api.get<{ category: string; articles: NewsArticle[] }>(`/api/news/${category}?limit=8`);
+      const { data } = await api.get<{ category: string; articles: NewsArticle[] }>(
+        `/api/news/${category}?limit=8&language=${language}`
+      );
       setArticlesByTab((prev) => ({
         ...prev,
         [category]: data?.articles || []
@@ -63,12 +78,12 @@ export default function NewsUpdatesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [articlesByTab]);
+  }, [articlesByTab, language]);
 
   useFocusEffect(
     useCallback(() => {
       loadCategory(activeTab, true);
-    }, [activeTab, loadCategory])
+    }, [activeTab, language, loadCategory])
   );
 
   const activeArticles = useMemo(() => articlesByTab[activeTab] || [], [activeTab, articlesByTab]);
@@ -81,6 +96,35 @@ export default function NewsUpdatesScreen() {
       <Text style={styles.heading}>News & Updates</Text>
       <Text style={styles.subheading}>Career, tech, exams, scholarships, and opportunities curated daily.</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
+      <View style={styles.languageWrap}>
+        <Text style={styles.languageTitle}>Select Language</Text>
+        <TouchableOpacity style={styles.languagePicker} onPress={() => setLanguageMenuOpen((prev) => !prev)}>
+          <Text style={styles.languagePickerText}>
+            {NEWS_LANGUAGES.find((item) => item.code === language)?.label || "English"}
+          </Text>
+          <Text style={styles.languagePickerArrow}>{languageMenuOpen ? "▲" : "▼"}</Text>
+        </TouchableOpacity>
+        {languageMenuOpen ? (
+          <View style={styles.languageMenu}>
+            {NEWS_LANGUAGES.map((item) => (
+              <TouchableOpacity
+                key={item.code}
+                style={[styles.languageOption, language === item.code && styles.languageOptionActive]}
+                onPress={async () => {
+                  setLanguage(item.code);
+                  setLanguageMenuOpen(false);
+                  await setStoredNewsLanguage(item.code);
+                  await loadCategory(activeTab, true);
+                }}
+              >
+                <Text style={[styles.languageOptionText, language === item.code && styles.languageOptionTextActive]}>
+                  {item.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : null}
+      </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabRow}>
         {tabs.map((tab) => {
@@ -131,6 +175,33 @@ const styles = StyleSheet.create({
   heading: { fontSize: 26, fontWeight: "800", color: "#13251E" },
   subheading: { marginTop: 4, marginBottom: 10, color: "#475467" },
   error: { color: "#B42318", marginBottom: 8 },
+  languageWrap: { marginBottom: 10 },
+  languageTitle: { color: "#1E2B24", fontWeight: "700", marginBottom: 6 },
+  languagePicker: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  languagePickerText: { color: "#344054", fontWeight: "600" },
+  languagePickerArrow: { color: "#667085", fontWeight: "700" },
+  languageMenu: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    borderRadius: 10,
+    backgroundColor: "#fff",
+    overflow: "hidden"
+  },
+  languageOption: { paddingHorizontal: 12, paddingVertical: 10 },
+  languageOptionActive: { backgroundColor: "#E8F5EE" },
+  languageOptionText: { color: "#344054", fontWeight: "600" },
+  languageOptionTextActive: { color: "#1F7A4C" },
   tabRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   tabChip: {
     borderWidth: 1,

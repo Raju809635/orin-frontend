@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
 import { submitManualPaymentWithPicker } from "@/utils/manualPaymentUpload";
 import { FEATURE_FLAGS } from "@/constants/featureFlags";
+import { getStoredNewsLanguage, NewsLanguageCode } from "@/utils/newsLanguage";
 
 type Booking = {
   _id: string;
@@ -291,6 +292,7 @@ export default function StudentDashboard() {
     opportunities: []
   });
   const [newsLoading, setNewsLoading] = useState(false);
+  const [newsLanguage, setNewsLanguage] = useState<NewsLanguageCode>("en");
   const [activeSection, setActiveSection] = useState<StudentSectionId>("overview");
   const [growthSubSection, setGrowthSubSection] = useState<GrowthSubSectionId>("ai");
   const studentBanners = [
@@ -410,6 +412,16 @@ export default function StudentDashboard() {
     }
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    getStoredNewsLanguage().then((lang) => {
+      if (mounted) setNewsLanguage(lang);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const fetchNews = useCallback(
     async (refresh = false) => {
       try {
@@ -418,7 +430,9 @@ export default function StudentDashboard() {
         }
         const endpoints: NewsCategoryKey[] = ["tech", "edtech", "exams", "scholarships", "opportunities"];
         const responses = await Promise.allSettled(
-          endpoints.map((category) => api.get<{ category: string; articles: NewsArticle[] }>(`/api/news/${category}?limit=6`))
+          endpoints.map((category) =>
+            api.get<{ category: string; articles: NewsArticle[] }>(`/api/news/${category}?limit=6&language=${newsLanguage}`)
+          )
         );
         setNewsByCategory((prev) => {
           const next = { ...prev };
@@ -436,7 +450,7 @@ export default function StudentDashboard() {
         setNewsLoading(false);
       }
     },
-    []
+    [newsLanguage]
   );
 
   useFocusEffect(
