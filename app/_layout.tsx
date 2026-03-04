@@ -2,15 +2,16 @@ import "react-native-gesture-handler";
 import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, AppState, AppStateStatus, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Drawer } from "expo-router/drawer";
-import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { DrawerContentScrollView, DrawerItem, DrawerContentComponentProps } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function defaultRouteByRole(role: "student" | "mentor") {
-  if (role === "student") return "/student-dashboard";
-  return "/mentor-dashboard";
+  if (role === "student") return "/network?section=feed";
+  return "/network?section=feed";
 }
 
 function homeRouteForUser(user: { role: "student" | "mentor"; approvalStatus?: "pending" | "approved" | "rejected" }) {
@@ -21,9 +22,9 @@ function homeRouteForUser(user: { role: "student" | "mentor"; approvalStatus?: "
 }
 
 function RootDrawer() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const pathname = usePathname();
-  const globalParams = useGlobalSearchParams<{ section?: string }>();
   const { user, isAuthenticated, isBootstrapping } = useAuth();
   const [mainOpen, setMainOpen] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -44,6 +45,7 @@ function RootDrawer() {
       pathname.startsWith("/chat") ||
       pathname.startsWith("/collaborate") ||
       pathname.startsWith("/domains") ||
+      pathname.startsWith("/news-updates") ||
       pathname.startsWith("/about") ||
       pathname.startsWith("/privacy") ||
       pathname.startsWith("/terms") ||
@@ -212,6 +214,7 @@ function RootDrawer() {
                 <DrawerItem label="Session Requests" onPress={() => router.push("/mentor-dashboard?section=requests" as never)} />
                 <DrawerItem label="Sessions" onPress={() => router.push("/mentor-dashboard?section=sessions" as never)} />
                 <DrawerItem label="Availability" onPress={() => router.push("/mentor-dashboard?section=availability" as never)} />
+                <DrawerItem label="Collaborate" onPress={() => router.push("/collaborate" as never)} />
               </>
             ) : (
               <>
@@ -219,6 +222,7 @@ function RootDrawer() {
                 <DrawerItem label="Career Growth" onPress={() => router.push("/student-dashboard?section=growth" as never)} />
                 <DrawerItem label="My Sessions" onPress={() => router.push("/student-dashboard?section=sessions" as never)} />
                 <DrawerItem label="Network Hub" onPress={() => router.push("/network?section=feed" as never)} />
+                <DrawerItem label="Collaborate" onPress={() => router.push("/collaborate" as never)} />
               </>
             )}
           </View>
@@ -233,6 +237,8 @@ function RootDrawer() {
             <DrawerItem label="My Profile" onPress={() => router.push("/my-profile" as never)} />
             <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
             <DrawerItem label="Domain Guide" onPress={() => router.push("/domain-guide" as never)} />
+            <DrawerItem label="News & Updates" onPress={() => router.push("/news-updates" as never)} />
+            <DrawerItem label="Complaints" onPress={() => router.push("/complaints" as never)} />
             <DrawerItem label="Posts" onPress={() => router.push("/posts" as never)} />
             <DrawerItem label="Messages" onPress={() => router.push("/chat" as never)} />
             <DrawerItem label="Notifications" onPress={() => router.push("/notifications" as never)} />
@@ -259,8 +265,6 @@ function RootDrawer() {
     return true;
   }
 
-  const currentMentorSection = String(globalParams.section || "overview");
-
   const studentTabs = [
     { key: "profile", label: "My Profile", icon: "person-circle", path: "/my-profile" },
     { key: "domains", label: "Domains", icon: "grid", path: "/domains" },
@@ -271,8 +275,8 @@ function RootDrawer() {
 
   const mentorTabs = [
     { key: "profile", label: "My Profile", icon: "person-circle", path: "/my-profile" },
-    { key: "requests", label: "Requests", icon: "list", path: "/mentor-dashboard?section=requests" },
-    { key: "sessions", label: "Sessions", icon: "videocam", path: "/mentor-dashboard?section=sessions" },
+    { key: "domains", label: "Domains", icon: "grid", path: "/domains" },
+    { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/mentor-dashboard" },
     { key: "network", label: "Network", icon: "people", path: "/network" },
     { key: "posts", label: "Posts", icon: "newspaper", path: "/posts" }
   ] as const;
@@ -280,8 +284,8 @@ function RootDrawer() {
   const tabs = user?.role === "mentor" ? mentorTabs : studentTabs;
   const isTabActive = (tabKey: string, path: string) => {
     if (path === "/") return pathname === "/";
-    if (tabKey === "requests") return pathname.startsWith("/mentor-dashboard") && currentMentorSection === "requests";
-    if (tabKey === "sessions") return pathname.startsWith("/mentor-dashboard") && currentMentorSection === "sessions";
+    if (tabKey === "dashboard" && path.startsWith("/student-dashboard")) return pathname.startsWith("/student-dashboard");
+    if (tabKey === "dashboard" && path.startsWith("/mentor-dashboard")) return pathname.startsWith("/mentor-dashboard");
     if (path.startsWith("/mentor-dashboard")) return pathname.startsWith("/mentor-dashboard");
     return pathname.startsWith(path);
   };
@@ -307,6 +311,7 @@ function RootDrawer() {
           <Drawer.Screen name="complaints" options={{ title: "Complaints", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="domains" options={{ title: "Domains", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="domain-guide" options={{ title: "Domain Guide", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="news-updates" options={{ title: "News & Updates", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="about" options={{ title: "About ORIN", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="privacy" options={{ title: "Privacy Policy", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="terms" options={{ title: "Terms of Use", drawerItemStyle: { display: "none" } }} />
@@ -330,7 +335,7 @@ function RootDrawer() {
         </Drawer>
       </View>
       {showBottomNav() ? (
-        <View style={styles.bottomNav}>
+        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8), minHeight: 66 + Math.max(insets.bottom, 8) }]}>
           {tabs.map((tab) => {
             const active = isTabActive(tab.key, tab.path);
             return (
@@ -418,7 +423,8 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: "#E4E7EC",
     backgroundColor: "#FFFFFF",
-    paddingVertical: 6
+    paddingTop: 8,
+    paddingHorizontal: 8
   },
   bottomNavItem: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2, paddingVertical: 4 },
   bottomNavLabel: { fontSize: 11, color: "#667085", fontWeight: "600" },

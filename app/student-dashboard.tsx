@@ -216,6 +216,16 @@ type ReputationSummary = {
   topPercent: number;
 };
 
+type NewsCategoryKey = "tech" | "edtech" | "exams" | "scholarships" | "opportunities";
+type NewsArticle = {
+  title: string;
+  description: string;
+  imageUrl: string;
+  source: string;
+  url: string;
+  publishedAt: string;
+};
+
 type StudentSectionId = "overview" | "growth" | "sessions" | "network";
 type GrowthSubSectionId = "ai" | "community" | "resources";
 
@@ -230,6 +240,14 @@ const growthSubSections: { id: GrowthSubSectionId; label: string }[] = [
   { id: "ai", label: "AI & Planning" },
   { id: "community", label: "Community" },
   { id: "resources", label: "Resources" }
+];
+
+const newsTabs: { key: NewsCategoryKey; label: string }[] = [
+  { key: "tech", label: "Tech" },
+  { key: "edtech", label: "EdTech" },
+  { key: "exams", label: "Govt Exams" },
+  { key: "scholarships", label: "Scholarships" },
+  { key: "opportunities", label: "Opportunities" }
 ];
 
 export default function StudentDashboard() {
@@ -264,82 +282,17 @@ export default function StudentDashboard() {
   const [projectIdeas, setProjectIdeas] = useState<ProjectIdeasResponse | null>(null);
   const [knowledgeLibrary, setKnowledgeLibrary] = useState<LibraryItem[]>([]);
   const [reputationSummary, setReputationSummary] = useState<ReputationSummary | null>(null);
+  const [activeNewsTab, setActiveNewsTab] = useState<NewsCategoryKey>("tech");
+  const [newsByCategory, setNewsByCategory] = useState<Record<NewsCategoryKey, NewsArticle[]>>({
+    tech: [],
+    edtech: [],
+    exams: [],
+    scholarships: [],
+    opportunities: []
+  });
+  const [newsLoading, setNewsLoading] = useState(false);
   const [activeSection, setActiveSection] = useState<StudentSectionId>("overview");
   const [growthSubSection, setGrowthSubSection] = useState<GrowthSubSectionId>("ai");
-  const quickServices = [
-    {
-      key: "mentors",
-      label: "Mentors",
-      icon: "people",
-      tint: "#165DFF",
-      bg: "#EAF2FF",
-      border: "#D7E6FF",
-      onPress: () => router.push("/domains")
-    },
-    {
-      key: "messages",
-      label: "Messages",
-      icon: "chatbubble-ellipses",
-      tint: "#0F766E",
-      bg: "#E7F9F6",
-      border: "#CDEEE8",
-      onPress: () => router.push("/chat" as never)
-    },
-    {
-      key: "notifications",
-      label: "Alerts",
-      icon: "notifications",
-      tint: "#C11574",
-      bg: "#FCE7F6",
-      border: "#FBCFE8",
-      onPress: () => router.push("/notifications" as never)
-    },
-    {
-      key: "ai",
-      label: "AI Coach",
-      icon: "sparkles",
-      tint: "#7C3AED",
-      bg: "#F0E9FF",
-      border: "#E1D5FF",
-      onPress: () => router.push("/ai-assistant" as never)
-    },
-    {
-      key: "profile",
-      label: "Profile",
-      icon: "person-circle",
-      tint: "#0369A1",
-      bg: "#E8F5FF",
-      border: "#D3EAFA",
-      onPress: () => router.push("/student-profile" as never)
-    },
-    {
-      key: "domain-guide",
-      label: "Domain Guide",
-      icon: "book",
-      tint: "#1F7A4C",
-      bg: "#E7F5EE",
-      border: "#D5E9DB",
-      onPress: () => router.push("/domain-guide" as never)
-    },
-    {
-      key: "support",
-      label: "Support",
-      icon: "help-buoy",
-      tint: "#B45309",
-      bg: "#FFF4E5",
-      border: "#F8E2C2",
-      onPress: () => router.push("/complaints" as never)
-    },
-    {
-      key: "settings",
-      label: "Settings",
-      icon: "settings",
-      tint: "#475467",
-      bg: "#EEF2F6",
-      border: "#DCE3EA",
-      onPress: () => router.push("/settings" as never)
-    }
-  ] as const;
   const studentBanners = [
     {
       key: "banner-growth",
@@ -457,10 +410,40 @@ export default function StudentDashboard() {
     }
   }, []);
 
+  const fetchNews = useCallback(
+    async (refresh = false) => {
+      try {
+        if (refresh) {
+          setNewsLoading(true);
+        }
+        const endpoints: NewsCategoryKey[] = ["tech", "edtech", "exams", "scholarships", "opportunities"];
+        const responses = await Promise.allSettled(
+          endpoints.map((category) => api.get<{ category: string; articles: NewsArticle[] }>(`/api/news/${category}?limit=6`))
+        );
+        setNewsByCategory((prev) => {
+          const next = { ...prev };
+          responses.forEach((result, index) => {
+            const key = endpoints[index];
+            if (result.status === "fulfilled") {
+              next[key] = result.value.data?.articles || [];
+            }
+          });
+          return next;
+        });
+      } catch {
+        // news is optional on dashboard; keep other sections unaffected
+      } finally {
+        setNewsLoading(false);
+      }
+    },
+    []
+  );
+
   useFocusEffect(
     useCallback(() => {
       fetchDashboard();
-    }, [fetchDashboard])
+      fetchNews(true);
+    }, [fetchDashboard, fetchNews])
   );
 
   useEffect(() => {
@@ -594,6 +577,7 @@ export default function StudentDashboard() {
       filteredBookings.length
     ]
   );
+  const activeNewsArticles = useMemo(() => newsByCategory[activeNewsTab] || [], [activeNewsTab, newsByCategory]);
   const searchBreakdown = useMemo(() => {
     const parts: string[] = [];
     if (filteredPendingPaymentSessions.length) parts.push(`Pending Payments (${filteredPendingPaymentSessions.length})`);
@@ -862,17 +846,47 @@ export default function StudentDashboard() {
 
       {activeSection === "overview" ? (
       <>
-      <Text style={styles.sectionHeader}>Services</Text>
-      <View style={styles.sectionGrid}>
-        {quickServices.map((item) => (
-          <TouchableOpacity key={item.key} style={[styles.sectionTile, { borderColor: item.border }]} onPress={item.onPress}>
-            <View style={[styles.iconBadge, { backgroundColor: item.bg }]}>
-              <Ionicons name={item.icon} size={18} color={item.tint} />
+      <Text style={styles.sectionHeader}>Career & Tech Updates</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.newsTabRow}>
+        {newsTabs.map((tab) => {
+          const active = activeNewsTab === tab.key;
+          return (
+            <TouchableOpacity
+              key={tab.key}
+              style={[styles.newsTabChip, active && styles.newsTabChipActive]}
+              onPress={() => setActiveNewsTab(tab.key)}
+            >
+              <Text style={[styles.newsTabText, active && styles.newsTabTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.newsRow}>
+        {newsLoading && activeNewsArticles.length === 0 ? (
+          <View style={styles.newsLoaderWrap}>
+            <ActivityIndicator size="small" color="#1F7A4C" />
+            <Text style={styles.meta}>Loading updates...</Text>
+          </View>
+        ) : activeNewsArticles.length === 0 ? (
+          <View style={styles.newsLoaderWrap}>
+            <Text style={styles.meta}>No updates available right now.</Text>
+          </View>
+        ) : (
+          activeNewsArticles.slice(0, 8).map((item, index) => (
+            <View key={`${item.url}-${index}`} style={styles.newsCard}>
+              {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.newsImage} resizeMode="cover" /> : null}
+              <Text style={styles.newsTitle} numberOfLines={3}>{item.title}</Text>
+              <Text style={styles.newsDesc} numberOfLines={3}>{item.description || "Tap Read More for full details."}</Text>
+              <View style={styles.newsMetaRow}>
+                <Text style={styles.newsSource} numberOfLines={1}>{item.source || "News Source"}</Text>
+                <TouchableOpacity onPress={() => item.url && Linking.openURL(item.url)}>
+                  <Text style={styles.newsReadMore}>Read More</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={styles.sectionTileTitle}>{item.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+          ))
+        )}
+      </ScrollView>
 
       <Text style={styles.sectionHeader}>Featured</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
@@ -1570,6 +1584,44 @@ const styles = StyleSheet.create({
     fontWeight: "500"
   },
   sectionHeader: { fontSize: 16, fontWeight: "800", color: "#1E2B24", marginBottom: 10 },
+  newsTabRow: { paddingBottom: 4, gap: 8, marginBottom: 8 },
+  newsTabChip: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#fff"
+  },
+  newsTabChipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
+  newsTabText: { color: "#475467", fontWeight: "700", fontSize: 12 },
+  newsTabTextActive: { color: "#1F7A4C" },
+  newsRow: { paddingBottom: 6, gap: 10, marginBottom: 10 },
+  newsLoaderWrap: {
+    width: 240,
+    height: 150,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8
+  },
+  newsCard: {
+    width: 260,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    backgroundColor: "#FFFFFF",
+    padding: 10
+  },
+  newsImage: { width: "100%", height: 132, borderRadius: 10, backgroundColor: "#EAECF0" },
+  newsTitle: { marginTop: 8, color: "#13251E", fontWeight: "800", lineHeight: 19 },
+  newsDesc: { marginTop: 5, color: "#667085", lineHeight: 17 },
+  newsMetaRow: { marginTop: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  newsSource: { flex: 1, color: "#475467", fontWeight: "700", fontSize: 12 },
+  newsReadMore: { color: "#175CD3", fontWeight: "800", fontSize: 12 },
   sectionGrid: { marginBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 },
   sectionTile: {
     backgroundColor: "#fff",
