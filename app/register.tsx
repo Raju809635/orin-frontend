@@ -3,6 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
+import { notify } from "@/utils/notify";
 
 type Role = "student" | "mentor";
 
@@ -36,6 +37,9 @@ export default function RegisterScreen() {
         role,
         phoneNumber: role === "mentor" ? normalizedPhone : ""
       });
+      if (response?.message) {
+        notify(response.message);
+      }
       const nextEmail = encodeURIComponent(response?.email || email.trim().toLowerCase());
       const nextRole = encodeURIComponent(response?.role || role);
       router.replace(`/verify-email?email=${nextEmail}&role=${nextRole}` as never);

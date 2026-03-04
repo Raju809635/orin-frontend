@@ -1,8 +1,34 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
 import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
+
+type ProfileProject = {
+  name?: string;
+  summary?: string;
+  link?: string;
+  techStack?: string[];
+  demoVideoUrl?: string;
+  screenshots?: string[];
+};
+
+type ProfileAchievement = {
+  title?: string;
+  type?: string;
+  issuer?: string;
+  date?: string;
+  description?: string;
+  url?: string;
+};
+
+type ProfileExperience = {
+  organization?: string;
+  role?: string;
+  startDate?: string;
+  endDate?: string;
+  description?: string;
+};
 
 type StudentProfile = {
   profilePhotoUrl: string;
@@ -12,10 +38,110 @@ type StudentProfile = {
   careerGoals: string;
   profileCompleteness: number;
   resumeUrl: string;
+  collegeName: string;
+  projects: ProfileProject[];
+  achievements: ProfileAchievement[];
+  experiences: ProfileExperience[];
 };
 
+const emptyProfile: StudentProfile = {
+  profilePhotoUrl: "",
+  headline: "",
+  about: "",
+  skills: [],
+  careerGoals: "",
+  profileCompleteness: 0,
+  resumeUrl: "",
+  collegeName: "",
+  projects: [],
+  achievements: [],
+  experiences: []
+};
+
+function projectsToText(projects: ProfileProject[]) {
+  return projects
+    .map((project) =>
+      [project.name || "", (project.techStack || []).join(","), project.link || "", project.summary || ""].join(" | ")
+    )
+    .filter((line) => line.trim())
+    .join("\n");
+}
+
+function achievementsToText(achievements: ProfileAchievement[]) {
+  return achievements
+    .map((item) => [item.title || "", item.issuer || "", item.date || "", item.url || ""].join(" | "))
+    .filter((line) => line.trim())
+    .join("\n");
+}
+
+function experiencesToText(experiences: ProfileExperience[]) {
+  return experiences
+    .map((item) =>
+      [item.organization || "", item.role || "", item.startDate || "", item.endDate || "", item.description || ""].join(
+        " | "
+      )
+    )
+    .filter((line) => line.trim())
+    .join("\n");
+}
+
+function textToProjects(value: string): ProfileProject[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name, techStack, link, summary] = line.split("|").map((s) => s.trim());
+      return {
+        name: name || "",
+        techStack: (techStack || "")
+          .split(",")
+          .map((item) => item.trim())
+          .filter(Boolean),
+        link: link || "",
+        summary: summary || ""
+      };
+    });
+}
+
+function textToAchievements(value: string): ProfileAchievement[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [title, issuer, date, url] = line.split("|").map((s) => s.trim());
+      return {
+        title: title || "",
+        issuer: issuer || "",
+        date: date || "",
+        url: url || ""
+      };
+    });
+}
+
+function textToExperiences(value: string): ProfileExperience[] {
+  return value
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [organization, role, startDate, endDate, description] = line.split("|").map((s) => s.trim());
+      return {
+        organization: organization || "",
+        role: role || "",
+        startDate: startDate || "",
+        endDate: endDate || "",
+        description: description || ""
+      };
+    });
+}
+
 export default function StudentProfileScreen() {
-  const [profile, setProfile] = useState<StudentProfile | null>(null);
+  const [profile, setProfile] = useState<StudentProfile>(emptyProfile);
+  const [projectsText, setProjectsText] = useState("");
+  const [achievementsText, setAchievementsText] = useState("");
+  const [experiencesText, setExperiencesText] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -26,18 +152,26 @@ export default function StudentProfileScreen() {
     (async () => {
       try {
         const { data } = await api.get("/api/profiles/student/me");
-        if (mounted) {
-          const profileData = data.profile || {};
-          setProfile({
-            profilePhotoUrl: profileData.profilePhotoUrl || "",
-            headline: profileData.headline || "",
-            about: profileData.about || "",
-            skills: Array.isArray(profileData.skills) ? profileData.skills : [],
-            careerGoals: profileData.careerGoals || "",
-            profileCompleteness: Number(profileData.profileCompleteness || 0),
-            resumeUrl: profileData.resumeUrl || ""
-          });
-        }
+        if (!mounted) return;
+        const profileData = data.profile || {};
+        const nextProfile: StudentProfile = {
+          ...emptyProfile,
+          profilePhotoUrl: profileData.profilePhotoUrl || "",
+          headline: profileData.headline || "",
+          about: profileData.about || "",
+          skills: Array.isArray(profileData.skills) ? profileData.skills : [],
+          careerGoals: profileData.careerGoals || "",
+          profileCompleteness: Number(profileData.profileCompleteness || 0),
+          resumeUrl: profileData.resumeUrl || "",
+          collegeName: profileData.collegeName || "",
+          projects: Array.isArray(profileData.projects) ? profileData.projects : [],
+          achievements: Array.isArray(profileData.achievements) ? profileData.achievements : [],
+          experiences: Array.isArray(profileData.experiences) ? profileData.experiences : []
+        };
+        setProfile(nextProfile);
+        setProjectsText(projectsToText(nextProfile.projects));
+        setAchievementsText(achievementsToText(nextProfile.achievements));
+        setExperiencesText(experiencesToText(nextProfile.experiences));
       } catch (e: any) {
         if (mounted) setError(e?.response?.data?.message || "Failed to load profile");
       } finally {
@@ -49,17 +183,28 @@ export default function StudentProfileScreen() {
     };
   }, []);
 
+  const skillsValue = useMemo(() => (profile.skills || []).join(", "), [profile.skills]);
+
   async function save() {
-    if (!profile) return;
     try {
       setSaving(true);
       setError(null);
       const payload = {
         ...profile,
-        skills: profile.skills
+        skills: profile.skills,
+        projects: textToProjects(projectsText),
+        achievements: textToAchievements(achievementsText),
+        experiences: textToExperiences(experiencesText)
       };
       const { data } = await api.patch("/api/profiles/student/me", payload);
-      setProfile(data.profile);
+      const updated = {
+        ...profile,
+        ...(data.profile || {})
+      };
+      setProfile(updated);
+      setProjectsText(projectsToText(updated.projects || []));
+      setAchievementsText(achievementsToText(updated.achievements || []));
+      setExperiencesText(experiencesToText(updated.experiences || []));
       notify("Student profile updated");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Save failed");
@@ -74,7 +219,7 @@ export default function StudentProfileScreen() {
       setError(null);
       const uploadedUrl = await pickAndUploadProfilePhoto();
       if (!uploadedUrl) return;
-      setProfile((prev) => (prev ? { ...prev, profilePhotoUrl: uploadedUrl } : prev));
+      setProfile((prev) => ({ ...prev, profilePhotoUrl: uploadedUrl }));
       notify("Profile photo uploaded. Save profile to apply.");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to upload profile photo");
@@ -91,14 +236,6 @@ export default function StudentProfileScreen() {
     );
   }
 
-  if (!profile) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error || "Profile unavailable"}</Text>
-      </View>
-    );
-  }
-
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Student Profile</Text>
@@ -109,9 +246,7 @@ export default function StudentProfileScreen() {
           <Image source={{ uri: profile.profilePhotoUrl }} style={styles.photo} />
         ) : (
           <View style={[styles.photo, styles.photoFallback]}>
-            <Text style={styles.photoFallbackText}>
-              {(profile.headline || "S").trim().charAt(0).toUpperCase() || "S"}
-            </Text>
+            <Text style={styles.photoFallbackText}>{(profile.headline || "S").trim().charAt(0).toUpperCase() || "S"}</Text>
           </View>
         )}
         <TouchableOpacity style={styles.uploadBtn} onPress={uploadPhoto} disabled={uploadingPhoto}>
@@ -120,52 +255,43 @@ export default function StudentProfileScreen() {
       </View>
 
       <Text style={styles.label}>Headline</Text>
-      <TextInput
-        style={styles.input}
-        value={profile.headline || ""}
-        onChangeText={(headline) => setProfile((prev) => (prev ? { ...prev, headline } : prev))}
-      />
+      <TextInput style={styles.input} value={profile.headline} onChangeText={(headline) => setProfile((prev) => ({ ...prev, headline }))} />
+
+      <Text style={styles.label}>College</Text>
+      <TextInput style={styles.input} value={profile.collegeName} onChangeText={(collegeName) => setProfile((prev) => ({ ...prev, collegeName }))} />
 
       <Text style={styles.label}>About</Text>
-      <TextInput
-        style={[styles.input, styles.multiline]}
-        multiline
-        value={profile.about || ""}
-        onChangeText={(about) => setProfile((prev) => (prev ? { ...prev, about } : prev))}
-      />
+      <TextInput style={[styles.input, styles.multiline]} multiline value={profile.about} onChangeText={(about) => setProfile((prev) => ({ ...prev, about }))} />
 
       <Text style={styles.label}>Skills (comma separated)</Text>
       <TextInput
         style={styles.input}
-        value={(profile.skills || []).join(", ")}
+        value={skillsValue}
         onChangeText={(val) =>
-          setProfile((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  skills: val
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean)
-                }
-              : prev
-          )
+          setProfile((prev) => ({
+            ...prev,
+            skills: val
+              .split(",")
+              .map((s) => s.trim())
+              .filter(Boolean)
+          }))
         }
       />
 
+      <Text style={styles.label}>Projects (one per line: title | tech1,tech2 | github/demo link | summary)</Text>
+      <TextInput style={[styles.input, styles.multiline]} multiline value={projectsText} onChangeText={setProjectsText} />
+
+      <Text style={styles.label}>Achievements (one per line: title | issuer | date | url)</Text>
+      <TextInput style={[styles.input, styles.multiline]} multiline value={achievementsText} onChangeText={setAchievementsText} />
+
+      <Text style={styles.label}>Experience (one per line: organization | role | start | end | description)</Text>
+      <TextInput style={[styles.input, styles.multiline]} multiline value={experiencesText} onChangeText={setExperiencesText} />
+
       <Text style={styles.label}>Career Goals</Text>
-      <TextInput
-        style={styles.input}
-        value={profile.careerGoals || ""}
-        onChangeText={(careerGoals) => setProfile((prev) => (prev ? { ...prev, careerGoals } : prev))}
-      />
+      <TextInput style={styles.input} value={profile.careerGoals} onChangeText={(careerGoals) => setProfile((prev) => ({ ...prev, careerGoals }))} />
 
       <Text style={styles.label}>Resume URL</Text>
-      <TextInput
-        style={styles.input}
-        value={profile.resumeUrl || ""}
-        onChangeText={(resumeUrl) => setProfile((prev) => (prev ? { ...prev, resumeUrl } : prev))}
-      />
+      <TextInput style={styles.input} value={profile.resumeUrl} onChangeText={(resumeUrl) => setProfile((prev) => ({ ...prev, resumeUrl }))} />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <TouchableOpacity style={styles.button} onPress={save} disabled={saving}>

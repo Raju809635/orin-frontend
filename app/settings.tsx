@@ -35,7 +35,7 @@ const defaultPrefs: Preferences = {
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
   const [prefs, setPrefs] = useState<Preferences>(defaultPrefs);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -201,9 +201,26 @@ export default function SettingsScreen() {
       </TouchableOpacity>
 
       <View style={styles.card}>
-        <Text style={styles.section}>Legal & Support</Text>
-        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/about" as never)}>
-          <Text style={styles.linkText}>About ORIN</Text>
+        <Text style={styles.section}>Account</Text>
+        <TouchableOpacity
+          style={styles.linkRow}
+          onPress={() => router.push((user?.role === "mentor" ? "/mentor-profile" : "/student-profile") as never)}
+        >
+          <Text style={styles.linkText}>My Profile</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.section}>Preferences</Text>
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/notifications" as never)}>
+          <Text style={styles.linkText}>Notifications</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.section}>Support & Legal</Text>
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/help" as never)}>
+          <Text style={styles.linkText}>Help & Support</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/privacy" as never)}>
           <Text style={styles.linkText}>Privacy Policy</Text>
@@ -211,8 +228,15 @@ export default function SettingsScreen() {
         <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/terms" as never)}>
           <Text style={styles.linkText}>Terms of Use</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/help" as never)}>
-          <Text style={styles.linkText}>Help & Support</Text>
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/mentor-policy" as never)}>
+          <Text style={styles.linkText}>Mentor Policy</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.section}>About</Text>
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/about" as never)}>
+          <Text style={styles.linkText}>About ORIN</Text>
         </TouchableOpacity>
       </View>
 

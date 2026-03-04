@@ -182,16 +182,16 @@ function RootDrawer() {
         options={{
           title: "Verify Email",
           drawerLabel: "Verify Email",
-          drawerItemStyle: user ? { display: "none" } : undefined
+          drawerItemStyle: { display: "none" }
         }}
       />
-      <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerLabel: "Collaborate" }} />
+      <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerLabel: "Collaborate", drawerItemStyle: { display: "none" } }} />
       <Drawer.Screen
         name="chat"
         options={{
           title: "Messages",
           drawerLabel: "Messages",
-          drawerItemStyle: user ? undefined : { display: "none" }
+          drawerItemStyle: { display: "none" }
         }}
       />
       <Drawer.Screen
@@ -216,7 +216,7 @@ function RootDrawer() {
         options={{
           title: "Domain Guide",
           drawerLabel: "Domain Guide",
-          drawerItemStyle: user?.role === "student" ? undefined : { display: "none" }
+          drawerItemStyle: user ? undefined : { display: "none" }
         }}
       />
       <Drawer.Screen
@@ -224,7 +224,7 @@ function RootDrawer() {
         options={{
           title: "About ORIN",
           drawerLabel: "About ORIN",
-          drawerItemStyle: user ? undefined : { display: "none" }
+          drawerItemStyle: { display: "none" }
         }}
       />
       <Drawer.Screen
@@ -232,7 +232,7 @@ function RootDrawer() {
         options={{
           title: "Privacy Policy",
           drawerLabel: "Privacy Policy",
-          drawerItemStyle: user ? undefined : { display: "none" }
+          drawerItemStyle: { display: "none" }
         }}
       />
       <Drawer.Screen
@@ -240,7 +240,7 @@ function RootDrawer() {
         options={{
           title: "Terms of Use",
           drawerLabel: "Terms of Use",
-          drawerItemStyle: user ? undefined : { display: "none" }
+          drawerItemStyle: { display: "none" }
         }}
       />
       <Drawer.Screen
@@ -248,7 +248,7 @@ function RootDrawer() {
         options={{
           title: "Help & Support",
           drawerLabel: "Help & Support",
-          drawerItemStyle: user ? undefined : { display: "none" }
+          drawerItemStyle: { display: "none" }
         }}
       />
       <Drawer.Screen
@@ -264,7 +264,7 @@ function RootDrawer() {
         options={{
           title: "Notifications",
           drawerLabel: "Notifications",
-          drawerItemStyle: user ? undefined : { display: "none" }
+          drawerItemStyle: { display: "none" }
         }}
       />
 
@@ -279,7 +279,7 @@ function RootDrawer() {
       <Drawer.Screen
         name="student-profile"
         options={{
-          title: "Student Profile",
+          title: "My Profile",
           drawerLabel: "My Profile",
           drawerItemStyle: user?.role === "student" ? undefined : { display: "none" }
         }}
@@ -295,10 +295,14 @@ function RootDrawer() {
       <Drawer.Screen
         name="mentor-profile"
         options={{
-          title: "Mentor Profile",
+          title: "My Profile",
           drawerLabel: "My Profile",
           drawerItemStyle: user?.role === "mentor" ? undefined : { display: "none" }
         }}
+      />
+      <Drawer.Screen
+        name="mentor-policy"
+        options={{ title: "Mentor Policy", drawerItemStyle: { display: "none" } }}
       />
       <Drawer.Screen name="mentors" options={{ title: "Mentors", drawerItemStyle: { display: "none" } }} />
       <Drawer.Screen

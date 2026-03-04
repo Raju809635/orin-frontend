@@ -18,6 +18,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
 import { submitManualPaymentWithPicker } from "@/utils/manualPaymentUpload";
+import { FEATURE_FLAGS } from "@/constants/featureFlags";
 
 type Booking = {
   _id: string;
@@ -56,6 +57,44 @@ type Session = {
   } | null;
 };
 
+type NetworkPost = {
+  _id: string;
+  authorId?: { name?: string; role?: string } | null;
+  content: string;
+  postType: string;
+  domainTags?: string[];
+  likeCount?: number;
+  commentCount?: number;
+  shareCount?: number;
+  saveCount?: number;
+};
+
+type DailyTask = {
+  key: string;
+  title: string;
+  xp: number;
+  completed: boolean;
+};
+
+type DailyDashboard = {
+  tasks: DailyTask[];
+  streakDays: number;
+  xp: number;
+  levelTag: string;
+  reputationScore: number;
+  leaderboard?: {
+    globalRank?: number | null;
+    collegeRank?: number | null;
+  };
+};
+
+type SmartSuggestion = {
+  id: string;
+  name: string;
+  role: "student" | "mentor";
+  reason: string;
+};
+
 export default function StudentDashboard() {
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -69,6 +108,9 @@ export default function StudentDashboard() {
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [networkFeed, setNetworkFeed] = useState<NetworkPost[]>([]);
+  const [dailyDashboard, setDailyDashboard] = useState<DailyDashboard | null>(null);
+  const [suggestions, setSuggestions] = useState<SmartSuggestion[]>([]);
   const quickServices = [
     {
       key: "mentors",
@@ -207,6 +249,31 @@ export default function StudentDashboard() {
       ]
     }
   ] as const;
+  const networkFeedPreview = [
+    {
+      id: "post-1",
+      author: "Ananya R",
+      line: "Completed a ML mini-project on student performance prediction.",
+      meta: "Same domain · AI/ML"
+    },
+    {
+      id: "post-2",
+      author: "Karthik S",
+      line: "Got shortlisted for internship after mentor mock interview practice.",
+      meta: "Mentor network · Career"
+    }
+  ] as const;
+  const dailyTasksPreview = [
+    "Solve 1 coding problem",
+    "Read 1 career tip",
+    "Update 1 resume bullet",
+    "Explore 1 domain concept"
+  ] as const;
+  const smartSuggestions = [
+    { name: "Sneha P", reason: "Same college · Data Science" },
+    { name: "Rahul M", reason: "Mutual mentor connection" },
+    { name: "Aditi K", reason: "Similar project interests" }
+  ] as const;
 
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
@@ -214,15 +281,29 @@ export default function StudentDashboard() {
       else setIsLoading(true);
 
       setError(null);
-      const [bookingsRes, sessionsRes, profileRes] = await Promise.all([
+      const [bookingsRes, sessionsRes, profileRes, feedRes, dailyRes, suggestionsRes] = await Promise.allSettled([
         api.get<Booking[]>("/api/bookings/student"),
         api.get<Session[]>("/api/sessions/student/me"),
-        api.get<{ profile?: { profilePhotoUrl?: string } }>("/api/profiles/student/me")
+        api.get<{ profile?: { profilePhotoUrl?: string } }>("/api/profiles/student/me"),
+        FEATURE_FLAGS.networking ? api.get<NetworkPost[]>("/api/network/feed") : Promise.resolve({ data: [] as NetworkPost[] }),
+        FEATURE_FLAGS.dailyEngagement
+          ? api.get<DailyDashboard>("/api/network/daily-dashboard")
+          : Promise.resolve({ data: null as DailyDashboard | null }),
+        FEATURE_FLAGS.smartSuggestions
+          ? api.get<SmartSuggestion[]>("/api/network/suggestions")
+          : Promise.resolve({ data: [] as SmartSuggestion[] })
       ]);
 
-      setBookings(bookingsRes.data || []);
-      setSessions(sessionsRes.data || []);
-      setProfilePhotoUrl(profileRes.data?.profile?.profilePhotoUrl || "");
+      if (bookingsRes.status !== "fulfilled" || sessionsRes.status !== "fulfilled" || profileRes.status !== "fulfilled") {
+        throw new Error("Failed to load required dashboard data");
+      }
+
+      setBookings(bookingsRes.value.data || []);
+      setSessions(sessionsRes.value.data || []);
+      setProfilePhotoUrl(profileRes.value.data?.profile?.profilePhotoUrl || "");
+      setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
+      setDailyDashboard(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
+      setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load your dashboard.");
     } finally {
@@ -588,6 +669,77 @@ export default function StudentDashboard() {
         ))}
       </View>
 
+      {FEATURE_FLAGS.networking ? (
+        <>
+          <Text style={styles.sectionHeader}>Network Activity Feed</Text>
+          <View style={styles.feedWrap}>
+            {(networkFeed.length ? networkFeed : networkFeedPreview).map((post) => (
+              <View key={"_id" in post ? post._id : post.id} style={styles.feedCard}>
+                <Text style={styles.feedAuthor}>
+                  {"authorId" in post ? post.authorId?.name || "ORIN User" : (post as any).author}
+                </Text>
+                <Text style={styles.feedLine}>{"content" in post ? post.content : (post as any).line}</Text>
+                <Text style={styles.feedMeta}>
+                  {"postType" in post
+                    ? `${post.postType} | Likes ${post.likeCount || 0} | Comments ${post.commentCount || 0}`
+                    : (post as any).meta}
+                </Text>
+                <View style={styles.feedActions}>
+                  <Text style={styles.feedActionText}>Like</Text>
+                  <Text style={styles.feedActionText}>Comment</Text>
+                  <Text style={styles.feedActionText}>Share</Text>
+                  <Text style={styles.feedActionText}>Save</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
+
+      {FEATURE_FLAGS.dailyEngagement ? (
+        <>
+          <Text style={styles.sectionHeader}>Daily Career Dashboard</Text>
+          <View style={styles.dailyCard}>
+            <Text style={styles.dailyTitle}>Today&apos;s Tasks</Text>
+            {(dailyDashboard?.tasks || dailyTasksPreview.map((item, index) => ({
+              key: `preview-${index}`,
+              title: item,
+              xp: 0,
+              completed: false
+            }))).map((task) => (
+              <Text key={task.key} style={styles.dailyItem}>
+                {task.completed ? "✓ " : "- "}
+                {task.title}
+              </Text>
+            ))}
+            <Text style={styles.dailyMeta}>
+              Streak: {dailyDashboard?.streakDays ?? 3} days | XP: {dailyDashboard?.xp ?? 120} | Tag: {dailyDashboard?.levelTag ?? "Starter"}
+            </Text>
+            <Text style={styles.dailyMeta}>
+              Leaderboard: College #{dailyDashboard?.leaderboard?.collegeRank ?? 12} | Global #{dailyDashboard?.leaderboard?.globalRank ?? 248}
+            </Text>
+          </View>
+        </>
+      ) : null}
+
+      {FEATURE_FLAGS.smartSuggestions ? (
+        <>
+          <Text style={styles.sectionHeader}>People You May Know</Text>
+          <View style={styles.suggestionWrap}>
+            {(suggestions.length ? suggestions : smartSuggestions).map((item, index) => (
+              <View key={`${item.name}-${index}`} style={styles.suggestionCard}>
+                <Text style={styles.suggestionName}>{item.name}</Text>
+                <Text style={styles.suggestionReason}>{item.reason}</Text>
+                <View style={styles.suggestionActions}>
+                  <Text style={styles.suggestionAction}>Connect</Text>
+                  <Text style={styles.suggestionAction}>Follow</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
+
       {isLoading ? (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color="#1F7A4C" />
@@ -925,6 +1077,42 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     overflow: "hidden"
   },
+  feedWrap: { gap: 9, marginBottom: 8 },
+  feedCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8E4DE",
+    borderRadius: 12,
+    padding: 11
+  },
+  feedAuthor: { color: "#1E2B24", fontWeight: "800" },
+  feedLine: { marginTop: 5, color: "#344054", lineHeight: 19 },
+  feedMeta: { marginTop: 4, color: "#667085", fontSize: 12, fontWeight: "600" },
+  feedActions: { marginTop: 8, flexDirection: "row", gap: 12 },
+  feedActionText: { color: "#175CD3", fontWeight: "700", fontSize: 12 },
+  dailyCard: {
+    backgroundColor: "#EEF4FF",
+    borderWidth: 1,
+    borderColor: "#D6E4FF",
+    borderRadius: 13,
+    padding: 12,
+    marginBottom: 8
+  },
+  dailyTitle: { color: "#1849A9", fontWeight: "800", marginBottom: 6 },
+  dailyItem: { color: "#344054", marginBottom: 3, fontWeight: "500" },
+  dailyMeta: { marginTop: 6, color: "#475467", fontWeight: "600", fontSize: 12 },
+  suggestionWrap: { gap: 9, marginBottom: 8 },
+  suggestionCard: {
+    backgroundColor: "#F5F3FF",
+    borderWidth: 1,
+    borderColor: "#DED8FF",
+    borderRadius: 12,
+    padding: 11
+  },
+  suggestionName: { color: "#1E2B24", fontWeight: "800" },
+  suggestionReason: { marginTop: 4, color: "#667085" },
+  suggestionActions: { marginTop: 8, flexDirection: "row", gap: 12 },
+  suggestionAction: { color: "#5925DC", fontWeight: "700", fontSize: 12 },
   centered: { alignItems: "center", justifyContent: "center", minHeight: 140 },
   panel: { marginTop: 8 },
   panelTitle: { fontSize: 17, fontWeight: "800", color: "#1E2B24", marginBottom: 8 },
