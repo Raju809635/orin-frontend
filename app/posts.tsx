@@ -13,6 +13,8 @@ type Post = {
   saveCount?: number;
   isLiked?: boolean;
   isSaved?: boolean;
+  userReaction?: ReactionType | null;
+  reactionCounts?: Partial<Record<ReactionType, number>>;
   comments?: PostComment[];
   mediaUrls?: string[];
   authorId?: {
@@ -28,9 +30,22 @@ type PostComment = {
   authorId?: { name?: string } | null;
 };
 
+type ReactionType = "like" | "love" | "care" | "haha" | "wow" | "sad" | "angry";
+
+const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
+  { type: "like", emoji: "👍", label: "Like" },
+  { type: "love", emoji: "❤️", label: "Love" },
+  { type: "care", emoji: "🤗", label: "Care" },
+  { type: "haha", emoji: "😂", label: "Haha" },
+  { type: "wow", emoji: "😮", label: "Wow" },
+  { type: "sad", emoji: "😢", label: "Sad" },
+  { type: "angry", emoji: "😡", label: "Angry" }
+];
+
 export default function PostsScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [reactionPickerPostId, setReactionPickerPostId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +97,23 @@ export default function PostsScreen() {
     }
   }
 
+  async function reactWithType(postId: string, reactionType: ReactionType) {
+    try {
+      await api.post(`/api/network/feed/${postId}/react`, { action: "react", reactionType });
+      setReactionPickerPostId(null);
+      await loadPosts(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to react.");
+    }
+  }
+
+  function reactionSummary(post: Post) {
+    const counts = post.reactionCounts || {};
+    const active = REACTIONS.filter((item) => Number(counts[item.type] || 0) > 0);
+    if (!active.length) return "No reactions yet";
+    return active.map((item) => `${item.emoji} ${counts[item.type] || 0}`).join("  ");
+  }
+
   async function comment(postId: string) {
     const content = (commentDrafts[postId] || "").trim();
     if (!content) return;
@@ -120,12 +152,16 @@ export default function PostsScreen() {
             <Text style={styles.role}>{post.authorId?.role || "member"}</Text>
             <Text style={styles.content}>{post.content}</Text>
             {post.mediaUrls?.[0] ? <Image source={{ uri: post.mediaUrls[0] }} style={styles.postImage} resizeMode="cover" /> : null}
+            <Text style={styles.reactionSummary}>{reactionSummary(post)}</Text>
             <Text style={styles.meta}>
               {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0} | Shares {post.shareCount || 0}
             </Text>
             <View style={styles.actions}>
-              <TouchableOpacity onPress={() => react(post._id, "like")}>
-                <Text style={styles.action}>{post.isLiked ? "Liked" : "Like"}</Text>
+              <TouchableOpacity onPress={() => setReactionPickerPostId((prev) => (prev === post._id ? null : post._id))}>
+                <Text style={styles.action}>
+                  {REACTIONS.find((item) => item.type === post.userReaction)?.emoji || "👍"}{" "}
+                  {REACTIONS.find((item) => item.type === post.userReaction)?.label || "React"}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => react(post._id, "save")}>
                 <Text style={styles.action}>{post.isSaved ? "Saved" : "Save"}</Text>
@@ -134,6 +170,15 @@ export default function PostsScreen() {
                 <Text style={styles.action}>Share</Text>
               </TouchableOpacity>
             </View>
+            {reactionPickerPostId === post._id ? (
+              <View style={styles.reactionPickerRow}>
+                {REACTIONS.map((reaction) => (
+                  <TouchableOpacity key={reaction.type} style={styles.reactionChip} onPress={() => reactWithType(post._id, reaction.type)}>
+                    <Text style={styles.reactionChipText}>{reaction.emoji}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
             <View style={styles.commentComposer}>
               <TextInput
                 style={styles.commentInput}
@@ -192,5 +237,19 @@ const styles = StyleSheet.create({
   },
   commentInput: { flex: 1, minHeight: 32, color: "#344054" },
   commentLine: { marginTop: 6, color: "#475467" },
-  postImage: { width: "100%", height: 220, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#E4E7EC" }
+  postImage: { width: "100%", height: 220, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#E4E7EC" },
+  reactionSummary: { marginTop: 8, color: "#475467", fontWeight: "700", fontSize: 12 },
+  reactionPickerRow: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    backgroundColor: "#FCFCFD",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    flexDirection: "row",
+    gap: 8
+  },
+  reactionChip: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  reactionChipText: { fontSize: 17 }
 });

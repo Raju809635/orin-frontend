@@ -27,11 +27,25 @@ type FeedPost = {
   saveCount: number;
   isLiked?: boolean;
   isSaved?: boolean;
+  userReaction?: ReactionType | null;
+  reactionCounts?: Partial<Record<ReactionType, number>>;
   comments?: FeedComment[];
   createdAt?: string;
   mediaUrls?: string[];
   authorId?: { _id?: string; name?: string; role?: string } | null;
 };
+
+type ReactionType = "like" | "love" | "care" | "haha" | "wow" | "sad" | "angry";
+
+const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
+  { type: "like", emoji: "👍", label: "Like" },
+  { type: "love", emoji: "❤️", label: "Love" },
+  { type: "care", emoji: "🤗", label: "Care" },
+  { type: "haha", emoji: "😂", label: "Haha" },
+  { type: "wow", emoji: "😮", label: "Wow" },
+  { type: "sad", emoji: "😢", label: "Sad" },
+  { type: "angry", emoji: "😡", label: "Angry" }
+];
 
 type FeedComment = {
   _id: string;
@@ -76,6 +90,7 @@ export default function NetworkScreen() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [pendingIncoming, setPendingIncoming] = useState<ConnectionRow[]>([]);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [reactionPickerPostId, setReactionPickerPostId] = useState<string | null>(null);
   const [daily, setDaily] = useState<DailyDashboard | null>(null);
   const [postText, setPostText] = useState("");
   const [postImageUrl, setPostImageUrl] = useState<string | null>(null);
@@ -159,6 +174,25 @@ export default function NetworkScreen() {
     } catch (e: any) {
       setError(e?.response?.data?.message || `Failed to ${action} post.`);
     }
+  }
+
+  async function reactWithType(postId: string, reactionType: ReactionType) {
+    try {
+      await api.post(`/api/network/feed/${postId}/react`, { action: "react", reactionType });
+      setReactionPickerPostId(null);
+      await loadData(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to react.");
+    }
+  }
+
+  function reactionSummary(post: FeedPost) {
+    const counts = post.reactionCounts || {};
+    const active = REACTIONS.filter((item) => Number(counts[item.type] || 0) > 0);
+    if (!active.length) return "No reactions yet";
+    return active
+      .map((item) => `${item.emoji} ${counts[item.type] || 0}`)
+      .join("  ");
   }
 
   async function uploadPostImage() {
@@ -368,12 +402,16 @@ export default function NetworkScreen() {
               <Text style={styles.rowTitle}>{post.authorId?.name || "ORIN User"}</Text>
               <Text style={styles.postText}>{post.content}</Text>
               {post.mediaUrls?.[0] ? <Image source={{ uri: post.mediaUrls[0] }} style={styles.postImage} resizeMode="cover" /> : null}
+              <Text style={styles.reactionSummary}>{reactionSummary(post)}</Text>
               <Text style={styles.meta}>
                 {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0} | Shares {post.shareCount || 0}
               </Text>
               <View style={styles.actionRow}>
-                <TouchableOpacity onPress={() => react(post._id, "like")}>
-                  <Text style={styles.action}>{post.isLiked ? "Liked" : "Like"}</Text>
+                <TouchableOpacity onPress={() => setReactionPickerPostId((prev) => (prev === post._id ? null : post._id))}>
+                  <Text style={styles.action}>
+                    {REACTIONS.find((item) => item.type === post.userReaction)?.emoji || "👍"}{" "}
+                    {REACTIONS.find((item) => item.type === post.userReaction)?.label || "React"}
+                  </Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => react(post._id, "save")}>
                   <Text style={styles.action}>{post.isSaved ? "Saved" : "Save"}</Text>
@@ -382,6 +420,19 @@ export default function NetworkScreen() {
                   <Text style={styles.action}>Share</Text>
                 </TouchableOpacity>
               </View>
+              {reactionPickerPostId === post._id ? (
+                <View style={styles.reactionPickerRow}>
+                  {REACTIONS.map((reaction) => (
+                    <TouchableOpacity
+                      key={reaction.type}
+                      style={styles.reactionChip}
+                      onPress={() => reactWithType(post._id, reaction.type)}
+                    >
+                      <Text style={styles.reactionChipText}>{reaction.emoji}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
               <View style={styles.commentComposer}>
                 <TextInput
                   style={styles.commentInput}
@@ -482,5 +533,19 @@ const styles = StyleSheet.create({
   commentInput: { flex: 1, minHeight: 32, color: "#344054" },
   commentLine: { marginTop: 6, color: "#475467" },
   composerPreview: { width: "100%", height: 170, borderRadius: 10, marginTop: 10, borderWidth: 1, borderColor: "#E4E7EC" },
-  postImage: { width: "100%", height: 210, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#E4E7EC" }
+  postImage: { width: "100%", height: 210, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#E4E7EC" },
+  reactionSummary: { marginTop: 8, color: "#475467", fontWeight: "700", fontSize: 12 },
+  reactionPickerRow: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    backgroundColor: "#FCFCFD",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    flexDirection: "row",
+    gap: 8
+  },
+  reactionChip: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  reactionChipText: { fontSize: 17 }
 });
