@@ -522,7 +522,14 @@ export default function StudentDashboard() {
           <Text style={styles.heading}>Home</Text>
           <Text style={styles.subheading}>Welcome back, {user.name}</Text>
         </View>
-        <View style={styles.profileMenuWrap}>
+        <View style={styles.topRightWrap}>
+          <TouchableOpacity style={styles.topIconBtn} onPress={() => router.push("/chat" as never)}>
+            <Ionicons name="chatbubble-ellipses" size={18} color="#1E2B24" />
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.topIconBtn} onPress={() => router.push("/notifications" as never)}>
+            <Ionicons name="notifications" size={18} color="#1E2B24" />
+          </TouchableOpacity>
+          <View style={styles.profileMenuWrap}>
           <TouchableOpacity style={styles.avatarButton} onPress={() => setShowProfileMenu((prev) => !prev)}>
             {profilePhotoUrl ? (
               <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
@@ -545,6 +552,7 @@ export default function StudentDashboard() {
               </TouchableOpacity>
             </View>
           ) : null}
+          </View>
         </View>
       </View>
 
@@ -881,6 +889,17 @@ const styles = StyleSheet.create({
   heading: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   subheading: { marginTop: 6, marginBottom: 14, color: "#475467", fontWeight: "500" },
   topRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  topRightWrap: { flexDirection: "row", alignItems: "center", gap: 8 },
+  topIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    alignItems: "center",
+    justifyContent: "center"
+  },
   profileMenuWrap: { alignItems: "flex-end", position: "relative", zIndex: 2 },
   avatarButton: { width: 48, height: 48, borderRadius: 24, overflow: "hidden", borderWidth: 2, borderColor: "#CFE4D8" },
   avatarImage: { width: "100%", height: "100%" },
