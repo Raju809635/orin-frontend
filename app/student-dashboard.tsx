@@ -95,6 +95,68 @@ type SmartSuggestion = {
   reason: string;
 };
 
+type MentorMatch = {
+  mentorId: string;
+  name: string;
+  title: string;
+  primaryCategory: string;
+  subCategory: string;
+  experienceYears: number;
+  rating: number;
+  matchScore: number;
+  reasons?: string[];
+};
+
+type SessionHistoryItem = {
+  sessionId: string;
+  mentorId?: string | null;
+  mentorName: string;
+  date: string;
+  time: string;
+  notes?: string;
+};
+
+type CareerRoadmapResponse = {
+  goal: string;
+  steps: Array<{ stepNumber: number; title: string; completed: boolean }>;
+};
+
+type OpportunityItem = {
+  _id: string;
+  title: string;
+  company?: string;
+  role?: string;
+  duration?: string;
+  type?: string;
+  relevanceScore?: number;
+};
+
+type LeaderboardEntry = {
+  rank: number;
+  name: string;
+  score: number;
+};
+
+type LeaderboardResponse = {
+  collegeName?: string;
+  collegeTop: LeaderboardEntry[];
+  globalTop: LeaderboardEntry[];
+};
+
+type LiveSessionItem = {
+  id: string;
+  title: string;
+  topic?: string;
+  startsAt: string;
+  meetingLink?: string;
+  mentor?: { name?: string };
+};
+
+type ResumeResponse = {
+  markdown: string;
+  export?: { fileName?: string };
+};
+
 export default function StudentDashboard() {
   const router = useRouter();
   const { user, logout } = useAuth();
@@ -111,6 +173,13 @@ export default function StudentDashboard() {
   const [dailyDashboard, setDailyDashboard] = useState<DailyDashboard | null>(null);
   const [completingTaskKey, setCompletingTaskKey] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SmartSuggestion[]>([]);
+  const [mentorMatches, setMentorMatches] = useState<MentorMatch[]>([]);
+  const [sessionHistory, setSessionHistory] = useState<SessionHistoryItem[]>([]);
+  const [roadmap, setRoadmap] = useState<CareerRoadmapResponse | null>(null);
+  const [opportunities, setOpportunities] = useState<OpportunityItem[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
+  const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
+  const [resumePreview, setResumePreview] = useState<ResumeResponse | null>(null);
   const quickServices = [
     {
       key: "mentors",
@@ -217,7 +286,21 @@ export default function StudentDashboard() {
       else setIsLoading(true);
 
       setError(null);
-      const [bookingsRes, sessionsRes, profileRes, feedRes, dailyRes, suggestionsRes] = await Promise.allSettled([
+      const [
+        bookingsRes,
+        sessionsRes,
+        profileRes,
+        feedRes,
+        dailyRes,
+        suggestionsRes,
+        mentorMatchesRes,
+        sessionHistoryRes,
+        roadmapRes,
+        opportunitiesRes,
+        leaderboardRes,
+        liveSessionsRes,
+        resumeRes
+      ] = await Promise.allSettled([
         api.get<Booking[]>("/api/bookings/student"),
         api.get<Session[]>("/api/sessions/student/me"),
         api.get<{ profile?: { profilePhotoUrl?: string } }>("/api/profiles/student/me"),
@@ -227,7 +310,14 @@ export default function StudentDashboard() {
           : Promise.resolve({ data: null as DailyDashboard | null }),
         FEATURE_FLAGS.smartSuggestions
           ? api.get<SmartSuggestion[]>("/api/network/suggestions")
-          : Promise.resolve({ data: [] as SmartSuggestion[] })
+          : Promise.resolve({ data: [] as SmartSuggestion[] }),
+        api.get<{ recommendations: MentorMatch[] }>("/api/network/mentor-matches"),
+        api.get<SessionHistoryItem[]>("/api/network/session-history"),
+        api.get<CareerRoadmapResponse>("/api/network/career-roadmap"),
+        api.get<OpportunityItem[]>("/api/network/opportunities"),
+        api.get<LeaderboardResponse>("/api/network/leaderboard"),
+        api.get<LiveSessionItem[]>("/api/network/live-sessions"),
+        api.get<ResumeResponse>("/api/network/resume/generate")
       ]);
 
       if (bookingsRes.status !== "fulfilled" || sessionsRes.status !== "fulfilled" || profileRes.status !== "fulfilled") {
@@ -240,6 +330,15 @@ export default function StudentDashboard() {
       setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
       setDailyDashboard(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
       setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
+      setMentorMatches(
+        mentorMatchesRes.status === "fulfilled" ? mentorMatchesRes.value.data?.recommendations || [] : []
+      );
+      setSessionHistory(sessionHistoryRes.status === "fulfilled" ? sessionHistoryRes.value.data || [] : []);
+      setRoadmap(roadmapRes.status === "fulfilled" ? roadmapRes.value.data || null : null);
+      setOpportunities(opportunitiesRes.status === "fulfilled" ? opportunitiesRes.value.data || [] : []);
+      setLeaderboard(leaderboardRes.status === "fulfilled" ? leaderboardRes.value.data || null : null);
+      setLiveSessions(liveSessionsRes.status === "fulfilled" ? liveSessionsRes.value.data || [] : []);
+      setResumePreview(resumeRes.status === "fulfilled" ? resumeRes.value.data || null : null);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load your dashboard.");
     } finally {
@@ -456,6 +555,32 @@ export default function StudentDashboard() {
     }
   }
 
+  async function addQuickSessionNote(sessionId: string) {
+    try {
+      setError(null);
+      const text = `Student note updated on ${new Date().toLocaleString()}`;
+      await api.patch(`/api/network/session-history/${sessionId}/note`, { note: text });
+      notify("Session note saved.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to save session note.");
+    }
+  }
+
+  async function addQuickReview(sessionId: string) {
+    try {
+      setError(null);
+      await api.post(`/api/network/sessions/${sessionId}/review`, {
+        rating: 5,
+        reviewText: "Very helpful mentor session."
+      });
+      notify("Review submitted.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to submit review.");
+    }
+  }
+
   if (user?.role !== "student") {
     return (
       <View style={styles.centered}>
@@ -563,6 +688,149 @@ export default function StudentDashboard() {
           </View>
         ))}
       </ScrollView>
+
+      <Text style={styles.sectionHeader}>AI Mentor Matching</Text>
+      <View style={styles.matchWrap}>
+        {mentorMatches.length === 0 ? (
+          <Text style={styles.empty}>No mentor recommendations available right now.</Text>
+        ) : (
+          mentorMatches.slice(0, 5).map((item) => (
+            <View key={item.mentorId} style={styles.matchCard}>
+              <Text style={styles.matchName}>{item.name}</Text>
+              <Text style={styles.matchMeta}>
+                {item.primaryCategory || "General"} {item.subCategory ? `> ${item.subCategory}` : ""}
+              </Text>
+              <Text style={styles.matchMeta}>
+                Experience {item.experienceYears || 0} yrs | Rating {item.rating || 0}
+              </Text>
+              <Text style={styles.matchScore}>Match Score: {item.matchScore}%</Text>
+              <View style={styles.matchActions}>
+                <TouchableOpacity
+                  style={styles.matchBtn}
+                  onPress={() => router.push(`/mentor/${item.mentorId}` as never)}
+                >
+                  <Text style={styles.matchBtnText}>View Profile</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.matchBtn, styles.matchBtnPrimary]}
+                  onPress={() => router.push(`/mentor/${item.mentorId}` as never)}
+                >
+                  <Text style={[styles.matchBtnText, styles.matchBtnTextPrimary]}>Book Session</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>Session History & Notes</Text>
+      <View style={styles.historyWrap}>
+        {sessionHistory.length === 0 ? (
+          <Text style={styles.empty}>No completed sessions yet.</Text>
+        ) : (
+          sessionHistory.slice(0, 6).map((item) => (
+            <View key={item.sessionId} style={styles.historyCard}>
+              <Text style={styles.historyTitle}>{item.mentorName}</Text>
+              <Text style={styles.historyMeta}>
+                {item.date} {item.time}
+              </Text>
+              <Text style={styles.historyMeta}>Notes: {item.notes?.trim() ? item.notes : "No notes yet."}</Text>
+              <View style={styles.historyActions}>
+                <TouchableOpacity style={styles.historyBtn} onPress={() => addQuickSessionNote(item.sessionId)}>
+                  <Text style={styles.historyBtnText}>Add Note</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.historyBtn, styles.historyBtnPrimary]}
+                  onPress={() => addQuickReview(item.sessionId)}
+                >
+                  <Text style={[styles.historyBtnText, styles.historyBtnTextPrimary]}>Rate Mentor</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>AI Career Roadmap</Text>
+      <View style={styles.roadmapCard}>
+        {!roadmap ? (
+          <Text style={styles.empty}>Roadmap unavailable right now.</Text>
+        ) : (
+          <>
+            <Text style={styles.roadmapGoal}>Goal: {roadmap.goal}</Text>
+            {roadmap.steps.map((step) => (
+              <Text key={`${step.stepNumber}-${step.title}`} style={styles.roadmapStep}>
+                Step {step.stepNumber}: {step.title}
+              </Text>
+            ))}
+          </>
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>Internships & Opportunities</Text>
+      <View style={styles.opportunityWrap}>
+        {opportunities.length === 0 ? (
+          <Text style={styles.empty}>No opportunities available right now.</Text>
+        ) : (
+          opportunities.slice(0, 5).map((item) => (
+            <View key={item._id} style={styles.opportunityCard}>
+              <Text style={styles.opportunityTitle}>{item.title}</Text>
+              <Text style={styles.opportunityMeta}>
+                {item.company || "ORIN Network"} | {item.role || item.type || "Opportunity"}
+              </Text>
+              <Text style={styles.opportunityMeta}>Duration: {item.duration || "Flexible"}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>College Leaderboard</Text>
+      <View style={styles.leaderboardCard}>
+        {!leaderboard || leaderboard.collegeTop.length === 0 ? (
+          <Text style={styles.empty}>Leaderboard will appear after enough activity.</Text>
+        ) : (
+          <>
+            <Text style={styles.leaderboardTitle}>{leaderboard.collegeName || "Your College"}</Text>
+            {leaderboard.collegeTop.slice(0, 5).map((entry) => (
+              <Text key={`${entry.rank}-${entry.name}`} style={styles.leaderboardRow}>
+                {entry.rank}. {entry.name} - {entry.score}
+              </Text>
+            ))}
+          </>
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>Mentor Live Sessions</Text>
+      <View style={styles.liveWrap}>
+        {liveSessions.length === 0 ? (
+          <Text style={styles.empty}>No upcoming live sessions right now.</Text>
+        ) : (
+          liveSessions.slice(0, 5).map((item) => (
+            <View key={item.id} style={styles.liveCard}>
+              <Text style={styles.liveTitle}>{item.title}</Text>
+              <Text style={styles.liveMeta}>{item.topic || "Live mentoring session"}</Text>
+              <Text style={styles.liveMeta}>
+                Mentor: {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
+              </Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>AI Resume Builder</Text>
+      <View style={styles.resumeCard}>
+        {!resumePreview?.markdown ? (
+          <Text style={styles.empty}>Resume preview unavailable right now.</Text>
+        ) : (
+          <>
+            <Text style={styles.resumeTitle}>Resume generated</Text>
+            <Text style={styles.resumeMeta}>File: {resumePreview.export?.fileName || "orin_resume.md"}</Text>
+            <Text style={styles.resumeSnippet} numberOfLines={5}>
+              {resumePreview.markdown}
+            </Text>
+          </>
+        )}
+      </View>
 
       {FEATURE_FLAGS.networking ? (
         <>
@@ -916,6 +1184,100 @@ const styles = StyleSheet.create({
   },
   bannerTitle: { fontSize: 16, color: "#13251E", fontWeight: "800", lineHeight: 20 },
   bannerCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
+  matchWrap: { gap: 9, marginBottom: 10 },
+  matchCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D5E3FF",
+    borderRadius: 12,
+    padding: 12
+  },
+  matchName: { color: "#1E2B24", fontSize: 16, fontWeight: "800" },
+  matchMeta: { marginTop: 3, color: "#667085" },
+  matchScore: { marginTop: 6, color: "#165DFF", fontWeight: "800" },
+  matchActions: { flexDirection: "row", gap: 8, marginTop: 10 },
+  matchBtn: {
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#165DFF",
+    paddingVertical: 8,
+    paddingHorizontal: 12
+  },
+  matchBtnPrimary: { backgroundColor: "#165DFF" },
+  matchBtnText: { color: "#165DFF", fontWeight: "700", fontSize: 12 },
+  matchBtnTextPrimary: { color: "#FFFFFF" },
+  historyWrap: { gap: 9, marginBottom: 10 },
+  historyCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8E4DE",
+    borderRadius: 12,
+    padding: 11
+  },
+  historyTitle: { color: "#1E2B24", fontWeight: "800" },
+  historyMeta: { marginTop: 4, color: "#667085" },
+  historyActions: { flexDirection: "row", gap: 8, marginTop: 8 },
+  historyBtn: {
+    borderWidth: 1,
+    borderColor: "#1F7A4C",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  historyBtnPrimary: { backgroundColor: "#1F7A4C" },
+  historyBtnText: { color: "#1F7A4C", fontWeight: "700", fontSize: 12 },
+  historyBtnTextPrimary: { color: "#FFFFFF" },
+  roadmapCard: {
+    backgroundColor: "#F4F8FF",
+    borderWidth: 1,
+    borderColor: "#D6E4FF",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10
+  },
+  roadmapGoal: { color: "#1849A9", fontWeight: "800", marginBottom: 8 },
+  roadmapStep: { color: "#344054", marginBottom: 4, fontWeight: "600" },
+  opportunityWrap: { gap: 9, marginBottom: 10 },
+  opportunityCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 12,
+    padding: 11
+  },
+  opportunityTitle: { color: "#1E2B24", fontWeight: "800" },
+  opportunityMeta: { marginTop: 3, color: "#667085" },
+  leaderboardCard: {
+    backgroundColor: "#FFF8F1",
+    borderWidth: 1,
+    borderColor: "#F9DBAF",
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 10
+  },
+  leaderboardTitle: { color: "#B54708", fontWeight: "800", marginBottom: 6 },
+  leaderboardRow: { color: "#7A2E0E", marginBottom: 3, fontWeight: "600" },
+  liveWrap: { gap: 9, marginBottom: 10 },
+  liveCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D5E9DB",
+    borderRadius: 12,
+    padding: 11
+  },
+  liveTitle: { color: "#1E2B24", fontWeight: "800" },
+  liveMeta: { marginTop: 3, color: "#667085" },
+  resumeCard: {
+    backgroundColor: "#F8F5FF",
+    borderWidth: 1,
+    borderColor: "#DDD2FE",
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 10
+  },
+  resumeTitle: { color: "#5925DC", fontWeight: "800" },
+  resumeMeta: { marginTop: 4, color: "#6941C6" },
+  resumeSnippet: { marginTop: 6, color: "#344054", lineHeight: 18 },
   domainGuideInlineCard: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
