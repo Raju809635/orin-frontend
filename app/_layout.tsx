@@ -47,6 +47,7 @@ function RootDrawer() {
       pathname.startsWith("/mentor/") ||
       pathname.startsWith("/settings") ||
       pathname.startsWith("/notifications") ||
+      pathname.startsWith("/my-profile") ||
       pathname.startsWith("/student-dashboard") ||
       pathname.startsWith("/mentor-dashboard") ||
       pathname.startsWith("/admin-dashboard") ||
@@ -153,14 +154,13 @@ function RootDrawer() {
             <Text style={styles.drawerProfileName}>{user.name || "ORIN User"}</Text>
             <Text style={styles.drawerProfileRole}>{user.role === "mentor" ? "Mentor" : "Student"}</Text>
             <TouchableOpacity
-              onPress={() =>
-                router.push((user.role === "mentor" ? "/mentor-profile" : "/student-profile") as never)
-              }
+              onPress={() => router.push("/my-profile" as never)}
             >
               <Text style={styles.drawerProfileLink}>View Profile</Text>
             </TouchableOpacity>
           </View>
         ) : null}
+        <DrawerItem label="My Profile" onPress={() => router.push("/my-profile" as never)} />
         <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
         <DrawerItem label="Domain Guide" onPress={() => router.push("/domain-guide" as never)} />
         {user?.role === "student" ? (
@@ -233,6 +233,7 @@ function RootDrawer() {
           <Drawer.Screen name="settings" options={{ title: "Settings", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="notifications" options={{ title: "Notifications", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="student-dashboard" options={{ title: "Student Dashboard", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="my-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="student-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor-dashboard" options={{ title: "Mentor Dashboard", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />

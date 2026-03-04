@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -169,10 +169,10 @@ export default function MentorDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [networkFeed, setNetworkFeed] = useState<NetworkPost[]>([]);
   const [dailyDashboard, setDailyDashboard] = useState<DailyDashboard | null>(null);
+  const [completingTaskKey, setCompletingTaskKey] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SmartSuggestion[]>([]);
   const calendarDateOptions = useMemo(() => nextDates(14), []);
   const mentorServices = [
@@ -343,18 +343,6 @@ export default function MentorDashboard() {
       saveCount: 4
     }
   ] as const;
-  const mentorDailyPreview: DailyDashboard = {
-    tasks: [
-      { key: "mentor-task-1", title: "Review one student roadmap", completed: false },
-      { key: "mentor-task-2", title: "Update one availability block", completed: false },
-      { key: "mentor-task-3", title: "Post one mentoring insight", completed: false }
-    ],
-    streakDays: 2,
-    xp: 80,
-    levelTag: "Consistent Builder",
-    reputationScore: 320,
-    leaderboard: { globalRank: 145, collegeRank: 18 }
-  };
   const mentorSuggestionsPreview = [
     { id: "preview-1", name: "Ravi P", role: "student" as const, reason: "Student interested in your domain" },
     { id: "preview-2", name: "Neha S", role: "mentor" as const, reason: "Similar mentoring track" }
@@ -655,6 +643,22 @@ export default function MentorDashboard() {
     }
   }
 
+  async function completeDailyTask(taskKey: string) {
+    try {
+      setCompletingTaskKey(taskKey);
+      setError(null);
+      const { data } = await api.post<{ message?: string; xpEarned?: number }>("/api/network/daily-task/complete", {
+        taskKey
+      });
+      notify(data?.message || "Task completed.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to complete daily task.");
+    } finally {
+      setCompletingTaskKey(null);
+    }
+  }
+
   if (user?.role !== "mentor") {
     return (
       <View style={styles.centered}>
@@ -681,7 +685,7 @@ export default function MentorDashboard() {
             <Ionicons name="notifications" size={18} color="#1E2B24" />
           </TouchableOpacity>
           <View style={styles.profileMenuWrap}>
-          <TouchableOpacity style={styles.avatarButton} onPress={() => setShowProfileMenu((prev) => !prev)}>
+          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push("/my-profile" as never)}>
             {profilePhotoUrl ? (
               <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
             ) : (
@@ -690,19 +694,6 @@ export default function MentorDashboard() {
               </View>
             )}
           </TouchableOpacity>
-          {showProfileMenu ? (
-            <View style={styles.profileMenuCard}>
-              <TouchableOpacity onPress={() => router.push("/mentor-profile" as never)}>
-                <Text style={styles.profileMenuItem}>Edit Profile</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push("/settings" as never)}>
-                <Text style={styles.profileMenuItem}>Settings</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push("/about" as never)}>
-                <Text style={styles.profileMenuItem}>About ORIN</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
           </View>
         </View>
       </View>
@@ -828,27 +819,45 @@ export default function MentorDashboard() {
             ))}
           </View>
         </>
-      ) : null}
-
-      {FEATURE_FLAGS.dailyEngagement ? (
+      ) : null}`r`n      {FEATURE_FLAGS.dailyEngagement ? (
         <>
           <Text style={styles.sectionHeader}>Mentor Growth Dashboard</Text>
           <View style={styles.dailyCard}>
-            <Text style={styles.dailyTitle}>Reputation Score: {dailyDashboard?.reputationScore ?? mentorDailyPreview.reputationScore}</Text>
-            <Text style={styles.dailyMeta}>Tag: {dailyDashboard?.levelTag ?? mentorDailyPreview.levelTag}</Text>
-            {(dailyDashboard?.tasks || mentorDailyPreview.tasks).map((task) => (
-              <Text key={task.key} style={styles.dailyItem}>
-                {task.completed ? "✓ " : "- "}
-                {task.title}
-              </Text>
-            ))}
-            <Text style={styles.dailyMeta}>
-              Streak: {dailyDashboard?.streakDays ?? mentorDailyPreview.streakDays} days | XP: {dailyDashboard?.xp ?? mentorDailyPreview.xp}
-            </Text>
-            <Text style={styles.dailyMeta}>
-              Leaderboard: College #{dailyDashboard?.leaderboard?.collegeRank ?? mentorDailyPreview.leaderboard?.collegeRank} | Global #
-              {dailyDashboard?.leaderboard?.globalRank ?? mentorDailyPreview.leaderboard?.globalRank}
-            </Text>
+            {!dailyDashboard ? (
+              <Text style={styles.empty}>Daily progress unavailable right now.</Text>
+            ) : (
+              <>
+                <Text style={styles.dailyTitle}>Reputation Score: {dailyDashboard.reputationScore}</Text>
+                <Text style={styles.dailyMeta}>Tag: {dailyDashboard.levelTag}</Text>
+                {(dailyDashboard.tasks || []).map((task) => {
+                  const inProgress = completingTaskKey === task.key;
+                  return (
+                    <View key={task.key} style={styles.dailyTaskRow}>
+                      <Text style={styles.dailyItem}>
+                        {task.completed ? "✓ " : "- "}
+                        {task.title}
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.dailyTaskButton, task.completed && styles.dailyTaskButtonDone]}
+                        onPress={() => completeDailyTask(task.key)}
+                        disabled={task.completed || inProgress}
+                      >
+                        <Text style={styles.dailyTaskButtonText}>
+                          {task.completed ? "Done" : inProgress ? "..." : "Complete"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+                <Text style={styles.dailyMeta}>
+                  Streak: {dailyDashboard.streakDays} days | XP: {dailyDashboard.xp}
+                </Text>
+                <Text style={styles.dailyMeta}>
+                  Leaderboard: College #{dailyDashboard.leaderboard?.collegeRank ?? "-"} | Global #
+                  {dailyDashboard.leaderboard?.globalRank ?? "-"}
+                </Text>
+              </>
+            )}
           </View>
         </>
       ) : null}
@@ -1203,19 +1212,6 @@ const styles = StyleSheet.create({
   avatarImage: { width: "100%", height: "100%" },
   avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
   avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 18 },
-  profileMenuCard: {
-    marginTop: 10,
-    position: "absolute",
-    top: 48,
-    right: 0,
-    backgroundColor: "#fff",
-    borderColor: "#D0D5DD",
-    borderWidth: 1,
-    borderRadius: 12,
-    minWidth: 150,
-    paddingVertical: 8
-  },
-  profileMenuItem: { paddingHorizontal: 12, paddingVertical: 9, color: "#1E2B24", fontWeight: "600" },
   centered: { alignItems: "center", justifyContent: "center", minHeight: 140 },
   searchBox: {
     marginTop: 4,
@@ -1381,6 +1377,10 @@ const styles = StyleSheet.create({
   },
   dailyTitle: { color: "#1849A9", fontWeight: "800", marginBottom: 6 },
   dailyItem: { color: "#344054", marginBottom: 3, fontWeight: "500" },
+  dailyTaskRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 8 },
+  dailyTaskButton: { backgroundColor: "#175CD3", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  dailyTaskButtonDone: { backgroundColor: "#12B76A" },
+  dailyTaskButtonText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   dailyMeta: { marginTop: 6, color: "#475467", fontWeight: "600", fontSize: 12 },
   suggestionWrap: { gap: 9, marginBottom: 10 },
   suggestionCard: {
@@ -1514,3 +1514,4 @@ const styles = StyleSheet.create({
   logout: { marginTop: 14, padding: 12, alignItems: "center" },
   logoutText: { color: "#7A271A", fontWeight: "700" }
 });
+

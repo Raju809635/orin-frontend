@@ -106,10 +106,10 @@ export default function StudentDashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
-  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [networkFeed, setNetworkFeed] = useState<NetworkPost[]>([]);
   const [dailyDashboard, setDailyDashboard] = useState<DailyDashboard | null>(null);
+  const [completingTaskKey, setCompletingTaskKey] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SmartSuggestion[]>([]);
   const quickServices = [
     {
@@ -211,13 +211,6 @@ export default function StudentDashboard() {
       border: "#CBECD9"
     }
   ] as const;
-  const dailyTasksPreview = [
-    "Solve 1 coding problem",
-    "Read 1 career tip",
-    "Update 1 resume bullet",
-    "Explore 1 domain concept"
-  ] as const;
-
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
       if (refresh) setIsRefreshing(true);
@@ -447,6 +440,22 @@ export default function StudentDashboard() {
     );
   }
 
+  async function completeDailyTask(taskKey: string) {
+    try {
+      setCompletingTaskKey(taskKey);
+      setError(null);
+      const { data } = await api.post<{ message?: string; xpEarned?: number }>("/api/network/daily-task/complete", {
+        taskKey
+      });
+      notify(data?.message || "Task completed.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to complete daily task.");
+    } finally {
+      setCompletingTaskKey(null);
+    }
+  }
+
   if (user?.role !== "student") {
     return (
       <View style={styles.centered}>
@@ -473,7 +482,7 @@ export default function StudentDashboard() {
             <Ionicons name="notifications" size={18} color="#1E2B24" />
           </TouchableOpacity>
           <View style={styles.profileMenuWrap}>
-          <TouchableOpacity style={styles.avatarButton} onPress={() => setShowProfileMenu((prev) => !prev)}>
+          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push("/my-profile" as never)}>
             {profilePhotoUrl ? (
               <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
             ) : (
@@ -482,19 +491,6 @@ export default function StudentDashboard() {
               </View>
             )}
           </TouchableOpacity>
-          {showProfileMenu ? (
-            <View style={styles.profileMenuCard}>
-              <TouchableOpacity onPress={() => router.push("/student-profile" as never)}>
-                <Text style={styles.profileMenuItem}>Edit Profile</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push("/settings" as never)}>
-                <Text style={styles.profileMenuItem}>Settings</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => router.push("/about" as never)}>
-                <Text style={styles.profileMenuItem}>About ORIN</Text>
-              </TouchableOpacity>
-            </View>
-          ) : null}
           </View>
         </View>
       </View>
@@ -599,24 +595,41 @@ export default function StudentDashboard() {
         <>
           <Text style={styles.sectionHeader}>Daily Career Dashboard</Text>
           <View style={styles.dailyCard}>
-            <Text style={styles.dailyTitle}>Today&apos;s Tasks</Text>
-            {(dailyDashboard?.tasks || dailyTasksPreview.map((item, index) => ({
-              key: `preview-${index}`,
-              title: item,
-              xp: 0,
-              completed: false
-            }))).map((task) => (
-              <Text key={task.key} style={styles.dailyItem}>
-                {task.completed ? "âœ“ " : "- "}
-                {task.title}
-              </Text>
-            ))}
-            <Text style={styles.dailyMeta}>
-              Streak: {dailyDashboard?.streakDays ?? 3} days | XP: {dailyDashboard?.xp ?? 120} | Tag: {dailyDashboard?.levelTag ?? "Starter"}
-            </Text>
-            <Text style={styles.dailyMeta}>
-              Leaderboard: College #{dailyDashboard?.leaderboard?.collegeRank ?? 12} | Global #{dailyDashboard?.leaderboard?.globalRank ?? 248}
-            </Text>
+            {!dailyDashboard ? (
+              <Text style={styles.empty}>Daily progress unavailable right now.</Text>
+            ) : (
+              <>
+                <Text style={styles.dailyTitle}>Reputation Score: {dailyDashboard.reputationScore}</Text>
+                <Text style={styles.dailyMeta}>Tag: {dailyDashboard.levelTag}</Text>
+                {(dailyDashboard.tasks || []).map((task) => {
+                  const inProgress = completingTaskKey === task.key;
+                  return (
+                    <View key={task.key} style={styles.dailyTaskRow}>
+                      <Text style={styles.dailyItem}>
+                        {task.completed ? "✓ " : "- "}
+                        {task.title} (+{task.xp} XP)
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.dailyTaskButton, task.completed && styles.dailyTaskButtonDone]}
+                        onPress={() => completeDailyTask(task.key)}
+                        disabled={task.completed || inProgress}
+                      >
+                        <Text style={styles.dailyTaskButtonText}>
+                          {task.completed ? "Done" : inProgress ? "..." : "Complete"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+                <Text style={styles.dailyMeta}>
+                  Streak: {dailyDashboard.streakDays} days | XP: {dailyDashboard.xp}
+                </Text>
+                <Text style={styles.dailyMeta}>
+                  Leaderboard: College #{dailyDashboard.leaderboard?.collegeRank ?? "-"} | Global #
+                  {dailyDashboard.leaderboard?.globalRank ?? "-"}
+                </Text>
+              </>
+            )}
           </View>
         </>
       ) : null}
@@ -800,19 +813,6 @@ const styles = StyleSheet.create({
   avatarImage: { width: "100%", height: "100%" },
   avatarFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
   avatarText: { color: "#0B3D2E", fontWeight: "700", fontSize: 18 },
-  profileMenuCard: {
-    marginTop: 10,
-    position: "absolute",
-    top: 48,
-    right: 0,
-    backgroundColor: "#fff",
-    borderColor: "#D0D5DD",
-    borderWidth: 1,
-    borderRadius: 12,
-    minWidth: 150,
-    paddingVertical: 8
-  },
-  profileMenuItem: { paddingHorizontal: 12, paddingVertical: 9, color: "#1E2B24", fontWeight: "600" },
   searchBox: {
     marginTop: 4,
     marginBottom: 12,
@@ -1014,6 +1014,10 @@ const styles = StyleSheet.create({
   },
   dailyTitle: { color: "#1849A9", fontWeight: "800", marginBottom: 6 },
   dailyItem: { color: "#344054", marginBottom: 3, fontWeight: "500" },
+  dailyTaskRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6, gap: 8 },
+  dailyTaskButton: { backgroundColor: "#175CD3", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  dailyTaskButtonDone: { backgroundColor: "#12B76A" },
+  dailyTaskButtonText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   dailyMeta: { marginTop: 6, color: "#475467", fontWeight: "600", fontSize: 12 },
   suggestionWrap: { gap: 9, marginBottom: 8 },
   suggestionCard: {
