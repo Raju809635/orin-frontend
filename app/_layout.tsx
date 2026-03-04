@@ -185,7 +185,7 @@ function RootDrawer() {
     { key: "domains", label: "Domains", icon: "grid", path: "/domains" },
     { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/student-dashboard" },
     { key: "network", label: "Network", icon: "people", path: "/network" },
-    { key: "posts", label: "Posts", icon: "newspaper", path: "/network" }
+    { key: "posts", label: "Posts", icon: "newspaper", path: "/posts" }
   ] as const;
 
   const mentorTabs = [
@@ -193,7 +193,7 @@ function RootDrawer() {
     { key: "requests", label: "Requests", icon: "list", path: "/mentor-dashboard?section=requests" },
     { key: "sessions", label: "Sessions", icon: "videocam", path: "/mentor-dashboard?section=sessions" },
     { key: "network", label: "Network", icon: "people", path: "/network" },
-    { key: "posts", label: "Posts", icon: "newspaper", path: "/network" }
+    { key: "posts", label: "Posts", icon: "newspaper", path: "/posts" }
   ] as const;
 
   const tabs = user?.role === "mentor" ? mentorTabs : studentTabs;
@@ -243,6 +243,7 @@ function RootDrawer() {
           <Drawer.Screen name="mentor-awaiting" options={{ title: "Mentor Awaiting", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="admin-dashboard" options={{ title: "Admin Dashboard", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="network" options={{ title: "Network", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="posts" options={{ title: "Posts", drawerItemStyle: { display: "none" } }} />
         </Drawer>
       </View>
       {showBottomNav() ? (

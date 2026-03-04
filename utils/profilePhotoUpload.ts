@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { Platform } from "react-native";
 
 type UploadResponse = {
   message: string;
@@ -21,16 +22,35 @@ export async function pickAndUploadProfilePhoto(): Promise<string | null> {
     throw new Error("Image picker is not available in this build. Please install latest APK.");
   }
 
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    return null;
+  try {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      return null;
+    }
+  } catch {
+    // Some Android OEM builds fail on explicit permission API; continue with picker call.
   }
 
-  const result = await ImagePicker.launchImageLibraryAsync({
-    quality: 0.8,
-    allowsEditing: true,
-    aspect: [1, 1]
-  });
+  let result: any;
+  try {
+    result = await ImagePicker.launchImageLibraryAsync({
+      quality: 0.8,
+      allowsEditing: false,
+      selectionLimit: 1
+    });
+  } catch (firstError) {
+    // Fallback for Android devices where default picker flow crashes/blank-screens.
+    if (Platform.OS === "android") {
+      result = await ImagePicker.launchImageLibraryAsync({
+        quality: 0.8,
+        allowsEditing: false,
+        selectionLimit: 1,
+        legacy: true
+      });
+    } else {
+      throw firstError;
+    }
+  }
 
   if (result.canceled || !result.assets?.length) {
     return null;

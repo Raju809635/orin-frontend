@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { Platform } from "react-native";
 
 export async function submitManualPaymentWithPicker(sessionId: string, transactionReference = "") {
   let ImagePicker: any;
@@ -15,15 +16,36 @@ export async function submitManualPaymentWithPicker(sessionId: string, transacti
     throw new Error("Image picker is not available in this build. Please install latest APK.");
   }
 
-  const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (!permission.granted) {
-    throw new Error("Gallery permission is required to upload payment screenshot.");
+  try {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      throw new Error("Gallery permission is required to upload payment screenshot.");
+    }
+  } catch (error: any) {
+    if ((error?.message || "").includes("required")) {
+      throw error;
+    }
   }
 
-  const result = await ImagePicker.launchImageLibraryAsync({
-    quality: 0.85,
-    allowsEditing: false
-  });
+  let result: any;
+  try {
+    result = await ImagePicker.launchImageLibraryAsync({
+      quality: 0.85,
+      allowsEditing: false,
+      selectionLimit: 1
+    });
+  } catch (firstError) {
+    if (Platform.OS === "android") {
+      result = await ImagePicker.launchImageLibraryAsync({
+        quality: 0.85,
+        allowsEditing: false,
+        selectionLimit: 1,
+        legacy: true
+      });
+    } else {
+      throw firstError;
+    }
+  }
 
   if (result.canceled || !result.assets?.length) {
     return { cancelled: true };
