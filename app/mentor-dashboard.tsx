@@ -10,11 +10,12 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
+import { FEATURE_FLAGS } from "@/constants/featureFlags";
 
 type Booking = {
   _id: string;
@@ -64,6 +65,42 @@ type MentorProfilePayload = {
   profilePhotoUrl?: string;
 };
 
+type NetworkPost = {
+  _id: string;
+  authorId?: { _id?: string; name?: string; role?: string } | null;
+  content: string;
+  postType: string;
+  likeCount?: number;
+  commentCount?: number;
+  shareCount?: number;
+  saveCount?: number;
+};
+
+type DailyTask = {
+  key: string;
+  title: string;
+  completed: boolean;
+};
+
+type DailyDashboard = {
+  tasks: DailyTask[];
+  streakDays: number;
+  xp: number;
+  levelTag: string;
+  reputationScore: number;
+  leaderboard?: {
+    globalRank?: number | null;
+    collegeRank?: number | null;
+  };
+};
+
+type SmartSuggestion = {
+  id: string;
+  name: string;
+  role: "student" | "mentor";
+  reason: string;
+};
+
 type SectionId = "overview" | "pricing" | "availability" | "sessions" | "requests" | "adminChat";
 
 const sectionOrder: { id: SectionId; label: string }[] = [
@@ -77,6 +114,7 @@ const sectionOrder: { id: SectionId; label: string }[] = [
 
 export default function MentorDashboard() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ section?: string }>();
   const { user, logout } = useAuth();
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -100,6 +138,9 @@ export default function MentorDashboard() {
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [networkFeed, setNetworkFeed] = useState<NetworkPost[]>([]);
+  const [dailyDashboard, setDailyDashboard] = useState<DailyDashboard | null>(null);
+  const [suggestions, setSuggestions] = useState<SmartSuggestion[]>([]);
   const mentorServices = [
     {
       key: "notifications",
@@ -174,6 +215,13 @@ export default function MentorDashboard() {
       onPress: () => router.push("/mentor-policy" as never)
     }
   ] as const;
+
+  useEffect(() => {
+    const section = String(params.section || "");
+    if (section === "requests" || section === "sessions" || section === "pricing" || section === "availability" || section === "adminChat" || section === "overview") {
+      setActiveSection(section);
+    }
+  }, [params.section]);
   const mentorDeepMaps = [
     {
       title: "Academic Mentoring Depth",
@@ -239,6 +287,44 @@ export default function MentorDashboard() {
       border: "#F7DCCB"
     }
   ] as const;
+  const mentorFeedPreview = [
+    {
+      _id: "preview-mentor-post-1",
+      authorId: { name: "Mentor Community" },
+      content: "Share one real student win this week to build profile trust.",
+      postType: "learning_progress",
+      likeCount: 8,
+      commentCount: 2,
+      shareCount: 1,
+      saveCount: 3
+    },
+    {
+      _id: "preview-mentor-post-2",
+      authorId: { name: "ORIN Team" },
+      content: "Update your slots every weekend so students see current availability.",
+      postType: "project_update",
+      likeCount: 5,
+      commentCount: 1,
+      shareCount: 0,
+      saveCount: 4
+    }
+  ] as const;
+  const mentorDailyPreview: DailyDashboard = {
+    tasks: [
+      { key: "mentor-task-1", title: "Review one student roadmap", completed: false },
+      { key: "mentor-task-2", title: "Update one availability block", completed: false },
+      { key: "mentor-task-3", title: "Post one mentoring insight", completed: false }
+    ],
+    streakDays: 2,
+    xp: 80,
+    levelTag: "Consistent Builder",
+    reputationScore: 320,
+    leaderboard: { globalRank: 145, collegeRank: 18 }
+  };
+  const mentorSuggestionsPreview = [
+    { id: "preview-1", name: "Ravi P", role: "student" as const, reason: "Student interested in your domain" },
+    { id: "preview-2", name: "Neha S", role: "mentor" as const, reason: "Similar mentoring track" }
+  ];
 
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
@@ -246,11 +332,22 @@ export default function MentorDashboard() {
       else setIsLoading(true);
 
       setError(null);
-      const [bookingRes, sessionRes, profileRes] = await Promise.all([
+      const [bookingRes, sessionRes, profileRes, feedRes, dailyRes, suggestionsRes] = await Promise.allSettled([
         api.get<Booking[]>("/api/bookings/mentor"),
         api.get<Session[]>("/api/sessions/mentor/me"),
-        api.get<{ profile?: MentorProfilePayload }>("/api/profiles/mentor/me")
+        api.get<{ profile?: MentorProfilePayload }>("/api/profiles/mentor/me"),
+        FEATURE_FLAGS.networking ? api.get<NetworkPost[]>("/api/network/feed") : Promise.resolve({ data: [] as NetworkPost[] }),
+        FEATURE_FLAGS.dailyEngagement
+          ? api.get<DailyDashboard>("/api/network/daily-dashboard")
+          : Promise.resolve({ data: null as DailyDashboard | null }),
+        FEATURE_FLAGS.smartSuggestions
+          ? api.get<SmartSuggestion[]>("/api/network/suggestions")
+          : Promise.resolve({ data: [] as SmartSuggestion[] })
       ]);
+
+      if (bookingRes.status !== "fulfilled" || sessionRes.status !== "fulfilled" || profileRes.status !== "fulfilled") {
+        throw new Error("Failed to load required mentor dashboard data");
+      }
 
       let adminMessages: AdminChatMessage[] = [];
       try {
@@ -267,12 +364,15 @@ export default function MentorDashboard() {
         setAvailabilitySlots(availabilityRes.data.weeklySlots || []);
       }
 
-      setBookings(bookingRes.data || []);
-      setSessions(sessionRes.data || []);
+      setBookings(bookingRes.value.data || []);
+      setSessions(sessionRes.value.data || []);
       setMessages(adminMessages);
-      setSessionPrice(String(Number(profileRes.data?.profile?.sessionPrice || 0) || 499));
-      setMentorTitle(profileRes.data?.profile?.title || "");
-      setProfilePhotoUrl(profileRes.data?.profile?.profilePhotoUrl || "");
+      setSessionPrice(String(Number(profileRes.value.data?.profile?.sessionPrice || 0) || 499));
+      setMentorTitle(profileRes.value.data?.profile?.title || "");
+      setProfilePhotoUrl(profileRes.value.data?.profile?.profilePhotoUrl || "");
+      setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
+      setDailyDashboard(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
+      setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load mentor dashboard.");
     } finally {
@@ -349,6 +449,7 @@ export default function MentorDashboard() {
   }, [messages, searchQuery]);
 
   const normalizedQuery = searchQuery.trim();
+  const hasLiveSuggestions = suggestions.length > 0;
   const totalSearchMatches = useMemo(
     () => filteredConfirmedPaidSessions.length + filteredBookings.length + filteredMessages.length,
     [filteredConfirmedPaidSessions.length, filteredBookings.length, filteredMessages.length]
@@ -472,6 +573,26 @@ export default function MentorDashboard() {
       setError(e?.response?.data?.message || "Failed to send message to admin.");
     } finally {
       setSendingMessage(false);
+    }
+  }
+
+  async function connectWithSuggestion(targetId: string) {
+    try {
+      await api.post("/api/network/connections/request", { recipientId: targetId });
+      notify("Connection request sent.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to send connection request.");
+    }
+  }
+
+  async function followSuggestion(targetId: string) {
+    try {
+      const { data } = await api.post<{ following: boolean }>(`/api/network/follow/${targetId}`);
+      notify(data?.following ? "Now following." : "Unfollowed.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to update follow.");
     }
   }
 
@@ -618,6 +739,82 @@ export default function MentorDashboard() {
           </View>
         ))}
       </View>
+
+      {FEATURE_FLAGS.networking ? (
+        <>
+          <Text style={styles.sectionHeader}>Mentor Network Feed</Text>
+          <View style={styles.feedWrap}>
+            {(networkFeed.length ? networkFeed : mentorFeedPreview).slice(0, 6).map((post) => (
+              <View key={post._id} style={styles.feedCard}>
+                <Text style={styles.feedAuthor}>{post.authorId?.name || "ORIN User"}</Text>
+                <Text style={styles.feedLine}>{post.content}</Text>
+                <Text style={styles.feedMeta}>
+                  {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0}
+                </Text>
+                <View style={styles.feedActions}>
+                  <Text style={styles.feedActionText}>Like</Text>
+                  <Text style={styles.feedActionText}>Comment</Text>
+                  <Text style={styles.feedActionText}>Share</Text>
+                  <Text style={styles.feedActionText}>Save</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
+
+      {FEATURE_FLAGS.dailyEngagement ? (
+        <>
+          <Text style={styles.sectionHeader}>Mentor Growth Dashboard</Text>
+          <View style={styles.dailyCard}>
+            <Text style={styles.dailyTitle}>Reputation Score: {dailyDashboard?.reputationScore ?? mentorDailyPreview.reputationScore}</Text>
+            <Text style={styles.dailyMeta}>Tag: {dailyDashboard?.levelTag ?? mentorDailyPreview.levelTag}</Text>
+            {(dailyDashboard?.tasks || mentorDailyPreview.tasks).map((task) => (
+              <Text key={task.key} style={styles.dailyItem}>
+                {task.completed ? "✓ " : "- "}
+                {task.title}
+              </Text>
+            ))}
+            <Text style={styles.dailyMeta}>
+              Streak: {dailyDashboard?.streakDays ?? mentorDailyPreview.streakDays} days | XP: {dailyDashboard?.xp ?? mentorDailyPreview.xp}
+            </Text>
+            <Text style={styles.dailyMeta}>
+              Leaderboard: College #{dailyDashboard?.leaderboard?.collegeRank ?? mentorDailyPreview.leaderboard?.collegeRank} | Global #
+              {dailyDashboard?.leaderboard?.globalRank ?? mentorDailyPreview.leaderboard?.globalRank}
+            </Text>
+          </View>
+        </>
+      ) : null}
+
+      {FEATURE_FLAGS.smartSuggestions ? (
+        <>
+          <Text style={styles.sectionHeader}>People You May Know</Text>
+          <View style={styles.suggestionWrap}>
+            {(hasLiveSuggestions ? suggestions : mentorSuggestionsPreview).slice(0, 8).map((item, index) => (
+              <View key={`${item.id}-${index}`} style={styles.suggestionCard}>
+                <Text style={styles.suggestionName}>{item.name}</Text>
+                <Text style={styles.suggestionReason}>{item.reason}</Text>
+                <View style={styles.suggestionActions}>
+                  <TouchableOpacity
+                    onPress={() =>
+                      hasLiveSuggestions ? connectWithSuggestion(item.id) : notify("Live suggestions will appear after more network activity.")
+                    }
+                  >
+                    <Text style={styles.suggestionAction}>Connect</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() =>
+                      hasLiveSuggestions ? followSuggestion(item.id) : notify("Live suggestions will appear after more network activity.")
+                    }
+                  >
+                    <Text style={styles.suggestionAction}>Follow</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectionNav}>
         <View style={styles.sectionNavRow}>
@@ -1017,6 +1214,42 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     overflow: "hidden"
   },
+  feedWrap: { gap: 9, marginBottom: 10 },
+  feedCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8E4DE",
+    borderRadius: 12,
+    padding: 11
+  },
+  feedAuthor: { color: "#1E2B24", fontWeight: "800" },
+  feedLine: { marginTop: 5, color: "#344054", lineHeight: 19 },
+  feedMeta: { marginTop: 4, color: "#667085", fontSize: 12, fontWeight: "600" },
+  feedActions: { marginTop: 8, flexDirection: "row", gap: 12 },
+  feedActionText: { color: "#175CD3", fontWeight: "700", fontSize: 12 },
+  dailyCard: {
+    backgroundColor: "#EEF4FF",
+    borderWidth: 1,
+    borderColor: "#D6E4FF",
+    borderRadius: 13,
+    padding: 12,
+    marginBottom: 10
+  },
+  dailyTitle: { color: "#1849A9", fontWeight: "800", marginBottom: 6 },
+  dailyItem: { color: "#344054", marginBottom: 3, fontWeight: "500" },
+  dailyMeta: { marginTop: 6, color: "#475467", fontWeight: "600", fontSize: 12 },
+  suggestionWrap: { gap: 9, marginBottom: 10 },
+  suggestionCard: {
+    backgroundColor: "#F5F3FF",
+    borderWidth: 1,
+    borderColor: "#DED8FF",
+    borderRadius: 12,
+    padding: 11
+  },
+  suggestionName: { color: "#1E2B24", fontWeight: "800" },
+  suggestionReason: { marginTop: 4, color: "#667085" },
+  suggestionActions: { marginTop: 8, flexDirection: "row", gap: 12 },
+  suggestionAction: { color: "#5925DC", fontWeight: "700", fontSize: 12 },
   sectionNav: { marginBottom: 10, marginTop: 2 },
   sectionNavRow: { flexDirection: "row", gap: 8 },
   sectionChip: {

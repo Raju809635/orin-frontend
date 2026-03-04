@@ -3,7 +3,6 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import { useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
-import { notify } from "@/utils/notify";
 
 type Role = "student" | "mentor";
 
@@ -37,12 +36,10 @@ export default function RegisterScreen() {
         role,
         phoneNumber: role === "mentor" ? normalizedPhone : ""
       });
-      if (response?.message) {
-        notify(response.message);
+      if (!response) {
+        throw new Error("Registration failed");
       }
-      const nextEmail = encodeURIComponent(response?.email || email.trim().toLowerCase());
-      const nextRole = encodeURIComponent(response?.role || role);
-      router.replace(`/verify-email?email=${nextEmail}&role=${nextRole}` as never);
+      router.replace("/login" as never);
     } catch (e: any) {
       const message = e?.response?.data?.message || "Registration failed.";
       setError(message);
@@ -120,8 +117,7 @@ export default function RegisterScreen() {
           />
           <View style={styles.infoCard}>
             <Text style={styles.infoText}>
-              Mentor registrations are reviewed by admin after email OTP verification. You can complete category and
-              specialization after approval.
+              Mentor registrations are reviewed by admin. You can complete category and specialization after approval.
             </Text>
           </View>
         </>

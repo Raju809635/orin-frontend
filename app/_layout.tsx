@@ -1,8 +1,10 @@
 import "react-native-gesture-handler";
 import React, { useEffect, useRef } from "react";
-import { ActivityIndicator, Alert, AppState, AppStateStatus, Platform, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, AppStateStatus, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Drawer } from "expo-router/drawer";
-import { usePathname, useRouter } from "expo-router";
+import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
+import { DrawerContentScrollView, DrawerItem, DrawerContentComponentProps } from "@react-navigation/drawer";
+import { Ionicons } from "@expo/vector-icons";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 
 function defaultRouteByRole(role: "student" | "mentor") {
@@ -20,6 +22,7 @@ function homeRouteForUser(user: { role: "student" | "mentor"; approvalStatus?: "
 function RootDrawer() {
   const router = useRouter();
   const pathname = usePathname();
+  const globalParams = useGlobalSearchParams<{ section?: string }>();
   const { user, isAuthenticated, isBootstrapping } = useAuth();
   const isCheckingUpdateRef = useRef(false);
   const hasPromptedReloadRef = useRef(false);
@@ -46,15 +49,11 @@ function RootDrawer() {
       pathname.startsWith("/notifications") ||
       pathname.startsWith("/student-dashboard") ||
       pathname.startsWith("/mentor-dashboard") ||
-      pathname.startsWith("/admin-dashboard");
+      pathname.startsWith("/admin-dashboard") ||
+      pathname.startsWith("/network");
 
     if (!isAuthenticated && isProtected) {
       router.replace("/login" as never);
-      return;
-    }
-
-    if (isAuthenticated && user && pathname === "/") {
-      router.replace(homeRouteForUser(user) as never);
       return;
     }
 
@@ -146,179 +145,120 @@ function RootDrawer() {
     );
   }
 
-  return (
-    <Drawer
-      screenOptions={{
-        headerStyle: { backgroundColor: "#1F7A4C" },
-        headerTintColor: "#fff",
-        drawerActiveTintColor: "#1F7A4C"
-      }}
-    >
-      <Drawer.Screen
-        name="index"
-        options={{
-          title: "Home",
-          drawerLabel: "Home"
-        }}
-      />
-      <Drawer.Screen
-        name="login"
-        options={{
-          title: "Login",
-          drawerLabel: "Login",
-          drawerItemStyle: user ? { display: "none" } : undefined
-        }}
-      />
-      <Drawer.Screen
-        name="register"
-        options={{
-          title: "Register",
-          drawerLabel: "Register",
-          drawerItemStyle: user ? { display: "none" } : undefined
-        }}
-      />
-      <Drawer.Screen
-        name="verify-email"
-        options={{
-          title: "Verify Email",
-          drawerLabel: "Verify Email",
-          drawerItemStyle: { display: "none" }
-        }}
-      />
-      <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerLabel: "Collaborate", drawerItemStyle: { display: "none" } }} />
-      <Drawer.Screen
-        name="chat"
-        options={{
-          title: "Messages",
-          drawerLabel: "Messages",
-          drawerItemStyle: { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="ai-assistant"
-        options={{
-          title: "AI Assistant",
-          drawerLabel: "AI Assistant",
-          drawerItemStyle: user ? undefined : { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="complaints"
-        options={{
-          title: "Complaints",
-          drawerLabel: "Complaints",
-          drawerItemStyle: user?.role === "student" ? undefined : { display: "none" }
-        }}
-      />
-      <Drawer.Screen name="domains" options={{ title: "Domains", drawerLabel: "Domains" }} />
-      <Drawer.Screen
-        name="domain-guide"
-        options={{
-          title: "Domain Guide",
-          drawerLabel: "Domain Guide",
-          drawerItemStyle: user ? undefined : { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="about"
-        options={{
-          title: "About ORIN",
-          drawerLabel: "About ORIN",
-          drawerItemStyle: { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="privacy"
-        options={{
-          title: "Privacy Policy",
-          drawerLabel: "Privacy Policy",
-          drawerItemStyle: { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="terms"
-        options={{
-          title: "Terms of Use",
-          drawerLabel: "Terms of Use",
-          drawerItemStyle: { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="help"
-        options={{
-          title: "Help & Support",
-          drawerLabel: "Help & Support",
-          drawerItemStyle: { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="settings"
-        options={{
-          title: "Settings",
-          drawerLabel: "Settings",
-          drawerItemStyle: user ? undefined : { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="notifications"
-        options={{
-          title: "Notifications",
-          drawerLabel: "Notifications",
-          drawerItemStyle: { display: "none" }
-        }}
-      />
+  function renderDrawerContent(props: DrawerContentComponentProps) {
+    return (
+      <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContent}>
+        {user ? (
+          <View style={styles.drawerProfileCard}>
+            <Text style={styles.drawerProfileName}>{user.name || "ORIN User"}</Text>
+            <Text style={styles.drawerProfileRole}>{user.role === "mentor" ? "Mentor" : "Student"}</Text>
+            <TouchableOpacity
+              onPress={() =>
+                router.push((user.role === "mentor" ? "/mentor-profile" : "/student-profile") as never)
+              }
+            >
+              <Text style={styles.drawerProfileLink}>View Profile</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
+        <DrawerItem label="Domain Guide" onPress={() => router.push("/domain-guide" as never)} />
+        {user?.role === "student" ? (
+          <DrawerItem label="Complaints" onPress={() => router.push("/complaints" as never)} />
+        ) : null}
+        <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
+      </DrawerContentScrollView>
+    );
+  }
 
-      <Drawer.Screen
-        name="student-dashboard"
-        options={{
-          title: "Student Dashboard",
-          drawerLabel: "Student Dashboard",
-          drawerItemStyle: user?.role === "student" ? undefined : { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="student-profile"
-        options={{
-          title: "My Profile",
-          drawerLabel: "My Profile",
-          drawerItemStyle: user?.role === "student" ? undefined : { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="mentor-dashboard"
-        options={{
-          title: "Mentor Dashboard",
-          drawerLabel: "Mentor Dashboard",
-          drawerItemStyle: user?.role === "mentor" ? undefined : { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="mentor-profile"
-        options={{
-          title: "My Profile",
-          drawerLabel: "My Profile",
-          drawerItemStyle: user?.role === "mentor" ? undefined : { display: "none" }
-        }}
-      />
-      <Drawer.Screen
-        name="mentor-policy"
-        options={{ title: "Mentor Policy", drawerItemStyle: { display: "none" } }}
-      />
-      <Drawer.Screen name="mentors" options={{ title: "Mentors", drawerItemStyle: { display: "none" } }} />
-      <Drawer.Screen
-        name="mentor/[mentorId]"
-        options={{ title: "Mentor Profile", drawerItemStyle: { display: "none" } }}
-      />
-      <Drawer.Screen name="mentor-pending" options={{ title: "Mentor Pending", drawerItemStyle: { display: "none" } }} />
-      <Drawer.Screen
-        name="mentor-awaiting"
-        options={{ title: "Mentor Awaiting", drawerItemStyle: { display: "none" } }}
-      />
-      <Drawer.Screen
-        name="admin-dashboard"
-        options={{ title: "Admin Dashboard", drawerItemStyle: { display: "none" } }}
-      />
-    </Drawer>
+  function showBottomNav() {
+    if (!isAuthenticated || !user) return false;
+    if (pathname === "/login" || pathname === "/register" || pathname === "/verify-email") return false;
+    if (pathname === "/mentor-awaiting" || pathname === "/mentor-pending") return false;
+    return true;
+  }
+
+  const currentMentorSection = String(globalParams.section || "overview");
+
+  const studentTabs = [
+    { key: "home", label: "Home", icon: "home", path: "/" },
+    { key: "domains", label: "Domains", icon: "grid", path: "/domains" },
+    { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/student-dashboard" },
+    { key: "network", label: "Network", icon: "people", path: "/network" },
+    { key: "messages", label: "Messages", icon: "chatbubble-ellipses", path: "/chat" }
+  ] as const;
+
+  const mentorTabs = [
+    { key: "home", label: "Home", icon: "home", path: "/" },
+    { key: "requests", label: "Requests", icon: "list", path: "/mentor-dashboard?section=requests" },
+    { key: "sessions", label: "Sessions", icon: "videocam", path: "/mentor-dashboard?section=sessions" },
+    { key: "network", label: "Network", icon: "people", path: "/network" },
+    { key: "messages", label: "Messages", icon: "chatbubble-ellipses", path: "/chat" }
+  ] as const;
+
+  const tabs = user?.role === "mentor" ? mentorTabs : studentTabs;
+  const isTabActive = (tabKey: string, path: string) => {
+    if (path === "/") return pathname === "/";
+    if (tabKey === "requests") return pathname.startsWith("/mentor-dashboard") && currentMentorSection === "requests";
+    if (tabKey === "sessions") return pathname.startsWith("/mentor-dashboard") && currentMentorSection === "sessions";
+    if (path.startsWith("/mentor-dashboard")) return pathname.startsWith("/mentor-dashboard");
+    return pathname.startsWith(path);
+  };
+
+  return (
+    <View style={styles.appRoot}>
+      <View style={styles.contentArea}>
+        <Drawer
+          drawerContent={renderDrawerContent}
+          screenOptions={{
+            headerStyle: { backgroundColor: "#1F7A4C" },
+            headerTintColor: "#fff",
+            drawerActiveTintColor: "#1F7A4C"
+          }}
+        >
+          <Drawer.Screen name="index" options={{ title: "Home", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="login" options={{ title: "Login", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="register" options={{ title: "Register", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="verify-email" options={{ title: "Verify Email", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="chat" options={{ title: "Messages", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai-assistant" options={{ title: "AI Assistant", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="complaints" options={{ title: "Complaints", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="domains" options={{ title: "Domains", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="domain-guide" options={{ title: "Domain Guide", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="about" options={{ title: "About ORIN", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="privacy" options={{ title: "Privacy Policy", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="terms" options={{ title: "Terms of Use", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="help" options={{ title: "Help & Support", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="settings" options={{ title: "Settings", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="notifications" options={{ title: "Notifications", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="student-dashboard" options={{ title: "Student Dashboard", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="student-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="mentor-dashboard" options={{ title: "Mentor Dashboard", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="mentor-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="mentor-policy" options={{ title: "Mentor Policy", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="mentors" options={{ title: "Mentors", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="mentor/[mentorId]" options={{ title: "Mentor Profile", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="mentor-pending" options={{ title: "Mentor Pending", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="mentor-awaiting" options={{ title: "Mentor Awaiting", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="admin-dashboard" options={{ title: "Admin Dashboard", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="network" options={{ title: "Network", drawerItemStyle: { display: "none" } }} />
+        </Drawer>
+      </View>
+      {showBottomNav() ? (
+        <View style={styles.bottomNav}>
+          {tabs.map((tab) => {
+            const active = isTabActive(tab.key, tab.path);
+            return (
+              <TouchableOpacity key={tab.key} style={styles.bottomNavItem} onPress={() => router.replace(tab.path as never)}>
+                <Ionicons name={tab.icon as any} size={20} color={active ? "#1F7A4C" : "#667085"} />
+                <Text style={[styles.bottomNavLabel, active && styles.bottomNavLabelActive]}>{tab.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -331,6 +271,32 @@ export default function Layout() {
 }
 
 const styles = StyleSheet.create({
+  appRoot: { flex: 1, backgroundColor: "#F4F9F6" },
+  contentArea: { flex: 1 },
+  drawerContent: { paddingTop: 0 },
+  drawerProfileCard: {
+    marginHorizontal: 10,
+    marginTop: 10,
+    marginBottom: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#FFFFFF",
+    padding: 12
+  },
+  drawerProfileName: { color: "#1E2B24", fontWeight: "800", fontSize: 16 },
+  drawerProfileRole: { marginTop: 4, color: "#667085", fontWeight: "600" },
+  drawerProfileLink: { marginTop: 8, color: "#1F7A4C", fontWeight: "700" },
+  bottomNav: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderColor: "#E4E7EC",
+    backgroundColor: "#FFFFFF",
+    paddingVertical: 6
+  },
+  bottomNavItem: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2, paddingVertical: 4 },
+  bottomNavLabel: { fontSize: 11, color: "#667085", fontWeight: "600" },
+  bottomNavLabelActive: { color: "#1F7A4C" },
   loadingContainer: {
     flex: 1,
     backgroundColor: "#F4F9F6",

@@ -52,7 +52,35 @@ export default function AiAssistantScreen() {
         message: nextUserItem.text,
         context: {
           role: user?.role,
-          app: "orin-mobile"
+          app: "orin-mobile",
+          appVersion: "5.0",
+          primarySections: [
+            "Home",
+            "Student Dashboard",
+            "Domains",
+            "Domain Guide",
+            "AI Assistant",
+            "Complaints",
+            "My Profile",
+            "Settings"
+          ],
+          settingsSections: [
+            "Notifications",
+            "Help & Support",
+            "Privacy Policy",
+            "Terms of Use",
+            "Mentor Policy",
+            "About ORIN"
+          ],
+          paymentMode: "manual",
+          bookingStates: [
+            "payment_pending",
+            "waiting_verification",
+            "confirmed",
+            "completed",
+            "cancelled",
+            "rejected"
+          ]
         }
       });
 
