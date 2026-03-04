@@ -29,8 +29,21 @@ export default function PostsScreen() {
       if (refresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const { data } = await api.get<Post[]>("/api/network/feed/public");
-      setPosts(data || []);
+      try {
+        const { data } = await api.get<Post[]>("/api/network/feed/public");
+        setPosts(data || []);
+      } catch (e: any) {
+        const message = e?.response?.data?.message || "";
+        const status = e?.response?.status;
+        if (status === 404 || message.toLowerCase().includes("route not found")) {
+          const fallback = await api.get<Post[]>("/api/network/feed");
+          const publicPosts = (fallback.data || []).filter((post) => post?.postType || post?.content);
+          setPosts(publicPosts);
+          setError("Public feed route not deployed yet. Showing latest feed.");
+        } else {
+          throw e;
+        }
+      }
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load public posts.");
     } finally {
