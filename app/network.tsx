@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
@@ -84,8 +84,19 @@ type DailyDashboard = {
   leaderboard?: { globalRank?: number | null; collegeRank?: number | null };
 };
 
+type NetworkSectionId = "compose" | "feed" | "connections" | "progress";
+
+const networkSections: { id: NetworkSectionId; label: string }[] = [
+  { id: "compose", label: "Create" },
+  { id: "feed", label: "Feed" },
+  { id: "connections", label: "Connections" },
+  { id: "progress", label: "Progress" }
+];
+
 export default function NetworkScreen() {
+  const params = useLocalSearchParams<{ section?: string }>();
   const { user } = useAuth();
+  const [activeSection, setActiveSection] = useState<NetworkSectionId>("feed");
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [pendingIncoming, setPendingIncoming] = useState<ConnectionRow[]>([]);
@@ -100,6 +111,13 @@ export default function NetworkScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadingPostImage, setUploadingPostImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const section = String(params.section || "");
+    if (section === "compose" || section === "feed" || section === "connections" || section === "progress") {
+      setActiveSection(section);
+    }
+  }, [params.section]);
 
   const loadData = useCallback(async (refresh = false) => {
     try {
@@ -278,6 +296,22 @@ export default function NetworkScreen() {
       </Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavRow}>
+        {networkSections.map((item) => {
+          const active = activeSection === item.id;
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.sectionChip, active && styles.sectionChipActive]}
+              onPress={() => setActiveSection(item.id)}
+            >
+              <Text style={[styles.sectionChipText, active && styles.sectionChipTextActive]}>{item.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {activeSection === "compose" ? (
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Create Post</Text>
         <View style={styles.chipsRow}>
@@ -321,7 +355,9 @@ export default function NetworkScreen() {
           <Text style={styles.primaryButtonText}>{submitting ? "Posting..." : "Publish Post"}</Text>
         </TouchableOpacity>
       </View>
+      ) : null}
 
+      {activeSection === "progress" ? (
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Reputation & Daily Progress</Text>
         <Text style={styles.meta}>Reputation Score: {daily?.reputationScore ?? 0}</Text>
@@ -347,7 +383,9 @@ export default function NetworkScreen() {
           ))}
         </View>
       </View>
+      ) : null}
 
+      {activeSection === "connections" ? (
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Pending Requests</Text>
         {pendingIncoming.length === 0 ? (
@@ -369,7 +407,9 @@ export default function NetworkScreen() {
           ))
         )}
       </View>
+      ) : null}
 
+      {activeSection === "connections" ? (
       <View style={styles.card}>
         <Text style={styles.cardTitle}>People You May Know</Text>
         {suggestions.length === 0 ? (
@@ -391,7 +431,9 @@ export default function NetworkScreen() {
           ))
         )}
       </View>
+      ) : null}
 
+      {activeSection === "feed" ? (
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Activity Feed</Text>
         {posts.length === 0 ? (
@@ -454,6 +496,7 @@ export default function NetworkScreen() {
           ))
         )}
       </View>
+      ) : null}
     </ScrollView>
   );
 }
@@ -473,6 +516,18 @@ const styles = StyleSheet.create({
     marginBottom: 10
   },
   cardTitle: { fontSize: 16, fontWeight: "800", color: "#1E2B24", marginBottom: 8 },
+  sectionNavRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  sectionChip: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#fff",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  sectionChipActive: { borderColor: "#1F7A4C", backgroundColor: "#EAF6EF" },
+  sectionChipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
+  sectionChipTextActive: { color: "#1F7A4C" },
   input: {
     minHeight: 84,
     borderWidth: 1,

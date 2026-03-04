@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -157,7 +157,17 @@ type ResumeResponse = {
   export?: { fileName?: string };
 };
 
+type StudentSectionId = "overview" | "growth" | "sessions" | "network";
+
+const studentSections: { id: StudentSectionId; label: string }[] = [
+  { id: "overview", label: "Overview" },
+  { id: "growth", label: "Career Growth" },
+  { id: "sessions", label: "Sessions" },
+  { id: "network", label: "Network" }
+];
+
 export default function StudentDashboard() {
+  const params = useLocalSearchParams<{ section?: string }>();
   const router = useRouter();
   const { user, logout } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -180,6 +190,7 @@ export default function StudentDashboard() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
   const [resumePreview, setResumePreview] = useState<ResumeResponse | null>(null);
+  const [activeSection, setActiveSection] = useState<StudentSectionId>("overview");
   const quickServices = [
     {
       key: "mentors",
@@ -352,6 +363,13 @@ export default function StudentDashboard() {
       fetchDashboard();
     }, [fetchDashboard])
   );
+
+  useEffect(() => {
+    const section = String(params.section || "");
+    if (section === "overview" || section === "growth" || section === "sessions" || section === "network") {
+      setActiveSection(section);
+    }
+  }, [params.section]);
 
   const pendingPaymentSessions = useMemo(
     () =>
@@ -647,6 +665,23 @@ export default function StudentDashboard() {
         <Text style={styles.heroSubTitle}>Explore mentors, track sessions, and grow faster with ORIN.</Text>
       </View>
 
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavRow}>
+        {studentSections.map((item) => {
+          const active = activeSection === item.id;
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.sectionChip, active && styles.sectionChipActive]}
+              onPress={() => setActiveSection(item.id)}
+            >
+              <Text style={[styles.sectionChipText, active && styles.sectionChipTextActive]}>{item.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {activeSection === "overview" ? (
+      <>
       <Text style={styles.sectionHeader}>Services</Text>
       <View style={styles.sectionGrid}>
         {quickServices.map((item) => (
@@ -688,7 +723,11 @@ export default function StudentDashboard() {
           </View>
         ))}
       </ScrollView>
+      </>
+      ) : null}
 
+      {activeSection === "growth" ? (
+      <>
       <Text style={styles.sectionHeader}>AI Mentor Matching</Text>
       <View style={styles.matchWrap}>
         {mentorMatches.length === 0 ? (
@@ -716,34 +755,6 @@ export default function StudentDashboard() {
                   onPress={() => router.push(`/mentor/${item.mentorId}` as never)}
                 >
                   <Text style={[styles.matchBtnText, styles.matchBtnTextPrimary]}>Book Session</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
-        )}
-      </View>
-
-      <Text style={styles.sectionHeader}>Session History & Notes</Text>
-      <View style={styles.historyWrap}>
-        {sessionHistory.length === 0 ? (
-          <Text style={styles.empty}>No completed sessions yet.</Text>
-        ) : (
-          sessionHistory.slice(0, 6).map((item) => (
-            <View key={item.sessionId} style={styles.historyCard}>
-              <Text style={styles.historyTitle}>{item.mentorName}</Text>
-              <Text style={styles.historyMeta}>
-                {item.date} {item.time}
-              </Text>
-              <Text style={styles.historyMeta}>Notes: {item.notes?.trim() ? item.notes : "No notes yet."}</Text>
-              <View style={styles.historyActions}>
-                <TouchableOpacity style={styles.historyBtn} onPress={() => addQuickSessionNote(item.sessionId)}>
-                  <Text style={styles.historyBtnText}>Add Note</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.historyBtn, styles.historyBtnPrimary]}
-                  onPress={() => addQuickReview(item.sessionId)}
-                >
-                  <Text style={[styles.historyBtnText, styles.historyBtnTextPrimary]}>Rate Mentor</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -831,8 +842,10 @@ export default function StudentDashboard() {
           </>
         )}
       </View>
+      </>
+      ) : null}
 
-      {FEATURE_FLAGS.networking ? (
+      {FEATURE_FLAGS.networking && activeSection === "network" ? (
         <>
           <Text style={styles.sectionHeader}>Network Activity Feed</Text>
           <View style={styles.feedWrap}>
@@ -859,7 +872,7 @@ export default function StudentDashboard() {
         </>
       ) : null}
 
-      {FEATURE_FLAGS.dailyEngagement ? (
+      {FEATURE_FLAGS.dailyEngagement && activeSection === "network" ? (
         <>
           <Text style={styles.sectionHeader}>Daily Career Dashboard</Text>
           <View style={styles.dailyCard}>
@@ -874,7 +887,7 @@ export default function StudentDashboard() {
                   return (
                     <View key={task.key} style={styles.dailyTaskRow}>
                       <Text style={styles.dailyItem}>
-                        {task.completed ? "✓ " : "- "}
+                        {task.completed ? "Done: " : "- "}
                         {task.title} (+{task.xp} XP)
                       </Text>
                       <TouchableOpacity
@@ -902,7 +915,7 @@ export default function StudentDashboard() {
         </>
       ) : null}
 
-      {FEATURE_FLAGS.smartSuggestions ? (
+      {FEATURE_FLAGS.smartSuggestions && activeSection === "network" ? (
         <>
           <Text style={styles.sectionHeader}>People You May Know</Text>
           <View style={styles.suggestionWrap}>
@@ -932,8 +945,36 @@ export default function StudentDashboard() {
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      {!isLoading ? (
+      {!isLoading && activeSection === "sessions" ? (
         <>
+          <Text style={styles.sectionHeader}>Session History & Notes</Text>
+          <View style={styles.historyWrap}>
+            {sessionHistory.length === 0 ? (
+              <Text style={styles.empty}>No completed sessions yet.</Text>
+            ) : (
+              sessionHistory.slice(0, 6).map((item) => (
+                <View key={item.sessionId} style={styles.historyCard}>
+                  <Text style={styles.historyTitle}>{item.mentorName}</Text>
+                  <Text style={styles.historyMeta}>
+                    {item.date} {item.time}
+                  </Text>
+                  <Text style={styles.historyMeta}>Notes: {item.notes?.trim() ? item.notes : "No notes yet."}</Text>
+                  <View style={styles.historyActions}>
+                    <TouchableOpacity style={styles.historyBtn} onPress={() => addQuickSessionNote(item.sessionId)}>
+                      <Text style={styles.historyBtnText}>Add Note</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.historyBtn, styles.historyBtnPrimary]}
+                      onPress={() => addQuickReview(item.sessionId)}
+                    >
+                      <Text style={[styles.historyBtnText, styles.historyBtnTextPrimary]}>Rate Mentor</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+          </View>
+
           <View style={styles.panel}>
             <Text style={[styles.panelTitle, styles.panelTitlePending]}>Pending Payments</Text>
             {filteredPendingPaymentSessions.length === 0 ? (
@@ -1119,6 +1160,18 @@ const styles = StyleSheet.create({
   heroEyebrow: { color: "#165DFF", fontWeight: "700", marginBottom: 6 },
   heroTitle: { color: "#11261E", fontSize: 28, fontWeight: "900", lineHeight: 34 },
   heroSubTitle: { marginTop: 8, color: "#4A5B53", fontWeight: "500", lineHeight: 20 },
+  sectionNavRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  sectionChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#fff"
+  },
+  sectionChipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
+  sectionChipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
+  sectionChipTextActive: { color: "#1F7A4C" },
   sectionHeader: { fontSize: 16, fontWeight: "800", color: "#1E2B24", marginBottom: 10 },
   sectionGrid: { marginBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 },
   sectionTile: {
@@ -1461,5 +1514,6 @@ const styles = StyleSheet.create({
   logout: { marginTop: 14, padding: 12, alignItems: "center" },
   logoutText: { color: "#7A271A", fontWeight: "700" }
 });
+
 
 

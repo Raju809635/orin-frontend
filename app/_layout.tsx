@@ -156,16 +156,34 @@ function RootDrawer() {
             <TouchableOpacity
               onPress={() => router.push("/my-profile" as never)}
             >
-              <Text style={styles.drawerProfileLink}>View Profile</Text>
+            <Text style={styles.drawerProfileLink}>View Profile</Text>
             </TouchableOpacity>
           </View>
         ) : null}
+        <Text style={styles.drawerSectionTitle}>Main</Text>
+        {user?.role === "mentor" ? (
+          <>
+            <DrawerItem label="Mentor Home" onPress={() => router.push("/mentor-dashboard?section=overview" as never)} />
+            <DrawerItem label="Session Requests" onPress={() => router.push("/mentor-dashboard?section=requests" as never)} />
+            <DrawerItem label="Sessions" onPress={() => router.push("/mentor-dashboard?section=sessions" as never)} />
+            <DrawerItem label="Availability" onPress={() => router.push("/mentor-dashboard?section=availability" as never)} />
+          </>
+        ) : (
+          <>
+            <DrawerItem label="Student Home" onPress={() => router.push("/student-dashboard?section=overview" as never)} />
+            <DrawerItem label="Career Growth" onPress={() => router.push("/student-dashboard?section=growth" as never)} />
+            <DrawerItem label="My Sessions" onPress={() => router.push("/student-dashboard?section=sessions" as never)} />
+            <DrawerItem label="Network Hub" onPress={() => router.push("/network?section=feed" as never)} />
+          </>
+        )}
+        <Text style={styles.drawerSectionTitle}>Tools</Text>
         <DrawerItem label="My Profile" onPress={() => router.push("/my-profile" as never)} />
         <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
         <DrawerItem label="Domain Guide" onPress={() => router.push("/domain-guide" as never)} />
-        {user?.role === "student" ? (
-          <DrawerItem label="Complaints" onPress={() => router.push("/complaints" as never)} />
-        ) : null}
+        <DrawerItem label="Posts" onPress={() => router.push("/posts" as never)} />
+        <DrawerItem label="Messages" onPress={() => router.push("/chat" as never)} />
+        <DrawerItem label="Notifications" onPress={() => router.push("/notifications" as never)} />
+        {user?.role === "student" ? <DrawerItem label="Complaints" onPress={() => router.push("/complaints" as never)} /> : null}
         <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
       </DrawerContentScrollView>
     );
@@ -289,6 +307,14 @@ const styles = StyleSheet.create({
   drawerProfileName: { color: "#1E2B24", fontWeight: "800", fontSize: 16 },
   drawerProfileRole: { marginTop: 4, color: "#667085", fontWeight: "600" },
   drawerProfileLink: { marginTop: 8, color: "#1F7A4C", fontWeight: "700" },
+  drawerSectionTitle: {
+    marginTop: 8,
+    marginBottom: 4,
+    marginLeft: 18,
+    color: "#475467",
+    fontWeight: "700",
+    fontSize: 12
+  },
   bottomNav: {
     flexDirection: "row",
     borderTopWidth: 1,
