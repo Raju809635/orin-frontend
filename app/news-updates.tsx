@@ -63,7 +63,7 @@ export default function NewsUpdatesScreen() {
   const loadCategory = useCallback(async (category: NewsCategoryKey, refresh = false) => {
     try {
       if (refresh) setRefreshing(true);
-      else setLoading((prev) => (articlesByTab[category]?.length ? prev : true));
+      else setLoading(true);
       setError(null);
       const { data } = await api.get<{ category: string; articles: NewsArticle[] }>(
         `/api/news/${category}?limit=8&language=${language}`
@@ -78,7 +78,7 @@ export default function NewsUpdatesScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [articlesByTab, language]);
+  }, [language]);
 
   useFocusEffect(
     useCallback(() => {
@@ -114,7 +114,6 @@ export default function NewsUpdatesScreen() {
                   setLanguage(item.code);
                   setLanguageMenuOpen(false);
                   await setStoredNewsLanguage(item.code);
-                  await loadCategory(activeTab, true);
                 }}
               >
                 <Text style={[styles.languageOptionText, language === item.code && styles.languageOptionTextActive]}>
