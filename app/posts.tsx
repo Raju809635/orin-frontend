@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { ActivityIndicator, Image, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 
 type Post = {
@@ -18,6 +18,7 @@ type Post = {
   comments?: PostComment[];
   mediaUrls?: string[];
   authorId?: {
+    _id?: string;
     name?: string;
     role?: "student" | "mentor";
   } | null;
@@ -43,6 +44,7 @@ const REACTIONS: { type: ReactionType; emoji: string; label: string }[] = [
 ];
 
 export default function PostsScreen() {
+  const router = useRouter();
   const [posts, setPosts] = useState<Post[]>([]);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [reactionPickerPostId, setReactionPickerPostId] = useState<string | null>(null);
@@ -148,7 +150,14 @@ export default function PostsScreen() {
       ) : (
         posts.map((post) => (
           <View key={post._id} style={styles.card}>
-            <Text style={styles.author}>{post.authorId?.name || "ORIN User"}</Text>
+            <TouchableOpacity
+              onPress={() =>
+                post.authorId?._id ? router.push(`/public-profile/${post.authorId._id}` as never) : undefined
+              }
+              disabled={!post.authorId?._id}
+            >
+              <Text style={styles.author}>{post.authorId?.name || "ORIN User"}</Text>
+            </TouchableOpacity>
             <Text style={styles.role}>{post.authorId?.role || "member"}</Text>
             <Text style={styles.content}>{post.content}</Text>
             {post.mediaUrls?.[0] ? <Image source={{ uri: post.mediaUrls[0] }} style={styles.postImage} resizeMode="cover" /> : null}

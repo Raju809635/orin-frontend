@@ -102,10 +102,55 @@ type SmartSuggestion = {
   reason: string;
 };
 
-type SectionId = "overview" | "pricing" | "availability" | "sessions" | "requests" | "adminChat";
+type VerifiedMentor = {
+  mentorId: string;
+  name: string;
+  rating?: number;
+  verifiedBadge?: boolean;
+  title?: string;
+};
+
+type ChallengeItem = {
+  id: string;
+  title: string;
+  domain?: string;
+  deadline: string;
+  participantsCount?: number;
+};
+
+type MentorGroupItem = {
+  id: string;
+  name: string;
+  domain?: string;
+  schedule?: string;
+  membersCount?: number;
+  mentor?: { id?: string | null; name?: string };
+};
+
+type ReputationSummary = {
+  score: number;
+  levelTag: string;
+  topPercent: number;
+};
+
+type LiveSessionItem = {
+  id: string;
+  title: string;
+  topic?: string;
+  startsAt: string;
+};
+
+type CertificationItem = {
+  id: string;
+  title: string;
+  level?: string;
+};
+
+type SectionId = "overview" | "growth" | "pricing" | "availability" | "sessions" | "requests" | "adminChat";
 
 const sectionOrder: { id: SectionId; label: string }[] = [
   { id: "overview", label: "Overview" },
+  { id: "growth", label: "Growth & Community" },
   { id: "pricing", label: "Profile & Pricing" },
   { id: "availability", label: "Availability" },
   { id: "sessions", label: "Sessions" },
@@ -174,6 +219,16 @@ export default function MentorDashboard() {
   const [dailyDashboard, setDailyDashboard] = useState<DailyDashboard | null>(null);
   const [completingTaskKey, setCompletingTaskKey] = useState<string | null>(null);
   const [suggestions, setSuggestions] = useState<SmartSuggestion[]>([]);
+  const [verifiedMentors, setVerifiedMentors] = useState<VerifiedMentor[]>([]);
+  const [challenges, setChallenges] = useState<ChallengeItem[]>([]);
+  const [mentorGroups, setMentorGroups] = useState<MentorGroupItem[]>([]);
+  const [reputationSummary, setReputationSummary] = useState<ReputationSummary | null>(null);
+  const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
+  const [certifications, setCertifications] = useState<CertificationItem[]>([]);
+  const [liveTitle, setLiveTitle] = useState("");
+  const [liveTopic, setLiveTopic] = useState("");
+  const [liveStartsAt, setLiveStartsAt] = useState("");
+  const [creatingLiveSession, setCreatingLiveSession] = useState(false);
   const calendarDateOptions = useMemo(() => nextDates(14), []);
   const mentorServices = [
     {
@@ -252,7 +307,7 @@ export default function MentorDashboard() {
 
   useEffect(() => {
     const section = String(params.section || "");
-    if (section === "requests" || section === "sessions" || section === "pricing" || section === "availability" || section === "adminChat" || section === "overview") {
+    if (section === "requests" || section === "sessions" || section === "pricing" || section === "availability" || section === "adminChat" || section === "overview" || section === "growth") {
       setActiveSection(section);
     }
   }, [params.section]);
@@ -354,7 +409,20 @@ export default function MentorDashboard() {
       else setIsLoading(true);
 
       setError(null);
-      const [bookingRes, sessionRes, profileRes, feedRes, dailyRes, suggestionsRes] = await Promise.allSettled([
+      const [
+        bookingRes,
+        sessionRes,
+        profileRes,
+        feedRes,
+        dailyRes,
+        suggestionsRes,
+        verifiedRes,
+        challengeRes,
+        groupRes,
+        reputationRes,
+        liveSessionRes,
+        certificationsRes
+      ] = await Promise.allSettled([
         api.get<Booking[]>("/api/bookings/mentor"),
         api.get<Session[]>("/api/sessions/mentor/me"),
         api.get<{ profile?: MentorProfilePayload }>("/api/profiles/mentor/me"),
@@ -364,7 +432,13 @@ export default function MentorDashboard() {
           : Promise.resolve({ data: null as DailyDashboard | null }),
         FEATURE_FLAGS.smartSuggestions
           ? api.get<SmartSuggestion[]>("/api/network/suggestions")
-          : Promise.resolve({ data: [] as SmartSuggestion[] })
+          : Promise.resolve({ data: [] as SmartSuggestion[] }),
+        api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
+        api.get<ChallengeItem[]>("/api/network/challenges"),
+        api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
+        api.get<ReputationSummary>("/api/network/reputation-summary"),
+        api.get<LiveSessionItem[]>("/api/network/live-sessions"),
+        api.get<CertificationItem[]>("/api/network/certifications")
       ]);
 
       if (bookingRes.status !== "fulfilled" || sessionRes.status !== "fulfilled" || profileRes.status !== "fulfilled") {
@@ -405,6 +479,12 @@ export default function MentorDashboard() {
       setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
       setDailyDashboard(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
       setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
+      setVerifiedMentors(verifiedRes.status === "fulfilled" ? verifiedRes.value.data || [] : []);
+      setChallenges(challengeRes.status === "fulfilled" ? challengeRes.value.data || [] : []);
+      setMentorGroups(groupRes.status === "fulfilled" ? groupRes.value.data || [] : []);
+      setReputationSummary(reputationRes.status === "fulfilled" ? reputationRes.value.data || null : null);
+      setLiveSessions(liveSessionRes.status === "fulfilled" ? liveSessionRes.value.data || [] : []);
+      setCertifications(certificationsRes.status === "fulfilled" ? certificationsRes.value.data || [] : []);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load mentor dashboard.");
     } finally {
@@ -656,6 +736,41 @@ export default function MentorDashboard() {
       setError(e?.response?.data?.message || "Failed to complete daily task.");
     } finally {
       setCompletingTaskKey(null);
+    }
+  }
+
+  async function createMentorLiveSession() {
+    const title = liveTitle.trim();
+    const topic = liveTopic.trim();
+    const startsAt = liveStartsAt.trim();
+
+    if (!title || !startsAt) {
+      setError("Live session title and start time are required.");
+      return;
+    }
+    const parsed = new Date(startsAt);
+    if (Number.isNaN(parsed.getTime())) {
+      setError("Use valid start time format: YYYY-MM-DDTHH:MM");
+      return;
+    }
+
+    try {
+      setCreatingLiveSession(true);
+      setError(null);
+      await api.post("/api/network/live-sessions", {
+        title,
+        topic,
+        startsAt: parsed.toISOString()
+      });
+      setLiveTitle("");
+      setLiveTopic("");
+      setLiveStartsAt("");
+      notify("Live session created.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to create live session.");
+    } finally {
+      setCreatingLiveSession(false);
     }
   }
 
@@ -935,6 +1050,108 @@ export default function MentorDashboard() {
             </View>
           </View>
           <Text style={styles.meta}>Use sections above to update price, timings and session actions quickly.</Text>
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "growth" ? (
+        <View style={[styles.panel, styles.panelGrowth]}>
+          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Growth & Community</Text>
+
+          <Text style={styles.metaStrong}>Mentor Verification & Reputation</Text>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricValue}>{verifiedMentors.some((item) => item.mentorId === user.id && item.verifiedBadge) ? "Yes" : "No"}</Text>
+              <Text style={styles.metricLabel}>Verified Badge</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricValue}>{Math.round(reputationSummary?.score || 0)}</Text>
+              <Text style={styles.metricLabel}>Reputation Score</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricValue}>Top {reputationSummary?.topPercent ?? "-"}</Text>
+              <Text style={styles.metricLabel}>Percentile</Text>
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.title}>Create Live Mentor Session</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Session title"
+              value={liveTitle}
+              onChangeText={setLiveTitle}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Topic (optional)"
+              value={liveTopic}
+              onChangeText={setLiveTopic}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Start (YYYY-MM-DDTHH:MM)"
+              value={liveStartsAt}
+              onChangeText={setLiveStartsAt}
+            />
+            <TouchableOpacity style={styles.primaryButton} onPress={createMentorLiveSession} disabled={creatingLiveSession}>
+              <Text style={styles.primaryButtonText}>{creatingLiveSession ? "Creating..." : "Create Live Session"}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.title}>Upcoming Live Sessions</Text>
+            {liveSessions.length === 0 ? (
+              <Text style={styles.empty}>No live sessions scheduled.</Text>
+            ) : (
+              liveSessions.slice(0, 5).map((item) => (
+                <Text key={item.id} style={styles.meta}>
+                  {item.title} | {new Date(item.startsAt).toLocaleString()}
+                </Text>
+              ))
+            )}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.title}>Community Challenges</Text>
+            {challenges.length === 0 ? (
+              <Text style={styles.empty}>No active challenges.</Text>
+            ) : (
+              challenges.slice(0, 5).map((item) => (
+                <Text key={item.id} style={styles.meta}>
+                  {item.title} | {item.participantsCount || 0} participants
+                </Text>
+              ))
+            )}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.title}>Mentor Groups</Text>
+            {mentorGroups.length === 0 ? (
+              <Text style={styles.empty}>No mentor groups available.</Text>
+            ) : (
+              mentorGroups
+                .filter((group) => String(group.mentor?.id || "") === String(user.id))
+                .slice(0, 5)
+                .map((group) => (
+                  <Text key={group.id} style={styles.meta}>
+                    {group.name} | {group.membersCount || 0} students | {group.schedule || "Weekly"}
+                  </Text>
+                ))
+            )}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.title}>ORIN Certifications</Text>
+            {certifications.length === 0 ? (
+              <Text style={styles.empty}>No certifications listed yet.</Text>
+            ) : (
+              certifications.slice(0, 5).map((item) => (
+                <Text key={item.id} style={styles.meta}>
+                  {item.title} ({item.level || "Level"})
+                </Text>
+              ))
+            )}
+          </View>
         </View>
       ) : null}
 
@@ -1409,6 +1626,7 @@ const styles = StyleSheet.create({
   sectionChipTextActive: { color: "#1F7A4C", fontWeight: "700" },
   panel: { marginTop: 8, borderRadius: 14, padding: 12, borderWidth: 1 },
   panelOverview: { backgroundColor: "#EFF8FF", borderColor: "#CFE3F6" },
+  panelGrowth: { backgroundColor: "#F8F5FF", borderColor: "#DDD2FE" },
   panelPricing: { backgroundColor: "#FFF7ED", borderColor: "#F7D8B3" },
   panelAvailability: { backgroundColor: "#ECFDF3", borderColor: "#CBECD9" },
   panelSessions: { backgroundColor: "#EEF4FF", borderColor: "#D4E2FF" },
@@ -1416,6 +1634,7 @@ const styles = StyleSheet.create({
   panelAdminChat: { backgroundColor: "#F5F3FF", borderColor: "#DED8FF" },
   panelTitle: { fontSize: 18, fontWeight: "800", color: "#1E2B24", marginBottom: 8 },
   panelTitleOverview: { color: "#175CD3" },
+  panelTitleGrowth: { color: "#5925DC" },
   panelTitlePricing: { color: "#B54708" },
   panelTitleAvailability: { color: "#067647" },
   panelTitleSessions: { color: "#1849A9" },

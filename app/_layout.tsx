@@ -1,5 +1,5 @@
 import "react-native-gesture-handler";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, AppState, AppStateStatus, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Drawer } from "expo-router/drawer";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
@@ -24,6 +24,8 @@ function RootDrawer() {
   const pathname = usePathname();
   const globalParams = useGlobalSearchParams<{ section?: string }>();
   const { user, isAuthenticated, isBootstrapping } = useAuth();
+  const [mainOpen, setMainOpen] = useState(true);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const isCheckingUpdateRef = useRef(false);
   const hasPromptedReloadRef = useRef(false);
 
@@ -160,31 +162,46 @@ function RootDrawer() {
             </TouchableOpacity>
           </View>
         ) : null}
-        <Text style={styles.drawerSectionTitle}>Main</Text>
-        {user?.role === "mentor" ? (
-          <>
-            <DrawerItem label="Mentor Home" onPress={() => router.push("/mentor-dashboard?section=overview" as never)} />
-            <DrawerItem label="Session Requests" onPress={() => router.push("/mentor-dashboard?section=requests" as never)} />
-            <DrawerItem label="Sessions" onPress={() => router.push("/mentor-dashboard?section=sessions" as never)} />
-            <DrawerItem label="Availability" onPress={() => router.push("/mentor-dashboard?section=availability" as never)} />
-          </>
-        ) : (
-          <>
-            <DrawerItem label="Student Home" onPress={() => router.push("/student-dashboard?section=overview" as never)} />
-            <DrawerItem label="Career Growth" onPress={() => router.push("/student-dashboard?section=growth" as never)} />
-            <DrawerItem label="My Sessions" onPress={() => router.push("/student-dashboard?section=sessions" as never)} />
-            <DrawerItem label="Network Hub" onPress={() => router.push("/network?section=feed" as never)} />
-          </>
-        )}
-        <Text style={styles.drawerSectionTitle}>Tools</Text>
-        <DrawerItem label="My Profile" onPress={() => router.push("/my-profile" as never)} />
-        <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
-        <DrawerItem label="Domain Guide" onPress={() => router.push("/domain-guide" as never)} />
-        <DrawerItem label="Posts" onPress={() => router.push("/posts" as never)} />
-        <DrawerItem label="Messages" onPress={() => router.push("/chat" as never)} />
-        <DrawerItem label="Notifications" onPress={() => router.push("/notifications" as never)} />
-        {user?.role === "student" ? <DrawerItem label="Complaints" onPress={() => router.push("/complaints" as never)} /> : null}
-        <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
+        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setMainOpen((prev) => !prev)}>
+          <Text style={styles.drawerSectionTitle}>Main</Text>
+          <Ionicons name={mainOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
+        </TouchableOpacity>
+        {mainOpen ? (
+          <View style={styles.drawerSubList}>
+            {user?.role === "mentor" ? (
+              <>
+                <DrawerItem label="Mentor Home" onPress={() => router.push("/mentor-dashboard?section=overview" as never)} />
+                <DrawerItem label="Session Requests" onPress={() => router.push("/mentor-dashboard?section=requests" as never)} />
+                <DrawerItem label="Sessions" onPress={() => router.push("/mentor-dashboard?section=sessions" as never)} />
+                <DrawerItem label="Availability" onPress={() => router.push("/mentor-dashboard?section=availability" as never)} />
+              </>
+            ) : (
+              <>
+                <DrawerItem label="Student Home" onPress={() => router.push("/student-dashboard?section=overview" as never)} />
+                <DrawerItem label="Career Growth" onPress={() => router.push("/student-dashboard?section=growth" as never)} />
+                <DrawerItem label="My Sessions" onPress={() => router.push("/student-dashboard?section=sessions" as never)} />
+                <DrawerItem label="Network Hub" onPress={() => router.push("/network?section=feed" as never)} />
+              </>
+            )}
+          </View>
+        ) : null}
+
+        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setToolsOpen((prev) => !prev)}>
+          <Text style={styles.drawerSectionTitle}>Tools</Text>
+          <Ionicons name={toolsOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
+        </TouchableOpacity>
+        {toolsOpen ? (
+          <View style={styles.drawerSubList}>
+            <DrawerItem label="My Profile" onPress={() => router.push("/my-profile" as never)} />
+            <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
+            <DrawerItem label="Domain Guide" onPress={() => router.push("/domain-guide" as never)} />
+            <DrawerItem label="Posts" onPress={() => router.push("/posts" as never)} />
+            <DrawerItem label="Messages" onPress={() => router.push("/chat" as never)} />
+            <DrawerItem label="Notifications" onPress={() => router.push("/notifications" as never)} />
+            {user?.role === "student" ? <DrawerItem label="Complaints" onPress={() => router.push("/complaints" as never)} /> : null}
+            <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
+          </View>
+        ) : null}
       </DrawerContentScrollView>
     );
   }
@@ -199,7 +216,7 @@ function RootDrawer() {
   const currentMentorSection = String(globalParams.section || "overview");
 
   const studentTabs = [
-    { key: "home", label: "Home", icon: "home", path: "/" },
+    { key: "profile", label: "My Profile", icon: "person-circle", path: "/my-profile" },
     { key: "domains", label: "Domains", icon: "grid", path: "/domains" },
     { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/student-dashboard" },
     { key: "network", label: "Network", icon: "people", path: "/network" },
@@ -207,7 +224,7 @@ function RootDrawer() {
   ] as const;
 
   const mentorTabs = [
-    { key: "home", label: "Home", icon: "home", path: "/" },
+    { key: "profile", label: "My Profile", icon: "person-circle", path: "/my-profile" },
     { key: "requests", label: "Requests", icon: "list", path: "/mentor-dashboard?section=requests" },
     { key: "sessions", label: "Sessions", icon: "videocam", path: "/mentor-dashboard?section=sessions" },
     { key: "network", label: "Network", icon: "people", path: "/network" },
@@ -263,6 +280,7 @@ function RootDrawer() {
           <Drawer.Screen name="admin-dashboard" options={{ title: "Admin Dashboard", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="network" options={{ title: "Network", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="posts" options={{ title: "Posts", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="public-profile/[userId]" options={{ title: "Profile", drawerItemStyle: { display: "none" } }} />
         </Drawer>
       </View>
       {showBottomNav() ? (
@@ -308,12 +326,26 @@ const styles = StyleSheet.create({
   drawerProfileRole: { marginTop: 4, color: "#667085", fontWeight: "600" },
   drawerProfileLink: { marginTop: 8, color: "#1F7A4C", fontWeight: "700" },
   drawerSectionTitle: {
-    marginTop: 8,
-    marginBottom: 4,
-    marginLeft: 18,
     color: "#475467",
     fontWeight: "700",
     fontSize: 12
+  },
+  drawerGroupHeader: {
+    marginTop: 8,
+    marginBottom: 4,
+    marginHorizontal: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  drawerSubList: {
+    paddingLeft: 6
   },
   bottomNav: {
     flexDirection: "row",

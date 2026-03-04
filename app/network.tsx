@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
@@ -94,6 +94,7 @@ const networkSections: { id: NetworkSectionId; label: string }[] = [
 ];
 
 export default function NetworkScreen() {
+  const router = useRouter();
   const params = useLocalSearchParams<{ section?: string }>();
   const { user } = useAuth();
   const [activeSection, setActiveSection] = useState<NetworkSectionId>("feed");
@@ -441,7 +442,14 @@ export default function NetworkScreen() {
         ) : (
           posts.map((post) => (
             <View key={post._id} style={styles.postCard}>
-              <Text style={styles.rowTitle}>{post.authorId?.name || "ORIN User"}</Text>
+              <TouchableOpacity
+                onPress={() =>
+                  post.authorId?._id ? router.push(`/public-profile/${post.authorId._id}` as never) : undefined
+                }
+                disabled={!post.authorId?._id}
+              >
+                <Text style={styles.rowTitle}>{post.authorId?.name || "ORIN User"}</Text>
+              </TouchableOpacity>
               <Text style={styles.postText}>{post.content}</Text>
               {post.mediaUrls?.[0] ? <Image source={{ uri: post.mediaUrls[0] }} style={styles.postImage} resizeMode="cover" /> : null}
               <Text style={styles.reactionSummary}>{reactionSummary(post)}</Text>

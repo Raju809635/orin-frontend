@@ -59,7 +59,7 @@ type Session = {
 
 type NetworkPost = {
   _id: string;
-  authorId?: { name?: string; role?: string } | null;
+  authorId?: { _id?: string; name?: string; role?: string } | null;
   content: string;
   postType: string;
   domainTags?: string[];
@@ -157,6 +157,65 @@ type ResumeResponse = {
   export?: { fileName?: string };
 };
 
+type SkillGapResponse = {
+  goal: string;
+  currentSkills: string[];
+  missingSkills: string[];
+  suggestions?: {
+    courses?: string[];
+    projects?: string[];
+  };
+};
+
+type VerifiedMentor = {
+  mentorId: string;
+  name: string;
+  title?: string;
+  rating?: number;
+  verifiedBadge?: boolean;
+};
+
+type ChallengeItem = {
+  id: string;
+  title: string;
+  domain?: string;
+  deadline: string;
+  participantsCount?: number;
+};
+
+type CertificationItem = {
+  id: string;
+  title: string;
+  level?: string;
+};
+
+type MentorGroupItem = {
+  id: string;
+  name: string;
+  domain?: string;
+  schedule?: string;
+  membersCount?: number;
+  mentor?: { name?: string };
+};
+
+type ProjectIdeasResponse = {
+  goal: string;
+  ideas: Array<{ title: string; level?: string }>;
+};
+
+type LibraryItem = {
+  id: string;
+  type: string;
+  title: string;
+  description?: string;
+};
+
+type ReputationSummary = {
+  score: number;
+  levelTag: string;
+  topPercent: number;
+};
+
 type StudentSectionId = "overview" | "growth" | "sessions" | "network";
 
 const studentSections: { id: StudentSectionId; label: string }[] = [
@@ -190,6 +249,14 @@ export default function StudentDashboard() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
   const [resumePreview, setResumePreview] = useState<ResumeResponse | null>(null);
+  const [skillGap, setSkillGap] = useState<SkillGapResponse | null>(null);
+  const [verifiedMentors, setVerifiedMentors] = useState<VerifiedMentor[]>([]);
+  const [challenges, setChallenges] = useState<ChallengeItem[]>([]);
+  const [certifications, setCertifications] = useState<CertificationItem[]>([]);
+  const [mentorGroups, setMentorGroups] = useState<MentorGroupItem[]>([]);
+  const [projectIdeas, setProjectIdeas] = useState<ProjectIdeasResponse | null>(null);
+  const [knowledgeLibrary, setKnowledgeLibrary] = useState<LibraryItem[]>([]);
+  const [reputationSummary, setReputationSummary] = useState<ReputationSummary | null>(null);
   const [activeSection, setActiveSection] = useState<StudentSectionId>("overview");
   const quickServices = [
     {
@@ -310,7 +377,15 @@ export default function StudentDashboard() {
         opportunitiesRes,
         leaderboardRes,
         liveSessionsRes,
-        resumeRes
+        resumeRes,
+        skillGapRes,
+        verifiedMentorsRes,
+        challengesRes,
+        certificationsRes,
+        mentorGroupsRes,
+        projectIdeasRes,
+        knowledgeLibraryRes,
+        reputationSummaryRes
       ] = await Promise.allSettled([
         api.get<Booking[]>("/api/bookings/student"),
         api.get<Session[]>("/api/sessions/student/me"),
@@ -328,7 +403,15 @@ export default function StudentDashboard() {
         api.get<OpportunityItem[]>("/api/network/opportunities"),
         api.get<LeaderboardResponse>("/api/network/leaderboard"),
         api.get<LiveSessionItem[]>("/api/network/live-sessions"),
-        api.get<ResumeResponse>("/api/network/resume/generate")
+        api.get<ResumeResponse>("/api/network/resume/generate"),
+        api.get<SkillGapResponse>("/api/network/skill-gap"),
+        api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
+        api.get<ChallengeItem[]>("/api/network/challenges"),
+        api.get<CertificationItem[]>("/api/network/certifications"),
+        api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
+        api.get<ProjectIdeasResponse>("/api/network/project-ideas"),
+        api.get<LibraryItem[]>("/api/network/knowledge-library"),
+        api.get<ReputationSummary>("/api/network/reputation-summary")
       ]);
 
       if (bookingsRes.status !== "fulfilled" || sessionsRes.status !== "fulfilled" || profileRes.status !== "fulfilled") {
@@ -350,6 +433,14 @@ export default function StudentDashboard() {
       setLeaderboard(leaderboardRes.status === "fulfilled" ? leaderboardRes.value.data || null : null);
       setLiveSessions(liveSessionsRes.status === "fulfilled" ? liveSessionsRes.value.data || [] : []);
       setResumePreview(resumeRes.status === "fulfilled" ? resumeRes.value.data || null : null);
+      setSkillGap(skillGapRes.status === "fulfilled" ? skillGapRes.value.data || null : null);
+      setVerifiedMentors(verifiedMentorsRes.status === "fulfilled" ? verifiedMentorsRes.value.data || [] : []);
+      setChallenges(challengesRes.status === "fulfilled" ? challengesRes.value.data || [] : []);
+      setCertifications(certificationsRes.status === "fulfilled" ? certificationsRes.value.data || [] : []);
+      setMentorGroups(mentorGroupsRes.status === "fulfilled" ? mentorGroupsRes.value.data || [] : []);
+      setProjectIdeas(projectIdeasRes.status === "fulfilled" ? projectIdeasRes.value.data || null : null);
+      setKnowledgeLibrary(knowledgeLibraryRes.status === "fulfilled" ? knowledgeLibraryRes.value.data || [] : []);
+      setReputationSummary(reputationSummaryRes.status === "fulfilled" ? reputationSummaryRes.value.data || null : null);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load your dashboard.");
     } finally {
@@ -599,6 +690,28 @@ export default function StudentDashboard() {
     }
   }
 
+  async function joinChallenge(challengeId: string) {
+    try {
+      setError(null);
+      await api.post(`/api/network/challenges/${challengeId}/join`);
+      notify("Challenge joined.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to join challenge.");
+    }
+  }
+
+  async function joinGroup(groupId: string) {
+    try {
+      setError(null);
+      await api.post(`/api/network/mentor-groups/${groupId}/join`);
+      notify("Group joined.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to join group.");
+    }
+  }
+
   if (user?.role !== "student") {
     return (
       <View style={styles.centered}>
@@ -728,6 +841,8 @@ export default function StudentDashboard() {
 
       {activeSection === "growth" ? (
       <>
+      <Text style={styles.groupTitle}>AI Intelligence</Text>
+      <Text style={styles.groupNote}>Personalized AI guidance based on your goal, skills, and progress.</Text>
       <Text style={styles.sectionHeader}>AI Mentor Matching</Text>
       <View style={styles.matchWrap}>
         {mentorMatches.length === 0 ? (
@@ -762,6 +877,45 @@ export default function StudentDashboard() {
         )}
       </View>
 
+      <Text style={styles.sectionHeader}>AI Skill Gap Analyzer</Text>
+      <View style={styles.roadmapCard}>
+        {!skillGap ? (
+          <Text style={styles.empty}>Skill gap analysis unavailable right now.</Text>
+        ) : (
+          <>
+            <Text style={styles.roadmapGoal}>Goal: {skillGap.goal}</Text>
+            <Text style={styles.historyMeta}>Current Skills: {skillGap.currentSkills.join(", ") || "None yet"}</Text>
+            <Text style={styles.historyMeta}>
+              Missing Skills: {skillGap.missingSkills.length ? skillGap.missingSkills.join(", ") : "No gaps detected"}
+            </Text>
+            <Text style={styles.historyMeta}>
+              Suggested Courses: {skillGap.suggestions?.courses?.slice(0, 3).join(", ") || "No suggestions"}
+            </Text>
+          </>
+        )}
+      </View>
+
+      <Text style={styles.groupTitle}>Trust & Mentor Quality</Text>
+      <Text style={styles.groupNote}>Verified mentors and transparent quality signals for safer mentorship.</Text>
+      <Text style={styles.sectionHeader}>Verified Mentor System</Text>
+      <View style={styles.matchWrap}>
+        {verifiedMentors.length === 0 ? (
+          <Text style={styles.empty}>No verified mentors available currently.</Text>
+        ) : (
+          verifiedMentors.slice(0, 4).map((item) => (
+            <View key={item.mentorId} style={styles.matchCard}>
+              <Text style={styles.matchName}>
+                {item.name} {item.verifiedBadge ? "• Verified" : ""}
+              </Text>
+              <Text style={styles.matchMeta}>{item.title || "Mentor"}</Text>
+              <Text style={styles.matchMeta}>Rating: {item.rating || 0}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.groupTitle}>Career Progress</Text>
+      <Text style={styles.groupNote}>Roadmaps, opportunities, and live sessions to accelerate your journey.</Text>
       <Text style={styles.sectionHeader}>AI Career Roadmap</Text>
       <View style={styles.roadmapCard}>
         {!roadmap ? (
@@ -828,6 +982,110 @@ export default function StudentDashboard() {
         )}
       </View>
 
+      <Text style={styles.groupTitle}>Community & Collaboration</Text>
+      <Text style={styles.groupNote}>Learn together through challenges, certifications, and mentor-led groups.</Text>
+      <Text style={styles.sectionHeader}>Community Challenges</Text>
+      <View style={styles.opportunityWrap}>
+        {challenges.length === 0 ? (
+          <Text style={styles.empty}>No active challenges right now.</Text>
+        ) : (
+          challenges.slice(0, 4).map((item) => (
+            <View key={item.id} style={styles.opportunityCard}>
+              <Text style={styles.opportunityTitle}>{item.title}</Text>
+              <Text style={styles.opportunityMeta}>
+                {item.domain || "General"} | Participants: {item.participantsCount || 0}
+              </Text>
+              <Text style={styles.opportunityMeta}>Deadline: {new Date(item.deadline).toLocaleDateString()}</Text>
+              <TouchableOpacity style={styles.matchBtn} onPress={() => joinChallenge(item.id)}>
+                <Text style={styles.matchBtnText}>Join Challenge</Text>
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>ORIN Certification System</Text>
+      <View style={styles.historyWrap}>
+        {certifications.length === 0 ? (
+          <Text style={styles.empty}>No certifications yet.</Text>
+        ) : (
+          certifications.slice(0, 5).map((item) => (
+            <View key={item.id} style={styles.historyCard}>
+              <Text style={styles.historyTitle}>{item.title}</Text>
+              <Text style={styles.historyMeta}>Level: {item.level || "Beginner"}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>Mentor Groups</Text>
+      <View style={styles.opportunityWrap}>
+        {mentorGroups.length === 0 ? (
+          <Text style={styles.empty}>No mentor groups available.</Text>
+        ) : (
+          mentorGroups.slice(0, 4).map((item) => (
+            <View key={item.id} style={styles.opportunityCard}>
+              <Text style={styles.opportunityTitle}>{item.name}</Text>
+              <Text style={styles.opportunityMeta}>
+                Mentor: {item.mentor?.name || "Mentor"} | Students: {item.membersCount || 0}
+              </Text>
+              <Text style={styles.opportunityMeta}>{item.schedule || "Weekly sessions"}</Text>
+              <TouchableOpacity style={styles.matchBtn} onPress={() => joinGroup(item.id)}>
+                <Text style={styles.matchBtnText}>Join Group</Text>
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.groupTitle}>Resources & Portfolio</Text>
+      <Text style={styles.groupNote}>Build projects, access knowledge, and generate your resume.</Text>
+      <Text style={styles.sectionHeader}>AI Project Idea Generator</Text>
+      <View style={styles.roadmapCard}>
+        {!projectIdeas ? (
+          <Text style={styles.empty}>Project ideas unavailable right now.</Text>
+        ) : (
+          <>
+            <Text style={styles.roadmapGoal}>Goal: {projectIdeas.goal}</Text>
+            {projectIdeas.ideas.slice(0, 5).map((idea, idx) => (
+              <Text key={`${idea.title}-${idx}`} style={styles.roadmapStep}>
+                {idx + 1}. {idea.title}
+              </Text>
+            ))}
+          </>
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>Knowledge Library</Text>
+      <View style={styles.historyWrap}>
+        {knowledgeLibrary.length === 0 ? (
+          <Text style={styles.empty}>No resources available right now.</Text>
+        ) : (
+          knowledgeLibrary.slice(0, 6).map((item) => (
+            <View key={item.id} style={styles.historyCard}>
+              <Text style={styles.historyTitle}>{item.title}</Text>
+              <Text style={styles.historyMeta}>{item.type}</Text>
+              <Text style={styles.historyMeta}>{item.description || ""}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.groupTitle}>Reputation & Ranking</Text>
+      <Text style={styles.groupNote}>Track your ORIN standing and percentile among learners.</Text>
+      <Text style={styles.sectionHeader}>ORIN Reputation Score</Text>
+      <View style={styles.leaderboardCard}>
+        {!reputationSummary ? (
+          <Text style={styles.empty}>Reputation summary unavailable.</Text>
+        ) : (
+          <>
+            <Text style={styles.leaderboardTitle}>Reputation Score: {reputationSummary.score}</Text>
+            <Text style={styles.leaderboardRow}>{reputationSummary.levelTag}</Text>
+            <Text style={styles.leaderboardRow}>Top {reputationSummary.topPercent}% learners</Text>
+          </>
+        )}
+      </View>
+
       <Text style={styles.sectionHeader}>AI Resume Builder</Text>
       <View style={styles.resumeCard}>
         {!resumePreview?.markdown ? (
@@ -854,7 +1112,14 @@ export default function StudentDashboard() {
             ) : (
               networkFeed.map((post) => (
                 <View key={post._id} style={styles.feedCard}>
-                  <Text style={styles.feedAuthor}>{post.authorId?.name || "ORIN User"}</Text>
+                  <TouchableOpacity
+                    onPress={() =>
+                      post.authorId?._id ? router.push(`/public-profile/${post.authorId._id}` as never) : undefined
+                    }
+                    disabled={!post.authorId?._id}
+                  >
+                    <Text style={styles.feedAuthor}>{post.authorId?.name || "ORIN User"}</Text>
+                  </TouchableOpacity>
                   <Text style={styles.feedLine}>{post.content}</Text>
                   <Text style={styles.feedMeta}>
                     {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0}
@@ -1172,6 +1437,19 @@ const styles = StyleSheet.create({
   sectionChipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
   sectionChipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
   sectionChipTextActive: { color: "#1F7A4C" },
+  groupTitle: {
+    marginTop: 8,
+    marginBottom: 2,
+    color: "#0F172A",
+    fontWeight: "900",
+    fontSize: 17
+  },
+  groupNote: {
+    marginBottom: 8,
+    color: "#667085",
+    fontSize: 12,
+    fontWeight: "500"
+  },
   sectionHeader: { fontSize: 16, fontWeight: "800", color: "#1E2B24", marginBottom: 10 },
   sectionGrid: { marginBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 },
   sectionTile: {
