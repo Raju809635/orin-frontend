@@ -57,6 +57,7 @@ type AvailabilitySlot = {
   startTime: string;
   endTime: string;
   sessionDurationMinutes: 30 | 60;
+  specificDate?: string | null;
 };
 
 type MentorProfilePayload = {
@@ -112,6 +113,33 @@ const sectionOrder: { id: SectionId; label: string }[] = [
   { id: "adminChat", label: "Admin Chat" }
 ];
 
+const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
+
+function toDateLabel(dateStr: string) {
+  const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
+  const weekday = WEEKDAY_LABELS[dateObj.getUTCDay()];
+  const day = String(dateObj.getUTCDate()).padStart(2, "0");
+  const month = dateObj.toLocaleString("en-US", { month: "short", timeZone: "UTC" });
+  return `${weekday} ${day} ${month}`;
+}
+
+function toDayFromDate(dateStr: string): AvailabilitySlot["day"] {
+  const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
+  return WEEKDAY_LABELS[dateObj.getUTCDay()] as AvailabilitySlot["day"];
+}
+
+function nextDates(days = 14) {
+  const out: string[] = [];
+  const now = new Date();
+  now.setUTCHours(0, 0, 0, 0);
+  for (let i = 0; i < days; i += 1) {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() + i);
+    out.push(d.toISOString().slice(0, 10));
+  }
+  return out;
+}
+
 export default function MentorDashboard() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: string }>();
@@ -125,6 +153,11 @@ export default function MentorDashboard() {
   const [newSlotStartTime, setNewSlotStartTime] = useState("10:00");
   const [newSlotEndTime, setNewSlotEndTime] = useState("11:00");
   const [newSlotDuration, setNewSlotDuration] = useState<30 | 60>(60);
+  const [availabilityMode, setAvailabilityMode] = useState<"weekly" | "date">("weekly");
+  const [calendarDate, setCalendarDate] = useState(nextDates(1)[0]);
+  const [dateSpecificSlots, setDateSpecificSlots] = useState<AvailabilitySlot[]>([]);
+  const [blockedDateList, setBlockedDateList] = useState<string[]>([]);
+  const [blockingDate, setBlockingDate] = useState(false);
   const [creatingSlot, setCreatingSlot] = useState(false);
   const [sessionPrice, setSessionPrice] = useState("499");
   const [mentorTitle, setMentorTitle] = useState("");
@@ -141,6 +174,7 @@ export default function MentorDashboard() {
   const [networkFeed, setNetworkFeed] = useState<NetworkPost[]>([]);
   const [dailyDashboard, setDailyDashboard] = useState<DailyDashboard | null>(null);
   const [suggestions, setSuggestions] = useState<SmartSuggestion[]>([]);
+  const calendarDateOptions = useMemo(() => nextDates(14), []);
   const mentorServices = [
     {
       key: "notifications",
@@ -358,10 +392,20 @@ export default function MentorDashboard() {
       }
 
       if (user?.id) {
-        const availabilityRes = await api.get<{ weeklySlots: AvailabilitySlot[] }>(
+        const availabilityRes = await api.get<{
+          weeklySlots: AvailabilitySlot[];
+          dateSlots?: AvailabilitySlot[];
+          blockedDates?: Array<{ blockedDate?: string }>;
+        }>(
           `/api/availability/mentor/${user.id}`
         );
         setAvailabilitySlots(availabilityRes.data.weeklySlots || []);
+        setDateSpecificSlots(availabilityRes.data.dateSlots || []);
+        setBlockedDateList(
+          (availabilityRes.data.blockedDates || [])
+            .map((item) => item?.blockedDate || "")
+            .filter(Boolean)
+        );
       }
 
       setBookings(bookingRes.value.data || []);
@@ -494,17 +538,32 @@ export default function MentorDashboard() {
       setCreatingSlot(true);
       setError(null);
       await api.post("/api/availability", {
-        day: newSlotDay,
+        day: availabilityMode === "weekly" ? newSlotDay : toDayFromDate(calendarDate),
+        specificDate: availabilityMode === "date" ? calendarDate : undefined,
         startTime: newSlotStartTime,
         endTime: newSlotEndTime,
         sessionDurationMinutes: newSlotDuration
       });
-      notify("Availability slot added.");
+      notify(availabilityMode === "date" ? "Date availability slot added." : "Weekly availability slot added.");
       await fetchDashboard(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to add availability slot.");
     } finally {
       setCreatingSlot(false);
+    }
+  }
+
+  async function blockSelectedDate() {
+    try {
+      setBlockingDate(true);
+      setError(null);
+      await api.post("/api/availability/block-date", { blockedDate: calendarDate });
+      notify("Date blocked successfully.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to block date.");
+    } finally {
+      setBlockingDate(false);
     }
   }
 
@@ -895,22 +954,64 @@ export default function MentorDashboard() {
 
       {!isLoading && activeSection === "availability" ? (
         <View style={[styles.panel, styles.panelAvailability]}>
-          <Text style={[styles.panelTitle, styles.panelTitleAvailability]}>Weekly Availability</Text>
-          <Text style={styles.meta}>Students can only book these timings for next 7 days.</Text>
+          <Text style={[styles.panelTitle, styles.panelTitleAvailability]}>Calendar Availability</Text>
+          <Text style={styles.meta}>Set recurring weekly slots or exact date-time slots for the next 14 days.</Text>
+
           <View style={styles.rowWrap}>
-            {(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const).map((day) => {
-              const active = newSlotDay === day;
+            <TouchableOpacity
+              style={[styles.dayChip, availabilityMode === "weekly" && styles.dayChipActive]}
+              onPress={() => setAvailabilityMode("weekly")}
+            >
+              <Text style={[styles.dayChipText, availabilityMode === "weekly" && styles.dayChipTextActive]}>
+                Weekly
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.dayChip, availabilityMode === "date" && styles.dayChipActive]}
+              onPress={() => setAvailabilityMode("date")}
+            >
+              <Text style={[styles.dayChipText, availabilityMode === "date" && styles.dayChipTextActive]}>
+                Specific Date
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
+            {calendarDateOptions.map((date) => {
+              const active = calendarDate === date;
+              const isBlocked = blockedDateList.includes(date);
               return (
                 <TouchableOpacity
-                  key={day}
-                  style={[styles.dayChip, active && styles.dayChipActive]}
-                  onPress={() => setNewSlotDay(day)}
+                  key={date}
+                  style={[styles.dateChip, active && styles.dateChipActive, isBlocked && styles.dateChipBlocked]}
+                  onPress={() => setCalendarDate(date)}
                 >
-                  <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{day}</Text>
+                  <Text style={[styles.dateChipText, active && styles.dateChipTextActive]}>{toDateLabel(date)}</Text>
+                  {isBlocked ? <Text style={styles.dateChipBlockedText}>Blocked</Text> : null}
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
+          <Text style={styles.meta}>
+            Selected Date: {toDateLabel(calendarDate)} ({toDayFromDate(calendarDate)})
+          </Text>
+
+          {availabilityMode === "weekly" ? (
+            <View style={styles.rowWrap}>
+              {(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const).map((day) => {
+                const active = newSlotDay === day;
+                return (
+                  <TouchableOpacity
+                    key={day}
+                    style={[styles.dayChip, active && styles.dayChipActive]}
+                    onPress={() => setNewSlotDay(day)}
+                  >
+                    <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{day}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
           <TextInput
             style={styles.input}
             placeholder="Start Time (HH:MM)"
@@ -938,17 +1039,41 @@ export default function MentorDashboard() {
             })}
           </View>
           <TouchableOpacity style={styles.primaryButton} onPress={createAvailabilitySlot} disabled={creatingSlot}>
-            <Text style={styles.primaryButtonText}>{creatingSlot ? "Saving..." : "Add Availability Slot"}</Text>
+            <Text style={styles.primaryButtonText}>
+              {creatingSlot ? "Saving..." : availabilityMode === "date" ? "Add Date Slot" : "Add Weekly Slot"}
+            </Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.secondaryButton, blockingDate && styles.disabledButton]}
+            onPress={blockSelectedDate}
+            disabled={blockingDate}
+          >
+            <Text style={styles.secondaryButtonText}>{blockingDate ? "Blocking..." : "Block Selected Date"}</Text>
+          </TouchableOpacity>
+
           {availabilitySlots.length === 0 ? (
-            <Text style={styles.empty}>No availability slots set yet.</Text>
+            <Text style={styles.empty}>No weekly availability slots set yet.</Text>
           ) : (
-            availabilitySlots.map((slot) => (
-              <Text key={slot._id} style={styles.meta}>
-                {slot.day}: {slot.startTime} - {slot.endTime} ({slot.sessionDurationMinutes} min)
-              </Text>
-            ))
+            <>
+              <Text style={styles.metaStrong}>Weekly Slots</Text>
+              {availabilitySlots.map((slot) => (
+                <Text key={slot._id} style={styles.meta}>
+                  {slot.day}: {slot.startTime} - {slot.endTime} ({slot.sessionDurationMinutes} min)
+                </Text>
+              ))}
+            </>
           )}
+          {dateSpecificSlots.length > 0 ? (
+            <>
+              <Text style={styles.metaStrong}>Date-Specific Slots</Text>
+              {dateSpecificSlots.map((slot) => (
+                <Text key={slot._id} style={styles.meta}>
+                  {slot.specificDate} ({slot.day}): {slot.startTime} - {slot.endTime} ({slot.sessionDurationMinutes} min)
+                </Text>
+              ))}
+            </>
+          ) : null}
         </View>
       ) : null}
 
@@ -1334,6 +1459,21 @@ const styles = StyleSheet.create({
   },
   inputTall: { minHeight: 90, textAlignVertical: "top" },
   rowWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  dateStrip: { gap: 8, marginTop: 10, paddingRight: 10 },
+  dateChip: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    minWidth: 92
+  },
+  dateChipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
+  dateChipBlocked: { borderColor: "#F04438", backgroundColor: "#FFF1F3" },
+  dateChipText: { color: "#344054", fontWeight: "600", fontSize: 12 },
+  dateChipTextActive: { color: "#1F7A4C" },
+  dateChipBlockedText: { marginTop: 3, color: "#B42318", fontSize: 10, fontWeight: "700" },
   dayChip: {
     borderWidth: 1,
     borderColor: "#D0D5DD",
@@ -1352,6 +1492,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 11
   },
+  secondaryButton: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#B42318",
+    backgroundColor: "#FFF5F6",
+    borderRadius: 10,
+    alignItems: "center",
+    paddingVertical: 10
+  },
+  secondaryButtonText: { color: "#B42318", fontWeight: "700" },
   disabledButton: { opacity: 0.5 },
   primaryButtonText: { color: "#fff", fontWeight: "700" },
   actions: { flexDirection: "row", gap: 10, marginTop: 10 },

@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { api } from "@/lib/api";
 
@@ -11,6 +11,10 @@ type Post = {
   commentCount?: number;
   shareCount?: number;
   saveCount?: number;
+  isLiked?: boolean;
+  isSaved?: boolean;
+  comments?: PostComment[];
+  mediaUrls?: string[];
   authorId?: {
     name?: string;
     role?: "student" | "mentor";
@@ -18,8 +22,15 @@ type Post = {
   createdAt?: string;
 };
 
+type PostComment = {
+  _id: string;
+  content: string;
+  authorId?: { name?: string } | null;
+};
+
 export default function PostsScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,10 +71,26 @@ export default function PostsScreen() {
 
   async function react(postId: string, action: "like" | "save" | "share") {
     try {
+      const post = posts.find((p) => p._id === postId);
+      if (action === "share" && post?.content) {
+        await Share.share({ message: `${post.content}\n\nShared via ORIN` });
+      }
       await api.post(`/api/network/feed/${postId}/react`, { action });
       await loadPosts(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || `Failed to ${action} post.`);
+    }
+  }
+
+  async function comment(postId: string) {
+    const content = (commentDrafts[postId] || "").trim();
+    if (!content) return;
+    try {
+      await api.post(`/api/network/feed/${postId}/comment`, { content });
+      setCommentDrafts((prev) => ({ ...prev, [postId]: "" }));
+      await loadPosts(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to comment.");
     }
   }
 
@@ -92,20 +119,38 @@ export default function PostsScreen() {
             <Text style={styles.author}>{post.authorId?.name || "ORIN User"}</Text>
             <Text style={styles.role}>{post.authorId?.role || "member"}</Text>
             <Text style={styles.content}>{post.content}</Text>
+            {post.mediaUrls?.[0] ? <Image source={{ uri: post.mediaUrls[0] }} style={styles.postImage} resizeMode="cover" /> : null}
             <Text style={styles.meta}>
-              {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0}
+              {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0} | Shares {post.shareCount || 0}
             </Text>
             <View style={styles.actions}>
               <TouchableOpacity onPress={() => react(post._id, "like")}>
-                <Text style={styles.action}>Like</Text>
+                <Text style={styles.action}>{post.isLiked ? "Liked" : "Like"}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => react(post._id, "save")}>
-                <Text style={styles.action}>Save</Text>
+                <Text style={styles.action}>{post.isSaved ? "Saved" : "Save"}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => react(post._id, "share")}>
                 <Text style={styles.action}>Share</Text>
               </TouchableOpacity>
             </View>
+            <View style={styles.commentComposer}>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Add comment..."
+                value={commentDrafts[post._id] || ""}
+                onChangeText={(text) => setCommentDrafts((prev) => ({ ...prev, [post._id]: text }))}
+              />
+              <TouchableOpacity onPress={() => comment(post._id)}>
+                <Text style={styles.action}>Post</Text>
+              </TouchableOpacity>
+            </View>
+            {(post.comments || []).slice(0, 2).map((item) => (
+              <Text key={item._id} style={styles.commentLine}>
+                <Text style={{ fontWeight: "700", color: "#1E2B24" }}>{item.authorId?.name || "User"}: </Text>
+                {item.content}
+              </Text>
+            ))}
           </View>
         ))
       )}
@@ -133,5 +178,19 @@ const styles = StyleSheet.create({
   content: { marginTop: 8, color: "#344054", lineHeight: 19 },
   meta: { marginTop: 6, color: "#667085", fontSize: 12, fontWeight: "600" },
   actions: { marginTop: 8, flexDirection: "row", gap: 12 },
-  action: { color: "#175CD3", fontWeight: "700", fontSize: 12 }
+  action: { color: "#175CD3", fontWeight: "700", fontSize: 12 },
+  commentComposer: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  commentInput: { flex: 1, minHeight: 32, color: "#344054" },
+  commentLine: { marginTop: 6, color: "#475467" },
+  postImage: { width: "100%", height: 220, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: "#E4E7EC" }
 });

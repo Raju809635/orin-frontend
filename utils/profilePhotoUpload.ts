@@ -31,25 +31,32 @@ export async function pickAndUploadProfilePhoto(): Promise<string | null> {
     // Some Android OEM builds fail on explicit permission API; continue with picker call.
   }
 
+  const imageMediaType =
+    ImagePicker?.MediaTypeOptions?.Images !== undefined ? ImagePicker.MediaTypeOptions.Images : ["images"];
+
   let result: any;
-  try {
-    result = await ImagePicker.launchImageLibraryAsync({
-      quality: 0.8,
-      allowsEditing: false,
-      selectionLimit: 1
-    });
-  } catch (firstError) {
-    // Fallback for Android devices where default picker flow crashes/blank-screens.
-    if (Platform.OS === "android") {
-      result = await ImagePicker.launchImageLibraryAsync({
-        quality: 0.8,
-        allowsEditing: false,
-        selectionLimit: 1,
-        legacy: true
-      });
-    } else {
-      throw firstError;
+  let launchError: any = null;
+  const launchConfigs =
+    Platform.OS === "android"
+      ? [
+          { mediaTypes: imageMediaType, quality: 0.8, allowsEditing: false, legacy: true },
+          { mediaTypes: imageMediaType, quality: 0.8, allowsEditing: false },
+          { quality: 0.8, allowsEditing: false }
+        ]
+      : [{ mediaTypes: imageMediaType, quality: 0.8, allowsEditing: false }];
+
+  for (const config of launchConfigs) {
+    try {
+      result = await ImagePicker.launchImageLibraryAsync(config as any);
+      launchError = null;
+      break;
+    } catch (error) {
+      launchError = error;
     }
+  }
+
+  if (launchError) {
+    throw new Error("Unable to open gallery picker on this device. Please try again or restart app.");
   }
 
   if (result.canceled || !result.assets?.length) {

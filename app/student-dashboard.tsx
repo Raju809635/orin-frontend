@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+﻿import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -185,12 +185,6 @@ export default function StudentDashboard() {
       onPress: () => router.push("/settings" as never)
     }
   ] as const;
-  const domainHighlights = [
-    { name: "Academic", icon: "school", color: "#2563EB", note: "School, Intermediate, Engineering, MBA, Law" },
-    { name: "Competitive Exams", icon: "trophy", color: "#B45309", note: "JEE, NEET, UPSC, SSC, TGPSC, Banking" },
-    { name: "Technology & AI", icon: "hardware-chip", color: "#0369A1", note: "Web, Data Science, AI/ML tracks" },
-    { name: "Career & Placements", icon: "briefcase", color: "#9333EA", note: "Resume, Interviews, Roadmaps" }
-  ] as const;
   const studentBanners = [
     {
       key: "banner-growth",
@@ -217,62 +211,11 @@ export default function StudentDashboard() {
       border: "#CBECD9"
     }
   ] as const;
-  const deepDomainMaps = [
-    {
-      title: "Academic",
-      icon: "school",
-      tint: "#1D4ED8",
-      bg: "#EEF4FF",
-      sections: [
-        {
-          name: "Intermediate",
-          tracks: [
-            { name: "MPC", topics: ["Maths", "Physics", "Chemistry"] },
-            { name: "BiPC", topics: ["Botany", "Zoology", "Physics", "Chemistry"] }
-          ]
-        }
-      ]
-    },
-    {
-      title: "Competitive Exams",
-      icon: "trophy",
-      tint: "#B45309",
-      bg: "#FFF7ED",
-      sections: [
-        {
-          name: "UPSC",
-          tracks: [
-            { name: "Prelims", topics: ["Polity", "History", "Economy", "Current Affairs"] },
-            { name: "Mains", topics: ["Geography", "Law", "Ethics", "Society", "IR"] }
-          ]
-        }
-      ]
-    }
-  ] as const;
-  const networkFeedPreview = [
-    {
-      id: "post-1",
-      author: "Ananya R",
-      line: "Completed a ML mini-project on student performance prediction.",
-      meta: "Same domain · AI/ML"
-    },
-    {
-      id: "post-2",
-      author: "Karthik S",
-      line: "Got shortlisted for internship after mentor mock interview practice.",
-      meta: "Mentor network · Career"
-    }
-  ] as const;
   const dailyTasksPreview = [
     "Solve 1 coding problem",
     "Read 1 career tip",
     "Update 1 resume bullet",
     "Explore 1 domain concept"
-  ] as const;
-  const smartSuggestions = [
-    { name: "Sneha P", reason: "Same college · Data Science" },
-    { name: "Rahul M", reason: "Mutual mentor connection" },
-    { name: "Aditi K", reason: "Similar project interests" }
   ] as const;
 
   const fetchDashboard = useCallback(async (refresh = false) => {
@@ -625,81 +568,29 @@ export default function StudentDashboard() {
         ))}
       </ScrollView>
 
-      <Text style={styles.sectionHeader}>Domain Guide</Text>
-      <View style={styles.domainGuideInlineCard}>
-        <Text style={styles.domainGuideIntro}>
-          Understand every domain, sub-domain, and what to choose based on your goal.
-        </Text>
-        <View style={styles.domainMiniGrid}>
-          {domainHighlights.map((item) => (
-            <View key={item.name} style={styles.domainMiniTile}>
-              <View style={[styles.domainMiniIcon, { backgroundColor: `${item.color}22` }]}>
-                <Ionicons name={item.icon} size={16} color={item.color} />
-              </View>
-              <Text style={styles.domainMiniTitle}>{item.name}</Text>
-              <Text style={styles.domainMiniNote}>{item.note}</Text>
-            </View>
-          ))}
-        </View>
-        <TouchableOpacity style={styles.domainGuideButton} onPress={() => router.push("/domain-guide" as never)}>
-          <Text style={styles.domainGuideButtonText}>Open Full Domain Guide</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={styles.sectionHeader}>Deep Subsections</Text>
-      <View style={styles.deepMapWrap}>
-        {deepDomainMaps.map((map) => (
-          <View key={map.title} style={[styles.deepMapCard, { backgroundColor: map.bg, borderColor: `${map.tint}44` }]}>
-            <View style={styles.deepMapHead}>
-              <View style={[styles.deepMapIcon, { backgroundColor: `${map.tint}22` }]}>
-                <Ionicons name={map.icon} size={16} color={map.tint} />
-              </View>
-              <Text style={[styles.deepMapTitle, { color: map.tint }]}>{map.title}</Text>
-            </View>
-            {map.sections.map((section) => (
-              <View key={`${map.title}-${section.name}`} style={styles.deepSectionCard}>
-                <Text style={styles.deepSectionName}>{section.name}</Text>
-                {section.tracks.map((track) => (
-                  <View key={`${section.name}-${track.name}`} style={styles.deepTrackRow}>
-                    <Text style={styles.deepTrackName}>{track.name}</Text>
-                    <View style={styles.deepTopicWrap}>
-                      {track.topics.map((topic) => (
-                        <Text key={`${track.name}-${topic}`} style={[styles.deepTopicChip, { borderColor: `${map.tint}55` }]}>
-                          {topic}
-                        </Text>
-                      ))}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ))}
-          </View>
-        ))}
-      </View>
-
       {FEATURE_FLAGS.networking ? (
         <>
           <Text style={styles.sectionHeader}>Network Activity Feed</Text>
           <View style={styles.feedWrap}>
-            {(networkFeed.length ? networkFeed : networkFeedPreview).map((post) => (
-              <View key={"_id" in post ? post._id : post.id} style={styles.feedCard}>
-                <Text style={styles.feedAuthor}>
-                  {"authorId" in post ? post.authorId?.name || "ORIN User" : (post as any).author}
-                </Text>
-                <Text style={styles.feedLine}>{"content" in post ? post.content : (post as any).line}</Text>
-                <Text style={styles.feedMeta}>
-                  {"postType" in post
-                    ? `${post.postType} | Likes ${post.likeCount || 0} | Comments ${post.commentCount || 0}`
-                    : (post as any).meta}
-                </Text>
-                <View style={styles.feedActions}>
-                  <Text style={styles.feedActionText}>Like</Text>
-                  <Text style={styles.feedActionText}>Comment</Text>
-                  <Text style={styles.feedActionText}>Share</Text>
-                  <Text style={styles.feedActionText}>Save</Text>
+            {networkFeed.length === 0 ? (
+              <Text style={styles.empty}>No network activity yet.</Text>
+            ) : (
+              networkFeed.map((post) => (
+                <View key={post._id} style={styles.feedCard}>
+                  <Text style={styles.feedAuthor}>{post.authorId?.name || "ORIN User"}</Text>
+                  <Text style={styles.feedLine}>{post.content}</Text>
+                  <Text style={styles.feedMeta}>
+                    {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0}
+                  </Text>
+                  <View style={styles.feedActions}>
+                    <Text style={styles.feedActionText}>Like</Text>
+                    <Text style={styles.feedActionText}>Comment</Text>
+                    <Text style={styles.feedActionText}>Share</Text>
+                    <Text style={styles.feedActionText}>Save</Text>
+                  </View>
                 </View>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         </>
       ) : null}
@@ -716,7 +607,7 @@ export default function StudentDashboard() {
               completed: false
             }))).map((task) => (
               <Text key={task.key} style={styles.dailyItem}>
-                {task.completed ? "✓ " : "- "}
+                {task.completed ? "âœ“ " : "- "}
                 {task.title}
               </Text>
             ))}
@@ -734,16 +625,20 @@ export default function StudentDashboard() {
         <>
           <Text style={styles.sectionHeader}>People You May Know</Text>
           <View style={styles.suggestionWrap}>
-            {(suggestions.length ? suggestions : smartSuggestions).map((item, index) => (
-              <View key={`${item.name}-${index}`} style={styles.suggestionCard}>
-                <Text style={styles.suggestionName}>{item.name}</Text>
-                <Text style={styles.suggestionReason}>{item.reason}</Text>
-                <View style={styles.suggestionActions}>
-                  <Text style={styles.suggestionAction}>Connect</Text>
-                  <Text style={styles.suggestionAction}>Follow</Text>
+            {suggestions.length === 0 ? (
+              <Text style={styles.empty}>No suggestions available right now.</Text>
+            ) : (
+              suggestions.map((item, index) => (
+                <View key={`${item.id}-${index}`} style={styles.suggestionCard}>
+                  <Text style={styles.suggestionName}>{item.name}</Text>
+                  <Text style={styles.suggestionReason}>{item.reason}</Text>
+                  <View style={styles.suggestionActions}>
+                    <Text style={styles.suggestionAction}>Connect</Text>
+                    <Text style={styles.suggestionAction}>Follow</Text>
+                  </View>
                 </View>
-              </View>
-            ))}
+              ))
+            )}
           </View>
         </>
       ) : null}
@@ -1200,3 +1095,5 @@ const styles = StyleSheet.create({
   logout: { marginTop: 14, padding: 12, alignItems: "center" },
   logoutText: { color: "#7A271A", fontWeight: "700" }
 });
+
+

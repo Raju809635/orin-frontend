@@ -11,51 +11,21 @@ type VerifyResponse = {
 
 export default function VerifyEmailScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ email?: string; role?: "student" | "mentor" }>();
-  const initialEmail = useMemo(() => (params.email ? String(params.email) : ""), [params.email]);
+  const params = useLocalSearchParams<{ role?: "student" | "mentor" }>();
   const initialRole = useMemo(() => (params.role ? String(params.role) : ""), [params.role]);
+  const [isContinuing, setIsContinuing] = useState(false);
 
-  const [email, setEmail] = useState(initialEmail);
-  const [otp, setOtp] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isResending, setIsResending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function verifyOtp() {
+  async function continueToLogin() {
     try {
-      setIsSubmitting(true);
-      setError(null);
-      const { data } = await api.post<VerifyResponse>("/api/auth/verify-email-otp", {
-        email: email.trim().toLowerCase(),
-        otp: otp.trim()
-      });
-
-      notify(data?.message || "Email verified successfully.");
-      const role = data?.role || initialRole;
-      if (role === "mentor") {
-        router.replace("/mentor-awaiting" as never);
-      } else {
-        router.replace("/login" as never);
-      }
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "OTP verification failed.");
+      setIsContinuing(true);
+      const { data } = await api.post<VerifyResponse>("/api/auth/resend-email-otp", { email: "not-required@orin.app" });
+      notify(data?.message || "Email verification is not required.");
+    } catch {
+      // no-op
     } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function resendOtp() {
-    try {
-      setIsResending(true);
-      setError(null);
-      const { data } = await api.post<{ message: string }>("/api/auth/resend-email-otp", {
-        email: email.trim().toLowerCase()
-      });
-      notify(data?.message || "OTP resent.");
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to resend OTP.");
-    } finally {
-      setIsResending(false);
+      setIsContinuing(false);
+      if (initialRole === "mentor") router.replace("/mentor-awaiting" as never);
+      else router.replace("/login" as never);
     }
   }
 
@@ -64,39 +34,11 @@ export default function VerifyEmailScreen() {
       <View style={styles.card}>
         <Text style={styles.title}>Verify Your Email</Text>
         <Text style={styles.subtitle}>
-          Enter the 6-digit OTP sent to your email. Verification is required for signup privacy and account security.
+          Email OTP verification is currently disabled. Continue to login directly.
         </Text>
 
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Email"
-          placeholderTextColor="#6B7280"
-          autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
-        />
-
-        <Text style={styles.label}>OTP</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="6-digit OTP"
-          placeholderTextColor="#6B7280"
-          keyboardType="number-pad"
-          value={otp}
-          onChangeText={setOtp}
-          maxLength={6}
-        />
-
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-
-        <TouchableOpacity style={styles.buttonPrimary} onPress={verifyOtp} disabled={isSubmitting}>
-          {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonPrimaryText}>Verify OTP</Text>}
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.buttonSecondary} onPress={resendOtp} disabled={isResending}>
-          {isResending ? <ActivityIndicator color="#1F7A4C" /> : <Text style={styles.buttonSecondaryText}>Resend OTP</Text>}
+        <TouchableOpacity style={styles.buttonPrimary} onPress={continueToLogin} disabled={isContinuing}>
+          {isContinuing ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonPrimaryText}>Continue</Text>}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => router.replace("/login" as never)}>
