@@ -35,6 +35,11 @@ export default function HomeScreen() {
         : "/mentor-pending"
       : "/student-dashboard";
 
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+    router.replace(dashboardRoute as never);
+  }, [dashboardRoute, isAuthenticated, router, user]);
+
   return (
     <View style={styles.container}>
       <LinearGradient colors={["#E6F6EE", "#F8FCFA", "#FFFFFF"]} style={StyleSheet.absoluteFillObject} />

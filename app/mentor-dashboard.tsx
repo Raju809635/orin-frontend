@@ -147,6 +147,7 @@ type CertificationItem = {
 };
 
 type SectionId = "overview" | "growth" | "pricing" | "availability" | "sessions" | "requests" | "adminChat";
+type MentorGrowthSectionId = "reputation" | "live" | "community";
 
 const sectionOrder: { id: SectionId; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -156,6 +157,12 @@ const sectionOrder: { id: SectionId; label: string }[] = [
   { id: "sessions", label: "Sessions" },
   { id: "requests", label: "Booking Requests" },
   { id: "adminChat", label: "Admin Chat" }
+];
+
+const mentorGrowthSections: { id: MentorGrowthSectionId; label: string }[] = [
+  { id: "reputation", label: "Reputation" },
+  { id: "live", label: "Live Sessions" },
+  { id: "community", label: "Community" }
 ];
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -190,6 +197,7 @@ export default function MentorDashboard() {
   const params = useLocalSearchParams<{ section?: string }>();
   const { user, logout } = useAuth();
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
+  const [mentorGrowthSection, setMentorGrowthSection] = useState<MentorGrowthSectionId>("reputation");
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [messages, setMessages] = useState<AdminChatMessage[]>([]);
@@ -1056,7 +1064,23 @@ export default function MentorDashboard() {
       {!isLoading && activeSection === "growth" ? (
         <View style={[styles.panel, styles.panelGrowth]}>
           <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Growth & Community</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavRow}>
+            {mentorGrowthSections.map((item) => {
+              const active = mentorGrowthSection === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.sectionChip, active && styles.sectionChipActive]}
+                  onPress={() => setMentorGrowthSection(item.id)}
+                >
+                  <Text style={[styles.sectionChipText, active && styles.sectionChipTextActive]}>{item.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
 
+          {mentorGrowthSection === "reputation" ? (
+            <>
           <Text style={styles.metaStrong}>Mentor Verification & Reputation</Text>
           <View style={styles.metricsRow}>
             <View style={styles.metricCard}>
@@ -1072,7 +1096,11 @@ export default function MentorDashboard() {
               <Text style={styles.metricLabel}>Percentile</Text>
             </View>
           </View>
+            </>
+          ) : null}
 
+          {mentorGrowthSection === "live" ? (
+            <>
           <View style={styles.card}>
             <Text style={styles.title}>Create Live Mentor Session</Text>
             <TextInput
@@ -1110,7 +1138,11 @@ export default function MentorDashboard() {
               ))
             )}
           </View>
+            </>
+          ) : null}
 
+          {mentorGrowthSection === "community" ? (
+            <>
           <View style={styles.card}>
             <Text style={styles.title}>Community Challenges</Text>
             {challenges.length === 0 ? (
@@ -1152,6 +1184,8 @@ export default function MentorDashboard() {
               ))
             )}
           </View>
+            </>
+          ) : null}
         </View>
       ) : null}
 

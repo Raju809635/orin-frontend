@@ -219,6 +219,11 @@ export default function SettingsScreen() {
 
       <View style={styles.card}>
         <Text style={styles.section}>Support & Legal</Text>
+        {user?.role === "student" ? (
+          <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/complaints" as never)}>
+            <Text style={styles.linkText}>Complaints</Text>
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/help" as never)}>
           <Text style={styles.linkText}>Help & Support</Text>
         </TouchableOpacity>

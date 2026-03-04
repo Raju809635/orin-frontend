@@ -37,12 +37,25 @@ type FeedPost = {
   authorId?: { _id?: string; name?: string; role?: string } | null;
 };
 
+type PublicProfileLite = {
+  social?: {
+    followers?: number;
+    following?: number;
+    connections?: number;
+  };
+  socialPreview?: {
+    followers?: Array<{ _id?: string; name?: string; role?: string }>;
+    following?: Array<{ _id?: string; name?: string; role?: string }>;
+  };
+};
+
 export default function MyProfileScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const [overview, setOverview] = useState<NetworkOverview | null>(null);
   const [connections, setConnections] = useState<ConnectionRow[]>([]);
   const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
+  const [socialPreview, setSocialPreview] = useState<PublicProfileLite["socialPreview"] | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
@@ -56,10 +69,11 @@ export default function MyProfileScreen() {
       else setLoading(true);
       setError(null);
 
-      const [overviewRes, connectionsRes, feedRes] = await Promise.allSettled([
+      const [overviewRes, connectionsRes, feedRes, socialRes] = await Promise.allSettled([
         api.get<NetworkOverview>("/api/network/overview"),
         api.get<ConnectionRow[]>("/api/network/connections?status=accepted"),
-        api.get<FeedPost[]>("/api/network/feed")
+        api.get<FeedPost[]>("/api/network/feed"),
+        user?.id ? api.get<PublicProfileLite>(`/api/profiles/public/${user.id}`) : Promise.resolve({ data: {} as PublicProfileLite })
       ]);
 
       const overviewData = overviewRes.status === "fulfilled" ? overviewRes.value.data : null;
@@ -69,6 +83,7 @@ export default function MyProfileScreen() {
       setOverview(overviewData);
       setConnections(connectionData);
       setMyPosts(feedData.filter((post) => String(post?.authorId?._id || "") === String(user?.id || "")));
+      setSocialPreview(socialRes.status === "fulfilled" ? socialRes.value.data?.socialPreview || null : null);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load profile.");
     } finally {
@@ -131,6 +146,10 @@ export default function MyProfileScreen() {
               <Text style={styles.statLabel}>Followers</Text>
             </View>
             <View style={styles.statCard}>
+              <Text style={styles.statValue}>{overview?.follow?.following ?? 0}</Text>
+              <Text style={styles.statLabel}>Following</Text>
+            </View>
+            <View style={styles.statCard}>
               <Text style={styles.statValue}>{overview?.connections?.accepted ?? 0}</Text>
               <Text style={styles.statLabel}>Connections</Text>
             </View>
@@ -166,12 +185,45 @@ export default function MyProfileScreen() {
             const isRequester = String(item.requesterId?._id || "") === String(user?.id || "");
             const other = isRequester ? item.recipientId : item.requesterId;
             return (
-              <View key={item._id} style={styles.rowItem}>
+              <TouchableOpacity
+                key={item._id}
+                style={styles.rowItem}
+                onPress={() => (other?._id ? router.push(`/public-profile/${other._id}` as never) : undefined)}
+                disabled={!other?._id}
+              >
                 <Text style={styles.rowName}>{other?.name || "Connection"}</Text>
                 <Text style={styles.rowRole}>{other?.role || "member"}</Text>
-              </View>
+              </TouchableOpacity>
             );
           })
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Followers</Text>
+        {(socialPreview?.followers || []).length === 0 ? (
+          <Text style={styles.meta}>No followers yet.</Text>
+        ) : (
+          (socialPreview?.followers || []).slice(0, 20).map((item, idx) => (
+            <TouchableOpacity key={`${item._id || idx}-f`} style={styles.rowItem} onPress={() => item._id ? router.push(`/public-profile/${item._id}` as never) : undefined}>
+              <Text style={styles.rowName}>{item.name || "User"}</Text>
+              <Text style={styles.rowRole}>{item.role || "member"}</Text>
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Following</Text>
+        {(socialPreview?.following || []).length === 0 ? (
+          <Text style={styles.meta}>Not following anyone yet.</Text>
+        ) : (
+          (socialPreview?.following || []).slice(0, 20).map((item, idx) => (
+            <TouchableOpacity key={`${item._id || idx}-g`} style={styles.rowItem} onPress={() => item._id ? router.push(`/public-profile/${item._id}` as never) : undefined}>
+              <Text style={styles.rowName}>{item.name || "User"}</Text>
+              <Text style={styles.rowRole}>{item.role || "member"}</Text>
+            </TouchableOpacity>
+          ))
         )}
       </View>
 

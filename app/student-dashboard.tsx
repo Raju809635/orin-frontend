@@ -217,12 +217,19 @@ type ReputationSummary = {
 };
 
 type StudentSectionId = "overview" | "growth" | "sessions" | "network";
+type GrowthSubSectionId = "ai" | "community" | "resources";
 
 const studentSections: { id: StudentSectionId; label: string }[] = [
   { id: "overview", label: "Overview" },
   { id: "growth", label: "Career Growth" },
   { id: "sessions", label: "Sessions" },
   { id: "network", label: "Network" }
+];
+
+const growthSubSections: { id: GrowthSubSectionId; label: string }[] = [
+  { id: "ai", label: "AI & Planning" },
+  { id: "community", label: "Community" },
+  { id: "resources", label: "Resources" }
 ];
 
 export default function StudentDashboard() {
@@ -258,6 +265,7 @@ export default function StudentDashboard() {
   const [knowledgeLibrary, setKnowledgeLibrary] = useState<LibraryItem[]>([]);
   const [reputationSummary, setReputationSummary] = useState<ReputationSummary | null>(null);
   const [activeSection, setActiveSection] = useState<StudentSectionId>("overview");
+  const [growthSubSection, setGrowthSubSection] = useState<GrowthSubSectionId>("ai");
   const quickServices = [
     {
       key: "mentors",
@@ -414,13 +422,9 @@ export default function StudentDashboard() {
         api.get<ReputationSummary>("/api/network/reputation-summary")
       ]);
 
-      if (bookingsRes.status !== "fulfilled" || sessionsRes.status !== "fulfilled" || profileRes.status !== "fulfilled") {
-        throw new Error("Failed to load required dashboard data");
-      }
-
-      setBookings(bookingsRes.value.data || []);
-      setSessions(sessionsRes.value.data || []);
-      setProfilePhotoUrl(profileRes.value.data?.profile?.profilePhotoUrl || "");
+      setBookings(bookingsRes.status === "fulfilled" ? bookingsRes.value.data || [] : []);
+      setSessions(sessionsRes.status === "fulfilled" ? sessionsRes.value.data || [] : []);
+      setProfilePhotoUrl(profileRes.status === "fulfilled" ? profileRes.value.data?.profile?.profilePhotoUrl || "" : "");
       setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
       setDailyDashboard(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
       setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
@@ -441,8 +445,12 @@ export default function StudentDashboard() {
       setProjectIdeas(projectIdeasRes.status === "fulfilled" ? projectIdeasRes.value.data || null : null);
       setKnowledgeLibrary(knowledgeLibraryRes.status === "fulfilled" ? knowledgeLibraryRes.value.data || [] : []);
       setReputationSummary(reputationSummaryRes.status === "fulfilled" ? reputationSummaryRes.value.data || null : null);
+      const hardFailures = [bookingsRes, sessionsRes].filter((item) => item.status !== "fulfilled").length;
+      if (hardFailures > 0) {
+        setError("Some dashboard sections could not load. Pull to refresh.");
+      }
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load your dashboard.");
+      setError(e?.response?.data?.message || "Failed to load dashboard data.");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -598,6 +606,51 @@ export default function StudentDashboard() {
     filteredWaitingVerificationSessions.length,
     filteredConfirmedSessions.length,
     filteredBookings.length
+  ]);
+
+  const searchResultItems = useMemo(() => {
+    if (!normalizedQuery) return [];
+    const items: Array<{ id: string; title: string; subtitle: string }> = [];
+
+    filteredPendingPaymentSessions.slice(0, 2).forEach((session) => {
+      items.push({
+        id: `pending-${session._id}`,
+        title: session.mentorId?.name || "Mentor session",
+        subtitle: `Pending payment | ${session.date} ${session.time}`
+      });
+    });
+
+    filteredWaitingVerificationSessions.slice(0, 2).forEach((session) => {
+      items.push({
+        id: `waiting-${session._id}`,
+        title: session.mentorId?.name || "Mentor session",
+        subtitle: `Awaiting verification | ${session.date} ${session.time}`
+      });
+    });
+
+    filteredConfirmedSessions.slice(0, 2).forEach((session) => {
+      items.push({
+        id: `confirmed-${session._id}`,
+        title: session.mentorId?.name || "Mentor session",
+        subtitle: `Confirmed | ${session.date} ${session.time}`
+      });
+    });
+
+    filteredBookings.slice(0, 2).forEach((booking) => {
+      items.push({
+        id: `legacy-${booking._id}`,
+        title: booking.mentor?.name || "Booking request",
+        subtitle: `${booking.status} | ${new Date(booking.scheduledAt).toLocaleString()}`
+      });
+    });
+
+    return items.slice(0, 6);
+  }, [
+    normalizedQuery,
+    filteredPendingPaymentSessions,
+    filteredWaitingVerificationSessions,
+    filteredConfirmedSessions,
+    filteredBookings
   ]);
 
   async function submitManualProof(session: Session) {
@@ -769,6 +822,20 @@ export default function StudentDashboard() {
               : "No results for your search"}
           </Text>
           {totalSearchMatches > 0 ? <Text style={styles.searchMetaDetail}>Matched in: {searchBreakdown}</Text> : null}
+          {totalSearchMatches > 0 ? (
+            <View style={styles.searchResultList}>
+              {searchResultItems.map((item) => (
+                <View key={item.id} style={styles.searchResultCard}>
+                  <Text style={styles.searchResultTitle}>{item.title}</Text>
+                  <Text style={styles.searchResultSubtitle}>{item.subtitle}</Text>
+                </View>
+              ))}
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.searchAskAiBtn} onPress={() => router.push(`/ai-assistant?q=${encodeURIComponent(normalizedQuery)}` as never)}>
+              <Text style={styles.searchAskAiBtnText}>Ask AI about "{normalizedQuery}"</Text>
+            </TouchableOpacity>
+          )}
         </>
       ) : null}
 
@@ -841,6 +908,23 @@ export default function StudentDashboard() {
 
       {activeSection === "growth" ? (
       <>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavRow}>
+        {growthSubSections.map((item) => {
+          const active = growthSubSection === item.id;
+          return (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.sectionChip, active && styles.sectionChipActive]}
+              onPress={() => setGrowthSubSection(item.id)}
+            >
+              <Text style={[styles.sectionChipText, active && styles.sectionChipTextActive]}>{item.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {growthSubSection === "ai" ? (
+        <>
       <Text style={styles.groupTitle}>AI Intelligence</Text>
       <Text style={styles.groupNote}>Personalized AI guidance based on your goal, skills, and progress.</Text>
       <Text style={styles.sectionHeader}>AI Mentor Matching</Text>
@@ -905,7 +989,7 @@ export default function StudentDashboard() {
           verifiedMentors.slice(0, 4).map((item) => (
             <View key={item.mentorId} style={styles.matchCard}>
               <Text style={styles.matchName}>
-                {item.name} {item.verifiedBadge ? "• Verified" : ""}
+                {item.name} {item.verifiedBadge ? "(Verified)" : ""}
               </Text>
               <Text style={styles.matchMeta}>{item.title || "Mentor"}</Text>
               <Text style={styles.matchMeta}>Rating: {item.rating || 0}</Text>
@@ -982,6 +1066,11 @@ export default function StudentDashboard() {
         )}
       </View>
 
+      </>
+      ) : null}
+
+      {growthSubSection === "community" ? (
+      <>
       <Text style={styles.groupTitle}>Community & Collaboration</Text>
       <Text style={styles.groupNote}>Learn together through challenges, certifications, and mentor-led groups.</Text>
       <Text style={styles.sectionHeader}>Community Challenges</Text>
@@ -1038,6 +1127,11 @@ export default function StudentDashboard() {
         )}
       </View>
 
+      </>
+      ) : null}
+
+      {growthSubSection === "resources" ? (
+      <>
       <Text style={styles.groupTitle}>Resources & Portfolio</Text>
       <Text style={styles.groupNote}>Build projects, access knowledge, and generate your resume.</Text>
       <Text style={styles.sectionHeader}>AI Project Idea Generator</Text>
@@ -1100,6 +1194,9 @@ export default function StudentDashboard() {
           </>
         )}
       </View>
+      </>
+      ) : null}
+
       </>
       ) : null}
 
@@ -1414,6 +1511,28 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 12
   },
+  searchResultList: { marginBottom: 10, gap: 6 },
+  searchResultCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  searchResultTitle: { color: "#1E2B24", fontWeight: "700" },
+  searchResultSubtitle: { marginTop: 2, color: "#667085", fontSize: 12 },
+  searchAskAiBtn: {
+    marginBottom: 10,
+    alignSelf: "flex-start",
+    backgroundColor: "#EEF4FF",
+    borderWidth: 1,
+    borderColor: "#D6E4FF",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7
+  },
+  searchAskAiBtnText: { color: "#1849A9", fontWeight: "700", fontSize: 12 },
   heroBanner: {
     backgroundColor: "#F7FBFF",
     borderRadius: 24,

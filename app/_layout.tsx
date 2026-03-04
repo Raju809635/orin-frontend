@@ -1,11 +1,12 @@
 import "react-native-gesture-handler";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, AppState, AppStateStatus, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, AppState, AppStateStatus, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Drawer } from "expo-router/drawer";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { DrawerContentScrollView, DrawerItem, DrawerContentComponentProps } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
 
 function defaultRouteByRole(role: "student" | "mentor") {
   if (role === "student") return "/student-dashboard";
@@ -26,6 +27,8 @@ function RootDrawer() {
   const { user, isAuthenticated, isBootstrapping } = useAuth();
   const [mainOpen, setMainOpen] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [drawerPhotoUrl, setDrawerPhotoUrl] = useState("");
   const isCheckingUpdateRef = useRef(false);
   const hasPromptedReloadRef = useRef(false);
 
@@ -79,6 +82,30 @@ function RootDrawer() {
       }
     }
   }, [isBootstrapping, isAuthenticated, pathname, router, user]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadDrawerPhoto() {
+      if (!isAuthenticated || !user) {
+        if (active) setDrawerPhotoUrl("");
+        return;
+      }
+      try {
+        const endpoint = user.role === "mentor" ? "/api/profiles/mentor/me" : "/api/profiles/student/me";
+        const { data } = await api.get<{ profile?: { profilePhotoUrl?: string } }>(endpoint);
+        if (!active) return;
+        setDrawerPhotoUrl(data?.profile?.profilePhotoUrl || "");
+      } catch {
+        if (active) setDrawerPhotoUrl("");
+      }
+    }
+
+    loadDrawerPhoto();
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, user?.id, user?.role]);
 
   useEffect(() => {
     if (__DEV__ || Platform.OS === "web") {
@@ -153,8 +180,19 @@ function RootDrawer() {
       <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContent}>
         {user ? (
           <View style={styles.drawerProfileCard}>
+            <View style={styles.drawerProfileHead}>
+              {drawerPhotoUrl ? (
+                <Image source={{ uri: drawerPhotoUrl }} style={styles.drawerAvatarImage} />
+              ) : (
+                <View style={styles.drawerAvatarFallback}>
+                  <Text style={styles.drawerAvatarText}>{user.name?.charAt(0)?.toUpperCase() || "U"}</Text>
+                </View>
+              )}
+              <View style={styles.drawerProfileTextWrap}>
             <Text style={styles.drawerProfileName}>{user.name || "ORIN User"}</Text>
             <Text style={styles.drawerProfileRole}>{user.role === "mentor" ? "Mentor" : "Student"}</Text>
+              </View>
+            </View>
             <TouchableOpacity
               onPress={() => router.push("/my-profile" as never)}
             >
@@ -198,7 +236,15 @@ function RootDrawer() {
             <DrawerItem label="Posts" onPress={() => router.push("/posts" as never)} />
             <DrawerItem label="Messages" onPress={() => router.push("/chat" as never)} />
             <DrawerItem label="Notifications" onPress={() => router.push("/notifications" as never)} />
-            {user?.role === "student" ? <DrawerItem label="Complaints" onPress={() => router.push("/complaints" as never)} /> : null}
+          </View>
+        ) : null}
+
+        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setSettingsOpen((prev) => !prev)}>
+          <Text style={styles.drawerSectionTitle}>Settings</Text>
+          <Ionicons name={settingsOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
+        </TouchableOpacity>
+        {settingsOpen ? (
+          <View style={styles.drawerSubList}>
             <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
           </View>
         ) : null}
@@ -322,6 +368,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     padding: 12
   },
+  drawerProfileHead: { flexDirection: "row", alignItems: "center", gap: 10 },
+  drawerProfileTextWrap: { flex: 1 },
+  drawerAvatarImage: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#CFE4D8"
+  },
+  drawerAvatarFallback: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#CFE4D8",
+    backgroundColor: "#E8F5EE",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  drawerAvatarText: { color: "#0B3D2E", fontWeight: "800", fontSize: 18 },
   drawerProfileName: { color: "#1E2B24", fontWeight: "800", fontSize: 16 },
   drawerProfileRole: { marginTop: 4, color: "#667085", fontWeight: "600" },
   drawerProfileLink: { marginTop: 8, color: "#1F7A4C", fontWeight: "700" },
