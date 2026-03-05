@@ -824,7 +824,7 @@ export default function StudentDashboard() {
             </View>
           ) : (
             <TouchableOpacity style={styles.searchAskAiBtn} onPress={() => router.push(`/ai-assistant?q=${encodeURIComponent(normalizedQuery)}` as never)}>
-              <Text style={styles.searchAskAiBtnText}>Ask AI about "{normalizedQuery}"</Text>
+              <Text style={styles.searchAskAiBtnText}>Ask AI about &quot;{normalizedQuery}&quot;</Text>
             </TouchableOpacity>
           )}
         </>

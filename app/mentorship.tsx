@@ -1,84 +1,274 @@
-import React from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
+import { api } from "@/lib/api";
 
-type LinkCard = {
-  title: string;
-  desc: string;
-  route: string;
+type MentorshipSectionId = "discovery" | "interaction" | "session_management";
+
+type VerifiedMentor = { mentorId: string; name: string; title?: string; rating?: number; verifiedBadge?: boolean };
+type MentorGroupItem = { id: string; name: string; schedule?: string; membersCount?: number; mentor?: { name?: string } };
+type LiveSessionItem = { id: string; title: string; topic?: string; startsAt: string; mentor?: { name?: string } };
+type SessionHistoryItem = { sessionId: string; mentorName: string; date: string; time: string; notes?: string };
+type SessionItem = {
+  _id: string;
+  date: string;
+  time: string;
+  amount: number;
+  currency?: string;
+  paymentStatus?: string;
+  sessionStatus?: string;
+  status?: string;
+  mentorId?: { name?: string } | null;
 };
+type BookingItem = { _id: string; status?: string; scheduledAt: string; mentor?: { name?: string; email?: string } };
+
+const sections: { id: MentorshipSectionId; label: string }[] = [
+  { id: "discovery", label: "Discovery" },
+  { id: "interaction", label: "Interaction" },
+  { id: "session_management", label: "Session Management" }
+];
 
 export default function MentorshipHubScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const isMentor = user?.role === "mentor";
-  const growthRoute = isMentor ? "/mentor-dashboard?section=growth" : "/student-dashboard?section=growth";
+  const [activeSection, setActiveSection] = useState<MentorshipSectionId>("discovery");
+  const [verifiedMentors, setVerifiedMentors] = useState<VerifiedMentor[]>([]);
+  const [mentorGroups, setMentorGroups] = useState<MentorGroupItem[]>([]);
+  const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
+  const [sessionHistory, setSessionHistory] = useState<SessionHistoryItem[]>([]);
+  const [sessions, setSessions] = useState<SessionItem[]>([]);
+  const [bookings, setBookings] = useState<BookingItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const discovery: LinkCard[] = [
-    { title: "Domains", desc: "Browse mentorship domains and mentor categories.", route: "/domains" },
-    { title: "Domain Guide", desc: "Understand domains and sub-domains in detail.", route: "/domain-guide" },
-    { title: "Verified Mentor System", desc: "Trusted mentor cards and quality signals.", route: growthRoute }
-  ];
+  const loadData = useCallback(async (refresh = false) => {
+    try {
+      if (refresh) setRefreshing(true);
+      else setLoading(true);
+      setError(null);
+      const [verifiedRes, groupsRes, liveRes, historyRes, sessionsRes, bookingsRes] = await Promise.allSettled([
+        api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
+        api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
+        api.get<LiveSessionItem[]>("/api/network/live-sessions"),
+        api.get<SessionHistoryItem[]>("/api/network/session-history"),
+        api.get<SessionItem[]>("/api/sessions/my"),
+        api.get<BookingItem[]>("/api/bookings/my")
+      ]);
+      setVerifiedMentors(verifiedRes.status === "fulfilled" ? verifiedRes.value.data || [] : []);
+      setMentorGroups(groupsRes.status === "fulfilled" ? groupsRes.value.data || [] : []);
+      setLiveSessions(liveRes.status === "fulfilled" ? liveRes.value.data || [] : []);
+      setSessionHistory(historyRes.status === "fulfilled" ? historyRes.value.data || [] : []);
+      setSessions(sessionsRes.status === "fulfilled" ? sessionsRes.value.data || [] : []);
+      setBookings(bookingsRes.status === "fulfilled" ? bookingsRes.value.data || [] : []);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to load mentorship modules.");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
-  const interaction: LinkCard[] = [
-    { title: "Mentor Groups", desc: "Join group-based learning with mentors.", route: growthRoute },
-    { title: "Mentor Live Sessions", desc: "Discover upcoming live mentor sessions.", route: growthRoute }
-  ];
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
-  const sessionMgmt: LinkCard[] = isMentor
-    ? [
-        { title: "Session Requests", desc: "Review and manage incoming booking requests.", route: "/mentor-dashboard?section=requests" },
-        { title: "Sessions", desc: "Track confirmed sessions and update meeting links.", route: "/mentor-dashboard?section=sessions" },
-        { title: "Availability", desc: "Set weekly and date-specific slots.", route: "/mentor-dashboard?section=availability" }
-      ]
-    : [
-        { title: "Session History & Notes", desc: "Review completed sessions and add notes.", route: "/student-dashboard?section=sessions" },
-        { title: "Pending Payments", desc: "Complete payment upload or cancel pending sessions.", route: "/student-dashboard?section=sessions" },
-        { title: "Awaiting Verification", desc: "Track submitted payments under review.", route: "/student-dashboard?section=sessions" },
-        { title: "Confirmed Sessions", desc: "Open confirmed sessions and join links.", route: "/student-dashboard?section=sessions" },
-        { title: "Legacy Booking Requests", desc: "View old request flow sessions.", route: "/student-dashboard?section=sessions" }
-      ];
+  const pendingSessions = useMemo(
+    () => sessions.filter((s) => s.paymentStatus === "pending" || s.paymentStatus === "rejected"),
+    [sessions]
+  );
+  const waitingSessions = useMemo(
+    () => sessions.filter((s) => s.paymentStatus === "waiting_verification"),
+    [sessions]
+  );
+  const confirmedSessions = useMemo(
+    () => sessions.filter((s) => s.paymentStatus === "verified" || s.sessionStatus === "confirmed"),
+    [sessions]
+  );
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <ScrollView
+      contentContainerStyle={styles.container}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
+    >
       <Text style={styles.title}>Mentorship</Text>
-      <Text style={styles.sub}>All mentorship discovery, interaction, and sessions in one place.</Text>
+      <Text style={styles.sub}>Tap a section and only that section appears here.</Text>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Section title="Discovery" items={discovery} onOpen={(route) => router.push(route as never)} />
-      <Section title="Interaction" items={interaction} onOpen={(route) => router.push(route as never)} />
-      <Section title="Session Management" items={sessionMgmt} onOpen={(route) => router.push(route as never)} />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+        {sections.map((item) => {
+          const active = activeSection === item.id;
+          return (
+            <TouchableOpacity key={item.id} style={[styles.chip, active && styles.chipActive]} onPress={() => setActiveSection(item.id)}>
+              <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color="#1F7A4C" />
+        </View>
+      ) : null}
+
+      {!loading && activeSection === "discovery" ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Discovery</Text>
+          <TouchableOpacity style={styles.card} onPress={() => router.push("/domains" as never)}>
+            <Text style={styles.cardTitle}>Domains</Text>
+            <Text style={styles.meta}>Browse mentorship categories and mentors.</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.card} onPress={() => router.push("/domain-guide" as never)}>
+            <Text style={styles.cardTitle}>Domain Guide</Text>
+            <Text style={styles.meta}>Understand domain paths and sub-domains.</Text>
+          </TouchableOpacity>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Verified Mentor System</Text>
+            {verifiedMentors.length === 0 ? (
+              <Text style={styles.meta}>No verified mentors available now.</Text>
+            ) : (
+              verifiedMentors.slice(0, 6).map((item) => (
+                <Text key={item.mentorId} style={styles.meta}>
+                  {item.name} {item.verifiedBadge ? "(Verified)" : ""} | Rating {item.rating || 0}
+                </Text>
+              ))
+            )}
+          </View>
+        </View>
+      ) : null}
+
+      {!loading && activeSection === "interaction" ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Interaction</Text>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Mentor Groups</Text>
+            {mentorGroups.length === 0 ? (
+              <Text style={styles.meta}>No mentor groups available.</Text>
+            ) : (
+              mentorGroups.slice(0, 6).map((item) => (
+                <Text key={item.id} style={styles.meta}>
+                  {item.name} | Mentor: {item.mentor?.name || "Mentor"} | Students: {item.membersCount || 0}
+                </Text>
+              ))
+            )}
+          </View>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Mentor Live Sessions</Text>
+            {liveSessions.length === 0 ? (
+              <Text style={styles.meta}>No live sessions scheduled.</Text>
+            ) : (
+              liveSessions.slice(0, 6).map((item) => (
+                <Text key={item.id} style={styles.meta}>
+                  {item.title} | {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
+                </Text>
+              ))
+            )}
+          </View>
+        </View>
+      ) : null}
+
+      {!loading && activeSection === "session_management" ? (
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Session Management</Text>
+          {isMentor ? (
+            <>
+              <TouchableOpacity style={styles.card} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
+                <Text style={styles.cardTitle}>Session Requests</Text>
+                <Text style={styles.meta}>Open mentor requests management.</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.card} onPress={() => router.push("/mentor-dashboard?section=sessions" as never)}>
+                <Text style={styles.cardTitle}>Sessions</Text>
+                <Text style={styles.meta}>Open mentor sessions management.</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.card} onPress={() => router.push("/mentor-dashboard?section=availability" as never)}>
+                <Text style={styles.cardTitle}>Availability</Text>
+                <Text style={styles.meta}>Open mentor availability controls.</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Session History & Notes</Text>
+                {sessionHistory.length === 0 ? (
+                  <Text style={styles.meta}>No completed sessions yet.</Text>
+                ) : (
+                  sessionHistory.slice(0, 5).map((item) => (
+                    <Text key={item.sessionId} style={styles.meta}>
+                      {item.mentorName} | {item.date} {item.time}
+                    </Text>
+                  ))
+                )}
+              </View>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Pending Payments</Text>
+                <Text style={styles.meta}>{pendingSessions.length} session(s)</Text>
+              </View>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Awaiting Verification</Text>
+                <Text style={styles.meta}>{waitingSessions.length} session(s)</Text>
+              </View>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Confirmed Sessions</Text>
+                <Text style={styles.meta}>{confirmedSessions.length} session(s)</Text>
+              </View>
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Legacy Booking Requests</Text>
+                <Text style={styles.meta}>{bookings.length} request(s)</Text>
+              </View>
+              <TouchableOpacity style={styles.openBtn} onPress={() => router.push("/student-dashboard?section=sessions" as never)}>
+                <Text style={styles.openBtnText}>Open Full Session Panel</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
 
-function Section({ title, items, onOpen }: { title: string; items: LinkCard[]; onOpen: (route: string) => void }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {items.map((item) => (
-        <TouchableOpacity key={`${title}-${item.title}`} style={styles.card} onPress={() => onOpen(item.route)}>
-          <Text style={styles.cardTitle}>{item.title}</Text>
-          <Text style={styles.cardDesc}>{item.desc}</Text>
-        </TouchableOpacity>
-      ))}
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: "#F4F9F6", gap: 14 },
+  container: { padding: 16, backgroundColor: "#F4F9F6", gap: 10 },
   title: { fontSize: 28, fontWeight: "800", color: "#11261E" },
-  sub: { marginTop: 4, color: "#475467" },
-  section: { gap: 8 },
-  sectionTitle: { marginTop: 8, fontSize: 16, fontWeight: "800", color: "#1E2B24" },
+  sub: { color: "#475467" },
+  error: { color: "#B42318" },
+  chipsRow: { gap: 8, paddingBottom: 4 },
+  chip: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 999,
+    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  chipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
+  chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
+  chipTextActive: { color: "#1F7A4C" },
+  loadingWrap: { alignItems: "center", justifyContent: "center", minHeight: 180 },
+  panel: { gap: 8 },
+  panelTitle: { fontSize: 16, fontWeight: "800", color: "#1E2B24" },
   card: {
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#DDE6E1",
     borderRadius: 12,
-    padding: 12
+    padding: 12,
+    gap: 4
   },
   cardTitle: { color: "#1E2B24", fontWeight: "800" },
-  cardDesc: { marginTop: 4, color: "#667085" }
+  meta: { color: "#667085" },
+  openBtn: {
+    marginTop: 2,
+    alignSelf: "flex-start",
+    backgroundColor: "#1F7A4C",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9
+  },
+  openBtnText: { color: "#fff", fontWeight: "700" }
 });
+
