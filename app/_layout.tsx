@@ -10,8 +10,8 @@ import { api } from "@/lib/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function defaultRouteByRole(role: "student" | "mentor") {
-  if (role === "student") return "/network?section=feed";
-  return "/network?section=feed";
+  if (role === "student") return "/student-dashboard?section=overview";
+  return "/mentor-dashboard?section=overview";
 }
 
 function homeRouteForUser(user: { role: "student" | "mentor"; approvalStatus?: "pending" | "approved" | "rejected" }) {
@@ -26,10 +26,13 @@ function RootDrawer() {
   const router = useRouter();
   const pathname = usePathname();
   const { user, isAuthenticated, isBootstrapping } = useAuth();
-  const [mainOpen, setMainOpen] = useState(true);
-  const [toolsOpen, setToolsOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(true);
+  const [learningOpen, setLearningOpen] = useState(true);
+  const [careerOpen, setCareerOpen] = useState(false);
+  const [communityOpen, setCommunityOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [drawerPhotoUrl, setDrawerPhotoUrl] = useState("");
+  const [drawerReputation, setDrawerReputation] = useState<{ levelTag?: string; xp?: number; score?: number } | null>(null);
   const isCheckingUpdateRef = useRef(false);
   const hasPromptedReloadRef = useRef(false);
 
@@ -46,6 +49,9 @@ function RootDrawer() {
       pathname.startsWith("/collaborate") ||
       pathname.startsWith("/domains") ||
       pathname.startsWith("/news-updates") ||
+      pathname.startsWith("/mentorship") ||
+      pathname.startsWith("/ai-hub") ||
+      pathname.startsWith("/community-growth") ||
       pathname.startsWith("/about") ||
       pathname.startsWith("/privacy") ||
       pathname.startsWith("/terms") ||
@@ -95,11 +101,26 @@ function RootDrawer() {
       }
       try {
         const endpoint = user.role === "mentor" ? "/api/profiles/mentor/me" : "/api/profiles/student/me";
-        const { data } = await api.get<{ profile?: { profilePhotoUrl?: string } }>(endpoint);
+        const [profileRes, dailyRes] = await Promise.allSettled([
+          api.get<{ profile?: { profilePhotoUrl?: string } }>(endpoint),
+          api.get<{ levelTag?: string; xp?: number; reputationScore?: number }>("/api/network/daily-dashboard")
+        ]);
         if (!active) return;
-        setDrawerPhotoUrl(data?.profile?.profilePhotoUrl || "");
+        setDrawerPhotoUrl(profileRes.status === "fulfilled" ? profileRes.value.data?.profile?.profilePhotoUrl || "" : "");
+        setDrawerReputation(
+          dailyRes.status === "fulfilled"
+            ? {
+                levelTag: dailyRes.value.data?.levelTag || "Starter",
+                xp: Number(dailyRes.value.data?.xp || 0),
+                score: Number(dailyRes.value.data?.reputationScore || 0)
+              }
+            : { levelTag: "Starter", xp: 0, score: 0 }
+        );
       } catch {
-        if (active) setDrawerPhotoUrl("");
+        if (active) {
+          setDrawerPhotoUrl("");
+          setDrawerReputation({ levelTag: "Starter", xp: 0, score: 0 });
+        }
       }
     }
 
@@ -193,6 +214,9 @@ function RootDrawer() {
               <View style={styles.drawerProfileTextWrap}>
             <Text style={styles.drawerProfileName}>{user.name || "ORIN User"}</Text>
             <Text style={styles.drawerProfileRole}>{user.role === "mentor" ? "Mentor" : "Student"}</Text>
+            <Text style={styles.drawerProfileMeta}>
+              {drawerReputation?.levelTag || "Starter"} | XP {drawerReputation?.xp ?? 0} | Score {drawerReputation?.score ?? 0}
+            </Text>
               </View>
             </View>
             <TouchableOpacity
@@ -202,46 +226,66 @@ function RootDrawer() {
             </TouchableOpacity>
           </View>
         ) : null}
-        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setMainOpen((prev) => !prev)}>
-          <Text style={styles.drawerSectionTitle}>Main</Text>
-          <Ionicons name={mainOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
+        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setProfileOpen((prev) => !prev)}>
+          <Text style={styles.drawerSectionTitle}>Menu</Text>
+          <Ionicons name={profileOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
         </TouchableOpacity>
-        {mainOpen ? (
+        {profileOpen ? (
           <View style={styles.drawerSubList}>
-            {user?.role === "mentor" ? (
-              <>
-                <DrawerItem label="Mentor Home" onPress={() => router.push("/mentor-dashboard?section=overview" as never)} />
-                <DrawerItem label="Session Requests" onPress={() => router.push("/mentor-dashboard?section=requests" as never)} />
-                <DrawerItem label="Sessions" onPress={() => router.push("/mentor-dashboard?section=sessions" as never)} />
-                <DrawerItem label="Availability" onPress={() => router.push("/mentor-dashboard?section=availability" as never)} />
-                <DrawerItem label="Collaborate" onPress={() => router.push("/collaborate" as never)} />
-              </>
-            ) : (
-              <>
-                <DrawerItem label="Student Home" onPress={() => router.push("/student-dashboard?section=overview" as never)} />
-                <DrawerItem label="Career Growth" onPress={() => router.push("/student-dashboard?section=growth" as never)} />
-                <DrawerItem label="My Sessions" onPress={() => router.push("/student-dashboard?section=sessions" as never)} />
-                <DrawerItem label="Network Hub" onPress={() => router.push("/network?section=feed" as never)} />
-                <DrawerItem label="Collaborate" onPress={() => router.push("/collaborate" as never)} />
-              </>
-            )}
+            <DrawerItem label="My Profile" onPress={() => router.push("/my-profile" as never)} />
+            <DrawerItem
+              label="Resume / Portfolio"
+              onPress={() => router.push((user?.role === "mentor" ? "/mentor-profile" : "/student-profile") as never)}
+            />
           </View>
         ) : null}
 
-        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setToolsOpen((prev) => !prev)}>
-          <Text style={styles.drawerSectionTitle}>Tools</Text>
-          <Ionicons name={toolsOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
+        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setLearningOpen((prev) => !prev)}>
+          <Text style={styles.drawerSectionTitle}>Learning Tools</Text>
+          <Ionicons name={learningOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
         </TouchableOpacity>
-        {toolsOpen ? (
+        {learningOpen ? (
           <View style={styles.drawerSubList}>
-            <DrawerItem label="My Profile" onPress={() => router.push("/my-profile" as never)} />
-            <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
             <DrawerItem label="Domain Guide" onPress={() => router.push("/domain-guide" as never)} />
+            <DrawerItem
+              label="Knowledge Library"
+              onPress={() =>
+                router.push((user?.role === "mentor" ? "/mentor-dashboard?section=growth" : "/student-dashboard?section=growth") as never)
+              }
+            />
+            <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
+          </View>
+        ) : null}
+
+        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setCareerOpen((prev) => !prev)}>
+          <Text style={styles.drawerSectionTitle}>Career Tools</Text>
+          <Ionicons name={careerOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
+        </TouchableOpacity>
+        {careerOpen ? (
+          <View style={styles.drawerSubList}>
             <DrawerItem label="News & Updates" onPress={() => router.push("/news-updates" as never)} />
-            <DrawerItem label="Complaints" onPress={() => router.push("/complaints" as never)} />
-            <DrawerItem label="Posts" onPress={() => router.push("/posts" as never)} />
-            <DrawerItem label="Messages" onPress={() => router.push("/chat" as never)} />
-            <DrawerItem label="Notifications" onPress={() => router.push("/notifications" as never)} />
+            <DrawerItem
+              label="Internship Opportunities"
+              onPress={() =>
+                router.push((user?.role === "mentor" ? "/mentor-dashboard?section=growth" : "/student-dashboard?section=growth") as never)
+              }
+            />
+            <DrawerItem
+              label="Certifications"
+              onPress={() =>
+                router.push((user?.role === "mentor" ? "/mentor-dashboard?section=growth" : "/student-dashboard?section=growth") as never)
+              }
+            />
+          </View>
+        ) : null}
+
+        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setCommunityOpen((prev) => !prev)}>
+          <Text style={styles.drawerSectionTitle}>Community</Text>
+          <Ionicons name={communityOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
+        </TouchableOpacity>
+        {communityOpen ? (
+          <View style={styles.drawerSubList}>
+            <DrawerItem label="Collaborate with ORIN" onPress={() => router.push("/collaborate" as never)} />
           </View>
         ) : null}
 
@@ -266,28 +310,34 @@ function RootDrawer() {
   }
 
   const studentTabs = [
-    { key: "profile", label: "My Profile", icon: "person-circle", path: "/my-profile" },
-    { key: "domains", label: "Domains", icon: "grid", path: "/domains" },
-    { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/student-dashboard" },
-    { key: "network", label: "Network", icon: "people", path: "/network" },
-    { key: "posts", label: "Posts", icon: "newspaper", path: "/posts" }
+    { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/student-dashboard?section=overview" },
+    { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
+    { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
+    { key: "network", label: "Network", icon: "people", path: "/network?section=feed" },
+    { key: "community", label: "Community & Growth", icon: "trophy", path: "/community-growth" }
   ] as const;
 
   const mentorTabs = [
-    { key: "profile", label: "My Profile", icon: "person-circle", path: "/my-profile" },
-    { key: "domains", label: "Domains", icon: "grid", path: "/domains" },
-    { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/mentor-dashboard" },
-    { key: "network", label: "Network", icon: "people", path: "/network" },
-    { key: "posts", label: "Posts", icon: "newspaper", path: "/posts" }
+    { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/mentor-dashboard?section=overview" },
+    { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
+    { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
+    { key: "network", label: "Network", icon: "people", path: "/network?section=feed" },
+    { key: "community", label: "Community & Growth", icon: "trophy", path: "/community-growth" }
   ] as const;
 
   const tabs = user?.role === "mentor" ? mentorTabs : studentTabs;
   const isTabActive = (tabKey: string, path: string) => {
-    if (path === "/") return pathname === "/";
-    if (tabKey === "dashboard" && path.startsWith("/student-dashboard")) return pathname.startsWith("/student-dashboard");
-    if (tabKey === "dashboard" && path.startsWith("/mentor-dashboard")) return pathname.startsWith("/mentor-dashboard");
-    if (path.startsWith("/mentor-dashboard")) return pathname.startsWith("/mentor-dashboard");
-    return pathname.startsWith(path);
+    const basePath = path.split("?")[0];
+    if (basePath === "/") return pathname === "/";
+    if (tabKey === "dashboard" && basePath.startsWith("/student-dashboard")) return pathname.startsWith("/student-dashboard");
+    if (tabKey === "dashboard" && basePath.startsWith("/mentor-dashboard")) return pathname.startsWith("/mentor-dashboard");
+    if (tabKey === "mentorship") {
+      return pathname.startsWith("/mentorship") || pathname.startsWith("/domains") || pathname.startsWith("/domain-guide") || pathname.startsWith("/mentor/");
+    }
+    if (tabKey === "ai") return pathname.startsWith("/ai-hub") || pathname.startsWith("/ai-assistant");
+    if (tabKey === "network") return pathname.startsWith("/network") || pathname.startsWith("/posts");
+    if (tabKey === "community") return pathname.startsWith("/community-growth") || pathname.startsWith("/collaborate");
+    return pathname.startsWith(basePath);
   };
 
   return (
@@ -319,6 +369,9 @@ function RootDrawer() {
           <Drawer.Screen name="settings" options={{ title: "Settings", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="notifications" options={{ title: "Notifications", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="student-dashboard" options={{ title: "Student Dashboard", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="mentorship" options={{ title: "Mentorship", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai-hub" options={{ title: "AI", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community-growth" options={{ title: "Community & Growth", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="my-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="student-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor-dashboard" options={{ title: "Mentor Dashboard", drawerItemStyle: { display: "none" } }} />
@@ -395,6 +448,7 @@ const styles = StyleSheet.create({
   drawerAvatarText: { color: "#0B3D2E", fontWeight: "800", fontSize: 18 },
   drawerProfileName: { color: "#1E2B24", fontWeight: "800", fontSize: 16 },
   drawerProfileRole: { marginTop: 4, color: "#667085", fontWeight: "600" },
+  drawerProfileMeta: { marginTop: 4, color: "#344054", fontWeight: "600", fontSize: 12 },
   drawerProfileLink: { marginTop: 8, color: "#1F7A4C", fontWeight: "700" },
   drawerSectionTitle: {
     color: "#475467",

@@ -61,29 +61,12 @@ type ConnectionRow = {
   status: "pending" | "accepted" | "rejected" | "blocked";
 };
 
-type DailyTask = {
-  key: string;
-  title: string;
-  xp: number;
-  completed: boolean;
-};
-
-type DailyDashboard = {
-  tasks?: DailyTask[];
-  streakDays: number;
-  xp: number;
-  levelTag: string;
-  reputationScore: number;
-  leaderboard?: { globalRank?: number | null; collegeRank?: number | null };
-};
-
-type NetworkSectionId = "compose" | "feed" | "connections" | "progress";
+type NetworkSectionId = "compose" | "feed" | "connections";
 
 const networkSections: { id: NetworkSectionId; label: string }[] = [
   { id: "compose", label: "Create" },
   { id: "feed", label: "Feed" },
-  { id: "connections", label: "Connections" },
-  { id: "progress", label: "Progress" }
+  { id: "connections", label: "Connections" }
 ];
 
 const FEED_BOTTOM_NAV_SPACE = 108;
@@ -108,7 +91,6 @@ export default function NetworkScreen() {
   const [pendingIncoming, setPendingIncoming] = useState<ConnectionRow[]>([]);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [openCommentFor, setOpenCommentFor] = useState<Record<string, boolean>>({});
-  const [daily, setDaily] = useState<DailyDashboard | null>(null);
   const [postText, setPostText] = useState("");
   const [postImageUrls, setPostImageUrls] = useState<string[]>([]);
   const [postType, setPostType] = useState<FeedPost["postType"]>("learning_progress");
@@ -128,7 +110,7 @@ export default function NetworkScreen() {
 
   useEffect(() => {
     const section = String(params.section || "");
-    if (section === "compose" || section === "feed" || section === "connections" || section === "progress") {
+    if (section === "compose" || section === "feed" || section === "connections") {
       setActiveSection(section);
     }
   }, [params.section]);
@@ -140,17 +122,15 @@ export default function NetworkScreen() {
         else setLoading(true);
         setError(null);
 
-        const [feedRes, suggestionsRes, dailyRes] = await Promise.allSettled([
+        const [feedRes, suggestionsRes] = await Promise.allSettled([
           api.get<FeedPost[]>("/api/network/feed"),
-          api.get<Suggestion[]>("/api/network/suggestions"),
-          api.get<DailyDashboard>("/api/network/daily-dashboard")
+          api.get<Suggestion[]>("/api/network/suggestions")
         ]);
         const pendingRes = await api.get<ConnectionRow[]>("/api/network/connections?status=pending");
 
         const nextPosts = feedRes.status === "fulfilled" ? feedRes.value.data || [] : [];
         setPosts(nextPosts);
         setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
-        setDaily(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
         setPendingIncoming(
           (pendingRes.data || []).filter((item) => String(item?.recipientId?._id || "") === String(user?.id || ""))
         );
@@ -279,16 +259,6 @@ export default function NetworkScreen() {
     }
   }
 
-  async function completeTask(taskKey: string) {
-    try {
-      await api.post("/api/network/daily-task/complete", { taskKey });
-      notify("Task completed.");
-      await loadData(true);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to complete task.");
-    }
-  }
-
   function onCarouselScroll(postId: string, x: number) {
     const index = Math.max(0, Math.round(x / carouselWidth));
     setCarouselIndexByPost((prev) => ({ ...prev, [postId]: index }));
@@ -379,34 +349,6 @@ export default function NetworkScreen() {
             <TouchableOpacity style={styles.primaryButton} onPress={publishPost} disabled={submitting}>
               <Text style={styles.primaryButtonText}>{submitting ? "Posting..." : "Publish Post"}</Text>
             </TouchableOpacity>
-          </View>
-        ) : null}
-
-        {activeSection === "progress" ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Reputation & Daily Progress</Text>
-            <Text style={styles.meta}>Reputation Score: {daily?.reputationScore ?? 0}</Text>
-            <Text style={styles.meta}>Level: {daily?.levelTag ?? "Starter"}</Text>
-            <Text style={styles.meta}>Streak: {daily?.streakDays ?? 0} days | XP: {daily?.xp ?? 0}</Text>
-            <Text style={styles.meta}>
-              Leaderboard: College #{daily?.leaderboard?.collegeRank ?? "-"} | Global #{daily?.leaderboard?.globalRank ?? "-"}
-            </Text>
-            <View style={{ marginTop: 8 }}>
-              {(daily?.tasks || []).map((task) => (
-                <View key={task.key} style={styles.taskRow}>
-                  <Text style={styles.taskTitle}>
-                    {task.title} (+{task.xp} XP)
-                  </Text>
-                  <TouchableOpacity
-                    style={[styles.taskButton, task.completed ? styles.taskButtonDone : null]}
-                    onPress={() => completeTask(task.key)}
-                    disabled={task.completed}
-                  >
-                    <Text style={styles.taskButtonText}>{task.completed ? "Done" : "Complete"}</Text>
-                  </TouchableOpacity>
-                </View>
-              ))}
-            </View>
           </View>
         ) : null}
 
@@ -722,11 +664,6 @@ const styles = StyleSheet.create({
   chipActive: { borderColor: "#1F7A4C", backgroundColor: "#EAF6EF" },
   chipText: { color: "#475467", fontWeight: "600", fontSize: 12 },
   chipTextActive: { color: "#1F7A4C" },
-  taskRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
-  taskTitle: { color: "#344054", flex: 1, marginRight: 8 },
-  taskButton: { backgroundColor: "#175CD3", borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10 },
-  taskButtonDone: { backgroundColor: "#12B76A" },
-  taskButtonText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   commentComposer: {
     marginTop: 8,
     borderWidth: 1,

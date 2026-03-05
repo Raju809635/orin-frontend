@@ -31,9 +31,9 @@ export default function HomeScreen() {
   const dashboardRoute =
     user?.role === "mentor"
       ? user?.approvalStatus === "approved"
-        ? "/network?section=feed"
+        ? "/mentor-dashboard?section=overview"
         : "/mentor-pending"
-      : "/network?section=feed";
+      : "/student-dashboard?section=overview";
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;
@@ -61,7 +61,7 @@ export default function HomeScreen() {
         ) : (
           <View style={styles.actions}>
             <TouchableOpacity style={styles.button} onPress={() => router.push(dashboardRoute as never)}>
-              <Text style={styles.buttonText}>Open Feed</Text>
+              <Text style={styles.buttonText}>Open Dashboard</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.secondaryButton}

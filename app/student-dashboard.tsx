@@ -230,13 +230,6 @@ type NewsArticle = {
 type StudentSectionId = "overview" | "growth" | "sessions" | "network";
 type GrowthSubSectionId = "ai" | "community" | "resources";
 
-const studentSections: { id: StudentSectionId; label: string }[] = [
-  { id: "overview", label: "Overview" },
-  { id: "growth", label: "Career Growth" },
-  { id: "sessions", label: "Sessions" },
-  { id: "network", label: "Network" }
-];
-
 const growthSubSections: { id: GrowthSubSectionId; label: string }[] = [
   { id: "ai", label: "AI & Planning" },
   { id: "community", label: "Community" },
@@ -843,20 +836,11 @@ export default function StudentDashboard() {
         <Text style={styles.heroSubTitle}>Explore mentors, track sessions, and grow faster with ORIN.</Text>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavRow}>
-        {studentSections.map((item) => {
-          const active = activeSection === item.id;
-          return (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.sectionChip, active && styles.sectionChipActive]}
-              onPress={() => setActiveSection(item.id)}
-            >
-              <Text style={[styles.sectionChipText, active && styles.sectionChipTextActive]}>{item.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      {activeSection !== "overview" ? (
+        <TouchableOpacity style={styles.sectionBackButton} onPress={() => setActiveSection("overview")}>
+          <Text style={styles.sectionBackButtonText}>Back to Dashboard Home</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {activeSection === "overview" ? (
       <>
@@ -931,6 +915,56 @@ export default function StudentDashboard() {
           </View>
         ))}
       </ScrollView>
+
+      {FEATURE_FLAGS.dailyEngagement ? (
+        <>
+          <Text style={styles.sectionHeader}>Daily Challenge</Text>
+          <View style={styles.dailyCard}>
+            {!dailyDashboard ? (
+              <Text style={styles.empty}>Daily challenge unavailable right now.</Text>
+            ) : (
+              <>
+                <Text style={styles.dailyTitle}>Reputation Score: {dailyDashboard.reputationScore}</Text>
+                <Text style={styles.dailyMeta}>Tag: {dailyDashboard.levelTag}</Text>
+                {(dailyDashboard.tasks || []).map((task) => {
+                  const inProgress = completingTaskKey === task.key;
+                  return (
+                    <View key={task.key} style={styles.dailyTaskRow}>
+                      <Text style={styles.dailyItem}>
+                        {task.completed ? "Done: " : "- "}
+                        {task.title} (+{task.xp} XP)
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.dailyTaskButton, task.completed && styles.dailyTaskButtonDone]}
+                        onPress={() => completeDailyTask(task.key)}
+                        disabled={task.completed || inProgress}
+                      >
+                        <Text style={styles.dailyTaskButtonText}>
+                          {task.completed ? "Done" : inProgress ? "..." : "Complete"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  );
+                })}
+                <Text style={styles.dailyMeta}>
+                  Streak: {dailyDashboard.streakDays} days | XP: {dailyDashboard.xp}
+                </Text>
+                <Text style={styles.dailyMeta}>
+                  Leaderboard: College #{dailyDashboard.leaderboard?.collegeRank ?? "-"} | Global #
+                  {dailyDashboard.leaderboard?.globalRank ?? "-"}
+                </Text>
+              </>
+            )}
+          </View>
+        </>
+      ) : null}
+
+      <Text style={styles.sectionHeader}>ORIN Collaborate</Text>
+      <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo]} onPress={() => router.push("/collaborate" as never)}>
+        <Text style={styles.featurePill}>Community</Text>
+        <Text style={styles.featureTitle}>Collaborate with ORIN</Text>
+        <Text style={styles.featureCopy}>Share ideas, partnerships, and initiatives with the ORIN team.</Text>
+      </TouchableOpacity>
       </>
       ) : null}
 
@@ -1262,49 +1296,6 @@ export default function StudentDashboard() {
         </>
       ) : null}
 
-      {FEATURE_FLAGS.dailyEngagement && activeSection === "network" ? (
-        <>
-          <Text style={styles.sectionHeader}>Daily Career Dashboard</Text>
-          <View style={styles.dailyCard}>
-            {!dailyDashboard ? (
-              <Text style={styles.empty}>Daily progress unavailable right now.</Text>
-            ) : (
-              <>
-                <Text style={styles.dailyTitle}>Reputation Score: {dailyDashboard.reputationScore}</Text>
-                <Text style={styles.dailyMeta}>Tag: {dailyDashboard.levelTag}</Text>
-                {(dailyDashboard.tasks || []).map((task) => {
-                  const inProgress = completingTaskKey === task.key;
-                  return (
-                    <View key={task.key} style={styles.dailyTaskRow}>
-                      <Text style={styles.dailyItem}>
-                        {task.completed ? "Done: " : "- "}
-                        {task.title} (+{task.xp} XP)
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.dailyTaskButton, task.completed && styles.dailyTaskButtonDone]}
-                        onPress={() => completeDailyTask(task.key)}
-                        disabled={task.completed || inProgress}
-                      >
-                        <Text style={styles.dailyTaskButtonText}>
-                          {task.completed ? "Done" : inProgress ? "..." : "Complete"}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
-                <Text style={styles.dailyMeta}>
-                  Streak: {dailyDashboard.streakDays} days | XP: {dailyDashboard.xp}
-                </Text>
-                <Text style={styles.dailyMeta}>
-                  Leaderboard: College #{dailyDashboard.leaderboard?.collegeRank ?? "-"} | Global #
-                  {dailyDashboard.leaderboard?.globalRank ?? "-"}
-                </Text>
-              </>
-            )}
-          </View>
-        </>
-      ) : null}
-
       {FEATURE_FLAGS.smartSuggestions && activeSection === "network" ? (
         <>
           <Text style={styles.sectionHeader}>People You May Know</Text>
@@ -1573,6 +1564,17 @@ const styles = StyleSheet.create({
   heroTitle: { color: "#11261E", fontSize: 28, fontWeight: "900", lineHeight: 34 },
   heroSubTitle: { marginTop: 8, color: "#4A5B53", fontWeight: "500", lineHeight: 20 },
   sectionNavRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
+  sectionBackButton: {
+    marginBottom: 12,
+    alignSelf: "flex-start",
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 999,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  sectionBackButtonText: { color: "#1F7A4C", fontWeight: "700", fontSize: 12 },
   sectionChip: {
     paddingHorizontal: 12,
     paddingVertical: 8,
