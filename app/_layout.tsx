@@ -391,7 +391,7 @@ function RootDrawer() {
     { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
     { key: "network", label: "Network", icon: "people", path: "/network?section=feed" },
     { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
-    { key: "community", label: "Community & Growth", icon: "trophy", path: "/community-growth" }
+    { key: "community", label: "Community", icon: "trophy", path: "/community-growth" }
   ] as const;
 
   const mentorTabs = [
@@ -399,7 +399,7 @@ function RootDrawer() {
     { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
     { key: "network", label: "Network", icon: "people", path: "/network?section=feed" },
     { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
-    { key: "community", label: "Community & Growth", icon: "trophy", path: "/community-growth" }
+    { key: "community", label: "Community", icon: "trophy", path: "/community-growth" }
   ] as const;
 
   const tabs = user?.role === "mentor" ? mentorTabs : studentTabs;

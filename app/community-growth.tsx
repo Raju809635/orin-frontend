@@ -2,6 +2,8 @@ import React, { useCallback, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 type CommunitySectionId =
   | "collaboration"
@@ -19,14 +21,78 @@ type LeaderboardResponse = { collegeName?: string; collegeTop: Array<{ rank: num
 type LibraryItem = { id: string; title: string; type: string; description?: string };
 type ReputationSummary = { score: number; levelTag: string; topPercent: number };
 
-const sections: { id: CommunitySectionId; label: string; tint: string; bg: string }[] = [
-  { id: "collaboration", label: "Community & Collaboration", tint: "#6941C6", bg: "#F9F5FF" },
-  { id: "challenges", label: "Challenges", tint: "#B54708", bg: "#FFF7ED" },
-  { id: "certifications", label: "Certifications", tint: "#165DFF", bg: "#EEF4FF" },
-  { id: "opportunities", label: "Internships", tint: "#027A48", bg: "#ECFDF3" },
-  { id: "leaderboard", label: "Leaderboard", tint: "#B54708", bg: "#FFF7ED" },
-  { id: "library", label: "Knowledge Library", tint: "#175CD3", bg: "#EFF8FF" },
-  { id: "reputation", label: "Reputation & Ranking", tint: "#B42318", bg: "#FEF3F2" }
+const sections: {
+  id: CommunitySectionId;
+  label: string;
+  description: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  border: string;
+  gradient: [string, string];
+  gradientActive: [string, string];
+}[] = [
+  {
+    id: "collaboration",
+    label: "Community & Collaboration",
+    description: "Join ORIN collaboration initiatives and shared growth programs.",
+    icon: "people",
+    border: "#D6BBFB",
+    gradient: ["#FFFFFF", "#F9F5FF"],
+    gradientActive: ["#F4EBFF", "#F9F5FF"]
+  },
+  {
+    id: "challenges",
+    label: "Challenges",
+    description: "Participate in monthly challenges and climb the rankings.",
+    icon: "trophy",
+    border: "#F9DBAF",
+    gradient: ["#FFFFFF", "#FFF7ED"],
+    gradientActive: ["#FFEDD5", "#FFF7ED"]
+  },
+  {
+    id: "certifications",
+    label: "Certifications",
+    description: "Track ORIN certifications and skill credibility badges.",
+    icon: "ribbon",
+    border: "#A4BCFD",
+    gradient: ["#FFFFFF", "#EEF4FF"],
+    gradientActive: ["#E0EAFF", "#EEF4FF"]
+  },
+  {
+    id: "opportunities",
+    label: "Internship Opportunities",
+    description: "Discover internships and practical career opportunities.",
+    icon: "briefcase",
+    border: "#ABEFC6",
+    gradient: ["#FFFFFF", "#ECFDF3"],
+    gradientActive: ["#DCFCE7", "#ECFDF3"]
+  },
+  {
+    id: "leaderboard",
+    label: "College Leaderboard",
+    description: "See top performers and your standing across peers.",
+    icon: "podium",
+    border: "#F9DBAF",
+    gradient: ["#FFFFFF", "#FFF7ED"],
+    gradientActive: ["#FFEDD5", "#FFF7ED"]
+  },
+  {
+    id: "library",
+    label: "Knowledge Library",
+    description: "Access guides, resources, interview prep, and roadmaps.",
+    icon: "library",
+    border: "#B2DDFF",
+    gradient: ["#FFFFFF", "#EFF8FF"],
+    gradientActive: ["#E0F2FE", "#EFF8FF"]
+  },
+  {
+    id: "reputation",
+    label: "Reputation & Ranking",
+    description: "Monitor your score, level, and growth percentile.",
+    icon: "stats-chart",
+    border: "#FDA29B",
+    gradient: ["#FFFFFF", "#FEF3F2"],
+    gradientActive: ["#FEE4E2", "#FEF3F2"]
+  }
 ];
 
 export default function CommunityGrowthScreen() {
@@ -81,23 +147,32 @@ export default function CommunityGrowthScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
     >
       <Text style={styles.title}>Community & Growth</Text>
-      <Text style={styles.sub}>Tap a section and only that section appears here.</Text>
+      <Text style={styles.sub}>Select a module card to focus on that community area.</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipsRow}>
+      <View style={styles.moduleStack}>
         {sections.map((item) => {
           const active = activeSection === item.id;
           return (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.chip, { borderColor: item.tint }, active && { backgroundColor: item.bg }]}
-              onPress={() => setActiveSection(item.id)}
-            >
-              <Text style={[styles.chipText, { color: item.tint }, active && styles.chipTextActive]}>{item.label}</Text>
+            <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={() => setActiveSection(item.id)}>
+              <LinearGradient
+                colors={active ? item.gradientActive : item.gradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.moduleCard, { borderColor: item.border }, active && styles.moduleCardActive]}
+              >
+                <View style={[styles.moduleIconWrap, active && styles.moduleIconWrapActive]}>
+                  <Ionicons name={item.icon} size={20} color={active ? "#1F7A4C" : "#475467"} />
+                </View>
+                <View style={styles.moduleTextWrap}>
+                  <Text style={styles.moduleTitle}>{item.label}</Text>
+                  <Text style={styles.moduleDesc}>{item.description}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={18} color={active ? "#1F7A4C" : "#98A2B3"} />
+              </LinearGradient>
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
       {loading ? (
         <View style={styles.loadingWrap}>
@@ -225,19 +300,35 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   sub: { color: "#475467" },
   error: { color: "#B42318" },
-  chipsRow: { gap: 8, paddingBottom: 4 },
-  chip: {
+  moduleStack: { gap: 10 },
+  moduleCard: {
     borderWidth: 1,
-    borderColor: "#D0D5DD",
-    borderRadius: 999,
-    backgroundColor: "#fff",
-    paddingHorizontal: 12,
-    paddingVertical: 8
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    shadowColor: "#101828",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4
   },
-  chipText: { fontWeight: "700", fontSize: 12 },
-  chipTextActive: { fontWeight: "800" },
+  moduleCardActive: { shadowOpacity: 0.13, elevation: 6 },
+  moduleIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.85)",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  moduleIconWrapActive: { backgroundColor: "rgba(255,255,255,1)" },
+  moduleTextWrap: { flex: 1, gap: 2 },
+  moduleTitle: { color: "#1E2B24", fontWeight: "800", fontSize: 15 },
+  moduleDesc: { color: "#667085", fontSize: 12, lineHeight: 16 },
   loadingWrap: { alignItems: "center", justifyContent: "center", minHeight: 180 },
-  panel: { gap: 8 },
+  panel: { gap: 8, marginTop: 4 },
   panelTitle: { fontSize: 16, fontWeight: "800", color: "#1E2B24" },
   card: {
     backgroundColor: "#FFFFFF",

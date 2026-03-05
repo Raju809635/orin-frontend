@@ -86,7 +86,7 @@ const FEED_BOTTOM_NAV_SPACE = 108;
 const { width } = Dimensions.get("window");
 const carouselWidth = Math.max(width - 56, 280);
 const REACTION_ORDER = ["like", "love", "care", "haha", "wow", "sad", "angry"] as const;
-const REACTION_META: Record<(typeof REACTION_ORDER)[number], { emoji: string; label: string }> = {
+const REACTION_OPTIONS: Record<(typeof REACTION_ORDER)[number], { emoji: string; label: string }> = {
   like: { emoji: "👍", label: "Like" },
   love: { emoji: "❤️", label: "Love" },
   care: { emoji: "🤗", label: "Care" },
@@ -138,6 +138,7 @@ export default function NetworkScreen() {
   });
   const [editingCommentId, setEditingCommentId] = useState<string>("");
   const [editingCommentText, setEditingCommentText] = useState("");
+  const [reactionMenuFor, setReactionMenuFor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -265,6 +266,7 @@ export default function NetworkScreen() {
         });
       }
       await api.post(`/api/network/feed/${postId}/react`, reactionType ? { action, reactionType } : { action });
+      setReactionMenuFor(null);
       await loadData(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || `Failed to ${action} post.`);
@@ -520,10 +522,10 @@ export default function NetworkScreen() {
                 const media = (post.mediaUrls || []).slice(0, 5);
                 const currentIndex = carouselIndexByPost[post._id] || 0;
                 const userReaction = post.userReaction || null;
-                const reactionSummary = REACTION_ORDER.map((type) => ({
-                  type,
-                  count: Number(post.reactionCounts?.[type] || 0)
-                })).filter((item) => item.count > 0);
+                const totalReactions = REACTION_ORDER.reduce(
+                  (sum, type) => sum + Number(post.reactionCounts?.[type] || 0),
+                  0
+                );
 
                 return (
                   <View key={post._id} style={styles.postCard}>
@@ -585,53 +587,77 @@ export default function NetworkScreen() {
                     <Text style={styles.meta}>
                       {post.postType} • Comments {post.commentCount || 0} • Shares {post.shareCount || 0} • Saved {post.saveCount || 0}
                     </Text>
-                    {reactionSummary.length ? (
-                      <View style={styles.reactionSummaryRow}>
-                        {reactionSummary.map((item) => (
-                          <Text key={`${post._id}-${item.type}`} style={styles.reactionSummaryText}>
-                            {REACTION_META[item.type].emoji} {item.count}
-                          </Text>
+                    <View style={styles.likeSummaryRow}>
+                      <View style={styles.likeSummaryIcon}>
+                        <Ionicons name="thumbs-up" size={12} color="#FFFFFF" />
+                      </View>
+                      <Text style={styles.likeSummaryText}>{Math.max(totalReactions, Number(post.likeCount || 0))}</Text>
+                    </View>
+                    {reactionMenuFor === post._id ? (
+                      <View style={styles.reactionDropdown}>
+                        {REACTION_ORDER.map((type) => (
+                          <TouchableOpacity
+                            key={`${post._id}-drop-${type}`}
+                            style={styles.reactionDropdownItem}
+                            onPress={() => react(post._id, "react", type)}
+                          >
+                            <Text style={styles.reactionDropdownEmoji}>{REACTION_OPTIONS[type].emoji}</Text>
+                            <Text style={styles.reactionDropdownLabel}>{REACTION_OPTIONS[type].label}</Text>
+                          </TouchableOpacity>
                         ))}
                       </View>
                     ) : null}
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reactionPickerRow}>
-                      {REACTION_ORDER.map((type) => {
-                        const active = userReaction === type;
-                        return (
-                          <TouchableOpacity
-                            key={`${post._id}-reaction-${type}`}
-                            style={[styles.reactionChip, active && styles.reactionChipActive]}
-                            onPress={() => react(post._id, "react", type)}
-                          >
-                            <Text style={styles.reactionChipText}>
-                              {REACTION_META[type].emoji} {Number(post.reactionCounts?.[type] || 0)}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
                     <View style={styles.postActionRow}>
-                      <TouchableOpacity style={styles.postActionBtn} onPress={() => react(post._id, "react", userReaction ? userReaction : "like")}>
-                        <Text style={styles.postActionText}>
-                          {userReaction ? `${REACTION_META[userReaction].emoji} ${REACTION_META[userReaction].label}` : "👍 Like"}
+                      <TouchableOpacity
+                        style={styles.postActionBtn}
+                        onPress={() => setReactionMenuFor((prev) => (prev === post._id ? null : post._id))}
+                      >
+                        <Ionicons
+                          name={userReaction ? "thumbs-up" : "thumbs-up-outline"}
+                          size={16}
+                          color={userReaction ? "#175CD3" : "#475467"}
+                        />
+                        <Text style={[styles.postActionText, userReaction ? styles.postActionTextActive : null]}>
+                          {userReaction ? REACTION_OPTIONS[userReaction].label : "Like"}
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.postActionBtn}
-                        onPress={() => setOpenCommentFor((prev) => ({ ...prev, [post._id]: !prev[post._id] }))}
+                        onPress={() => {
+                          setReactionMenuFor(null);
+                          setOpenCommentFor((prev) => ({ ...prev, [post._id]: !prev[post._id] }));
+                        }}
                       >
                         <Ionicons name="chatbubble-outline" size={16} color="#475467" />
                         <Text style={styles.postActionText}>Comment</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.postActionBtn} onPress={() => openComments(post._id)}>
+                      <TouchableOpacity
+                        style={styles.postActionBtn}
+                        onPress={() => {
+                          setReactionMenuFor(null);
+                          openComments(post._id);
+                        }}
+                      >
                         <Ionicons name="eye-outline" size={16} color="#475467" />
                         <Text style={styles.postActionText}>View</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.postActionBtn} onPress={() => react(post._id, "share")}>
+                      <TouchableOpacity
+                        style={styles.postActionBtn}
+                        onPress={() => {
+                          setReactionMenuFor(null);
+                          react(post._id, "share");
+                        }}
+                      >
                         <Ionicons name="share-social-outline" size={16} color="#475467" />
                         <Text style={styles.postActionText}>Share</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity style={styles.postActionBtn} onPress={() => react(post._id, "save")}>
+                      <TouchableOpacity
+                        style={styles.postActionBtn}
+                        onPress={() => {
+                          setReactionMenuFor(null);
+                          react(post._id, "save");
+                        }}
+                      >
                         <Ionicons name={post.isSaved ? "bookmark" : "bookmark-outline"} size={16} color="#475467" />
                         <Text style={styles.postActionText}>{post.isSaved ? "Saved" : "Save"}</Text>
                       </TouchableOpacity>
@@ -873,19 +899,41 @@ const styles = StyleSheet.create({
     borderColor: "#EAECF0"
   },
   postActionText: { color: "#475467", fontWeight: "700", fontSize: 12 },
-  reactionSummaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
-  reactionSummaryText: { color: "#475467", fontWeight: "700", fontSize: 12 },
-  reactionPickerRow: { gap: 8, marginTop: 8, paddingBottom: 2 },
-  reactionChip: {
+  postActionTextActive: { color: "#175CD3" },
+  likeSummaryRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 8 },
+  likeSummaryIcon: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#175CD3",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  likeSummaryText: { color: "#475467", fontWeight: "700", fontSize: 12 },
+  reactionDropdown: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    padding: 8,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6
+  },
+  reactionDropdownItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
     borderWidth: 1,
     borderColor: "#D0D5DD",
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#FFFFFF"
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    backgroundColor: "#F9FAFB"
   },
-  reactionChipActive: { borderColor: "#175CD3", backgroundColor: "#EFF8FF" },
-  reactionChipText: { color: "#344054", fontWeight: "700", fontSize: 12 },
+  reactionDropdownEmoji: { fontSize: 14 },
+  reactionDropdownLabel: { color: "#344054", fontWeight: "700", fontSize: 11 },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
   chip: {
     borderWidth: 1,
@@ -949,3 +997,5 @@ const styles = StyleSheet.create({
   zoomInner: { width, height: "100%", alignItems: "center", justifyContent: "center" },
   viewerImage: { width, height: "85%" }
 });
+
+

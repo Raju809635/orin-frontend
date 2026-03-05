@@ -65,15 +65,28 @@ export default function NewsUpdatesScreen() {
       if (refresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const { data } = await api.get<{ category: string; articles: NewsArticle[] }>(
-        `/api/news/${category}?limit=8&language=${language}`
-      );
+      let data: { category: string; articles: NewsArticle[] } | null = null;
+      try {
+        const response = await api.get<{ category: string; articles: NewsArticle[] }>(
+          `/api/news/${category}?limit=8&language=${language}`
+        );
+        data = response.data;
+      } catch {
+        if (language !== "en") {
+          const fallbackResponse = await api.get<{ category: string; articles: NewsArticle[] }>(
+            `/api/news/${category}?limit=8&language=en`
+          );
+          data = fallbackResponse.data;
+        } else {
+          throw new Error("Unable to fetch news");
+        }
+      }
       setArticlesByTab((prev) => ({
         ...prev,
         [category]: data?.articles || []
       }));
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load news.");
+      setError(e?.response?.data?.message || e?.message || "Unable to load news right now.");
     } finally {
       setLoading(false);
       setRefreshing(false);
