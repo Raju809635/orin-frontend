@@ -64,9 +64,9 @@ type ConnectionRow = {
 type NetworkSectionId = "compose" | "feed" | "connections";
 
 const networkSections: { id: NetworkSectionId; label: string }[] = [
-  { id: "compose", label: "Create" },
-  { id: "feed", label: "Feed" },
-  { id: "connections", label: "Connections" }
+  { id: "connections", label: "My Circle" },
+  { id: "compose", label: "Discover Circle" },
+  { id: "feed", label: "Circle Activity" }
 ];
 
 const FEED_BOTTOM_NAV_SPACE = 108;
@@ -89,6 +89,8 @@ export default function NetworkScreen() {
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [pendingIncoming, setPendingIncoming] = useState<ConnectionRow[]>([]);
+  const [requestedCircleIds, setRequestedCircleIds] = useState<Record<string, boolean>>({});
+  const [circleMemberIds, setCircleMemberIds] = useState<Record<string, boolean>>({});
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [openCommentFor, setOpenCommentFor] = useState<Record<string, boolean>>({});
   const [postText, setPostText] = useState("");
@@ -122,18 +124,39 @@ export default function NetworkScreen() {
         else setLoading(true);
         setError(null);
 
-        const [feedRes, suggestionsRes] = await Promise.allSettled([
+        const [feedRes, suggestionsRes, pendingRes, acceptedRes] = await Promise.allSettled([
           api.get<FeedPost[]>("/api/network/feed"),
-          api.get<Suggestion[]>("/api/network/suggestions")
+          api.get<Suggestion[]>("/api/network/suggestions"),
+          api.get<ConnectionRow[]>("/api/network/connections?status=pending"),
+          api.get<ConnectionRow[]>("/api/network/connections?status=accepted")
         ]);
-        const pendingRes = await api.get<ConnectionRow[]>("/api/network/connections?status=pending");
 
         const nextPosts = feedRes.status === "fulfilled" ? feedRes.value.data || [] : [];
         setPosts(nextPosts);
         setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
+        const pendingRows = pendingRes.status === "fulfilled" ? pendingRes.value.data || [] : [];
         setPendingIncoming(
-          (pendingRes.data || []).filter((item) => String(item?.recipientId?._id || "") === String(user?.id || ""))
+          pendingRows.filter((item) => String(item?.recipientId?._id || "") === String(user?.id || ""))
         );
+        const requested: Record<string, boolean> = {};
+        pendingRows.forEach((item) => {
+          if (String(item?.requesterId?._id || "") === String(user?.id || "")) {
+            const targetId = String(item?.recipientId?._id || "");
+            if (targetId) requested[targetId] = true;
+          }
+        });
+        setRequestedCircleIds(requested);
+
+        const acceptedRows = acceptedRes.status === "fulfilled" ? acceptedRes.value.data || [] : [];
+        const inCircle: Record<string, boolean> = {};
+        acceptedRows.forEach((item) => {
+          const requesterId = String(item?.requesterId?._id || "");
+          const recipientId = String(item?.recipientId?._id || "");
+          const me = String(user?.id || "");
+          const other = requesterId === me ? recipientId : recipientId === me ? requesterId : "";
+          if (other) inCircle[other] = true;
+        });
+        setCircleMemberIds(inCircle);
 
         const followMap: Record<string, boolean> = {};
         nextPosts.forEach((post) => {
@@ -233,7 +256,8 @@ export default function NetworkScreen() {
   async function connect(recipientId: string) {
     try {
       await api.post("/api/network/connections/request", { recipientId });
-      notify("Connection request sent.");
+      setRequestedCircleIds((prev) => ({ ...prev, [recipientId]: true }));
+      notify("Request Sent");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to send connection request.");
     }
@@ -252,7 +276,12 @@ export default function NetworkScreen() {
   async function respondConnection(connectionId: string, action: "accept" | "reject") {
     try {
       await api.post(`/api/network/connections/${connectionId}/respond`, { action });
-      notify(`Request ${action}ed.`);
+      if (action === "accept") {
+        const accepted = pendingIncoming.find((item) => item._id === connectionId);
+        const otherId = String(accepted?.requesterId?._id || "");
+        if (otherId) setCircleMemberIds((prev) => ({ ...prev, [otherId]: true }));
+      }
+      notify(action === "accept" ? "In Your Circle" : `Request ${action}ed.`);
       await loadData(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || `Failed to ${action} request.`);
@@ -278,7 +307,7 @@ export default function NetworkScreen() {
         contentContainerStyle={[styles.container, { paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
       >
-        <Text style={styles.heading}>Network</Text>
+        <Text style={styles.heading}>Circle</Text>
         <Text style={styles.subheading}>
           {user?.role === "mentor" ? "Share insights and build your mentor presence." : "Build your learning network and share progress."}
         </Text>
@@ -301,7 +330,7 @@ export default function NetworkScreen() {
 
         {activeSection === "compose" ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Create Post</Text>
+            <Text style={styles.cardTitle}>Discover Circle</Text>
             <View style={styles.chipsRow}>
               {[
                 ["learning_progress", "Learning"],
@@ -347,14 +376,39 @@ export default function NetworkScreen() {
             ) : null}
             <Text style={styles.meta}>Images selected: {postImageUrls.length}/5</Text>
             <TouchableOpacity style={styles.primaryButton} onPress={publishPost} disabled={submitting}>
-              <Text style={styles.primaryButtonText}>{submitting ? "Posting..." : "Publish Post"}</Text>
+              <Text style={styles.primaryButtonText}>{submitting ? "Posting..." : "Publish Insight"}</Text>
             </TouchableOpacity>
+            <Text style={[styles.cardTitle, { marginTop: 14 }]}>People You May Know</Text>
+            {suggestions.length === 0 ? (
+              <Text style={styles.meta}>No suggestions yet.</Text>
+            ) : (
+              suggestions.slice(0, 8).map((item) => {
+                const inCircle = Boolean(circleMemberIds[item.id]);
+                const requested = Boolean(requestedCircleIds[item.id]);
+                return (
+                  <View key={`discover-${item.id}`} style={styles.rowItem}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rowTitle}>{item.name}</Text>
+                      <Text style={styles.meta}>{item.reason}</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => (!inCircle && !requested ? connect(item.id) : undefined)}
+                      disabled={inCircle || requested}
+                    >
+                      <Text style={styles.action}>
+                        {inCircle ? "✓ In Your Circle" : requested ? "Request Sent" : "+ Add to Circle"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })
+            )}
           </View>
         ) : null}
 
         {activeSection === "connections" ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Pending Requests</Text>
+            <Text style={styles.cardTitle}>My Circle Requests</Text>
             {pendingIncoming.length === 0 ? (
               <Text style={styles.meta}>No pending requests.</Text>
             ) : (
@@ -362,10 +416,10 @@ export default function NetworkScreen() {
                 <View key={item._id} style={styles.rowItem}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.rowTitle}>{item.requesterId?.name || "User"}</Text>
-                    <Text style={styles.meta}>Wants to connect with you</Text>
+                    <Text style={styles.meta}>Wants to join your circle</Text>
                   </View>
                   <TouchableOpacity onPress={() => respondConnection(item._id, "accept")}>
-                    <Text style={styles.action}>Accept</Text>
+                    <Text style={styles.action}>✓ In Your Circle</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => respondConnection(item._id, "reject")}>
                     <Text style={styles.actionDanger}>Reject</Text>
@@ -376,33 +430,9 @@ export default function NetworkScreen() {
           </View>
         ) : null}
 
-        {activeSection === "connections" ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>People You May Know</Text>
-            {suggestions.length === 0 ? (
-              <Text style={styles.meta}>No suggestions yet.</Text>
-            ) : (
-              suggestions.slice(0, 12).map((item) => (
-                <View key={item.id} style={styles.rowItem}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.rowTitle}>{item.name}</Text>
-                    <Text style={styles.meta}>{item.reason}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => connect(item.id)}>
-                    <Text style={styles.action}>Connect</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity onPress={() => follow(item.id)}>
-                    <Text style={styles.action}>Follow</Text>
-                  </TouchableOpacity>
-                </View>
-              ))
-            )}
-          </View>
-        ) : null}
-
         {activeSection === "feed" ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Activity Feed</Text>
+            <Text style={styles.cardTitle}>Circle Activity</Text>
             {posts.length === 0 ? (
               <Text style={styles.meta}>No posts yet. Create the first one.</Text>
             ) : (

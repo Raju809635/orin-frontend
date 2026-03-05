@@ -1576,7 +1576,7 @@ export default function StudentDashboard() {
 
       {FEATURE_FLAGS.networking && activeSection === "network" ? (
         <>
-          <Text style={styles.sectionHeader}>Network Activity Feed</Text>
+          <Text style={styles.sectionHeader}>Circle Activity</Text>
           <View style={styles.feedWrap}>
             {networkFeed.length === 0 ? (
               <Text style={styles.empty}>No network activity yet.</Text>
@@ -1610,7 +1610,7 @@ export default function StudentDashboard() {
 
       {FEATURE_FLAGS.smartSuggestions && activeSection === "network" ? (
         <>
-          <Text style={styles.sectionHeader}>People You May Know</Text>
+          <Text style={styles.sectionHeader}>Discover Circle</Text>
           <View style={styles.suggestionWrap}>
             {suggestions.length === 0 ? (
               <Text style={styles.empty}>No suggestions available right now.</Text>

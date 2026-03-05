@@ -207,7 +207,7 @@ export default function ChatScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.heading}>Messages</Text>
+      <Text style={styles.heading}>Circle Conversations</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {user?.role === "student" ? (
@@ -243,7 +243,7 @@ export default function ChatScreen() {
         </>
       ) : null}
 
-      <Text style={styles.subTitle}>Conversations</Text>
+      <Text style={styles.subTitle}>Circle Conversations</Text>
       <FlatList
         horizontal
         data={conversations}
@@ -267,7 +267,7 @@ export default function ChatScreen() {
         ListEmptyComponent={<Text style={styles.empty}>No conversations yet.</Text>}
       />
 
-      <Text style={styles.threadTitle}>{activeUser ? `Chat with ${activeUser.name}` : "Select a chat"}</Text>
+      <Text style={styles.threadTitle}>{activeUser ? `Circle chat with ${activeUser.name}` : "Select a conversation"}</Text>
       <FlatList
         data={messages}
         keyExtractor={(item) => item._id}

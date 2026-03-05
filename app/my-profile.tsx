@@ -60,7 +60,7 @@ export default function MyProfileScreen() {
   const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
   const [socialPreview, setSocialPreview] = useState<PublicProfileLite["socialPreview"] | null>(null);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
-  const [activeList, setActiveList] = useState<"posts" | "followers" | "following" | "connections">("posts");
+  const [activeList, setActiveList] = useState<"insights" | "audience" | "following" | "circle">("insights");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
@@ -147,21 +147,21 @@ export default function MyProfileScreen() {
             </View>
           )}
           <View style={styles.statsRow}>
-            <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("posts")}>
+            <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("insights")}>
               <Text style={styles.statValue}>{myPosts.length}</Text>
-              <Text style={[styles.statLabel, activeList === "posts" && styles.statLabelActive]}>Posts</Text>
+              <Text style={[styles.statLabel, activeList === "insights" && styles.statLabelActive]}>Insights</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("followers")}>
-              <Text style={styles.statValue}>{overview?.follow?.followers ?? 0}</Text>
-              <Text style={[styles.statLabel, activeList === "followers" && styles.statLabelActive]}>Followers</Text>
+            <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("circle")}>
+              <Text style={styles.statValue}>{overview?.connections?.accepted ?? 0}</Text>
+              <Text style={[styles.statLabel, activeList === "circle" && styles.statLabelActive]}>Circle</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("following")}>
               <Text style={styles.statValue}>{overview?.follow?.following ?? 0}</Text>
               <Text style={[styles.statLabel, activeList === "following" && styles.statLabelActive]}>Following</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("connections")}>
-              <Text style={styles.statValue}>{overview?.connections?.accepted ?? 0}</Text>
-              <Text style={[styles.statLabel, activeList === "connections" && styles.statLabelActive]}>Connections</Text>
+            <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("audience")}>
+              <Text style={styles.statValue}>{overview?.follow?.followers ?? 0}</Text>
+              <Text style={[styles.statLabel, activeList === "audience" && styles.statLabelActive]}>Audience</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -186,9 +186,9 @@ export default function MyProfileScreen() {
         <Text style={styles.meta}>Tag: {overview?.reputation?.levelTag || "Starter"}</Text>
       </View>
 
-      {activeList === "connections" ? (
+      {activeList === "circle" ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Connections</Text>
+          <Text style={styles.cardTitle}>My Circle</Text>
           {connections.length === 0 ? (
             <Text style={styles.meta}>No accepted connections yet.</Text>
           ) : (
@@ -211,9 +211,9 @@ export default function MyProfileScreen() {
         </View>
       ) : null}
 
-      {activeList === "followers" ? (
+      {activeList === "audience" ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Followers</Text>
+          <Text style={styles.cardTitle}>Audience</Text>
           {(socialPreview?.followers || []).length === 0 ? (
             <Text style={styles.meta}>No followers yet.</Text>
           ) : (
@@ -243,9 +243,9 @@ export default function MyProfileScreen() {
         </View>
       ) : null}
 
-      {activeList === "posts" ? (
+      {activeList === "insights" ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Posts</Text>
+          <Text style={styles.cardTitle}>Insights</Text>
           {myPosts.length === 0 ? (
             <Text style={styles.meta}>No posts yet.</Text>
           ) : (
