@@ -36,13 +36,13 @@ type ResumeResponse = {
   export?: { fileName?: string };
 };
 
-const sections: { id: AiSectionId; label: string }[] = [
-  { id: "mentor_matching", label: "AI Mentor Matching" },
-  { id: "skill_gap", label: "AI Skill Gap" },
-  { id: "roadmap", label: "AI Roadmap" },
-  { id: "project_ideas", label: "Project Ideas" },
-  { id: "resume_builder", label: "Resume Builder" },
-  { id: "assistant", label: "AI Assistant" }
+const sections: { id: AiSectionId; label: string; tint: string; bg: string }[] = [
+  { id: "mentor_matching", label: "AI Mentor Matching", tint: "#165DFF", bg: "#EEF4FF" },
+  { id: "skill_gap", label: "AI Skill Gap", tint: "#7A5AF8", bg: "#F4F3FF" },
+  { id: "roadmap", label: "AI Roadmap", tint: "#027A48", bg: "#ECFDF3" },
+  { id: "project_ideas", label: "Project Ideas", tint: "#B54708", bg: "#FFF7ED" },
+  { id: "resume_builder", label: "Resume Builder", tint: "#B42318", bg: "#FEF3F2" },
+  { id: "assistant", label: "AI Assistant", tint: "#6941C6", bg: "#F9F5FF" }
 ];
 
 export default function AiHubScreen() {
@@ -103,10 +103,10 @@ export default function AiHubScreen() {
           return (
             <TouchableOpacity
               key={item.id}
-              style={[styles.chip, active && styles.chipActive]}
+              style={[styles.chip, { borderColor: item.tint }, active && { backgroundColor: item.bg }]}
               onPress={() => setActiveSection(item.id)}
             >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.label}</Text>
+              <Text style={[styles.chipText, { color: item.tint }, active && styles.chipTextActive]}>{item.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -125,7 +125,7 @@ export default function AiHubScreen() {
             <Text style={styles.meta}>No mentor recommendations right now.</Text>
           ) : (
             mentorMatches.slice(0, 6).map((item) => (
-              <View key={item.mentorId} style={styles.card}>
+              <View key={item.mentorId} style={[styles.card, styles.cardBlue]}>
                 <Text style={styles.cardTitle}>{item.name}</Text>
                 <Text style={styles.meta}>{item.title || "Mentor"}</Text>
                 <Text style={styles.meta}>Experience: {item.experienceYears || 0} yrs | Rating: {item.rating || 0}</Text>
@@ -142,7 +142,7 @@ export default function AiHubScreen() {
           {!skillGap ? (
             <Text style={styles.meta}>Skill gap data unavailable right now.</Text>
           ) : (
-            <View style={styles.card}>
+            <View style={[styles.card, styles.cardPurple]}>
               <Text style={styles.cardTitle}>Goal: {skillGap.goal}</Text>
               <Text style={styles.meta}>Current: {skillGap.currentSkills.join(", ") || "None"}</Text>
               <Text style={styles.meta}>Missing: {skillGap.missingSkills.join(", ") || "No major gaps"}</Text>
@@ -158,7 +158,7 @@ export default function AiHubScreen() {
           {!roadmap ? (
             <Text style={styles.meta}>Roadmap data unavailable right now.</Text>
           ) : (
-            <View style={styles.card}>
+            <View style={[styles.card, styles.cardGreen]}>
               <Text style={styles.cardTitle}>Goal: {roadmap.goal}</Text>
               {roadmap.steps.map((step) => (
                 <Text key={`${step.stepNumber}-${step.title}`} style={styles.meta}>
@@ -176,7 +176,7 @@ export default function AiHubScreen() {
           {!projectIdeas ? (
             <Text style={styles.meta}>Project ideas unavailable right now.</Text>
           ) : (
-            <View style={styles.card}>
+            <View style={[styles.card, styles.cardOrange]}>
               <Text style={styles.cardTitle}>Goal: {projectIdeas.goal}</Text>
               {projectIdeas.ideas.slice(0, 8).map((idea, index) => (
                 <Text key={`${idea.title}-${index}`} style={styles.meta}>
@@ -194,7 +194,7 @@ export default function AiHubScreen() {
           {!resumePreview?.markdown ? (
             <Text style={styles.meta}>Resume preview unavailable right now.</Text>
           ) : (
-            <View style={styles.card}>
+            <View style={[styles.card, styles.cardRed]}>
               <Text style={styles.cardTitle}>Resume generated</Text>
               <Text style={styles.meta}>File: {resumePreview.export?.fileName || "orin_resume.md"}</Text>
               <Text style={styles.meta} numberOfLines={8}>
@@ -208,7 +208,7 @@ export default function AiHubScreen() {
       {!loading && activeSection === "assistant" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>AI Assistant</Text>
-          <View style={styles.card}>
+          <View style={[styles.card, styles.cardViolet]}>
             <Text style={styles.meta}>Open assistant chat for detailed guidance and personalized answers.</Text>
             <TouchableOpacity style={styles.openBtn} onPress={() => router.push("/ai-assistant" as never)}>
               <Text style={styles.openBtnText}>Open AI Assistant</Text>
@@ -221,7 +221,7 @@ export default function AiHubScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: "#F4F9F6", gap: 10 },
+  container: { padding: 16, backgroundColor: "#F3F6FB", gap: 10 },
   title: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   sub: { color: "#475467" },
   error: { color: "#B42318" },
@@ -234,9 +234,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8
   },
-  chipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
-  chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
-  chipTextActive: { color: "#1F7A4C" },
+  chipText: { fontWeight: "700", fontSize: 12 },
+  chipTextActive: { fontWeight: "800" },
   loadingWrap: { alignItems: "center", justifyContent: "center", minHeight: 180 },
   panel: { gap: 8 },
   panelTitle: { fontSize: 16, fontWeight: "800", color: "#1E2B24" },
@@ -248,6 +247,12 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 4
   },
+  cardBlue: { backgroundColor: "#EEF4FF", borderColor: "#C7D7FE" },
+  cardPurple: { backgroundColor: "#F4F3FF", borderColor: "#DDD6FE" },
+  cardGreen: { backgroundColor: "#ECFDF3", borderColor: "#B7E5CC" },
+  cardOrange: { backgroundColor: "#FFF7ED", borderColor: "#F9DBAF" },
+  cardRed: { backgroundColor: "#FEF3F2", borderColor: "#F7C1BB" },
+  cardViolet: { backgroundColor: "#F9F5FF", borderColor: "#E2D6FF" },
   cardTitle: { color: "#1E2B24", fontWeight: "800" },
   meta: { color: "#667085" },
   score: { color: "#165DFF", fontWeight: "800", marginTop: 4 },
@@ -261,4 +266,3 @@ const styles = StyleSheet.create({
   },
   openBtnText: { color: "#fff", fontWeight: "700" }
 });
-

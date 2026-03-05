@@ -392,7 +392,7 @@ function RootDrawer() {
           {tabs.map((tab) => {
             const active = isTabActive(tab.key, tab.path);
             return (
-              <TouchableOpacity key={tab.key} style={styles.bottomNavItem} onPress={() => router.replace(tab.path as never)}>
+              <TouchableOpacity key={tab.key} style={styles.bottomNavItem} onPress={() => router.push(tab.path as never)}>
                 <Ionicons name={tab.icon as any} size={20} color={active ? "#1F7A4C" : "#667085"} />
                 <Text style={[styles.bottomNavLabel, active && styles.bottomNavLabelActive]}>{tab.label}</Text>
               </TouchableOpacity>

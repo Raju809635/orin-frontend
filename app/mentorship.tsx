@@ -23,10 +23,10 @@ type SessionItem = {
 };
 type BookingItem = { _id: string; status?: string; scheduledAt: string; mentor?: { name?: string; email?: string } };
 
-const sections: { id: MentorshipSectionId; label: string }[] = [
-  { id: "discovery", label: "Discovery" },
-  { id: "interaction", label: "Interaction" },
-  { id: "session_management", label: "Session Management" }
+const sections: { id: MentorshipSectionId; label: string; tint: string; bg: string }[] = [
+  { id: "discovery", label: "Discovery", tint: "#165DFF", bg: "#EEF4FF" },
+  { id: "interaction", label: "Interaction", tint: "#027A48", bg: "#ECFDF3" },
+  { id: "session_management", label: "Session Management", tint: "#B54708", bg: "#FFF7ED" }
 ];
 
 export default function MentorshipHubScreen() {
@@ -103,8 +103,12 @@ export default function MentorshipHubScreen() {
         {sections.map((item) => {
           const active = activeSection === item.id;
           return (
-            <TouchableOpacity key={item.id} style={[styles.chip, active && styles.chipActive]} onPress={() => setActiveSection(item.id)}>
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.label}</Text>
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.chip, { borderColor: item.tint }, active && { backgroundColor: item.bg }]}
+              onPress={() => setActiveSection(item.id)}
+            >
+              <Text style={[styles.chipText, { color: item.tint }, active && styles.chipTextActive]}>{item.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -119,15 +123,15 @@ export default function MentorshipHubScreen() {
       {!loading && activeSection === "discovery" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Discovery</Text>
-          <TouchableOpacity style={styles.card} onPress={() => router.push("/domains" as never)}>
+          <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/domains" as never)}>
             <Text style={styles.cardTitle}>Domains</Text>
             <Text style={styles.meta}>Browse mentorship categories and mentors.</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.card} onPress={() => router.push("/domain-guide" as never)}>
+          <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/domain-guide" as never)}>
             <Text style={styles.cardTitle}>Domain Guide</Text>
             <Text style={styles.meta}>Understand domain paths and sub-domains.</Text>
           </TouchableOpacity>
-          <View style={styles.card}>
+          <View style={[styles.card, styles.cardBlue]}>
             <Text style={styles.cardTitle}>Verified Mentor System</Text>
             {verifiedMentors.length === 0 ? (
               <Text style={styles.meta}>No verified mentors available now.</Text>
@@ -145,7 +149,7 @@ export default function MentorshipHubScreen() {
       {!loading && activeSection === "interaction" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Interaction</Text>
-          <View style={styles.card}>
+          <View style={[styles.card, styles.cardGreen]}>
             <Text style={styles.cardTitle}>Mentor Groups</Text>
             {mentorGroups.length === 0 ? (
               <Text style={styles.meta}>No mentor groups available.</Text>
@@ -157,7 +161,7 @@ export default function MentorshipHubScreen() {
               ))
             )}
           </View>
-          <View style={styles.card}>
+          <View style={[styles.card, styles.cardGreen]}>
             <Text style={styles.cardTitle}>Mentor Live Sessions</Text>
             {liveSessions.length === 0 ? (
               <Text style={styles.meta}>No live sessions scheduled.</Text>
@@ -177,22 +181,22 @@ export default function MentorshipHubScreen() {
           <Text style={styles.panelTitle}>Session Management</Text>
           {isMentor ? (
             <>
-              <TouchableOpacity style={styles.card} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
+              <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
                 <Text style={styles.cardTitle}>Session Requests</Text>
                 <Text style={styles.meta}>Open mentor requests management.</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.card} onPress={() => router.push("/mentor-dashboard?section=sessions" as never)}>
+              <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=sessions" as never)}>
                 <Text style={styles.cardTitle}>Sessions</Text>
                 <Text style={styles.meta}>Open mentor sessions management.</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.card} onPress={() => router.push("/mentor-dashboard?section=availability" as never)}>
+              <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=availability" as never)}>
                 <Text style={styles.cardTitle}>Availability</Text>
                 <Text style={styles.meta}>Open mentor availability controls.</Text>
               </TouchableOpacity>
             </>
           ) : (
             <>
-              <View style={styles.card}>
+              <View style={[styles.card, styles.cardOrange]}>
                 <Text style={styles.cardTitle}>Session History & Notes</Text>
                 {sessionHistory.length === 0 ? (
                   <Text style={styles.meta}>No completed sessions yet.</Text>
@@ -204,19 +208,19 @@ export default function MentorshipHubScreen() {
                   ))
                 )}
               </View>
-              <View style={styles.card}>
+              <View style={[styles.card, styles.cardOrange]}>
                 <Text style={styles.cardTitle}>Pending Payments</Text>
                 <Text style={styles.meta}>{pendingSessions.length} session(s)</Text>
               </View>
-              <View style={styles.card}>
+              <View style={[styles.card, styles.cardOrange]}>
                 <Text style={styles.cardTitle}>Awaiting Verification</Text>
                 <Text style={styles.meta}>{waitingSessions.length} session(s)</Text>
               </View>
-              <View style={styles.card}>
+              <View style={[styles.card, styles.cardOrange]}>
                 <Text style={styles.cardTitle}>Confirmed Sessions</Text>
                 <Text style={styles.meta}>{confirmedSessions.length} session(s)</Text>
               </View>
-              <View style={styles.card}>
+              <View style={[styles.card, styles.cardOrange]}>
                 <Text style={styles.cardTitle}>Legacy Booking Requests</Text>
                 <Text style={styles.meta}>{bookings.length} request(s)</Text>
               </View>
@@ -232,7 +236,7 @@ export default function MentorshipHubScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: "#F4F9F6", gap: 10 },
+  container: { padding: 16, backgroundColor: "#F3F6FB", gap: 10 },
   title: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   sub: { color: "#475467" },
   error: { color: "#B42318" },
@@ -245,9 +249,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8
   },
-  chipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
-  chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
-  chipTextActive: { color: "#1F7A4C" },
+  chipText: { fontWeight: "700", fontSize: 12 },
+  chipTextActive: { fontWeight: "800" },
   loadingWrap: { alignItems: "center", justifyContent: "center", minHeight: 180 },
   panel: { gap: 8 },
   panelTitle: { fontSize: 16, fontWeight: "800", color: "#1E2B24" },
@@ -259,6 +262,9 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 4
   },
+  cardBlue: { backgroundColor: "#EEF4FF", borderColor: "#C7D7FE" },
+  cardGreen: { backgroundColor: "#ECFDF3", borderColor: "#B7E5CC" },
+  cardOrange: { backgroundColor: "#FFF7ED", borderColor: "#F9DBAF" },
   cardTitle: { color: "#1E2B24", fontWeight: "800" },
   meta: { color: "#667085" },
   openBtn: {
@@ -271,4 +277,3 @@ const styles = StyleSheet.create({
   },
   openBtnText: { color: "#fff", fontWeight: "700" }
 });
-

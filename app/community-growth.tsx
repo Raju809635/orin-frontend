@@ -19,14 +19,14 @@ type LeaderboardResponse = { collegeName?: string; collegeTop: Array<{ rank: num
 type LibraryItem = { id: string; title: string; type: string; description?: string };
 type ReputationSummary = { score: number; levelTag: string; topPercent: number };
 
-const sections: { id: CommunitySectionId; label: string }[] = [
-  { id: "collaboration", label: "Community & Collaboration" },
-  { id: "challenges", label: "Challenges" },
-  { id: "certifications", label: "Certifications" },
-  { id: "opportunities", label: "Internships" },
-  { id: "leaderboard", label: "Leaderboard" },
-  { id: "library", label: "Knowledge Library" },
-  { id: "reputation", label: "Reputation & Ranking" }
+const sections: { id: CommunitySectionId; label: string; tint: string; bg: string }[] = [
+  { id: "collaboration", label: "Community & Collaboration", tint: "#6941C6", bg: "#F9F5FF" },
+  { id: "challenges", label: "Challenges", tint: "#B54708", bg: "#FFF7ED" },
+  { id: "certifications", label: "Certifications", tint: "#165DFF", bg: "#EEF4FF" },
+  { id: "opportunities", label: "Internships", tint: "#027A48", bg: "#ECFDF3" },
+  { id: "leaderboard", label: "Leaderboard", tint: "#B54708", bg: "#FFF7ED" },
+  { id: "library", label: "Knowledge Library", tint: "#175CD3", bg: "#EFF8FF" },
+  { id: "reputation", label: "Reputation & Ranking", tint: "#B42318", bg: "#FEF3F2" }
 ];
 
 export default function CommunityGrowthScreen() {
@@ -88,8 +88,12 @@ export default function CommunityGrowthScreen() {
         {sections.map((item) => {
           const active = activeSection === item.id;
           return (
-            <TouchableOpacity key={item.id} style={[styles.chip, active && styles.chipActive]} onPress={() => setActiveSection(item.id)}>
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{item.label}</Text>
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.chip, { borderColor: item.tint }, active && { backgroundColor: item.bg }]}
+              onPress={() => setActiveSection(item.id)}
+            >
+              <Text style={[styles.chipText, { color: item.tint }, active && styles.chipTextActive]}>{item.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -104,7 +108,7 @@ export default function CommunityGrowthScreen() {
       {!loading && activeSection === "collaboration" ? (
         <View style={styles.panel}>
           <Text style={styles.panelTitle}>Community & Collaboration</Text>
-          <View style={styles.card}>
+          <View style={[styles.card, styles.cardViolet]}>
             <Text style={styles.meta}>Join ORIN collaboration initiatives and partnership programs.</Text>
             <TouchableOpacity style={styles.openBtn} onPress={() => router.push("/collaborate" as never)}>
               <Text style={styles.openBtnText}>Open Collaborate</Text>
@@ -120,7 +124,7 @@ export default function CommunityGrowthScreen() {
             <Text style={styles.meta}>No active challenges right now.</Text>
           ) : (
             challenges.slice(0, 8).map((item) => (
-              <View key={item.id} style={styles.card}>
+              <View key={item.id} style={[styles.card, styles.cardOrange]}>
                 <Text style={styles.cardTitle}>{item.title}</Text>
                 <Text style={styles.meta}>{item.domain || "General"} | Participants: {item.participantsCount || 0}</Text>
                 <Text style={styles.meta}>Deadline: {new Date(item.deadline).toLocaleDateString()}</Text>
@@ -137,7 +141,7 @@ export default function CommunityGrowthScreen() {
             <Text style={styles.meta}>No certifications available.</Text>
           ) : (
             certifications.slice(0, 8).map((item) => (
-              <View key={item.id} style={styles.card}>
+              <View key={item.id} style={[styles.card, styles.cardBlue]}>
                 <Text style={styles.cardTitle}>{item.title}</Text>
                 <Text style={styles.meta}>Level: {item.level || "Beginner"}</Text>
               </View>
@@ -153,7 +157,7 @@ export default function CommunityGrowthScreen() {
             <Text style={styles.meta}>No opportunities available right now.</Text>
           ) : (
             opportunities.slice(0, 8).map((item) => (
-              <View key={item._id} style={styles.card}>
+              <View key={item._id} style={[styles.card, styles.cardGreen]}>
                 <Text style={styles.cardTitle}>{item.title}</Text>
                 <Text style={styles.meta}>{item.company || "ORIN Network"} | {item.role || item.type || "Opportunity"}</Text>
                 <Text style={styles.meta}>Duration: {item.duration || "Flexible"}</Text>
@@ -169,7 +173,7 @@ export default function CommunityGrowthScreen() {
           {!leaderboard || leaderboard.collegeTop.length === 0 ? (
             <Text style={styles.meta}>Leaderboard not available right now.</Text>
           ) : (
-            <View style={styles.card}>
+            <View style={[styles.card, styles.cardOrange]}>
               <Text style={styles.cardTitle}>{leaderboard.collegeName || "Your College"}</Text>
               {leaderboard.collegeTop.slice(0, 8).map((entry) => (
                 <Text key={`${entry.rank}-${entry.name}`} style={styles.meta}>
@@ -188,7 +192,7 @@ export default function CommunityGrowthScreen() {
             <Text style={styles.meta}>No library items available.</Text>
           ) : (
             knowledgeLibrary.slice(0, 10).map((item) => (
-              <View key={item.id} style={styles.card}>
+              <View key={item.id} style={[styles.card, styles.cardCyan]}>
                 <Text style={styles.cardTitle}>{item.title}</Text>
                 <Text style={styles.meta}>{item.type}</Text>
                 <Text style={styles.meta}>{item.description || ""}</Text>
@@ -204,7 +208,7 @@ export default function CommunityGrowthScreen() {
           {!reputation ? (
             <Text style={styles.meta}>Reputation data unavailable.</Text>
           ) : (
-            <View style={styles.card}>
+            <View style={[styles.card, styles.cardRed]}>
               <Text style={styles.cardTitle}>Reputation Score: {reputation.score}</Text>
               <Text style={styles.meta}>{reputation.levelTag}</Text>
               <Text style={styles.meta}>Top {reputation.topPercent}% learners</Text>
@@ -217,7 +221,7 @@ export default function CommunityGrowthScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16, backgroundColor: "#F4F9F6", gap: 10 },
+  container: { padding: 16, backgroundColor: "#F3F6FB", gap: 10 },
   title: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   sub: { color: "#475467" },
   error: { color: "#B42318" },
@@ -230,9 +234,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8
   },
-  chipActive: { borderColor: "#1F7A4C", backgroundColor: "#E8F5EE" },
-  chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
-  chipTextActive: { color: "#1F7A4C" },
+  chipText: { fontWeight: "700", fontSize: 12 },
+  chipTextActive: { fontWeight: "800" },
   loadingWrap: { alignItems: "center", justifyContent: "center", minHeight: 180 },
   panel: { gap: 8 },
   panelTitle: { fontSize: 16, fontWeight: "800", color: "#1E2B24" },
@@ -244,6 +247,12 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 4
   },
+  cardViolet: { backgroundColor: "#F9F5FF", borderColor: "#E2D6FF" },
+  cardOrange: { backgroundColor: "#FFF7ED", borderColor: "#F9DBAF" },
+  cardBlue: { backgroundColor: "#EEF4FF", borderColor: "#C7D7FE" },
+  cardGreen: { backgroundColor: "#ECFDF3", borderColor: "#B7E5CC" },
+  cardCyan: { backgroundColor: "#EFF8FF", borderColor: "#B2DDFF" },
+  cardRed: { backgroundColor: "#FEF3F2", borderColor: "#F7C1BB" },
   cardTitle: { color: "#1E2B24", fontWeight: "800" },
   meta: { color: "#667085" },
   openBtn: {
@@ -256,4 +265,3 @@ const styles = StyleSheet.create({
   },
   openBtnText: { color: "#fff", fontWeight: "700" }
 });
-
