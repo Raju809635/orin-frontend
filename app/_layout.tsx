@@ -248,6 +248,10 @@ function RootDrawer() {
           <View style={styles.drawerSubList}>
             <DrawerItem label="Domain Guide" onPress={() => router.push("/domain-guide" as never)} />
             <DrawerItem
+              label="Daily Career Quiz"
+              onPress={() => router.push("/student-dashboard?section=overview&openQuiz=1" as never)}
+            />
+            <DrawerItem
               label="Knowledge Library"
               onPress={() =>
                 router.push((user?.role === "mentor" ? "/mentor-dashboard?section=growth" : "/student-dashboard?section=growth") as never)

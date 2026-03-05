@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
+  Pressable,
   Image,
   Linking,
   RefreshControl,
@@ -10,10 +12,12 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  Animated,
   View
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
@@ -77,12 +81,74 @@ type DailyTask = {
   completed: boolean;
 };
 
+type DailyQuizQuestion = {
+  id: string;
+  question: string;
+  options: string[];
+  correct: string;
+  difficulty: "easy" | "medium" | "hard";
+  explanation: string;
+  skill: string;
+};
+
+type DailyQuizData = {
+  totalQuestions: number;
+  startDifficulty: "easy" | "medium" | "hard";
+  questionPool: DailyQuizQuestion[];
+};
+
+type DailyQuizSummary = {
+  score: number;
+  totalQuestions: number;
+  xpEarned: number;
+  streak: number;
+};
+
+type SkillRadarData = {
+  domain: string;
+  skills: Array<{ name: string; score: number }>;
+};
+
+type CareerIntelligenceData = {
+  strength: string;
+  needsImprovement: string[];
+  recommendedNextStep: string;
+  mentorRecommendations?: Array<{ mentorId: string; name: string; matchScore: number }>;
+  trendingOpportunity?: { title: string; company?: string; role?: string } | null;
+};
+
+type DailyQuizResponse = {
+  completedToday: boolean;
+  dateKey: string;
+  domain: string;
+  message?: string;
+  streak?: number;
+  result?: DailyQuizSummary | null;
+  quiz?: DailyQuizData | null;
+};
+
+type DailyQuizSubmitResponse = {
+  message?: string;
+  result: DailyQuizSummary;
+  skillRadar?: SkillRadarData;
+  careerIntelligence?: CareerIntelligenceData;
+};
+
 type DailyDashboard = {
   tasks: DailyTask[];
   streakDays: number;
   xp: number;
   levelTag: string;
   reputationScore: number;
+  dailyQuiz?: {
+    completedToday: boolean;
+    domain: string;
+    attemptsLeft: number;
+    message: string;
+    result?: DailyQuizSummary | null;
+  };
+  skillRadar?: SkillRadarData;
+  careerIntelligence?: CareerIntelligenceData | null;
   leaderboard?: {
     globalRank?: number | null;
     collegeRank?: number | null;
@@ -245,8 +311,9 @@ const newsTabs: { key: NewsCategoryKey; label: string }[] = [
 ];
 
 export default function StudentDashboard() {
-  const params = useLocalSearchParams<{ section?: string }>();
+  const params = useLocalSearchParams<{ section?: string; openQuiz?: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -259,7 +326,28 @@ export default function StudentDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [networkFeed, setNetworkFeed] = useState<NetworkPost[]>([]);
   const [dailyDashboard, setDailyDashboard] = useState<DailyDashboard | null>(null);
-  const [completingTaskKey, setCompletingTaskKey] = useState<string | null>(null);
+  const [dailyQuiz, setDailyQuiz] = useState<DailyQuizResponse | null>(null);
+  const [quizVisible, setQuizVisible] = useState(false);
+  const [quizQuestions, setQuizQuestions] = useState<DailyQuizQuestion[]>([]);
+  const [quizIndex, setQuizIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [quizFeedback, setQuizFeedback] = useState<"correct" | "wrong" | null>(null);
+  const [quizXp, setQuizXp] = useState(0);
+  const [quizAnswers, setQuizAnswers] = useState<
+    Array<{
+      questionId: string;
+      skill: string;
+      difficulty: "easy" | "medium" | "hard";
+      selectedOption: string;
+      correctOption: string;
+      isCorrect: boolean;
+    }>
+  >([]);
+  const [quizResult, setQuizResult] = useState<DailyQuizSummary | null>(null);
+  const [quizLoading, setQuizLoading] = useState(false);
+  const [submittingQuiz, setSubmittingQuiz] = useState(false);
+  const [quizMessage, setQuizMessage] = useState("");
+  const [slideAnim] = useState(new Animated.Value(0));
   const [suggestions, setSuggestions] = useState<SmartSuggestion[]>([]);
   const [mentorMatches, setMentorMatches] = useState<MentorMatch[]>([]);
   const [sessionHistory, setSessionHistory] = useState<SessionHistoryItem[]>([]);
@@ -459,6 +547,15 @@ export default function StudentDashboard() {
       setActiveSection(section);
     }
   }, [params.section]);
+
+  useEffect(() => {
+    const openQuiz = String(params.openQuiz || "");
+    if (openQuiz === "1") {
+      setActiveSection("overview");
+      openDailyQuiz();
+      router.replace("/student-dashboard?section=overview" as never);
+    }
+  }, [params.openQuiz]);
 
   const pendingPaymentSessions = useMemo(
     () =>
@@ -692,19 +789,146 @@ export default function StudentDashboard() {
     );
   }
 
-  async function completeDailyTask(taskKey: string) {
+  function nextDifficulty(current: "easy" | "medium" | "hard", wasCorrect: boolean): "easy" | "medium" | "hard" {
+    if (wasCorrect) {
+      if (current === "easy") return "medium";
+      if (current === "medium") return "hard";
+      return "hard";
+    }
+    if (current === "hard") return "medium";
+    if (current === "medium") return "easy";
+    return "easy";
+  }
+
+  function pickQuestion(
+    pool: DailyQuizQuestion[],
+    usedIds: Set<string>,
+    preferredDifficulty: "easy" | "medium" | "hard"
+  ): DailyQuizQuestion | null {
+    const byDifficulty = pool.find(
+      (item) => item.difficulty === preferredDifficulty && !usedIds.has(String(item.id))
+    );
+    if (byDifficulty) return byDifficulty;
+    return pool.find((item) => !usedIds.has(String(item.id))) || null;
+  }
+
+  async function openDailyQuiz() {
     try {
-      setCompletingTaskKey(taskKey);
+      setQuizLoading(true);
       setError(null);
-      const { data } = await api.post<{ message?: string; xpEarned?: number }>("/api/network/daily-task/complete", {
-        taskKey
+      const { data } = await api.get<DailyQuizResponse>("/api/network/daily-quiz");
+      setDailyQuiz(data || null);
+      if (data?.completedToday || !data?.quiz) {
+        setQuizMessage(data?.message || "Today's quiz already completed.");
+        notify(data?.message || "Today's quiz already completed.");
+        await fetchDashboard(true);
+        return;
+      }
+
+      const used = new Set<string>();
+      const difficulty = data.quiz.startDifficulty || "medium";
+      const generated: DailyQuizQuestion[] = [];
+      for (let i = 0; i < 5; i += 1) {
+        const question = pickQuestion(data.quiz.questionPool || [], used, difficulty);
+        if (!question) break;
+        generated.push(question);
+        used.add(String(question.id));
+      }
+      if (generated.length < 5) {
+        throw new Error("Daily quiz pool is incomplete.");
+      }
+
+      setQuizQuestions(generated);
+      setQuizIndex(0);
+      setSelectedOption(null);
+      setQuizFeedback(null);
+      setQuizXp(0);
+      setQuizAnswers([]);
+      setQuizResult(null);
+      setQuizMessage("");
+      slideAnim.setValue(0);
+      setQuizVisible(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Failed to load daily quiz.");
+    } finally {
+      setQuizLoading(false);
+    }
+  }
+
+  function submitAnswerAndNext() {
+    const current = quizQuestions[quizIndex];
+    if (!current || !selectedOption) return;
+    const isCorrect = selectedOption === current.correct;
+    const points = isCorrect ? 10 : 0;
+    const feedbackText = isCorrect ? "Great job!" : "Keep going!";
+
+    setQuizFeedback(isCorrect ? "correct" : "wrong");
+    if (points > 0) {
+      setQuizXp((prev) => prev + points);
+      notify(`+${points} XP`);
+    } else {
+      notify(feedbackText);
+    }
+
+    const answerRow = {
+      questionId: current.id,
+      skill: current.skill,
+      difficulty: current.difficulty,
+      selectedOption,
+      correctOption: current.correct,
+      isCorrect
+    };
+    setQuizAnswers((prev) => [...prev, answerRow]);
+
+    const remainingPool = quizQuestions.filter((item, idx) => idx > quizIndex);
+    if (remainingPool.length > 0) {
+      const desired = nextDifficulty(current.difficulty, isCorrect);
+      const nextQuestion =
+        remainingPool.find((item) => item.difficulty === desired) || remainingPool[0];
+      if (nextQuestion && nextQuestion.id !== quizQuestions[quizIndex + 1]?.id) {
+        setQuizQuestions((prev) => {
+          const copy = [...prev];
+          const foundIndex = copy.findIndex((item, idx) => idx > quizIndex && item.id === nextQuestion.id);
+          if (foundIndex > -1) {
+            const temp = copy[quizIndex + 1];
+            copy[quizIndex + 1] = copy[foundIndex];
+            copy[foundIndex] = temp;
+          }
+          return copy;
+        });
+      }
+    }
+  }
+
+  function goNextQuestion() {
+    if (quizIndex >= quizQuestions.length - 1) return;
+    setSelectedOption(null);
+    setQuizFeedback(null);
+    Animated.sequence([
+      Animated.timing(slideAnim, { toValue: 1, duration: 160, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 0, useNativeDriver: true })
+    ]).start(() => setQuizIndex((prev) => prev + 1));
+  }
+
+  async function finishQuiz() {
+    try {
+      setSubmittingQuiz(true);
+      setError(null);
+      const payloadAnswers = quizAnswers.length === 5 ? quizAnswers : [];
+      if (payloadAnswers.length !== 5) {
+        throw new Error("Please complete all 5 questions.");
+      }
+      const { data } = await api.post<DailyQuizSubmitResponse>("/api/network/daily-quiz/submit", {
+        domain: dailyQuiz?.domain || dailyDashboard?.dailyQuiz?.domain || "Technology & AI",
+        answers: payloadAnswers
       });
-      notify(data?.message || "Task completed.");
+      setQuizResult(data?.result || null);
+      notify("Quiz completed.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to complete daily task.");
+      setError(e?.response?.data?.message || "Failed to submit quiz.");
     } finally {
-      setCompletingTaskKey(null);
+      setSubmittingQuiz(false);
     }
   }
 
@@ -764,7 +988,13 @@ export default function StudentDashboard() {
     );
   }
 
+  const currentQuizQuestion = quizQuestions[quizIndex];
+  const progressRatio = quizQuestions.length ? (quizIndex + 1) / quizQuestions.length : 0;
+  const selectedAnswersCount = quizAnswers.length;
+  const canFinalizeQuiz = selectedAnswersCount === 5 && !quizResult;
+
   return (
+    <>
     <ScrollView
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchDashboard(true)} />}
@@ -918,34 +1148,17 @@ export default function StudentDashboard() {
 
       {FEATURE_FLAGS.dailyEngagement ? (
         <>
-          <Text style={styles.sectionHeader}>Daily Challenge</Text>
+          <Text style={styles.sectionHeader}>Daily Career Quiz</Text>
           <View style={styles.dailyCard}>
             {!dailyDashboard ? (
-              <Text style={styles.empty}>Daily challenge unavailable right now.</Text>
+              <Text style={styles.empty}>Daily quiz unavailable right now.</Text>
             ) : (
               <>
                 <Text style={styles.dailyTitle}>Reputation Score: {dailyDashboard.reputationScore}</Text>
                 <Text style={styles.dailyMeta}>Tag: {dailyDashboard.levelTag}</Text>
-                {(dailyDashboard.tasks || []).map((task) => {
-                  const inProgress = completingTaskKey === task.key;
-                  return (
-                    <View key={task.key} style={styles.dailyTaskRow}>
-                      <Text style={styles.dailyItem}>
-                        {task.completed ? "Done: " : "- "}
-                        {task.title} (+{task.xp} XP)
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.dailyTaskButton, task.completed && styles.dailyTaskButtonDone]}
-                        onPress={() => completeDailyTask(task.key)}
-                        disabled={task.completed || inProgress}
-                      >
-                        <Text style={styles.dailyTaskButtonText}>
-                          {task.completed ? "Done" : inProgress ? "..." : "Complete"}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
+                <Text style={styles.dailyItem}>
+                  Domain: {dailyDashboard.dailyQuiz?.domain || "Career Domain"}
+                </Text>
                 <Text style={styles.dailyMeta}>
                   Streak: {dailyDashboard.streakDays} days | XP: {dailyDashboard.xp}
                 </Text>
@@ -953,6 +1166,34 @@ export default function StudentDashboard() {
                   Leaderboard: College #{dailyDashboard.leaderboard?.collegeRank ?? "-"} | Global #
                   {dailyDashboard.leaderboard?.globalRank ?? "-"}
                 </Text>
+                {dailyDashboard.dailyQuiz?.result ? (
+                  <View style={styles.dailyResultCard}>
+                    <Text style={styles.dailyResultTitle}>Today's Quiz Completed</Text>
+                    <Text style={styles.dailyMeta}>
+                      Score: {dailyDashboard.dailyQuiz.result.score}/{dailyDashboard.dailyQuiz.result.totalQuestions}
+                    </Text>
+                    <Text style={styles.dailyMeta}>XP Earned: +{dailyDashboard.dailyQuiz.result.xpEarned}</Text>
+                    <Text style={styles.dailyMeta}>Streak: {dailyDashboard.dailyQuiz.result.streak} days</Text>
+                  </View>
+                ) : null}
+                <TouchableOpacity
+                  style={[
+                    styles.dailyTaskButton,
+                    (dailyDashboard.dailyQuiz?.completedToday || quizLoading) && styles.dailyTaskButtonDone
+                  ]}
+                  onPress={openDailyQuiz}
+                  disabled={Boolean(dailyDashboard.dailyQuiz?.completedToday) || quizLoading}
+                >
+                  <Text style={styles.dailyTaskButtonText}>
+                    {quizLoading
+                      ? "Loading..."
+                      : dailyDashboard.dailyQuiz?.completedToday
+                        ? "Completed for Today"
+                        : "Start Daily Quiz"}
+                  </Text>
+                </TouchableOpacity>
+                {dailyDashboard.dailyQuiz?.message ? <Text style={styles.dailyMeta}>{dailyDashboard.dailyQuiz.message}</Text> : null}
+                {quizMessage ? <Text style={styles.dailyMeta}>{quizMessage}</Text> : null}
               </>
             )}
           </View>
@@ -1037,6 +1278,49 @@ export default function StudentDashboard() {
             <Text style={styles.historyMeta}>
               Suggested Courses: {skillGap.suggestions?.courses?.slice(0, 3).join(", ") || "No suggestions"}
             </Text>
+          </>
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>Skill Radar</Text>
+      <View style={styles.roadmapCard}>
+        {!dailyDashboard?.skillRadar || (dailyDashboard.skillRadar.skills || []).length === 0 ? (
+          <Text style={styles.empty}>Complete daily quiz to unlock your skill radar.</Text>
+        ) : (
+          <>
+            <Text style={styles.roadmapGoal}>Domain: {dailyDashboard.skillRadar.domain}</Text>
+            {(dailyDashboard.skillRadar.skills || []).map((item) => (
+              <View key={`${item.name}-${item.score}`} style={styles.radarRow}>
+                <Text style={styles.historyMeta}>{item.name}</Text>
+                <Text style={styles.historyMeta}>{item.score}/100</Text>
+              </View>
+            ))}
+          </>
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>Career Intelligence</Text>
+      <View style={styles.roadmapCard}>
+        {!dailyDashboard?.careerIntelligence ? (
+          <Text style={styles.empty}>Complete today&apos;s quiz to get personalized intelligence.</Text>
+        ) : (
+          <>
+            <Text style={styles.roadmapGoal}>Strength: {dailyDashboard.careerIntelligence.strength}</Text>
+            <Text style={styles.historyMeta}>
+              Needs Improvement: {(dailyDashboard.careerIntelligence.needsImprovement || []).join(", ") || "No major gaps"}
+            </Text>
+            <Text style={styles.historyMeta}>Next Step: {dailyDashboard.careerIntelligence.recommendedNextStep}</Text>
+            {dailyDashboard.careerIntelligence.trendingOpportunity?.title ? (
+              <Text style={styles.historyMeta}>
+                Trending Opportunity: {dailyDashboard.careerIntelligence.trendingOpportunity.title}
+              </Text>
+            ) : null}
+            {(dailyDashboard.careerIntelligence.mentorRecommendations || []).length ? (
+              <Text style={styles.historyMeta}>
+                Recommended Mentors:{" "}
+                {dailyDashboard.careerIntelligence.mentorRecommendations?.map((item) => item.name).join(", ")}
+              </Text>
+            ) : null}
           </>
         )}
       </View>
@@ -1479,6 +1763,105 @@ export default function StudentDashboard() {
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
     </ScrollView>
+    <Modal visible={quizVisible} transparent={false} animationType="slide" onRequestClose={() => setQuizVisible(false)}>
+      <View style={[styles.quizModalWrap, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 14 }]}>
+        <View style={styles.quizTopBar}>
+          <Text style={styles.quizDomain}>{dailyQuiz?.domain || dailyDashboard?.dailyQuiz?.domain || "Career Quiz"}</Text>
+          <TouchableOpacity onPress={() => setQuizVisible(false)} style={styles.quizCloseBtn}>
+            <Ionicons name="close" size={18} color="#1E2B24" />
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.quizMeta}>🔥 Quiz Streak: {dailyDashboard?.streakDays || dailyQuiz?.streak || 0} days</Text>
+        <Text style={styles.quizMeta}>XP: {quizXp}</Text>
+        <View style={styles.quizProgressTrack}>
+          <View style={[styles.quizProgressFill, { width: `${Math.max(6, progressRatio * 100)}%` }]} />
+        </View>
+        {quizResult ? (
+          <View style={styles.quizResultScreen}>
+            <Text style={styles.quizResultEmoji}>🎉</Text>
+            <Text style={styles.quizResultTitle}>Quiz Completed</Text>
+            <Text style={styles.quizResultMeta}>
+              Score: {quizResult.score}/{quizResult.totalQuestions}
+            </Text>
+            <Text style={styles.quizResultMeta}>XP Earned: +{quizResult.xpEarned}</Text>
+            <Text style={styles.quizResultMeta}>🔥 Streak: {quizResult.streak} days</Text>
+            <TouchableOpacity style={styles.dailyTaskButton} onPress={() => setQuizVisible(false)}>
+              <Text style={styles.dailyTaskButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        ) : currentQuizQuestion ? (
+          <Animated.View
+            style={[
+              styles.quizQuestionCard,
+              { transform: [{ translateX: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -16] }) }] }
+            ]}
+          >
+            <Text style={styles.quizQuestionMeta}>
+              Question {quizIndex + 1}/5 • {currentQuizQuestion.difficulty.toUpperCase()}
+            </Text>
+            <Text style={styles.quizQuestionText}>{currentQuizQuestion.question}</Text>
+            <View style={styles.quizOptionsWrap}>
+              {currentQuizQuestion.options.map((option) => {
+                const isSelected = selectedOption === option;
+                const showCorrect = quizFeedback && option === currentQuizQuestion.correct;
+                const showWrong = quizFeedback === "wrong" && isSelected && option !== currentQuizQuestion.correct;
+                return (
+                  <Pressable
+                    key={`${currentQuizQuestion.id}-${option}`}
+                    style={[
+                      styles.quizOptionCard,
+                      isSelected && styles.quizOptionCardSelected,
+                      showCorrect && styles.quizOptionCardCorrect,
+                      showWrong && styles.quizOptionCardWrong
+                    ]}
+                    onPress={() => {
+                      if (!quizFeedback) setSelectedOption(option);
+                    }}
+                  >
+                    <Text style={styles.quizOptionText}>{option}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {quizFeedback ? (
+              <View style={styles.quizExplainWrap}>
+                <Text style={quizFeedback === "correct" ? styles.quizFeedbackCorrect : styles.quizFeedbackWrong}>
+                  {quizFeedback === "correct" ? "✅ Correct +10 XP" : `❌ Incorrect. Correct: ${currentQuizQuestion.correct}`}
+                </Text>
+                <Text style={styles.quizExplainText}>{currentQuizQuestion.explanation}</Text>
+              </View>
+            ) : null}
+            {!quizFeedback ? (
+              <TouchableOpacity
+                style={[styles.dailyTaskButton, !selectedOption && styles.dailyTaskButtonDone]}
+                disabled={!selectedOption}
+                onPress={submitAnswerAndNext}
+              >
+                <Text style={styles.dailyTaskButtonText}>Check Answer</Text>
+              </TouchableOpacity>
+            ) : quizIndex < 4 ? (
+              <TouchableOpacity style={styles.dailyTaskButton} onPress={goNextQuestion}>
+                <Text style={styles.dailyTaskButtonText}>Next</Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[styles.dailyTaskButton, (submittingQuiz || !canFinalizeQuiz) && styles.dailyTaskButtonDone]}
+                onPress={finishQuiz}
+                disabled={submittingQuiz || !canFinalizeQuiz}
+              >
+                <Text style={styles.dailyTaskButtonText}>{submittingQuiz ? "Submitting..." : "Finish Quiz"}</Text>
+              </TouchableOpacity>
+            )}
+          </Animated.View>
+        ) : (
+          <View style={styles.quizResultScreen}>
+            <ActivityIndicator size="small" color="#1F7A4C" />
+            <Text style={styles.quizResultMeta}>Preparing quiz...</Text>
+          </View>
+        )}
+      </View>
+    </Modal>
+    </>
   );
 }
 
@@ -1899,6 +2282,24 @@ const styles = StyleSheet.create({
   dailyTaskButtonDone: { backgroundColor: "#12B76A" },
   dailyTaskButtonText: { color: "#fff", fontWeight: "700", fontSize: 12 },
   dailyMeta: { marginTop: 6, color: "#475467", fontWeight: "600", fontSize: 12 },
+  dailyResultCard: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: "#B2CCFF",
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    padding: 10
+  },
+  dailyResultTitle: { color: "#1849A9", fontWeight: "800", marginBottom: 4 },
+  radarRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EAECF0",
+    paddingBottom: 5
+  },
   suggestionWrap: { gap: 9, marginBottom: 8 },
   suggestionCard: {
     backgroundColor: "#F5F3FF",
@@ -1977,7 +2378,89 @@ const styles = StyleSheet.create({
   error: { color: "#B42318", marginBottom: 8 },
   empty: { color: "#667085", marginTop: 4 },
   logout: { marginTop: 14, padding: 12, alignItems: "center" },
-  logoutText: { color: "#7A271A", fontWeight: "700" }
+  logoutText: { color: "#7A271A", fontWeight: "700" },
+  quizModalWrap: {
+    flex: 1,
+    backgroundColor: "#F3F8F6",
+    paddingHorizontal: 16
+  },
+  quizTopBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10
+  },
+  quizDomain: {
+    color: "#0F172A",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  quizCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  quizMeta: { color: "#475467", fontWeight: "700", marginBottom: 6 },
+  quizProgressTrack: {
+    width: "100%",
+    height: 10,
+    backgroundColor: "#E4E7EC",
+    borderRadius: 999,
+    overflow: "hidden",
+    marginBottom: 12
+  },
+  quizProgressFill: {
+    height: "100%",
+    backgroundColor: "#12B76A",
+    borderRadius: 999
+  },
+  quizQuestionCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 14,
+    padding: 14
+  },
+  quizQuestionMeta: { color: "#027A48", fontWeight: "800", marginBottom: 8 },
+  quizQuestionText: { color: "#101828", fontWeight: "800", fontSize: 17, lineHeight: 24, marginBottom: 10 },
+  quizOptionsWrap: { gap: 8 },
+  quizOptionCard: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 12
+  },
+  quizOptionCardSelected: { borderColor: "#2E90FA", backgroundColor: "#EFF8FF" },
+  quizOptionCardCorrect: { borderColor: "#12B76A", backgroundColor: "#ECFDF3" },
+  quizOptionCardWrong: { borderColor: "#F04438", backgroundColor: "#FEF3F2" },
+  quizOptionText: { color: "#1E2B24", fontWeight: "700" },
+  quizExplainWrap: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    borderRadius: 10,
+    backgroundColor: "#F9FAFB",
+    padding: 10
+  },
+  quizFeedbackCorrect: { color: "#027A48", fontWeight: "800", marginBottom: 4 },
+  quizFeedbackWrong: { color: "#B42318", fontWeight: "800", marginBottom: 4 },
+  quizExplainText: { color: "#475467", lineHeight: 18 },
+  quizResultScreen: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8
+  },
+  quizResultEmoji: { fontSize: 38 },
+  quizResultTitle: { color: "#0F172A", fontWeight: "900", fontSize: 22 },
+  quizResultMeta: { color: "#475467", fontWeight: "700" }
 });
 
 
