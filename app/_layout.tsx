@@ -1,6 +1,18 @@
 import "react-native-gesture-handler";
 import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Alert, AppState, AppStateStatus, Image, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  AppStateStatus,
+  BackHandler,
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { Drawer } from "expo-router/drawer";
 import { usePathname, useRouter } from "expo-router";
 import { DrawerContentScrollView, DrawerItem, DrawerContentComponentProps } from "@react-navigation/drawer";
@@ -90,6 +102,41 @@ function RootDrawer() {
       }
     }
   }, [isBootstrapping, isAuthenticated, pathname, router, user]);
+
+  useEffect(() => {
+    if (Platform.OS !== "android") return;
+
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (isBootstrapping) return true;
+
+      const isAuthScreen = pathname === "/login" || pathname === "/register" || pathname === "/verify-email";
+      if (!isAuthenticated || !user) {
+        return false;
+      }
+
+      const homePath = homeRouteForUser(user);
+      const atHome = pathname.startsWith(homePath.split("?")[0]);
+
+      if (atHome || isAuthScreen) {
+        return false;
+      }
+
+      try {
+        // Prefer navigation history first.
+        if (typeof (router as any).canGoBack === "function" && (router as any).canGoBack()) {
+          router.back();
+          return true;
+        }
+      } catch {
+        // Fall through to dashboard redirect.
+      }
+
+      router.replace(homePath as never);
+      return true;
+    });
+
+    return () => sub.remove();
+  }, [isAuthenticated, isBootstrapping, pathname, router, user]);
 
   useEffect(() => {
     let active = true;
