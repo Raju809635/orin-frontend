@@ -4,6 +4,7 @@ import {
   Alert,
   Modal,
   Pressable,
+  BackHandler,
   Image,
   Linking,
   RefreshControl,
@@ -556,6 +557,33 @@ export default function StudentDashboard() {
       router.replace("/student-dashboard?section=overview" as never);
     }
   }, [params.openQuiz]);
+
+  useFocusEffect(
+    useCallback(() => {
+      const onBackPress = () => {
+        if (quizVisible) {
+          setQuizVisible(false);
+          return true;
+        }
+        if (activeSection === "growth" && growthSubSection !== "ai") {
+          setGrowthSubSection("ai");
+          return true;
+        }
+        if (activeSection !== "overview") {
+          setActiveSection("overview");
+          return true;
+        }
+        if (searchQuery.trim()) {
+          setSearchQuery("");
+          return true;
+        }
+        return false;
+      };
+
+      const subscription = BackHandler.addEventListener("hardwareBackPress", onBackPress);
+      return () => subscription.remove();
+    }, [quizVisible, activeSection, growthSubSection, searchQuery])
+  );
 
   const pendingPaymentSessions = useMemo(
     () =>
