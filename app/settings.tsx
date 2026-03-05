@@ -215,6 +215,9 @@ export default function SettingsScreen() {
         <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/notifications" as never)}>
           <Text style={styles.linkText}>Notifications</Text>
         </TouchableOpacity>
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/saved-posts" as never)}>
+          <Text style={styles.linkText}>Saved Posts</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.card}>

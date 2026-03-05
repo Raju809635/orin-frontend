@@ -32,6 +32,18 @@ type FeedPost = {
   comments?: FeedComment[];
   createdAt?: string;
   mediaUrls?: string[];
+  userReaction?: "like" | "love" | "care" | "haha" | "wow" | "sad" | "angry" | null;
+  isSaved?: boolean;
+  saveCount?: number;
+  reactionCounts?: {
+    like?: number;
+    love?: number;
+    care?: number;
+    haha?: number;
+    wow?: number;
+    sad?: number;
+    angry?: number;
+  };
   authorId?: {
     _id?: string;
     name?: string;
@@ -44,6 +56,7 @@ type FeedPost = {
 type FeedComment = {
   _id: string;
   content: string;
+  createdAt?: string;
   authorId?: { _id?: string; name?: string; role?: string } | null;
 };
 
@@ -72,6 +85,16 @@ const networkSections: { id: NetworkSectionId; label: string }[] = [
 const FEED_BOTTOM_NAV_SPACE = 108;
 const { width } = Dimensions.get("window");
 const carouselWidth = Math.max(width - 56, 280);
+const REACTION_ORDER = ["like", "love", "care", "haha", "wow", "sad", "angry"] as const;
+const REACTION_META: Record<(typeof REACTION_ORDER)[number], { emoji: string; label: string }> = {
+  like: { emoji: "👍", label: "Like" },
+  love: { emoji: "❤️", label: "Love" },
+  care: { emoji: "🤗", label: "Care" },
+  haha: { emoji: "😂", label: "Haha" },
+  wow: { emoji: "😮", label: "Wow" },
+  sad: { emoji: "😢", label: "Sad" },
+  angry: { emoji: "😡", label: "Angry" }
+};
 
 function formatPostTime(dateValue?: string) {
   if (!dateValue) return "Just now";
@@ -108,6 +131,13 @@ export default function NetworkScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingPostImage, setUploadingPostImage] = useState(false);
+  const [commentsModal, setCommentsModal] = useState<{ visible: boolean; postId: string; comments: FeedComment[] }>({
+    visible: false,
+    postId: "",
+    comments: []
+  });
+  const [editingCommentId, setEditingCommentId] = useState<string>("");
+  const [editingCommentText, setEditingCommentText] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -226,7 +256,7 @@ export default function NetworkScreen() {
     }
   }
 
-  async function react(postId: string, action: "like" | "share") {
+  async function react(postId: string, action: "like" | "react" | "save" | "share", reactionType?: (typeof REACTION_ORDER)[number]) {
     try {
       const post = posts.find((p) => p._id === postId);
       if (action === "share" && post?.content) {
@@ -234,7 +264,7 @@ export default function NetworkScreen() {
           message: `${post.content}\n\nShared via ORIN`
         });
       }
-      await api.post(`/api/network/feed/${postId}/react`, { action });
+      await api.post(`/api/network/feed/${postId}/react`, reactionType ? { action, reactionType } : { action });
       await loadData(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || `Failed to ${action} post.`);
@@ -250,6 +280,53 @@ export default function NetworkScreen() {
       await loadData(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to comment.");
+    }
+  }
+
+  async function openComments(postId: string) {
+    try {
+      setError(null);
+      const { data } = await api.get<FeedComment[]>(`/api/network/feed/${postId}/comments`);
+      setCommentsModal({ visible: true, postId, comments: data || [] });
+      setEditingCommentId("");
+      setEditingCommentText("");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to load comments.");
+    }
+  }
+
+  async function saveCommentEdit() {
+    if (!commentsModal.postId || !editingCommentId || !editingCommentText.trim()) return;
+    try {
+      setError(null);
+      const { data } = await api.patch<FeedComment>(
+        `/api/network/feed/${commentsModal.postId}/comment/${editingCommentId}`,
+        { content: editingCommentText.trim() }
+      );
+      setCommentsModal((prev) => ({
+        ...prev,
+        comments: prev.comments.map((item) => (item._id === editingCommentId ? { ...item, ...data } : item))
+      }));
+      setEditingCommentId("");
+      setEditingCommentText("");
+      await loadData(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to update comment.");
+    }
+  }
+
+  async function removeComment(commentId: string) {
+    if (!commentsModal.postId) return;
+    try {
+      setError(null);
+      await api.delete(`/api/network/feed/${commentsModal.postId}/comment/${commentId}`);
+      setCommentsModal((prev) => ({
+        ...prev,
+        comments: prev.comments.filter((item) => item._id !== commentId)
+      }));
+      await loadData(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to delete comment.");
     }
   }
 
@@ -442,6 +519,11 @@ export default function NetworkScreen() {
                 const isFollowing = authorId ? Boolean(followingState[authorId]) : false;
                 const media = (post.mediaUrls || []).slice(0, 5);
                 const currentIndex = carouselIndexByPost[post._id] || 0;
+                const userReaction = post.userReaction || null;
+                const reactionSummary = REACTION_ORDER.map((type) => ({
+                  type,
+                  count: Number(post.reactionCounts?.[type] || 0)
+                })).filter((item) => item.count > 0);
 
                 return (
                   <View key={post._id} style={styles.postCard}>
@@ -501,12 +583,38 @@ export default function NetworkScreen() {
                     ) : null}
 
                     <Text style={styles.meta}>
-                      {post.postType} • Likes {post.likeCount || 0} • Comments {post.commentCount || 0} • Shares {post.shareCount || 0}
+                      {post.postType} • Comments {post.commentCount || 0} • Shares {post.shareCount || 0} • Saved {post.saveCount || 0}
                     </Text>
+                    {reactionSummary.length ? (
+                      <View style={styles.reactionSummaryRow}>
+                        {reactionSummary.map((item) => (
+                          <Text key={`${post._id}-${item.type}`} style={styles.reactionSummaryText}>
+                            {REACTION_META[item.type].emoji} {item.count}
+                          </Text>
+                        ))}
+                      </View>
+                    ) : null}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.reactionPickerRow}>
+                      {REACTION_ORDER.map((type) => {
+                        const active = userReaction === type;
+                        return (
+                          <TouchableOpacity
+                            key={`${post._id}-reaction-${type}`}
+                            style={[styles.reactionChip, active && styles.reactionChipActive]}
+                            onPress={() => react(post._id, "react", type)}
+                          >
+                            <Text style={styles.reactionChipText}>
+                              {REACTION_META[type].emoji} {Number(post.reactionCounts?.[type] || 0)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
                     <View style={styles.postActionRow}>
-                      <TouchableOpacity style={styles.postActionBtn} onPress={() => react(post._id, "like")}>
-                        <Ionicons name={post.isLiked ? "thumbs-up" : "thumbs-up-outline"} size={16} color="#175CD3" />
-                        <Text style={styles.postActionText}>Like</Text>
+                      <TouchableOpacity style={styles.postActionBtn} onPress={() => react(post._id, "react", userReaction ? userReaction : "like")}>
+                        <Text style={styles.postActionText}>
+                          {userReaction ? `${REACTION_META[userReaction].emoji} ${REACTION_META[userReaction].label}` : "👍 Like"}
+                        </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.postActionBtn}
@@ -515,9 +623,17 @@ export default function NetworkScreen() {
                         <Ionicons name="chatbubble-outline" size={16} color="#475467" />
                         <Text style={styles.postActionText}>Comment</Text>
                       </TouchableOpacity>
+                      <TouchableOpacity style={styles.postActionBtn} onPress={() => openComments(post._id)}>
+                        <Ionicons name="eye-outline" size={16} color="#475467" />
+                        <Text style={styles.postActionText}>View</Text>
+                      </TouchableOpacity>
                       <TouchableOpacity style={styles.postActionBtn} onPress={() => react(post._id, "share")}>
                         <Ionicons name="share-social-outline" size={16} color="#475467" />
                         <Text style={styles.postActionText}>Share</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.postActionBtn} onPress={() => react(post._id, "save")}>
+                        <Ionicons name={post.isSaved ? "bookmark" : "bookmark-outline"} size={16} color="#475467" />
+                        <Text style={styles.postActionText}>{post.isSaved ? "Saved" : "Save"}</Text>
                       </TouchableOpacity>
                     </View>
 
@@ -570,6 +686,81 @@ export default function NetworkScreen() {
               </ScrollView>
             ))}
           </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={commentsModal.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setCommentsModal({ visible: false, postId: "", comments: [] })}
+      >
+        <View style={styles.commentsModalRoot}>
+          <View style={styles.commentsSheet}>
+            <View style={styles.commentsHeader}>
+              <Text style={styles.cardTitle}>All Comments</Text>
+              <TouchableOpacity onPress={() => setCommentsModal({ visible: false, postId: "", comments: [] })}>
+                <Ionicons name="close" size={20} color="#344054" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {commentsModal.comments.length === 0 ? (
+                <Text style={styles.meta}>No comments yet.</Text>
+              ) : (
+                commentsModal.comments.map((item) => {
+                  const isMine = String(item.authorId?._id || "") === String(user?.id || "");
+                  const editing = editingCommentId === item._id;
+                  return (
+                    <View key={item._id} style={styles.commentItem}>
+                      <Text style={styles.commentAuthor}>{item.authorId?.name || "User"}</Text>
+                      {editing ? (
+                        <>
+                          <TextInput
+                            style={styles.commentEditInput}
+                            value={editingCommentText}
+                            onChangeText={setEditingCommentText}
+                          />
+                          <View style={styles.commentActionsRow}>
+                            <TouchableOpacity onPress={saveCommentEdit}>
+                              <Text style={styles.action}>Save</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setEditingCommentId("");
+                                setEditingCommentText("");
+                              }}
+                            >
+                              <Text style={styles.actionDanger}>Cancel</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={styles.commentBody}>{item.content}</Text>
+                          <Text style={styles.metaSmall}>{item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}</Text>
+                          {isMine ? (
+                            <View style={styles.commentActionsRow}>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  setEditingCommentId(item._id);
+                                  setEditingCommentText(item.content || "");
+                                }}
+                              >
+                                <Text style={styles.action}>Edit</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity onPress={() => removeComment(item._id)}>
+                                <Text style={styles.actionDanger}>Delete</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : null}
+                        </>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
         </View>
       </Modal>
     </>
@@ -682,6 +873,19 @@ const styles = StyleSheet.create({
     borderColor: "#EAECF0"
   },
   postActionText: { color: "#475467", fontWeight: "700", fontSize: 12 },
+  reactionSummaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 6 },
+  reactionSummaryText: { color: "#475467", fontWeight: "700", fontSize: 12 },
+  reactionPickerRow: { gap: 8, marginTop: 8, paddingBottom: 2 },
+  reactionChip: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: "#FFFFFF"
+  },
+  reactionChipActive: { borderColor: "#175CD3", backgroundColor: "#EFF8FF" },
+  reactionChipText: { color: "#344054", fontWeight: "700", fontSize: 12 },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
   chip: {
     borderWidth: 1,
@@ -707,6 +911,36 @@ const styles = StyleSheet.create({
   },
   commentInput: { flex: 1, minHeight: 32, color: "#344054" },
   commentLine: { marginTop: 6, color: "#475467" },
+  commentsModalRoot: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.45)",
+    justifyContent: "flex-end"
+  },
+  commentsSheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    padding: 14
+  },
+  commentsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  commentItem: {
+    borderWidth: 1,
+    borderColor: "#EAECF0",
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 8
+  },
+  commentAuthor: { color: "#1E2B24", fontWeight: "800" },
+  commentBody: { color: "#344054", marginTop: 4, lineHeight: 18 },
+  commentEditInput: {
+    marginTop: 6,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  commentActionsRow: { flexDirection: "row", gap: 16, marginTop: 8 },
   previewRow: { gap: 8, marginTop: 10 },
   composerPreview: { width: 110, height: 110, borderRadius: 10, borderWidth: 1, borderColor: "#E4E7EC" },
   viewerRoot: { flex: 1, backgroundColor: "rgba(0,0,0,0.95)", justifyContent: "center" },

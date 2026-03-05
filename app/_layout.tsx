@@ -445,6 +445,7 @@ function RootDrawer() {
           <Drawer.Screen name="help" options={{ title: "Help & Support", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="settings" options={{ title: "Settings", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="notifications" options={{ title: "Notifications", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="saved-posts" options={{ title: "Saved Posts", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="student-dashboard" options={{ title: "Student Dashboard", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentorship" options={{ title: "Mentorship", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai-hub" options={{ title: "AI", drawerItemStyle: { display: "none" } }} />
