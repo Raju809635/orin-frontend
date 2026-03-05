@@ -389,16 +389,16 @@ function RootDrawer() {
   const studentTabs = [
     { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/student-dashboard?section=overview" },
     { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
-    { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
     { key: "network", label: "Network", icon: "people", path: "/network?section=feed" },
+    { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
     { key: "community", label: "Community & Growth", icon: "trophy", path: "/community-growth" }
   ] as const;
 
   const mentorTabs = [
     { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/mentor-dashboard?section=overview" },
     { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
-    { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
     { key: "network", label: "Network", icon: "people", path: "/network?section=feed" },
+    { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
     { key: "community", label: "Community & Growth", icon: "trophy", path: "/community-growth" }
   ] as const;
 
