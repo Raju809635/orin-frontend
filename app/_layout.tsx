@@ -39,11 +39,6 @@ function RootDrawer() {
   const navigation = useNavigation();
   const pathname = usePathname();
   const { user, isAuthenticated, isBootstrapping } = useAuth();
-  const [profileOpen, setProfileOpen] = useState(true);
-  const [learningOpen, setLearningOpen] = useState(true);
-  const [careerOpen, setCareerOpen] = useState(false);
-  const [communityOpen, setCommunityOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const [drawerPhotoUrl, setDrawerPhotoUrl] = useState("");
   const [drawerReputation, setDrawerReputation] = useState<{ levelTag?: string; xp?: number; score?: number } | null>(null);
   const isCheckingUpdateRef = useRef(false);
@@ -299,82 +294,19 @@ function RootDrawer() {
             </TouchableOpacity>
           </View>
         ) : null}
-        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setProfileOpen((prev) => !prev)}>
-          <Text style={styles.drawerSectionTitle}>Menu</Text>
-          <Ionicons name={profileOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
-        </TouchableOpacity>
-        {profileOpen ? (
-          <View style={styles.drawerSubList}>
-            <DrawerItem label="My Profile" onPress={() => router.push("/my-profile" as never)} />
-            <DrawerItem
-              label="Resume / Portfolio"
-              onPress={() => router.push((user?.role === "mentor" ? "/mentor-profile" : "/student-profile") as never)}
-            />
-          </View>
-        ) : null}
-
-        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setLearningOpen((prev) => !prev)}>
-          <Text style={styles.drawerSectionTitle}>Learning Tools</Text>
-          <Ionicons name={learningOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
-        </TouchableOpacity>
-        {learningOpen ? (
-          <View style={styles.drawerSubList}>
-            <DrawerItem label="Domain Guide" onPress={() => router.push("/domain-guide" as never)} />
-            <DrawerItem
-              label="Daily Career Quiz"
-              onPress={() => router.push("/student-dashboard?section=overview&openQuiz=1" as never)}
-            />
-            <DrawerItem
-              label="Knowledge Library"
-              onPress={() =>
-                router.push((user?.role === "mentor" ? "/mentor-dashboard?section=growth" : "/student-dashboard?section=growth") as never)
-              }
-            />
-            <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
-          </View>
-        ) : null}
-
-        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setCareerOpen((prev) => !prev)}>
-          <Text style={styles.drawerSectionTitle}>Career Tools</Text>
-          <Ionicons name={careerOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
-        </TouchableOpacity>
-        {careerOpen ? (
-          <View style={styles.drawerSubList}>
-            <DrawerItem label="News & Updates" onPress={() => router.push("/news-updates" as never)} />
-            <DrawerItem
-              label="Internship Opportunities"
-              onPress={() =>
-                router.push((user?.role === "mentor" ? "/mentor-dashboard?section=growth" : "/student-dashboard?section=growth") as never)
-              }
-            />
-            <DrawerItem
-              label="Certifications"
-              onPress={() =>
-                router.push((user?.role === "mentor" ? "/mentor-dashboard?section=growth" : "/student-dashboard?section=growth") as never)
-              }
-            />
-          </View>
-        ) : null}
-
-        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setCommunityOpen((prev) => !prev)}>
-          <Text style={styles.drawerSectionTitle}>Community</Text>
-          <Ionicons name={communityOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
-        </TouchableOpacity>
-        {communityOpen ? (
-          <View style={styles.drawerSubList}>
-            <DrawerItem label="Collaborate with ORIN" onPress={() => router.push("/collaborate" as never)} />
-          </View>
-        ) : null}
-
-        <TouchableOpacity style={styles.drawerGroupHeader} onPress={() => setSettingsOpen((prev) => !prev)}>
-          <Text style={styles.drawerSectionTitle}>Settings</Text>
-          <Ionicons name={settingsOpen ? "chevron-up" : "chevron-down"} size={16} color="#475467" />
-        </TouchableOpacity>
-        {settingsOpen ? (
-          <View style={styles.drawerSubList}>
-            <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
-          </View>
-        ) : null}
+        <View style={styles.drawerFlatList}>
+          <DrawerItem label="Domains" onPress={() => router.push("/domains" as never)} />
+          <DrawerItem
+            label="Daily Quiz"
+            onPress={() =>
+              router.push((user?.role === "student" ? "/student-dashboard?section=overview&openQuiz=1" : "/mentor-dashboard?section=overview") as never)
+            }
+          />
+          <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
+          <DrawerItem label="News & Updates" onPress={() => router.push("/news-updates" as never)} />
+          <DrawerItem label="Collaborate" onPress={() => router.push("/collaborate" as never)} />
+          <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
+        </View>
       </DrawerContentScrollView>
     );
   }
@@ -449,7 +381,20 @@ function RootDrawer() {
           <Drawer.Screen name="student-dashboard" options={{ title: "Student Dashboard", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentorship" options={{ title: "Mentorship", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai-hub" options={{ title: "AI", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/mentor-matching" options={{ title: "AI Mentor Matching", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/skill-gap" options={{ title: "AI Skill Gap Analysis", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/career-roadmap" options={{ title: "AI Career Roadmap", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/project-ideas" options={{ title: "AI Project Ideas", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/resume-builder" options={{ title: "AI Resume Builder", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/assistant" options={{ title: "AI Assistant", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community-growth" options={{ title: "Community & Growth", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/collaboration" options={{ title: "Community & Collaboration", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/challenges" options={{ title: "Community Challenges", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/certifications" options={{ title: "Certifications", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/opportunities" options={{ title: "Internship Opportunities", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/leaderboard" options={{ title: "College Leaderboard", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/knowledge-library" options={{ title: "Knowledge Library", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/reputation" options={{ title: "Reputation & Ranking", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="my-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="student-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor-dashboard" options={{ title: "Mentor Dashboard", drawerItemStyle: { display: "none" } }} />
@@ -528,28 +473,7 @@ const styles = StyleSheet.create({
   drawerProfileRole: { marginTop: 4, color: "#667085", fontWeight: "600" },
   drawerProfileMeta: { marginTop: 4, color: "#344054", fontWeight: "600", fontSize: 12 },
   drawerProfileLink: { marginTop: 8, color: "#1F7A4C", fontWeight: "700" },
-  drawerSectionTitle: {
-    color: "#475467",
-    fontWeight: "700",
-    fontSize: 12
-  },
-  drawerGroupHeader: {
-    marginTop: 8,
-    marginBottom: 4,
-    marginHorizontal: 16,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: "#E4E7EC",
-    borderRadius: 10,
-    backgroundColor: "#FFFFFF",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between"
-  },
-  drawerSubList: {
-    paddingLeft: 6
-  },
+  drawerFlatList: { paddingTop: 4, paddingLeft: 6 },
   bottomNav: {
     flexDirection: "row",
     borderTopWidth: 1,
