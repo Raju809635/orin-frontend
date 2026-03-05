@@ -14,7 +14,7 @@ import {
   View
 } from "react-native";
 import { Drawer } from "expo-router/drawer";
-import { usePathname, useRouter } from "expo-router";
+import { useNavigation, usePathname, useRouter } from "expo-router";
 import { DrawerContentScrollView, DrawerItem, DrawerContentComponentProps } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -36,6 +36,7 @@ function homeRouteForUser(user: { role: "student" | "mentor"; approvalStatus?: "
 function RootDrawer() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const navigation = useNavigation();
   const pathname = usePathname();
   const { user, isAuthenticated, isBootstrapping } = useAuth();
   const [profileOpen, setProfileOpen] = useState(true);
@@ -115,28 +116,53 @@ function RootDrawer() {
       }
 
       const homePath = homeRouteForUser(user);
-      const atHome = pathname.startsWith(homePath.split("?")[0]);
+      const homeBasePath = homePath.split("?")[0];
+      const atHome = pathname.startsWith(homeBasePath);
 
       if (atHome || isAuthScreen) {
         return false;
       }
 
-      try {
-        // Prefer navigation history first.
-        if (typeof (router as any).canGoBack === "function" && (router as any).canGoBack()) {
-          router.back();
-          return true;
-        }
-      } catch {
-        // Fall through to dashboard redirect.
+      if (typeof (navigation as any).canGoBack === "function" && (navigation as any).canGoBack()) {
+        (navigation as any).goBack();
+        return true;
       }
 
-      router.replace(homePath as never);
+      if (pathname.startsWith("/mentor/") || pathname.startsWith("/mentors")) {
+        router.push("/domains" as never);
+        return true;
+      }
+      if (pathname.startsWith("/domains") || pathname.startsWith("/domain-guide")) {
+        router.push("/mentorship" as never);
+        return true;
+      }
+      if (pathname.startsWith("/public-profile/")) {
+        router.push("/network?section=feed" as never);
+        return true;
+      }
+      if (
+        pathname.startsWith("/ai-assistant") ||
+        pathname.startsWith("/ai-hub") ||
+        pathname.startsWith("/network") ||
+        pathname.startsWith("/community-growth") ||
+        pathname.startsWith("/news-updates") ||
+        pathname.startsWith("/chat") ||
+        pathname.startsWith("/notifications") ||
+        pathname.startsWith("/my-profile") ||
+        pathname.startsWith("/settings") ||
+        pathname.startsWith("/complaints") ||
+        pathname.startsWith("/collaborate")
+      ) {
+        router.push(homePath as never);
+        return true;
+      }
+
+      router.push(homePath as never);
       return true;
     });
 
     return () => sub.remove();
-  }, [isAuthenticated, isBootstrapping, pathname, router, user]);
+  }, [isAuthenticated, isBootstrapping, navigation, pathname, router, user]);
 
   useEffect(() => {
     let active = true;
