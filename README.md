@@ -1,50 +1,72 @@
-# Welcome to your Expo app 👋
+# ORIN Frontend (Expo React Native)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+ORIN mobile app frontend for students and mentors.
 
-## Get started
+## Current Product UI
 
-1. Install dependencies
+### Bottom tabs
+- `Dashboard`
+- `Mentorship`
+- `Network`
+- `AI`
+- `Community`
 
-   ```bash
-   npm install
-   ```
+### Side drawer (minimal)
+- `Domains`
+- `Daily Quiz`
+- `AI Assistant`
+- `News & Updates`
+- `Collaborate with ORIN`
+- `Settings`
 
-2. Start the app
+### Key feature groups
+- Mentor discovery and booking
+- Session and payment status tracking
+- Social network style feed (posts, reactions, comments, shares, saves)
+- AI tools (mentor matching, skill gap, roadmap, project ideas, resume builder, assistant)
+- Community modules (challenges, certifications, internships, leaderboard, knowledge library)
+- Daily quiz, reputation, and growth tracking
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Run Locally
 
 ```bash
-npm run reset-project
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Environment
 
-## Learn more
+Set in `.env`:
 
-To learn more about developing your project with Expo, look at the following resources:
+```env
+EXPO_PUBLIC_API_BASE_URL=https://your-backend-url
+```
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+## OTA Update
 
-## Join the community
+Preview OTA update:
 
-Join our community of developers creating universal apps.
+```bash
+npm run update:preview
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+Production OTA update:
+
+```bash
+npm run update
+```
+
+## Native Build
+
+When native dependencies change, create a new build:
+
+```bash
+eas build -p android --profile production
+```
+
+Use `.aab` for Play Store uploads.
+
+## User Documentation
+
+See full user-facing guide:
+- `ORIN_USER_GUIDE.md`

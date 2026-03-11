@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -10,10 +10,11 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useFocusEffect } from "expo-router";
 import { api } from "@/lib/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getStoredNewsLanguage, NEWS_LANGUAGES, NewsLanguageCode, setStoredNewsLanguage } from "@/utils/newsLanguage";
+
+const NEWS_SCREEN_CACHE_MS = 5 * 60 * 1000;
 
 type NewsCategoryKey = "tech" | "edtech" | "exams" | "scholarships" | "opportunities";
 
@@ -42,6 +43,7 @@ export default function NewsUpdatesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastFetchedRef = useRef<Record<string, number>>({});
   const [articlesByTab, setArticlesByTab] = useState<Record<NewsCategoryKey, NewsArticle[]>>({
     tech: [],
     edtech: [],
@@ -60,7 +62,13 @@ export default function NewsUpdatesScreen() {
     };
   }, []);
 
-  const loadCategory = useCallback(async (category: NewsCategoryKey, refresh = false) => {
+  const loadCategory = useCallback(async (category: NewsCategoryKey, refresh = false, force = false) => {
+    const cacheKey = `${language}:${category}`;
+    const now = Date.now();
+    if (!refresh && !force && articlesByTab[category]?.length && now - (lastFetchedRef.current[cacheKey] || 0) < NEWS_SCREEN_CACHE_MS) {
+      return;
+    }
+
     try {
       if (refresh) setRefreshing(true);
       else setLoading(true);
@@ -85,19 +93,18 @@ export default function NewsUpdatesScreen() {
         ...prev,
         [category]: data?.articles || []
       }));
+      lastFetchedRef.current[cacheKey] = now;
     } catch (e: any) {
       setError(e?.response?.data?.message || e?.message || "Unable to load news right now.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [language]);
+  }, [articlesByTab, language]);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadCategory(activeTab, true);
-    }, [activeTab, language, loadCategory])
-  );
+  useEffect(() => {
+    loadCategory(activeTab, false);
+  }, [activeTab, language, loadCategory]);
 
   const activeArticles = useMemo(() => articlesByTab[activeTab] || [], [activeTab, articlesByTab]);
 

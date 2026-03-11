@@ -281,7 +281,7 @@ export default function MentorshipHubScreen() {
                 <Text style={styles.cardTitle}>Legacy Booking Requests</Text>
                 <Text style={styles.meta}>{bookings.length} request(s)</Text>
               </View>
-              <TouchableOpacity style={styles.openBtn} onPress={() => router.push("/student-dashboard?section=sessions" as never)}>
+              <TouchableOpacity style={styles.openBtn} onPress={() => router.push("/student-sessions" as never)}>
                 <Text style={styles.openBtnText}>Open Full Session Panel</Text>
               </TouchableOpacity>
             </>

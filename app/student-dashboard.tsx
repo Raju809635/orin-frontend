@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +25,9 @@ import { notify } from "@/utils/notify";
 import { submitManualPaymentWithPicker } from "@/utils/manualPaymentUpload";
 import { FEATURE_FLAGS } from "@/constants/featureFlags";
 import { getStoredNewsLanguage, NewsLanguageCode } from "@/utils/newsLanguage";
+
+const DASHBOARD_STALE_MS = 2 * 60 * 1000;
+const NEWS_STALE_MS = 5 * 60 * 1000;
 
 type Booking = {
   _id: string;
@@ -316,6 +319,8 @@ export default function StudentDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
+  const lastDashboardFetchAtRef = useRef(0);
+  const lastNewsFetchAtRef = useRef(0);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [transactionRefBySession, setTransactionRefBySession] = useState<Record<string, string>>({});
@@ -403,7 +408,12 @@ export default function StudentDashboard() {
       border: "#CBECD9"
     }
   ] as const;
-  const fetchDashboard = useCallback(async (refresh = false) => {
+  const fetchDashboard = useCallback(async (refresh = false, force = false) => {
+    const now = Date.now();
+    if (!refresh && !force && now - lastDashboardFetchAtRef.current < DASHBOARD_STALE_MS) {
+      return;
+    }
+
     try {
       if (refresh) setIsRefreshing(true);
       else setIsLoading(true);
@@ -413,32 +423,30 @@ export default function StudentDashboard() {
         bookingsRes,
         sessionsRes,
         profileRes,
-        feedRes,
         dailyRes,
-        suggestionsRes,
-        mentorMatchesRes,
-        sessionHistoryRes,
-        roadmapRes,
-        opportunitiesRes,
-        leaderboardRes,
-        liveSessionsRes,
-        resumeRes,
-        skillGapRes,
-        verifiedMentorsRes,
-        challengesRes,
-        certificationsRes,
-        mentorGroupsRes,
-        projectIdeasRes,
-        knowledgeLibraryRes,
-        reputationSummaryRes
+        feedRes
       ] = await Promise.allSettled([
         api.get<Booking[]>("/api/bookings/student"),
         api.get<Session[]>("/api/sessions/student/me"),
         api.get<{ profile?: { profilePhotoUrl?: string } }>("/api/profiles/student/me"),
-        FEATURE_FLAGS.networking ? api.get<NetworkPost[]>("/api/network/feed") : Promise.resolve({ data: [] as NetworkPost[] }),
         FEATURE_FLAGS.dailyEngagement
           ? api.get<DailyDashboard>("/api/network/daily-dashboard")
           : Promise.resolve({ data: null as DailyDashboard | null }),
+        FEATURE_FLAGS.networking ? api.get<NetworkPost[]>("/api/network/feed") : Promise.resolve({ data: [] as NetworkPost[] })
+      ]);
+
+      setBookings(bookingsRes.status === "fulfilled" ? bookingsRes.value.data || [] : []);
+      setSessions(sessionsRes.status === "fulfilled" ? sessionsRes.value.data || [] : []);
+      setProfilePhotoUrl(profileRes.status === "fulfilled" ? profileRes.value.data?.profile?.profilePhotoUrl || "" : "");
+      setDailyDashboard(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
+      setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
+      const hardFailures = [bookingsRes, sessionsRes].filter((item) => item.status !== "fulfilled").length;
+      if (hardFailures > 0) {
+        setError("Some dashboard sections could not load. Pull to refresh.");
+      }
+      lastDashboardFetchAtRef.current = now;
+
+      Promise.allSettled([
         FEATURE_FLAGS.smartSuggestions
           ? api.get<SmartSuggestion[]>("/api/network/suggestions")
           : Promise.resolve({ data: [] as SmartSuggestion[] }),
@@ -457,35 +465,47 @@ export default function StudentDashboard() {
         api.get<ProjectIdeasResponse>("/api/network/project-ideas"),
         api.get<LibraryItem[]>("/api/network/knowledge-library"),
         api.get<ReputationSummary>("/api/network/reputation-summary")
-      ]);
-
-      setBookings(bookingsRes.status === "fulfilled" ? bookingsRes.value.data || [] : []);
-      setSessions(sessionsRes.status === "fulfilled" ? sessionsRes.value.data || [] : []);
-      setProfilePhotoUrl(profileRes.status === "fulfilled" ? profileRes.value.data?.profile?.profilePhotoUrl || "" : "");
-      setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
-      setDailyDashboard(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
-      setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
-      setMentorMatches(
-        mentorMatchesRes.status === "fulfilled" ? mentorMatchesRes.value.data?.recommendations || [] : []
+      ]).then(
+        ([
+          suggestionsRes,
+          mentorMatchesRes,
+          sessionHistoryRes,
+          roadmapRes,
+          opportunitiesRes,
+          leaderboardRes,
+          liveSessionsRes,
+          resumeRes,
+          skillGapRes,
+          verifiedMentorsRes,
+          challengesRes,
+          certificationsRes,
+          mentorGroupsRes,
+          projectIdeasRes,
+          knowledgeLibraryRes,
+          reputationSummaryRes
+        ]) => {
+          setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
+          setMentorMatches(
+            mentorMatchesRes.status === "fulfilled" ? mentorMatchesRes.value.data?.recommendations || [] : []
+          );
+          setSessionHistory(sessionHistoryRes.status === "fulfilled" ? sessionHistoryRes.value.data || [] : []);
+          setRoadmap(roadmapRes.status === "fulfilled" ? roadmapRes.value.data || null : null);
+          setOpportunities(opportunitiesRes.status === "fulfilled" ? opportunitiesRes.value.data || [] : []);
+          setLeaderboard(leaderboardRes.status === "fulfilled" ? leaderboardRes.value.data || null : null);
+          setLiveSessions(liveSessionsRes.status === "fulfilled" ? liveSessionsRes.value.data || [] : []);
+          setResumePreview(resumeRes.status === "fulfilled" ? resumeRes.value.data || null : null);
+          setSkillGap(skillGapRes.status === "fulfilled" ? skillGapRes.value.data || null : null);
+          setVerifiedMentors(verifiedMentorsRes.status === "fulfilled" ? verifiedMentorsRes.value.data || [] : []);
+          setChallenges(challengesRes.status === "fulfilled" ? challengesRes.value.data || [] : []);
+          setCertifications(certificationsRes.status === "fulfilled" ? certificationsRes.value.data || [] : []);
+          setMentorGroups(mentorGroupsRes.status === "fulfilled" ? mentorGroupsRes.value.data || [] : []);
+          setProjectIdeas(projectIdeasRes.status === "fulfilled" ? projectIdeasRes.value.data || null : null);
+          setKnowledgeLibrary(knowledgeLibraryRes.status === "fulfilled" ? knowledgeLibraryRes.value.data || [] : []);
+          setReputationSummary(
+            reputationSummaryRes.status === "fulfilled" ? reputationSummaryRes.value.data || null : null
+          );
+        }
       );
-      setSessionHistory(sessionHistoryRes.status === "fulfilled" ? sessionHistoryRes.value.data || [] : []);
-      setRoadmap(roadmapRes.status === "fulfilled" ? roadmapRes.value.data || null : null);
-      setOpportunities(opportunitiesRes.status === "fulfilled" ? opportunitiesRes.value.data || [] : []);
-      setLeaderboard(leaderboardRes.status === "fulfilled" ? leaderboardRes.value.data || null : null);
-      setLiveSessions(liveSessionsRes.status === "fulfilled" ? liveSessionsRes.value.data || [] : []);
-      setResumePreview(resumeRes.status === "fulfilled" ? resumeRes.value.data || null : null);
-      setSkillGap(skillGapRes.status === "fulfilled" ? skillGapRes.value.data || null : null);
-      setVerifiedMentors(verifiedMentorsRes.status === "fulfilled" ? verifiedMentorsRes.value.data || [] : []);
-      setChallenges(challengesRes.status === "fulfilled" ? challengesRes.value.data || [] : []);
-      setCertifications(certificationsRes.status === "fulfilled" ? certificationsRes.value.data || [] : []);
-      setMentorGroups(mentorGroupsRes.status === "fulfilled" ? mentorGroupsRes.value.data || [] : []);
-      setProjectIdeas(projectIdeasRes.status === "fulfilled" ? projectIdeasRes.value.data || null : null);
-      setKnowledgeLibrary(knowledgeLibraryRes.status === "fulfilled" ? knowledgeLibraryRes.value.data || [] : []);
-      setReputationSummary(reputationSummaryRes.status === "fulfilled" ? reputationSummaryRes.value.data || null : null);
-      const hardFailures = [bookingsRes, sessionsRes].filter((item) => item.status !== "fulfilled").length;
-      if (hardFailures > 0) {
-        setError("Some dashboard sections could not load. Pull to refresh.");
-      }
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load dashboard data.");
     } finally {
@@ -505,27 +525,27 @@ export default function StudentDashboard() {
   }, []);
 
   const fetchNews = useCallback(
-    async (refresh = false) => {
+    async (refresh = false, force = false) => {
+      const now = Date.now();
+      if (!refresh && !force && now - lastNewsFetchAtRef.current < NEWS_STALE_MS) {
+        return;
+      }
       try {
         if (refresh) {
           setNewsLoading(true);
         }
-        const endpoints: NewsCategoryKey[] = ["tech", "edtech", "exams", "scholarships", "opportunities"];
-        const responses = await Promise.allSettled(
-          endpoints.map((category) =>
-            api.get<{ category: string; articles: NewsArticle[] }>(`/api/news/${category}?limit=6&language=${newsLanguage}`)
-          )
-        );
-        setNewsByCategory((prev) => {
-          const next = { ...prev };
-          responses.forEach((result, index) => {
-            const key = endpoints[index];
-            if (result.status === "fulfilled") {
-              next[key] = result.value.data?.articles || [];
-            }
-          });
-          return next;
-        });
+        const response = await api.get<{
+          categories: Record<NewsCategoryKey, { articles: NewsArticle[] }>;
+        }>(`/api/news?limit=6&language=${newsLanguage}`);
+        setNewsByCategory((prev) => ({
+          ...prev,
+          tech: response.data?.categories?.tech?.articles || [],
+          edtech: response.data?.categories?.edtech?.articles || [],
+          exams: response.data?.categories?.exams?.articles || [],
+          scholarships: response.data?.categories?.scholarships?.articles || [],
+          opportunities: response.data?.categories?.opportunities?.articles || []
+        }));
+        lastNewsFetchAtRef.current = now;
       } catch {
         // news is optional on dashboard; keep other sections unaffected
       } finally {
@@ -537,8 +557,8 @@ export default function StudentDashboard() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchDashboard();
-      fetchNews(true);
+      fetchDashboard(false);
+      fetchNews(false);
     }, [fetchDashboard, fetchNews])
   );
 
