@@ -1,15 +1,18 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 
 type SkillGapResponse = { goal: string; currentSkills: string[]; missingSkills: string[]; suggestions?: { courses?: string[] } };
 
-const GOALS = ["AI Engineer", "Full Stack Developer", "Cyber Security Analyst", "Data Scientist"];
-
 export default function AiSkillGapPage() {
-  const [selectedGoal, setSelectedGoal] = useState(GOALS[0]);
+  const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
+  const [primaryCategory, setPrimaryCategory] = useState("");
+  const [subCategory, setSubCategory] = useState("");
+  const [focus, setFocus] = useState("");
+  const [customGoal, setCustomGoal] = useState("");
   const [skillsInput, setSkillsInput] = useState("");
   const [data, setData] = useState<SkillGapResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -17,13 +20,59 @@ export default function AiSkillGapPage() {
   const [analyzing, setAnalyzing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let mounted = true;
+    getDomainTree()
+      .then((tree) => {
+        if (!mounted) return;
+        setDomainTree(tree);
+        const p = tree.primaryCategories?.[0] || "";
+        const s = (tree.subCategoriesByPrimary?.[p] || [])[0] || "";
+        const f = (tree.focusByPrimarySub?.[`${p}::${s}`] || [])[0] || "";
+        setPrimaryCategory((prev) => prev || p);
+        setSubCategory((prev) => prev || s);
+        setFocus((prev) => prev || f);
+      })
+      .catch(() => {
+        // If this fails, backend still falls back to saved user profile + goal.
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!domainTree || !primaryCategory) return;
+    const subs = domainTree.subCategoriesByPrimary?.[primaryCategory] || [];
+    if (!subs.length) return;
+    if (!subs.includes(subCategory)) {
+      setSubCategory(subs[0]);
+    }
+  }, [domainTree, primaryCategory, subCategory]);
+
+  useEffect(() => {
+    if (!domainTree || !primaryCategory || !subCategory) return;
+    const focuses = domainTree.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || [];
+    if (!focuses.length) {
+      setFocus("");
+      return;
+    }
+    if (!focuses.includes(focus)) {
+      setFocus(focuses[0]);
+    }
+  }, [domainTree, primaryCategory, subCategory, focus]);
+
   const load = useCallback(async (refresh = false) => {
     try {
       if (refresh) setRefreshing(true); else setLoading(true);
       setError(null);
       const res = await api.get<SkillGapResponse>("/api/network/skill-gap", {
         params: {
-          goal: selectedGoal,
+          primaryCategory,
+          subCategory,
+          focus,
+          goal: customGoal.trim() || [primaryCategory, subCategory, focus].filter(Boolean).join(" > "),
           // CSV override; if empty the backend falls back to saved profile skills.
           skills: skillsInput
         }
@@ -34,7 +83,7 @@ export default function AiSkillGapPage() {
     } finally {
       setLoading(false); setRefreshing(false); setAnalyzing(false);
     }
-  }, [selectedGoal, skillsInput]);
+  }, [primaryCategory, subCategory, focus, customGoal, skillsInput]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -47,13 +96,60 @@ export default function AiSkillGapPage() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}><Ionicons name="analytics" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Overview</Text></View>
-        <Text style={styles.meta}>This module compares your current skill set with required skills for the selected goal.</Text>
+        <Text style={styles.meta}>
+          Select your path from the Domain Guide (domain, sub-domain, focus). ORIN then checks what skills/topics you're missing and suggests next steps.
+        </Text>
       </View>
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}><Ionicons name="build" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Main Feature</Text></View>
-        <Text style={styles.label}>Career Goal</Text>
-        <View style={styles.chips}>{GOALS.map((goal) => <TouchableOpacity key={goal} style={[styles.chip, selectedGoal===goal && styles.chipActive]} onPress={() => setSelectedGoal(goal)}><Text style={[styles.chipText, selectedGoal===goal && styles.chipTextActive]}>{goal}</Text></TouchableOpacity>)}</View>
+        <Text style={styles.label}>Domain (Domain Guide)</Text>
+        <View style={styles.chips}>
+          {(domainTree?.primaryCategories || []).map((p) => (
+            <TouchableOpacity
+              key={p}
+              style={[styles.chip, primaryCategory === p && styles.chipActive]}
+              onPress={() => setPrimaryCategory(p)}
+            >
+              <Text style={[styles.chipText, primaryCategory === p && styles.chipTextActive]}>{p}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Sub-domain</Text>
+        <View style={styles.chips}>
+          {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((s) => (
+            <TouchableOpacity
+              key={s}
+              style={[styles.chip, subCategory === s && styles.chipActive]}
+              onPress={() => setSubCategory(s)}
+            >
+              <Text style={[styles.chipText, subCategory === s && styles.chipTextActive]}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Focus</Text>
+        <View style={styles.chips}>
+          {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((f) => (
+            <TouchableOpacity
+              key={f}
+              style={[styles.chip, focus === f && styles.chipActive]}
+              onPress={() => setFocus(f)}
+            >
+              <Text style={[styles.chipText, focus === f && styles.chipTextActive]}>{f}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.label}>Custom Goal (optional)</Text>
+        <TextInput
+          style={styles.input}
+          value={customGoal}
+          onChangeText={setCustomGoal}
+          placeholder="Example: UPSC Prelims, Frontend Developer, Constitutional Law"
+        />
+
         <Text style={styles.label}>Current Skills (comma separated)</Text>
         <TextInput style={styles.input} value={skillsInput} onChangeText={setSkillsInput} placeholder="Python, SQL, React" />
         <TouchableOpacity style={styles.primaryBtn} onPress={() => { setAnalyzing(true); load(true); }}><Text style={styles.primaryBtnText}>{analyzing ? "Analyzing..." : "Analyze"}</Text></TouchableOpacity>

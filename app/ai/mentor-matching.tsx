@@ -1,9 +1,10 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 
 type MentorMatch = {
   mentorId: string;
@@ -17,12 +18,12 @@ type MentorMatch = {
   reasons?: string[];
 };
 
-const DOMAIN_OPTIONS = ["AI", "Web Development", "Cybersecurity", "Data Science", "UPSC", "Academics"];
 const LEVEL_OPTIONS = ["Beginner", "Intermediate", "Advanced"];
 
 export default function AiMentorMatchingPage() {
   const { user } = useAuth();
-  const [selectedDomain, setSelectedDomain] = useState("AI");
+  const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
+  const [selectedDomain, setSelectedDomain] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("Beginner");
   const [items, setItems] = useState<MentorMatch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,8 +32,30 @@ export default function AiMentorMatchingPage() {
   const [error, setError] = useState<string | null>(null);
   const didAutofill = useRef(false);
 
+  useEffect(() => {
+    let mounted = true;
+    getDomainTree()
+      .then((tree) => {
+        if (!mounted) return;
+        setDomainTree(tree);
+        setSelectedDomain((prev) => prev || tree.primaryCategories?.[0] || "");
+      })
+      .catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const load = useCallback(async (refresh = false) => {
     try {
+      if (!selectedDomain) {
+        setItems([]);
+        setLoading(false);
+        setRefreshing(false);
+        setFinding(false);
+        return;
+      }
       if (refresh) setRefreshing(true); else setLoading(true);
       setError(null);
       const { data } = await api.get<{ studentSignals?: any; recommendations: MentorMatch[] }>("/api/network/mentor-matches", {
@@ -48,7 +71,7 @@ export default function AiMentorMatchingPage() {
       const suggestedDomain = String(data?.studentSignals?.domain || "").trim();
       if (!didAutofill.current && suggestedDomain) {
         didAutofill.current = true;
-        const match = DOMAIN_OPTIONS.find((d) => d.toLowerCase() === suggestedDomain.toLowerCase());
+        const match = (domainTree?.primaryCategories || []).find((d) => d.toLowerCase() === suggestedDomain.toLowerCase());
         if (match && match !== selectedDomain) setSelectedDomain(match);
       }
     } catch (e: any) {
@@ -58,7 +81,7 @@ export default function AiMentorMatchingPage() {
       setRefreshing(false);
       setFinding(false);
     }
-  }, [selectedDomain, selectedLevel]);
+  }, [selectedDomain, selectedLevel, domainTree]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -95,7 +118,13 @@ export default function AiMentorMatchingPage() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}><Ionicons name="options" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Main Feature</Text></View>
         <Text style={styles.label}>Domain</Text>
-        <View style={styles.chips}>{DOMAIN_OPTIONS.map((d) => <TouchableOpacity key={d} style={[styles.chip, selectedDomain===d && styles.chipActive]} onPress={() => setSelectedDomain(d)}><Text style={[styles.chipText, selectedDomain===d && styles.chipTextActive]}>{d}</Text></TouchableOpacity>)}</View>
+        <View style={styles.chips}>
+          {(domainTree?.primaryCategories || []).map((d) => (
+            <TouchableOpacity key={d} style={[styles.chip, selectedDomain===d && styles.chipActive]} onPress={() => setSelectedDomain(d)}>
+              <Text style={[styles.chipText, selectedDomain===d && styles.chipTextActive]}>{d}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
         <Text style={styles.label}>Experience Level</Text>
         <View style={styles.chips}>{LEVEL_OPTIONS.map((d) => <TouchableOpacity key={d} style={[styles.chip, selectedLevel===d && styles.chipActive]} onPress={() => setSelectedLevel(d)}><Text style={[styles.chipText, selectedLevel===d && styles.chipTextActive]}>{d}</Text></TouchableOpacity>)}</View>
         <TouchableOpacity style={styles.primaryBtn} onPress={() => { setFinding(true); load(true); }}><Text style={styles.primaryBtnText}>{finding ? "Finding..." : "Find Mentor"}</Text></TouchableOpacity>
