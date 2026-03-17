@@ -184,7 +184,7 @@ function nextDates(days = 14) {
 
 export default function MentorDashboard() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ section?: string }>();
+  const params = useLocalSearchParams<{ section?: string; growth?: string }>();
   const { user, logout } = useAuth();
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [mentorGrowthSection, setMentorGrowthSection] = useState<MentorGrowthSectionId>("reputation");
@@ -311,7 +311,11 @@ export default function MentorDashboard() {
     if (section === "requests" || section === "sessions" || section === "pricing" || section === "availability" || section === "adminChat" || section === "overview" || section === "growth") {
       setActiveSection(section);
     }
-  }, [params.section]);
+    const growth = String(params.growth || "");
+    if (section === "growth" && (growth === "reputation" || growth === "live" || growth === "community")) {
+      setMentorGrowthSection(growth as MentorGrowthSectionId);
+    }
+  }, [params.section, params.growth]);
   const mentorDeepMaps = [
     {
       title: "Academic Mentoring Depth",

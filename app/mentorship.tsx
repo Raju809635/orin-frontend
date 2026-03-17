@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, BackHandler, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { Ionicons } from "@expo/vector-icons";
@@ -37,6 +37,7 @@ type BookingItem = { _id: string; status?: string; scheduledAt: string; mentor?:
 
 export default function MentorshipHubScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ section?: MentorshipSectionId }>();
   const { user } = useAuth();
   const isMentor = user?.role === "mentor";
   const [activeSection, setActiveSection] = useState<MentorshipSectionId>("discovery");
@@ -83,6 +84,13 @@ export default function MentorshipHubScreen() {
       loadData();
     }, [loadData])
   );
+
+  useEffect(() => {
+    const section = params.section;
+    if (section === "discovery" || section === "interaction" || section === "session_management") {
+      setActiveSection(section);
+    }
+  }, [params.section]);
 
   useFocusEffect(
     useCallback(() => {
@@ -289,6 +297,13 @@ export default function MentorshipHubScreen() {
               <TouchableOpacity style={[styles.card, styles.cardGreen]} onPress={() => router.push("/chat" as never)}>
                 <Text style={styles.cardTitle}>Student Chats</Text>
                 <Text style={styles.meta}>Open your conversation workspace for student coordination and follow-up.</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.card, styles.cardGreen]}
+                onPress={() => router.push("/mentor-dashboard?section=growth&growth=live" as never)}
+              >
+                <Text style={styles.cardTitle}>Create / Manage Live Sessions</Text>
+                <Text style={styles.meta}>Schedule sessions with posters, track interest counts, and publish to all students.</Text>
               </TouchableOpacity>
               <View style={[styles.card, styles.cardGreen]}>
                 <Text style={styles.cardTitle}>Mentor Groups</Text>

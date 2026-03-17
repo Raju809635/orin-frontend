@@ -1223,6 +1223,52 @@ export default function StudentDashboard() {
         ))}
       </ScrollView>
 
+      <View style={styles.sectionHeaderRow}>
+        <Text style={styles.sectionHeader}>Mentor Live Sessions</Text>
+        <TouchableOpacity onPress={() => router.push("/mentorship?section=interaction" as never)}>
+          <Text style={styles.sectionHeaderLink}>View all</Text>
+        </TouchableOpacity>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.liveBannerRow}>
+        {liveSessions.length === 0 ? (
+          <View style={styles.liveBannerEmpty}>
+            <Text style={styles.meta}>No upcoming live sessions right now.</Text>
+          </View>
+        ) : (
+          liveSessions.slice(0, 8).map((item) => (
+            <View key={item.id} style={styles.liveBannerCard}>
+              {item.posterImageUrl ? (
+                <Image source={{ uri: item.posterImageUrl }} style={styles.liveBannerImage} resizeMode="cover" />
+              ) : (
+                <View style={styles.liveBannerImagePlaceholder}>
+                  <Text style={styles.liveBannerPlaceholderText}>Live Session</Text>
+                </View>
+              )}
+              <Text style={styles.liveBannerTitle} numberOfLines={2}>{item.title}</Text>
+              <Text style={styles.liveBannerMeta} numberOfLines={1}>
+                {item.mentor?.name || "Mentor"} • {new Date(item.startsAt).toLocaleString()}
+              </Text>
+              <View style={styles.liveBannerFooter}>
+                <Text style={styles.liveBannerMeta}>Interested: {item.interestedCount || 0}</Text>
+                <TouchableOpacity
+                  style={[styles.liveBannerBtn, togglingLiveInterestId === item.id && styles.disabledButton]}
+                  onPress={() => toggleLiveSessionInterest(item.id)}
+                  disabled={togglingLiveInterestId === item.id}
+                >
+                  <Text style={styles.liveBannerBtnText}>
+                    {togglingLiveInterestId === item.id
+                      ? "..."
+                      : item.isInterested
+                        ? "Interested"
+                        : "I'm in"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+
       {FEATURE_FLAGS.dailyEngagement ? (
         <>
           <Text style={styles.sectionHeader}>Daily Career Quiz</Text>
@@ -2076,6 +2122,8 @@ const styles = StyleSheet.create({
     fontWeight: "500"
   },
   sectionHeader: { fontSize: 16, fontWeight: "800", color: "#1E2B24", marginBottom: 10 },
+  sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  sectionHeaderLink: { color: "#1F7A4C", fontWeight: "800", fontSize: 12 },
   newsTabRow: { paddingBottom: 4, gap: 8, marginBottom: 8 },
   newsTabChip: {
     borderWidth: 1,
@@ -2178,6 +2226,49 @@ const styles = StyleSheet.create({
   },
   bannerTitle: { fontSize: 16, color: "#13251E", fontWeight: "800", lineHeight: 20 },
   bannerCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
+  liveBannerRow: { paddingBottom: 6, gap: 10, marginBottom: 10 },
+  liveBannerEmpty: {
+    width: 240,
+    height: 150,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  liveBannerCard: {
+    width: 260,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#D4E8D8",
+    backgroundColor: "#FFFFFF",
+    padding: 10
+  },
+  liveBannerImage: { width: "100%", height: 132, borderRadius: 10, backgroundColor: "#EAECF0" },
+  liveBannerImagePlaceholder: {
+    width: "100%",
+    height: 132,
+    borderRadius: 10,
+    backgroundColor: "#F2F4F7",
+    borderWidth: 1,
+    borderColor: "#EAECF0",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  liveBannerPlaceholderText: { color: "#667085", fontWeight: "800" },
+  liveBannerTitle: { marginTop: 8, color: "#13251E", fontWeight: "900", lineHeight: 19 },
+  liveBannerMeta: { marginTop: 4, color: "#667085", fontWeight: "600", fontSize: 12 },
+  liveBannerFooter: { marginTop: 10, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  liveBannerBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#1F7A4C",
+    backgroundColor: "#E8F5EE"
+  },
+  liveBannerBtnText: { color: "#1F7A4C", fontWeight: "800", fontSize: 12 },
   matchWrap: { gap: 9, marginBottom: 10 },
   matchCard: {
     backgroundColor: "#FFFFFF",
