@@ -858,11 +858,15 @@ export default function StudentDashboard() {
     usedIds: Set<string>,
     preferredDifficulty: "easy" | "medium" | "hard"
   ): DailyQuizQuestion | null {
-    const byDifficulty = pool.find(
+    const candidates = pool.filter(
       (item) => item.difficulty === preferredDifficulty && !usedIds.has(String(item.id))
     );
-    if (byDifficulty) return byDifficulty;
-    return pool.find((item) => !usedIds.has(String(item.id))) || null;
+    if (candidates.length) {
+      return candidates[Math.floor(Math.random() * candidates.length)];
+    }
+    const any = pool.filter((item) => !usedIds.has(String(item.id)));
+    if (!any.length) return null;
+    return any[Math.floor(Math.random() * any.length)];
   }
 
   async function openDailyQuiz() {
