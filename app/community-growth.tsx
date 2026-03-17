@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useAuth } from "@/context/AuthContext";
 
 type CommunityModule = {
   id: string;
@@ -14,79 +15,99 @@ type CommunityModule = {
   gradient: [string, string];
 };
 
-const modules: CommunityModule[] = [
-  {
-    id: "collaboration",
-    label: "Community & Collaboration",
-    description: "Join ORIN collaboration initiatives and partnerships.",
-    icon: "people",
-    path: "/community/collaboration",
-    border: "#D6BBFB",
-    gradient: ["#FFFFFF", "#F9F5FF"]
-  },
-  {
-    id: "challenges",
-    label: "Challenges",
-    description: "Participate in monthly challenges and competitions.",
-    icon: "trophy",
-    path: "/community/challenges",
-    border: "#F9DBAF",
-    gradient: ["#FFFFFF", "#FFF7ED"]
-  },
-  {
-    id: "certifications",
-    label: "Certifications",
-    description: "Explore ORIN certifications and level progression.",
-    icon: "ribbon",
-    path: "/community/certifications",
-    border: "#A4BCFD",
-    gradient: ["#FFFFFF", "#EEF4FF"]
-  },
-  {
-    id: "opportunities",
-    label: "Internship Opportunities",
-    description: "Discover internships and career opportunities.",
-    icon: "briefcase",
-    path: "/community/opportunities",
-    border: "#ABEFC6",
-    gradient: ["#FFFFFF", "#ECFDF3"]
-  },
-  {
-    id: "leaderboard",
-    label: "College Leaderboard",
-    description: "Check rankings and top students in your college.",
-    icon: "podium",
-    path: "/community/leaderboard",
-    border: "#F9DBAF",
-    gradient: ["#FFFFFF", "#FFF7ED"]
-  },
-  {
-    id: "library",
-    label: "Knowledge Library",
-    description: "Access resources, guides, and interview prep.",
-    icon: "library",
-    path: "/community/knowledge-library",
-    border: "#B2DDFF",
-    gradient: ["#FFFFFF", "#EFF8FF"]
-  },
-  {
-    id: "reputation",
-    label: "Reputation & Ranking",
-    description: "Track your score, tag, and percentile performance.",
-    icon: "stats-chart",
-    path: "/community/reputation",
-    border: "#FDA29B",
-    gradient: ["#FFFFFF", "#FEF3F2"]
-  }
-];
-
 export default function CommunityGrowthScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isMentor = user?.role === "mentor";
+
+  const modules: CommunityModule[] = [
+    {
+      id: "collaboration",
+      label: "Community & Collaboration",
+      description: isMentor
+        ? "Collaborate with other mentors, support initiatives, and grow your mentoring network."
+        : "Join ORIN collaboration initiatives and partnerships.",
+      icon: "people",
+      path: "/community/collaboration",
+      border: "#D6BBFB",
+      gradient: ["#FFFFFF", "#F9F5FF"]
+    },
+    {
+      id: "challenges",
+      label: "Challenges",
+      description: isMentor
+        ? "Join mentoring challenges and contribute structured learning activities."
+        : "Participate in monthly challenges and competitions.",
+      icon: "trophy",
+      path: "/community/challenges",
+      border: "#F9DBAF",
+      gradient: ["#FFFFFF", "#FFF7ED"]
+    },
+    {
+      id: "certifications",
+      label: "Certifications",
+      description: isMentor
+        ? "Track certification tracks you can recommend, review, or contribute toward."
+        : "Explore ORIN certifications and level progression.",
+      icon: "ribbon",
+      path: "/community/certifications",
+      border: "#A4BCFD",
+      gradient: ["#FFFFFF", "#EEF4FF"]
+    },
+    {
+      id: "opportunities",
+      label: "Internship Opportunities",
+      description: isMentor
+        ? "Track opportunities you can share with students and your mentoring circle."
+        : "Discover internships and career opportunities.",
+      icon: "briefcase",
+      path: "/community/opportunities",
+      border: "#ABEFC6",
+      gradient: ["#FFFFFF", "#ECFDF3"]
+    },
+    {
+      id: "leaderboard",
+      label: "College Leaderboard",
+      description: isMentor
+        ? "See where your students and mentoring community are performing across colleges."
+        : "Check rankings and top students in your college.",
+      icon: "podium",
+      path: "/community/leaderboard",
+      border: "#F9DBAF",
+      gradient: ["#FFFFFF", "#FFF7ED"]
+    },
+    {
+      id: "library",
+      label: "Knowledge Library",
+      description: isMentor
+        ? "Contribute guides, mentoring notes, and reusable learning resources."
+        : "Access resources, guides, and interview prep.",
+      icon: "library",
+      path: "/community/knowledge-library",
+      border: "#B2DDFF",
+      gradient: ["#FFFFFF", "#EFF8FF"]
+    },
+    {
+      id: "reputation",
+      label: "Reputation & Ranking",
+      description: isMentor
+        ? "Track your mentor reputation, ranking, and trust indicators inside ORIN."
+        : "Track your score, tag, and percentile performance.",
+      icon: "stats-chart",
+      path: "/community/reputation",
+      border: "#FDA29B",
+      gradient: ["#FFFFFF", "#FEF3F2"]
+    }
+  ];
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Community & Growth</Text>
-      <Text style={styles.sub}>Open a module to go to its dedicated full page.</Text>
+      <Text style={styles.sub}>
+        {isMentor
+          ? "Use community tools to collaborate with mentors, contribute knowledge, and track your mentor standing."
+          : "Open a module to go to its dedicated full page."}
+      </Text>
 
       <View style={styles.moduleStack}>
         {modules.map((item) => (

@@ -34,6 +34,7 @@ type Session = {
   time: string;
   scheduledStart?: string;
   amount: number;
+  status?: string;
   paymentStatus: "pending" | "waiting_verification" | "verified" | "rejected" | "paid";
   sessionStatus: "booked" | "confirmed" | "completed";
   meetingLink?: string;
@@ -64,6 +65,11 @@ type MentorProfilePayload = {
   title?: string;
   sessionPrice?: number;
   profilePhotoUrl?: string;
+  rating?: number;
+  experienceYears?: number;
+  specializations?: string[];
+  totalSessionsConducted?: number;
+  verifiedBadge?: boolean;
 };
 
 type NetworkPost = {
@@ -237,6 +243,7 @@ export default function MentorDashboard() {
   const [liveTopic, setLiveTopic] = useState("");
   const [liveStartsAt, setLiveStartsAt] = useState("");
   const [creatingLiveSession, setCreatingLiveSession] = useState(false);
+  const [mentorProfileSummary, setMentorProfileSummary] = useState<MentorProfilePayload | null>(null);
   const calendarDateOptions = useMemo(() => nextDates(14), []);
   const mentorServices = [
     {
@@ -484,6 +491,7 @@ export default function MentorDashboard() {
       setSessionPrice(String(Number(profileRes.value.data?.profile?.sessionPrice || 0) || 499));
       setMentorTitle(profileRes.value.data?.profile?.title || "");
       setProfilePhotoUrl(profileRes.value.data?.profile?.profilePhotoUrl || "");
+      setMentorProfileSummary(profileRes.value.data?.profile || null);
       setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
       setDailyDashboard(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
       setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
@@ -511,6 +519,30 @@ export default function MentorDashboard() {
     () => bookings.filter((booking) => booking.status === "pending"),
     [bookings]
   );
+
+  const upcomingSessions = useMemo(
+    () =>
+      sessions.filter((session) => {
+        const fallbackStart = session.date && session.time ? new Date(`${session.date}T${session.time}:00.000Z`).getTime() : NaN;
+        const startValue = session.scheduledStart ? new Date(session.scheduledStart).getTime() : fallbackStart;
+        return Number.isFinite(startValue) && startValue >= Date.now() && session.sessionStatus !== "completed";
+      }),
+    [sessions]
+  );
+
+  const completedSessions = useMemo(
+    () => sessions.filter((session) => session.sessionStatus === "completed" || session.status === "completed"),
+    [sessions]
+  );
+
+  const studentsMentoredCount = useMemo(() => {
+    const ids = new Set(
+      sessions
+        .map((session) => session.studentId?.email || session.studentId?.name || "")
+        .filter(Boolean)
+    );
+    return ids.size;
+  }, [sessions]);
 
   const confirmedPaidSessions = useMemo(
     () =>
@@ -848,6 +880,69 @@ export default function MentorDashboard() {
         <Text style={styles.heroSubTitle}>Manage pricing, availability, chat, and live links in one place.</Text>
       </View>
 
+      <Text style={styles.sectionHeader}>Booking Requests</Text>
+      <View style={styles.focusStack}>
+        {pendingRequests.length === 0 ? (
+          <View style={styles.focusCard}>
+            <Text style={styles.focusCardTitle}>No pending booking requests</Text>
+            <Text style={styles.meta}>New student requests will appear here first.</Text>
+          </View>
+        ) : (
+          pendingRequests.slice(0, 3).map((booking) => (
+            <TouchableOpacity key={booking._id} style={styles.focusCard} onPress={() => setActiveSection("requests")}>
+              <Text style={styles.focusCardTitle}>{booking.student?.name || "Student"}</Text>
+              <Text style={styles.meta}>{new Date(booking.scheduledAt).toLocaleString()}</Text>
+              <Text style={styles.focusCardAccent}>Pending approval</Text>
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>Upcoming Sessions</Text>
+      <View style={styles.focusStack}>
+        {upcomingSessions.length === 0 ? (
+          <View style={styles.focusCard}>
+            <Text style={styles.focusCardTitle}>No upcoming sessions</Text>
+            <Text style={styles.meta}>Confirmed sessions will appear here as soon as students complete payment and approval flow.</Text>
+          </View>
+        ) : (
+          upcomingSessions.slice(0, 3).map((session) => (
+            <TouchableOpacity key={session._id} style={styles.focusCard} onPress={() => setActiveSection("sessions")}>
+              <Text style={styles.focusCardTitle}>{session.studentId?.name || "Student"}</Text>
+              <Text style={styles.meta}>
+                {session.date} {session.time} | INR {session.amount}
+              </Text>
+              <Text style={styles.focusCardAccent}>Upcoming session</Text>
+            </TouchableOpacity>
+          ))
+        )}
+      </View>
+
+      <Text style={styles.sectionHeader}>Availability / Slot Management</Text>
+      <TouchableOpacity style={styles.focusCard} onPress={() => setActiveSection("availability")}>
+        <Text style={styles.focusCardTitle}>Manage Mentor Availability</Text>
+        <Text style={styles.meta}>
+          Weekly slots: {availabilitySlots.length} | Date slots: {dateSpecificSlots.length} | Blocked dates: {blockedDateList.length}
+        </Text>
+        <Text style={styles.focusCardAccent}>Open availability controls</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.sectionHeader}>Mentor Stats</Text>
+      <View style={styles.metricsRow}>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricValue}>{studentsMentoredCount}</Text>
+          <Text style={styles.metricLabel}>Students Mentored</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricValue}>{Math.max(completedSessions.length, Number(mentorProfileSummary?.totalSessionsConducted || 0))}</Text>
+          <Text style={styles.metricLabel}>Sessions Completed</Text>
+        </View>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricValue}>{Number(mentorProfileSummary?.rating || 0).toFixed(1)}</Text>
+          <Text style={styles.metricLabel}>Rating</Text>
+        </View>
+      </View>
+
       <Text style={styles.sectionHeader}>Services</Text>
       <View style={styles.quickGrid}>
         {mentorServices.map((item) => (
@@ -942,52 +1037,11 @@ export default function MentorDashboard() {
             ))}
           </View>
         </>
-      ) : null}`r`n      {FEATURE_FLAGS.dailyEngagement ? (
-        <>
-          <Text style={styles.sectionHeader}>Mentor Growth Dashboard</Text>
-          <View style={styles.dailyCard}>
-            {!dailyDashboard ? (
-              <Text style={styles.empty}>Daily progress unavailable right now.</Text>
-            ) : (
-              <>
-                <Text style={styles.dailyTitle}>Reputation Score: {dailyDashboard.reputationScore}</Text>
-                <Text style={styles.dailyMeta}>Tag: {dailyDashboard.levelTag}</Text>
-                {(dailyDashboard.tasks || []).map((task) => {
-                  const inProgress = completingTaskKey === task.key;
-                  return (
-                    <View key={task.key} style={styles.dailyTaskRow}>
-                      <Text style={styles.dailyItem}>
-                        {task.completed ? "✓ " : "- "}
-                        {task.title}
-                      </Text>
-                      <TouchableOpacity
-                        style={[styles.dailyTaskButton, task.completed && styles.dailyTaskButtonDone]}
-                        onPress={() => completeDailyTask(task.key)}
-                        disabled={task.completed || inProgress}
-                      >
-                        <Text style={styles.dailyTaskButtonText}>
-                          {task.completed ? "Done" : inProgress ? "..." : "Complete"}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
-                <Text style={styles.dailyMeta}>
-                  Streak: {dailyDashboard.streakDays} days | XP: {dailyDashboard.xp}
-                </Text>
-                <Text style={styles.dailyMeta}>
-                  Leaderboard: College #{dailyDashboard.leaderboard?.collegeRank ?? "-"} | Global #
-                  {dailyDashboard.leaderboard?.globalRank ?? "-"}
-                </Text>
-              </>
-            )}
-          </View>
-        </>
       ) : null}
 
       {FEATURE_FLAGS.smartSuggestions ? (
         <>
-          <Text style={styles.sectionHeader}>People You May Know</Text>
+          <Text style={styles.sectionHeader}>Suggested Connections</Text>
           <View style={styles.suggestionWrap}>
             {(hasLiveSuggestions ? suggestions : mentorSuggestionsPreview).slice(0, 8).map((item, index) => (
               <View key={`${item.id}-${index}`} style={styles.suggestionCard}>
@@ -1567,6 +1621,16 @@ const styles = StyleSheet.create({
   },
   bannerTitle: { fontSize: 16, color: "#13251E", fontWeight: "800", lineHeight: 20 },
   bannerCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
+  focusStack: { gap: 10, marginBottom: 10 },
+  focusCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8E4DE",
+    borderRadius: 14,
+    padding: 12
+  },
+  focusCardTitle: { color: "#1E2B24", fontWeight: "800", fontSize: 15 },
+  focusCardAccent: { marginTop: 6, color: "#1F7A4C", fontWeight: "700", fontSize: 12 },
   mentorMapWrap: { gap: 10, marginBottom: 8 },
   mentorMapCard: {
     borderWidth: 1,

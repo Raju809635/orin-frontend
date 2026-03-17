@@ -3,11 +3,14 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, Toucha
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
 type MentorGroupItem = { id: string; name: string; schedule?: string; membersCount?: number; mentor?: { name?: string } };
 
 export default function CommunityCollaborationPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isMentor = user?.role === "mentor";
   const [groups, setGroups] = useState<MentorGroupItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -31,11 +34,15 @@ export default function CommunityCollaborationPage() {
   return (
     <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
       <Text style={styles.pageTitle}>Community & Collaboration</Text>
-      <Text style={styles.pageSub}>Join learning communities and participate in shared discussions.</Text>
+      <Text style={styles.pageSub}>
+        {isMentor
+          ? "Work with other mentors, join mentoring circles, and contribute to shared discussions."
+          : "Join learning communities and participate in shared discussions."}
+      </Text>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="people" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Overview</Text></View><Text style={styles.meta}>Collaborate with peers and mentors in topic-focused groups.</Text></View>
+      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="people" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Overview</Text></View><Text style={styles.meta}>{isMentor ? "Collaborate with mentors, manage shared groups, and strengthen your credibility through community contribution." : "Collaborate with peers and mentors in topic-focused groups."}</Text></View>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="settings" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Main Feature</Text></View><TouchableOpacity style={styles.primaryBtn} onPress={() => router.push("/collaborate" as never)}><Text style={styles.primaryBtnText}>Join Community</Text></TouchableOpacity></View>
+      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="settings" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Main Feature</Text></View><TouchableOpacity style={styles.primaryBtn} onPress={() => router.push("/collaborate" as never)}><Text style={styles.primaryBtnText}>{isMentor ? "Open Mentor Collaboration" : "Join Community"}</Text></TouchableOpacity></View>
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}><Ionicons name="chatbubbles" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Community Discussions</Text></View>
@@ -52,7 +59,7 @@ export default function CommunityCollaborationPage() {
         ))}
       </View>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Tips</Text></View><Text style={styles.meta}>Join communities aligned with your domain for better networking value.</Text></View>
+      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Tips</Text></View><Text style={styles.meta}>{isMentor ? "Use community groups to collaborate with mentors, run small learning circles, and stay visible to students in your domain." : "Join communities aligned with your domain for better networking value."}</Text></View>
     </ScrollView>
   );
 }

@@ -25,44 +25,6 @@ type SessionItem = {
 };
 type BookingItem = { _id: string; status?: string; scheduledAt: string; mentor?: { name?: string; email?: string } };
 
-const sections: {
-  id: MentorshipSectionId;
-  label: string;
-  description: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  border: string;
-  gradient: [string, string];
-  gradientActive: [string, string];
-}[] = [
-  {
-    id: "discovery",
-    label: "Discover Mentors",
-    description: "Browse domains, open guides, and find verified mentors.",
-    icon: "search",
-    border: "#A4BCFD",
-    gradient: ["#FFFFFF", "#EEF4FF"],
-    gradientActive: ["#E0EAFF", "#EEF4FF"]
-  },
-  {
-    id: "interaction",
-    label: "Mentor Interaction",
-    description: "Explore mentor groups and upcoming live mentoring sessions.",
-    icon: "people",
-    border: "#ABEFC6",
-    gradient: ["#FFFFFF", "#ECFDF3"],
-    gradientActive: ["#DCFCE7", "#ECFDF3"]
-  },
-  {
-    id: "session_management",
-    label: "Session Management",
-    description: "Track bookings, payments, verification, and confirmed sessions.",
-    icon: "calendar",
-    border: "#F9DBAF",
-    gradient: ["#FFFFFF", "#FFF7ED"],
-    gradientActive: ["#FFEDD5", "#FFF7ED"]
-  }
-];
-
 export default function MentorshipHubScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -137,6 +99,54 @@ export default function MentorshipHubScreen() {
     () => sessions.filter((s) => s.paymentStatus === "verified" || s.sessionStatus === "confirmed"),
     [sessions]
   );
+  const completedSessions = useMemo(
+    () => sessions.filter((s) => s.sessionStatus === "completed" || s.status === "completed"),
+    [sessions]
+  );
+
+  const sections: {
+    id: MentorshipSectionId;
+    label: string;
+    description: string;
+    icon: keyof typeof Ionicons.glyphMap;
+    border: string;
+    gradient: [string, string];
+    gradientActive: [string, string];
+  }[] = [
+    {
+      id: "discovery",
+      label: isMentor ? "Mentor Operations" : "Discover Mentors",
+      description: isMentor
+        ? "Manage pricing, domains, and the mentor-side controls that students depend on."
+        : "Browse domains, open guides, and find verified mentors.",
+      icon: isMentor ? "briefcase" : "search",
+      border: "#A4BCFD",
+      gradient: ["#FFFFFF", "#EEF4FF"],
+      gradientActive: ["#E0EAFF", "#EEF4FF"]
+    },
+    {
+      id: "interaction",
+      label: isMentor ? "Student Interaction" : "Mentor Interaction",
+      description: isMentor
+        ? "Review student chats, mentor groups, and live sessions that support your mentoring delivery."
+        : "Explore mentor groups and upcoming live mentoring sessions.",
+      icon: "people",
+      border: "#ABEFC6",
+      gradient: ["#FFFFFF", "#ECFDF3"],
+      gradientActive: ["#DCFCE7", "#ECFDF3"]
+    },
+    {
+      id: "session_management",
+      label: "Session Management",
+      description: isMentor
+        ? "Handle booking requests, upcoming sessions, completed sessions, notes, pricing, and availability."
+        : "Track bookings, payments, verification, and confirmed sessions.",
+      icon: "calendar",
+      border: "#F9DBAF",
+      gradient: ["#FFFFFF", "#FFF7ED"],
+      gradientActive: ["#FFEDD5", "#FFF7ED"]
+    }
+  ];
 
   return (
     <ScrollView
@@ -144,7 +154,11 @@ export default function MentorshipHubScreen() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
     >
       <Text style={styles.title}>Mentorship</Text>
-      <Text style={styles.sub}>Select a module below to open focused mentorship tools.</Text>
+      <Text style={styles.sub}>
+        {isMentor
+          ? "Use the same mentorship workspace in mentor mode to manage requests, sessions, pricing, and availability."
+          : "Select a module below to open focused mentorship tools."}
+      </Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <View style={styles.moduleStack}>
         {sections.map((item) => {
@@ -179,57 +193,119 @@ export default function MentorshipHubScreen() {
 
       {!loading && activeSection === "discovery" ? (
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Discovery</Text>
-          <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/domains" as never)}>
-            <Text style={styles.cardTitle}>Domains</Text>
-            <Text style={styles.meta}>Browse mentorship categories and mentors.</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/domain-guide" as never)}>
-            <Text style={styles.cardTitle}>Domain Guide</Text>
-            <Text style={styles.meta}>Understand domain paths and sub-domains.</Text>
-          </TouchableOpacity>
-          <View style={[styles.card, styles.cardBlue]}>
-            <Text style={styles.cardTitle}>Verified Mentor System</Text>
-            {verifiedMentors.length === 0 ? (
-              <Text style={styles.meta}>No verified mentors available now.</Text>
-            ) : (
-              verifiedMentors.slice(0, 6).map((item) => (
-                <Text key={item.mentorId} style={styles.meta}>
-                  {item.name} {item.verifiedBadge ? "(Verified)" : ""} | Rating {item.rating || 0}
-                </Text>
-              ))
-            )}
-          </View>
+          <Text style={styles.panelTitle}>{isMentor ? "Mentor Operations" : "Discovery"}</Text>
+          {isMentor ? (
+            <>
+              <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
+                <Text style={styles.cardTitle}>Booking Requests</Text>
+                <Text style={styles.meta}>Review student booking requests and respond from your mentor dashboard.</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/mentor-dashboard?section=pricing" as never)}>
+                <Text style={styles.cardTitle}>Pricing Management</Text>
+                <Text style={styles.meta}>Update your mentor title and session fee without leaving the existing app flow.</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/mentor-dashboard?section=availability" as never)}>
+                <Text style={styles.cardTitle}>Availability & Slot Management</Text>
+                <Text style={styles.meta}>Publish only the slots you want students to book.</Text>
+              </TouchableOpacity>
+              <View style={[styles.card, styles.cardBlue]}>
+                <Text style={styles.cardTitle}>Verified Mentor System</Text>
+                {verifiedMentors.some((item) => item.mentorId === user?.id && item.verifiedBadge) ? (
+                  <Text style={styles.meta}>Your mentor profile currently carries a verified badge.</Text>
+                ) : (
+                  <Text style={styles.meta}>Verification status is managed by ORIN admin review and mentor profile quality.</Text>
+                )}
+              </View>
+            </>
+          ) : (
+            <>
+              <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/domains" as never)}>
+                <Text style={styles.cardTitle}>Domains</Text>
+                <Text style={styles.meta}>Browse mentorship categories and mentors.</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/domain-guide" as never)}>
+                <Text style={styles.cardTitle}>Domain Guide</Text>
+                <Text style={styles.meta}>Understand domain paths and sub-domains.</Text>
+              </TouchableOpacity>
+              <View style={[styles.card, styles.cardBlue]}>
+                <Text style={styles.cardTitle}>Verified Mentor System</Text>
+                {verifiedMentors.length === 0 ? (
+                  <Text style={styles.meta}>No verified mentors available now.</Text>
+                ) : (
+                  verifiedMentors.slice(0, 6).map((item) => (
+                    <Text key={item.mentorId} style={styles.meta}>
+                      {item.name} {item.verifiedBadge ? "(Verified)" : ""} | Rating {item.rating || 0}
+                    </Text>
+                  ))
+                )}
+              </View>
+            </>
+          )}
         </View>
       ) : null}
 
       {!loading && activeSection === "interaction" ? (
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Interaction</Text>
-          <View style={[styles.card, styles.cardGreen]}>
-            <Text style={styles.cardTitle}>Mentor Groups</Text>
-            {mentorGroups.length === 0 ? (
-              <Text style={styles.meta}>No mentor groups available.</Text>
-            ) : (
-              mentorGroups.slice(0, 6).map((item) => (
-                <Text key={item.id} style={styles.meta}>
-                  {item.name} | Mentor: {item.mentor?.name || "Mentor"} | Students: {item.membersCount || 0}
-                </Text>
-              ))
-            )}
-          </View>
-          <View style={[styles.card, styles.cardGreen]}>
-            <Text style={styles.cardTitle}>Mentor Live Sessions</Text>
-            {liveSessions.length === 0 ? (
-              <Text style={styles.meta}>No live sessions scheduled.</Text>
-            ) : (
-              liveSessions.slice(0, 6).map((item) => (
-                <Text key={item.id} style={styles.meta}>
-                  {item.title} | {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
-                </Text>
-              ))
-            )}
-          </View>
+          <Text style={styles.panelTitle}>{isMentor ? "Student Interaction" : "Interaction"}</Text>
+          {isMentor ? (
+            <>
+              <TouchableOpacity style={[styles.card, styles.cardGreen]} onPress={() => router.push("/chat" as never)}>
+                <Text style={styles.cardTitle}>Student Chats</Text>
+                <Text style={styles.meta}>Open your conversation workspace for student coordination and follow-up.</Text>
+              </TouchableOpacity>
+              <View style={[styles.card, styles.cardGreen]}>
+                <Text style={styles.cardTitle}>Mentor Groups</Text>
+                {mentorGroups.length === 0 ? (
+                  <Text style={styles.meta}>No mentor groups available.</Text>
+                ) : (
+                  mentorGroups.slice(0, 6).map((item) => (
+                    <Text key={item.id} style={styles.meta}>
+                      {item.name} | Mentor: {item.mentor?.name || "Mentor"} | Students: {item.membersCount || 0}
+                    </Text>
+                  ))
+                )}
+              </View>
+              <View style={[styles.card, styles.cardGreen]}>
+                <Text style={styles.cardTitle}>Mentor Live Sessions</Text>
+                {liveSessions.length === 0 ? (
+                  <Text style={styles.meta}>No live sessions scheduled.</Text>
+                ) : (
+                  liveSessions.slice(0, 6).map((item) => (
+                    <Text key={item.id} style={styles.meta}>
+                      {item.title} | {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
+                    </Text>
+                  ))
+                )}
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={[styles.card, styles.cardGreen]}>
+                <Text style={styles.cardTitle}>Mentor Groups</Text>
+                {mentorGroups.length === 0 ? (
+                  <Text style={styles.meta}>No mentor groups available.</Text>
+                ) : (
+                  mentorGroups.slice(0, 6).map((item) => (
+                    <Text key={item.id} style={styles.meta}>
+                      {item.name} | Mentor: {item.mentor?.name || "Mentor"} | Students: {item.membersCount || 0}
+                    </Text>
+                  ))
+                )}
+              </View>
+              <View style={[styles.card, styles.cardGreen]}>
+                <Text style={styles.cardTitle}>Mentor Live Sessions</Text>
+                {liveSessions.length === 0 ? (
+                  <Text style={styles.meta}>No live sessions scheduled.</Text>
+                ) : (
+                  liveSessions.slice(0, 6).map((item) => (
+                    <Text key={item.id} style={styles.meta}>
+                      {item.title} | {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
+                    </Text>
+                  ))
+                )}
+              </View>
+            </>
+          )}
         </View>
       ) : null}
 
@@ -239,16 +315,28 @@ export default function MentorshipHubScreen() {
           {isMentor ? (
             <>
               <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
-                <Text style={styles.cardTitle}>Session Requests</Text>
-                <Text style={styles.meta}>Open mentor requests management.</Text>
+                <Text style={styles.cardTitle}>View Booking Requests</Text>
+                <Text style={styles.meta}>Pending student requests: {bookings.filter((item) => item.status === "pending").length}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=sessions" as never)}>
-                <Text style={styles.cardTitle}>Sessions</Text>
-                <Text style={styles.meta}>Open mentor sessions management.</Text>
+                <Text style={styles.cardTitle}>Upcoming Sessions</Text>
+                <Text style={styles.meta}>Confirmed or active sessions: {confirmedSessions.length}</Text>
               </TouchableOpacity>
+              <View style={[styles.card, styles.cardOrange]}>
+                <Text style={styles.cardTitle}>Completed Sessions</Text>
+                <Text style={styles.meta}>{completedSessions.length} completed mentoring session(s)</Text>
+              </View>
               <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=availability" as never)}>
-                <Text style={styles.cardTitle}>Availability</Text>
+                <Text style={styles.cardTitle}>Manage Availability Slots</Text>
                 <Text style={styles.meta}>Open mentor availability controls.</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=pricing" as never)}>
+                <Text style={styles.cardTitle}>Manage Pricing</Text>
+                <Text style={styles.meta}>Open mentor pricing controls for session fee updates.</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=sessions" as never)}>
+                <Text style={styles.cardTitle}>Add Session Notes & Meet Links</Text>
+                <Text style={styles.meta}>Use the mentor sessions panel to add links and session delivery details.</Text>
               </TouchableOpacity>
             </>
           ) : (

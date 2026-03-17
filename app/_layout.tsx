@@ -41,6 +41,7 @@ function RootDrawer() {
   const { user, isAuthenticated, isBootstrapping } = useAuth();
   const [drawerPhotoUrl, setDrawerPhotoUrl] = useState("");
   const [drawerReputation, setDrawerReputation] = useState<{ levelTag?: string; xp?: number; score?: number } | null>(null);
+  const [drawerMentorStats, setDrawerMentorStats] = useState<{ rating?: number; studentsMentored?: number } | null>(null);
   const isCheckingUpdateRef = useRef(false);
   const hasPromptedReloadRef = useRef(false);
 
@@ -165,13 +166,17 @@ function RootDrawer() {
     async function loadDrawerPhoto() {
       if (!isAuthenticated || !user) {
         if (active) setDrawerPhotoUrl("");
+        if (active) setDrawerMentorStats(null);
         return;
       }
       try {
         const endpoint = user.role === "mentor" ? "/api/profiles/mentor/me" : "/api/profiles/student/me";
-        const [profileRes, dailyRes] = await Promise.allSettled([
+        const [profileRes, dailyRes, mentorSessionsRes] = await Promise.allSettled([
           api.get<{ profile?: { profilePhotoUrl?: string } }>(endpoint),
-          api.get<{ levelTag?: string; xp?: number; reputationScore?: number }>("/api/network/daily-dashboard")
+          api.get<{ levelTag?: string; xp?: number; reputationScore?: number }>("/api/network/daily-dashboard"),
+          user.role === "mentor"
+            ? api.get<Array<{ studentId?: { email?: string; name?: string } | null }>>("/api/sessions/mentor/me")
+            : Promise.resolve({ data: [] as Array<{ studentId?: { email?: string; name?: string } | null }> })
         ]);
         if (!active) return;
         setDrawerPhotoUrl(profileRes.status === "fulfilled" ? profileRes.value.data?.profile?.profilePhotoUrl || "" : "");
@@ -184,10 +189,26 @@ function RootDrawer() {
               }
             : { levelTag: "Starter", xp: 0, score: 0 }
         );
+        if (user.role === "mentor") {
+          const mentorProfile = profileRes.status === "fulfilled" ? (profileRes.value.data?.profile as { rating?: number } | undefined) : undefined;
+          const sessionRows = mentorSessionsRes.status === "fulfilled" ? mentorSessionsRes.value.data || [] : [];
+          const studentsMentored = new Set(
+            sessionRows
+              .map((item) => item.studentId?.email || item.studentId?.name || "")
+              .filter(Boolean)
+          ).size;
+          setDrawerMentorStats({
+            rating: Number(mentorProfile?.rating || 0),
+            studentsMentored
+          });
+        } else {
+          setDrawerMentorStats(null);
+        }
       } catch {
         if (active) {
           setDrawerPhotoUrl("");
           setDrawerReputation({ levelTag: "Starter", xp: 0, score: 0 });
+          setDrawerMentorStats(null);
         }
       }
     }
@@ -285,6 +306,11 @@ function RootDrawer() {
             <Text style={styles.drawerProfileMeta}>
               {drawerReputation?.levelTag || "Starter"} | XP {drawerReputation?.xp ?? 0} | Score {drawerReputation?.score ?? 0}
             </Text>
+            {user.role === "mentor" ? (
+              <Text style={styles.drawerProfileMeta}>
+                Rating {Number(drawerMentorStats?.rating || 0).toFixed(1)} | Students Mentored {drawerMentorStats?.studentsMentored ?? 0}
+              </Text>
+            ) : null}
               </View>
             </View>
             <TouchableOpacity
@@ -295,17 +321,29 @@ function RootDrawer() {
           </View>
         ) : null}
         <View style={styles.drawerFlatList}>
-          <DrawerItem label="Domains" onPress={() => router.push("/domains" as never)} />
-          <DrawerItem
-            label="Daily Quiz"
-            onPress={() =>
-              router.push((user?.role === "student" ? "/student-dashboard?section=overview&openQuiz=1" : "/mentor-dashboard?section=overview") as never)
-            }
-          />
-          <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
-          <DrawerItem label="News & Updates" onPress={() => router.push("/news-updates" as never)} />
-          <DrawerItem label="Collaborate" onPress={() => router.push("/collaborate" as never)} />
-          <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
+          {user?.role === "mentor" ? (
+            <>
+              <DrawerItem label="Domains" onPress={() => router.push("/mentor-profile" as never)} />
+              <DrawerItem label="Availability" onPress={() => router.push("/mentor-dashboard?section=availability" as never)} />
+              <DrawerItem label="Session Pricing" onPress={() => router.push("/mentor-dashboard?section=pricing" as never)} />
+              <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
+              <DrawerItem label="News & Updates" onPress={() => router.push("/news-updates" as never)} />
+              <DrawerItem label="Collaborate" onPress={() => router.push("/collaborate" as never)} />
+              <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
+            </>
+          ) : (
+            <>
+              <DrawerItem label="Domains" onPress={() => router.push("/domains" as never)} />
+              <DrawerItem
+                label="Daily Quiz"
+                onPress={() => router.push("/student-dashboard?section=overview&openQuiz=1" as never)}
+              />
+              <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
+              <DrawerItem label="News & Updates" onPress={() => router.push("/news-updates" as never)} />
+              <DrawerItem label="Collaborate" onPress={() => router.push("/collaborate" as never)} />
+              <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
+            </>
+          )}
         </View>
       </DrawerContentScrollView>
     );

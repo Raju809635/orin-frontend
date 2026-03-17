@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-nati
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useAuth } from "@/context/AuthContext";
 
 type AiModule = {
   id: string;
@@ -14,70 +15,88 @@ type AiModule = {
   gradient: [string, string];
 };
 
-const modules: AiModule[] = [
-  {
-    id: "mentor_matching",
-    label: "AI Mentor Matching",
-    description: "Find best-fit mentors with match score and experience insights.",
-    icon: "sparkles",
-    path: "/ai/mentor-matching",
-    border: "#A4BCFD",
-    gradient: ["#FFFFFF", "#EEF4FF"]
-  },
-  {
-    id: "skill_gap",
-    label: "AI Skill Gap Analysis",
-    description: "Identify missing skills and course suggestions for your goal.",
-    icon: "analytics",
-    path: "/ai/skill-gap",
-    border: "#C4B5FD",
-    gradient: ["#FFFFFF", "#F4F3FF"]
-  },
-  {
-    id: "roadmap",
-    label: "AI Career Roadmap",
-    description: "Get your step-by-step path and next milestones.",
-    icon: "map",
-    path: "/ai/career-roadmap",
-    border: "#ABEFC6",
-    gradient: ["#FFFFFF", "#ECFDF3"]
-  },
-  {
-    id: "project_ideas",
-    label: "AI Project Ideas",
-    description: "Generate practical project ideas aligned to your career track.",
-    icon: "bulb",
-    path: "/ai/project-ideas",
-    border: "#F9DBAF",
-    gradient: ["#FFFFFF", "#FFF7ED"]
-  },
-  {
-    id: "resume_builder",
-    label: "AI Resume Builder",
-    description: "Create resume draft from profile and activity data.",
-    icon: "document-text",
-    path: "/ai/resume-builder",
-    border: "#FDA29B",
-    gradient: ["#FFFFFF", "#FEF3F2"]
-  },
-  {
-    id: "assistant",
-    label: "AI Assistant",
-    description: "Open AI chat for personalized answers and guidance.",
-    icon: "chatbubbles",
-    path: "/ai/assistant",
-    border: "#D6BBFB",
-    gradient: ["#FFFFFF", "#F9F5FF"]
-  }
-];
-
 export default function AiHubScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isMentor = user?.role === "mentor";
+
+  const modules: AiModule[] = [
+    {
+      id: "mentor_matching",
+      label: "AI Mentor Matching",
+      description: isMentor
+        ? "Identify students whose goals and interests align with your mentoring domains."
+        : "Find best-fit mentors with match score and experience insights.",
+      icon: "sparkles",
+      path: "/ai/mentor-matching",
+      border: "#A4BCFD",
+      gradient: ["#FFFFFF", "#EEF4FF"]
+    },
+    {
+      id: "skill_gap",
+      label: "AI Skill Gap Analysis",
+      description: isMentor
+        ? "Review likely student skill gaps before sessions and plan better guidance."
+        : "Identify missing skills and course suggestions for your goal.",
+      icon: "analytics",
+      path: "/ai/skill-gap",
+      border: "#C4B5FD",
+      gradient: ["#FFFFFF", "#F4F3FF"]
+    },
+    {
+      id: "roadmap",
+      label: "AI Career Roadmap",
+      description: isMentor
+        ? "Generate structured mentoring plans and milestone-based guidance for mentees."
+        : "Get your step-by-step path and next milestones.",
+      icon: "map",
+      path: "/ai/career-roadmap",
+      border: "#ABEFC6",
+      gradient: ["#FFFFFF", "#ECFDF3"]
+    },
+    {
+      id: "project_ideas",
+      label: "AI Project Ideas",
+      description: isMentor
+        ? "Generate assignments, practice tasks, and project suggestions for students."
+        : "Generate practical project ideas aligned to your career track.",
+      icon: "bulb",
+      path: "/ai/project-ideas",
+      border: "#F9DBAF",
+      gradient: ["#FFFFFF", "#FFF7ED"]
+    },
+    {
+      id: "resume_builder",
+      label: "AI Resume Builder",
+      description: isMentor
+        ? "Review student resumes and prepare sharper improvement suggestions."
+        : "Create resume draft from profile and activity data.",
+      icon: "document-text",
+      path: "/ai/resume-builder",
+      border: "#FDA29B",
+      gradient: ["#FFFFFF", "#FEF3F2"]
+    },
+    {
+      id: "assistant",
+      label: "AI Assistant",
+      description: isMentor
+        ? "Open your mentoring assistant for session preparation and student guidance support."
+        : "Open AI chat for personalized answers and guidance.",
+      icon: "chatbubbles",
+      path: "/ai/assistant",
+      border: "#D6BBFB",
+      gradient: ["#FFFFFF", "#F9F5FF"]
+    }
+  ];
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>AI</Text>
-      <Text style={styles.sub}>Open a module to go to its dedicated full page.</Text>
+      <Text style={styles.sub}>
+        {isMentor
+          ? "Open a mentor-focused AI tool to prepare sessions, guide students, and improve mentoring delivery."
+          : "Open a module to go to its dedicated full page."}
+      </Text>
 
       <View style={styles.moduleStack}>
         {modules.map((item) => (

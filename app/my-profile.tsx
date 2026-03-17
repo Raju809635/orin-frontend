@@ -52,6 +52,26 @@ type PublicProfileLite = {
   };
 };
 
+type MentorProfilePrivate = {
+  profilePhotoUrl?: string;
+  title?: string;
+  company?: string;
+  experienceYears?: number;
+  sessionPrice?: number;
+  primaryCategory?: string;
+  subCategory?: string;
+  specializations?: string[];
+  rating?: number;
+  totalSessionsConducted?: number;
+  verifiedBadge?: boolean;
+};
+
+type MentorSessionLite = {
+  _id: string;
+  sessionStatus?: string;
+  studentId?: { name?: string; email?: string } | null;
+};
+
 export default function MyProfileScreen() {
   const router = useRouter();
   const { user } = useAuth();
@@ -60,6 +80,8 @@ export default function MyProfileScreen() {
   const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
   const [socialPreview, setSocialPreview] = useState<PublicProfileLite["socialPreview"] | null>(null);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
+  const [mentorProfile, setMentorProfile] = useState<MentorProfilePrivate | null>(null);
+  const [mentorSessions, setMentorSessions] = useState<MentorSessionLite[]>([]);
   const [activeList, setActiveList] = useState<"insights" | "audience" | "following" | "circle">("insights");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -67,6 +89,14 @@ export default function MyProfileScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const editRoute = useMemo(() => (user?.role === "mentor" ? "/mentor-profile" : "/student-profile"), [user?.role]);
+  const mentorStudentsMentored = useMemo(() => {
+    const ids = new Set(
+      mentorSessions
+        .map((item) => item.studentId?.email || item.studentId?.name || "")
+        .filter(Boolean)
+    );
+    return ids.size;
+  }, [mentorSessions]);
 
   const loadProfileData = useCallback(async (refresh = false) => {
     try {
@@ -74,11 +104,17 @@ export default function MyProfileScreen() {
       else setLoading(true);
       setError(null);
 
-      const [overviewRes, connectionsRes, feedRes, socialRes] = await Promise.allSettled([
+      const [overviewRes, connectionsRes, feedRes, socialRes, mentorProfileRes, mentorSessionsRes] = await Promise.allSettled([
         api.get<NetworkOverview>("/api/network/overview"),
         api.get<ConnectionRow[]>("/api/network/connections?status=accepted"),
         api.get<FeedPost[]>("/api/network/feed"),
-        user?.id ? api.get<PublicProfileLite>(`/api/profiles/public/${user.id}`) : Promise.resolve({ data: {} as PublicProfileLite })
+        user?.id ? api.get<PublicProfileLite>(`/api/profiles/public/${user.id}`) : Promise.resolve({ data: {} as PublicProfileLite }),
+        user?.role === "mentor"
+          ? api.get<{ profile?: MentorProfilePrivate }>("/api/profiles/mentor/me")
+          : Promise.resolve({ data: {} as { profile?: MentorProfilePrivate } }),
+        user?.role === "mentor"
+          ? api.get<MentorSessionLite[]>("/api/sessions/mentor/me")
+          : Promise.resolve({ data: [] as MentorSessionLite[] })
       ]);
 
       const overviewData = overviewRes.status === "fulfilled" ? overviewRes.value.data : null;
@@ -90,6 +126,8 @@ export default function MyProfileScreen() {
       setMyPosts(feedData.filter((post) => String(post?.authorId?._id || "") === String(user?.id || "")));
       setSocialPreview(socialRes.status === "fulfilled" ? socialRes.value.data?.socialPreview || null : null);
       setProfilePhotoUrl(socialRes.status === "fulfilled" ? socialRes.value.data?.profile?.profilePhotoUrl || "" : "");
+      setMentorProfile(mentorProfileRes.status === "fulfilled" ? mentorProfileRes.value.data?.profile || null : null);
+      setMentorSessions(mentorSessionsRes.status === "fulfilled" ? mentorSessionsRes.value.data || [] : []);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load profile.");
     } finally {
@@ -185,6 +223,27 @@ export default function MyProfileScreen() {
         <Text style={styles.meta}>Score: {overview?.reputation?.score ?? 0}</Text>
         <Text style={styles.meta}>Tag: {overview?.reputation?.levelTag || "Starter"}</Text>
       </View>
+
+      {user?.role === "mentor" ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Mentor Credibility</Text>
+          <Text style={styles.meta}>Title: {mentorProfile?.title || "Mentor"}</Text>
+          <Text style={styles.meta}>Company: {mentorProfile?.company || "Not added"}</Text>
+          <Text style={styles.meta}>Experience: {mentorProfile?.experienceYears || 0} years</Text>
+          <Text style={styles.meta}>Session pricing: INR {mentorProfile?.sessionPrice || 0}</Text>
+          <Text style={styles.meta}>Rating: {Number(mentorProfile?.rating || 0).toFixed(1)}</Text>
+          <Text style={styles.meta}>Total students mentored: {mentorStudentsMentored}</Text>
+          <Text style={styles.meta}>
+            Total sessions completed: {Math.max(Number(mentorProfile?.totalSessionsConducted || 0), mentorSessions.filter((item) => item.sessionStatus === "completed").length)}
+          </Text>
+          <Text style={styles.meta}>Verification: {mentorProfile?.verifiedBadge ? "Verified mentor" : "Standard mentor"}</Text>
+          <Text style={styles.meta}>Expertise domain: {mentorProfile?.primaryCategory || "Not selected"}</Text>
+          <Text style={styles.meta}>Mentoring subject: {mentorProfile?.subCategory || "Not selected"}</Text>
+          <Text style={styles.meta}>
+            Specializations: {(mentorProfile?.specializations || []).length ? (mentorProfile?.specializations || []).join(", ") : "Not added"}
+          </Text>
+        </View>
+      ) : null}
 
       {activeList === "circle" ? (
         <View style={styles.card}>
