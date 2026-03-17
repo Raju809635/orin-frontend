@@ -222,12 +222,30 @@ export default function MentorDashboard() {
   const [liveTitle, setLiveTitle] = useState("");
   const [liveTopic, setLiveTopic] = useState("");
   const [liveDescription, setLiveDescription] = useState("");
-  const [liveStartsAt, setLiveStartsAt] = useState("");
+  const [liveSessionDate, setLiveSessionDate] = useState(nextDates(14)[0]);
+  const [liveSessionTime, setLiveSessionTime] = useState("18:00");
   const [livePosterImageUrl, setLivePosterImageUrl] = useState("");
   const [uploadingLivePoster, setUploadingLivePoster] = useState(false);
   const [creatingLiveSession, setCreatingLiveSession] = useState(false);
   const [mentorProfileSummary, setMentorProfileSummary] = useState<MentorProfilePayload | null>(null);
   const calendarDateOptions = useMemo(() => nextDates(14), []);
+  const liveSessionTimeOptions = useMemo(
+    () => [
+      "09:00",
+      "10:00",
+      "11:00",
+      "12:00",
+      "13:00",
+      "14:00",
+      "15:00",
+      "16:00",
+      "17:00",
+      "18:00",
+      "19:00",
+      "20:00"
+    ],
+    []
+  );
   const mentorServices = [
     {
       key: "requests",
@@ -674,15 +692,14 @@ export default function MentorDashboard() {
     const title = liveTitle.trim();
     const topic = liveTopic.trim();
     const description = liveDescription.trim();
-    const startsAt = liveStartsAt.trim();
 
-    if (!title || !startsAt) {
+    if (!title || !liveSessionDate || !liveSessionTime) {
       setError("Live session title and start time are required.");
       return;
     }
-    const parsed = new Date(startsAt);
+    const parsed = new Date(`${liveSessionDate}T${liveSessionTime}:00`);
     if (Number.isNaN(parsed.getTime())) {
-      setError("Use valid start time format: YYYY-MM-DDTHH:MM");
+      setError("Please select a valid date and time.");
       return;
     }
 
@@ -699,7 +716,8 @@ export default function MentorDashboard() {
       setLiveTitle("");
       setLiveTopic("");
       setLiveDescription("");
-      setLiveStartsAt("");
+      setLiveSessionDate(nextDates(14)[0]);
+      setLiveSessionTime("18:00");
       setLivePosterImageUrl("");
       notify("Live session created.");
       await fetchDashboard(true);
@@ -1040,14 +1058,39 @@ export default function MentorDashboard() {
               onChangeText={setLiveDescription}
               multiline
             />
-            <Text style={styles.formFieldLabel}>Start Date & Time</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g. 2026-03-20T18:30"
-              placeholderTextColor="#98A2B3"
-              value={liveStartsAt}
-              onChangeText={setLiveStartsAt}
-            />
+            <Text style={styles.formFieldLabel}>Select Date</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
+              {calendarDateOptions.map((date) => {
+                const active = liveSessionDate === date;
+                return (
+                  <TouchableOpacity
+                    key={`live-${date}`}
+                    style={[styles.dateChip, active && styles.dateChipActive]}
+                    onPress={() => setLiveSessionDate(date)}
+                  >
+                    <Text style={[styles.dateChipText, active && styles.dateChipTextActive]}>{toDateLabel(date)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <Text style={styles.formFieldLabel}>Select Time</Text>
+            <View style={styles.rowWrap}>
+              {liveSessionTimeOptions.map((time) => {
+                const active = liveSessionTime === time;
+                return (
+                  <TouchableOpacity
+                    key={`live-time-${time}`}
+                    style={[styles.dayChip, active && styles.dayChipActive]}
+                    onPress={() => setLiveSessionTime(time)}
+                  >
+                    <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>{toMeridiemTime(time)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={styles.formFieldHint}>
+              Live session starts on {toDateLabel(liveSessionDate)} at {toMeridiemTime(liveSessionTime)}.
+            </Text>
             <TouchableOpacity style={styles.secondaryButton} onPress={uploadLiveSessionPoster} disabled={uploadingLivePoster}>
               <Text style={styles.secondaryButtonText}>
                 {uploadingLivePoster ? "Uploading Poster..." : livePosterImageUrl ? "Change Poster" : "Upload Session Poster"}
@@ -1710,6 +1753,13 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     marginTop: 4,
     marginBottom: 6
+  },
+  formFieldHint: {
+    color: "#667085",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: -2,
+    marginBottom: 8
   },
   textAreaInput: {
     minHeight: 92,
