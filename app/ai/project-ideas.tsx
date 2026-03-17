@@ -21,14 +21,16 @@ export default function AiProjectIdeasPage() {
     try {
       if (refresh) setRefreshing(true); else setLoading(true);
       setError(null);
-      const res = await api.get<ProjectIdeasResponse>("/api/network/project-ideas");
+      const res = await api.get<ProjectIdeasResponse>("/api/network/project-ideas", {
+        params: { domain, level }
+      });
       setData(res.data || null);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load project ideas.");
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, []);
+  }, [domain, level]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 

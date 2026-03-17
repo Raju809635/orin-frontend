@@ -19,14 +19,16 @@ export default function AiCareerRoadmapPage() {
     try {
       if (refresh) setRefreshing(true); else setLoading(true);
       setError(null);
-      const res = await api.get<CareerRoadmapResponse>("/api/network/career-roadmap");
+      const res = await api.get<CareerRoadmapResponse>("/api/network/career-roadmap", {
+        params: { goal }
+      });
       setData(res.data || null);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load roadmap.");
     } finally {
       setLoading(false); setRefreshing(false);
     }
-  }, []);
+  }, [goal]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 

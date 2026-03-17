@@ -1,15 +1,27 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 
-type MentorMatch = { mentorId: string; name: string; title?: string; matchScore: number; experienceYears?: number; rating?: number };
+type MentorMatch = {
+  mentorId: string;
+  name: string;
+  title?: string;
+  matchScore: number;
+  experienceYears?: number;
+  rating?: number;
+  primaryCategory?: string;
+  subCategory?: string;
+  reasons?: string[];
+};
 
 const DOMAIN_OPTIONS = ["AI", "Web Development", "Cybersecurity", "Data Science", "UPSC", "Academics"];
 const LEVEL_OPTIONS = ["Beginner", "Intermediate", "Advanced"];
 
 export default function AiMentorMatchingPage() {
+  const { user } = useAuth();
   const [selectedDomain, setSelectedDomain] = useState("AI");
   const [selectedLevel, setSelectedLevel] = useState("Beginner");
   const [items, setItems] = useState<MentorMatch[]>([]);
@@ -17,13 +29,28 @@ export default function AiMentorMatchingPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [finding, setFinding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const didAutofill = useRef(false);
 
   const load = useCallback(async (refresh = false) => {
     try {
       if (refresh) setRefreshing(true); else setLoading(true);
       setError(null);
-      const { data } = await api.get<{ recommendations: MentorMatch[] }>("/api/network/mentor-matches");
-      setItems(data?.recommendations || []);
+      const { data } = await api.get<{ studentSignals?: any; recommendations: MentorMatch[] }>("/api/network/mentor-matches", {
+        params: {
+          domain: selectedDomain,
+          level: selectedLevel
+        }
+      });
+      const recs = data?.recommendations || [];
+      setItems(recs);
+
+      // Autofill domain once from the student's saved profile/category (if available).
+      const suggestedDomain = String(data?.studentSignals?.domain || "").trim();
+      if (!didAutofill.current && suggestedDomain) {
+        didAutofill.current = true;
+        const match = DOMAIN_OPTIONS.find((d) => d.toLowerCase() === suggestedDomain.toLowerCase());
+        if (match && match !== selectedDomain) setSelectedDomain(match);
+      }
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load mentor matching.");
     } finally {
@@ -31,28 +58,38 @@ export default function AiMentorMatchingPage() {
       setRefreshing(false);
       setFinding(false);
     }
-  }, []);
+  }, [selectedDomain, selectedLevel]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const filtered = useMemo(() => {
+    // Backend already applies the filters; this is a safe fallback if stale data is shown.
     return items.filter((item) => {
-      const text = `${item.title || ""} ${item.name}`.toLowerCase();
-      const byDomain = selectedDomain ? text.includes(selectedDomain.toLowerCase()) : true;
       const years = Number(item.experienceYears || 0);
-      const byLevel = selectedLevel === "Beginner" ? years <= 3 : selectedLevel === "Intermediate" ? years >= 2 && years <= 6 : years >= 5;
-      return byDomain && byLevel;
+      const byLevel =
+        selectedLevel === "Beginner"
+          ? years <= 3
+          : selectedLevel === "Intermediate"
+            ? years >= 2 && years <= 6
+            : years >= 5;
+      return byLevel;
     });
   }, [items, selectedDomain, selectedLevel]);
 
   return (
     <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
       <Text style={styles.pageTitle}>AI Mentor Matching</Text>
-      <Text style={styles.pageSub}>Match with the right mentor using domain and skill-level context.</Text>
+      <Text style={styles.pageSub}>
+        {user?.role === "mentor"
+          ? "Find students aligned to your mentoring domains (based on your profile)."
+          : "Match with the right mentor using your domain, goal, and profile skills."}
+      </Text>
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}><Ionicons name="sparkles" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Overview</Text></View>
-        <Text style={styles.meta}>This module recommends mentors based on your selected domain and expected mentoring level.</Text>
+        <Text style={styles.meta}>
+          Recommendations are personalized using your saved ORIN profile (domain, sub-domain, goals, skills). You can also filter by domain/level.
+        </Text>
       </View>
 
       <View style={styles.section}>
@@ -73,16 +110,36 @@ export default function AiMentorMatchingPage() {
           <View key={item.mentorId} style={styles.resultCard}>
             <Text style={styles.resultTitle}>{item.name}</Text>
             <Text style={styles.meta}>{item.title || "Mentor"}</Text>
+            <Text style={styles.meta}>
+              {(item.primaryCategory || selectedDomain) ? `${item.primaryCategory || selectedDomain}${item.subCategory ? ` > ${item.subCategory}` : ""}` : ""}
+            </Text>
             <Text style={styles.meta}>Experience: {item.experienceYears || 0} yrs | Rating: {item.rating || 0}</Text>
             <Text style={styles.score}>Match Score: {item.matchScore}%</Text>
-            <TouchableOpacity style={styles.secondaryBtn}><Text style={styles.secondaryBtnText}>Connect</Text></TouchableOpacity>
+            {(item.reasons || []).length ? (
+              <Text style={styles.meta}>Why: {(item.reasons || []).slice(0, 3).join(" · ")}</Text>
+            ) : null}
+            <TouchableOpacity
+              style={styles.secondaryBtn}
+              onPress={() => router.push(`/mentor/${item.mentorId}` as never)}
+            >
+              <Text style={styles.secondaryBtnText}>View Profile</Text>
+            </TouchableOpacity>
           </View>
         ))}
       </View>
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}><Ionicons name="flash" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View>
-        <TouchableOpacity style={styles.primaryBtn}><Text style={styles.primaryBtnText}>Book Session</Text></TouchableOpacity>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={() => {
+            const first = filtered[0];
+            if (!first) return;
+            router.push(`/mentor/${first.mentorId}` as never);
+          }}
+        >
+          <Text style={styles.primaryBtnText}>Book a Session</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>

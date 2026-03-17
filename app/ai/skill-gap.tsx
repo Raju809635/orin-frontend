@@ -21,14 +21,20 @@ export default function AiSkillGapPage() {
     try {
       if (refresh) setRefreshing(true); else setLoading(true);
       setError(null);
-      const res = await api.get<SkillGapResponse>("/api/network/skill-gap");
+      const res = await api.get<SkillGapResponse>("/api/network/skill-gap", {
+        params: {
+          goal: selectedGoal,
+          // CSV override; if empty the backend falls back to saved profile skills.
+          skills: skillsInput
+        }
+      });
       setData(res.data || null);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load skill gap.");
     } finally {
       setLoading(false); setRefreshing(false); setAnalyzing(false);
     }
-  }, []);
+  }, [selectedGoal, skillsInput]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -60,12 +66,12 @@ export default function AiSkillGapPage() {
         {!loading && !data ? <Text style={styles.meta}>No analysis data available.</Text> : null}
         {data ? (
           <>
-            <Text style={styles.meta}>Goal: {selectedGoal}</Text>
-            <Text style={styles.meta}>Entered Skills: {enteredSkills.join(", ") || "None"}</Text>
+            <Text style={styles.meta}>Goal: {data.goal}</Text>
+            <Text style={styles.meta}>Skills Used: {(data.currentSkills || enteredSkills).join(", ") || "None"}</Text>
             <Text style={styles.resultTitle}>Missing Skills</Text>
-            {(data.missingSkills || []).map((s) => <Text key={s} style={styles.meta}>• {s}</Text>)}
+            {(data.missingSkills || []).map((s) => <Text key={s} style={styles.meta}>â€¢ {s}</Text>)}
             <Text style={styles.resultTitle}>Recommended Resources</Text>
-            {(data.suggestions?.courses || []).slice(0, 8).map((c, i) => <Text key={`${c}-${i}`} style={styles.meta}>• {c}</Text>)}
+            {(data.suggestions?.courses || []).slice(0, 8).map((c, i) => <Text key={`${c}-${i}`} style={styles.meta}>â€¢ {c}</Text>)}
           </>
         ) : null}
       </View>
