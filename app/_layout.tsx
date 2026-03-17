@@ -288,6 +288,11 @@ function RootDrawer() {
   }
 
   function renderDrawerContent(props: DrawerContentComponentProps) {
+    const openDrawerRoute = (path: string) => {
+      props.navigation.closeDrawer();
+      router.replace(path as never);
+    };
+
     return (
       <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContent}>
         {user ? (
@@ -323,25 +328,25 @@ function RootDrawer() {
         <View style={styles.drawerFlatList}>
           {user?.role === "mentor" ? (
             <>
-              <DrawerItem label="Domains" onPress={() => router.push("/mentor-profile" as never)} />
-              <DrawerItem label="Availability" onPress={() => router.push("/mentor-dashboard?section=availability" as never)} />
-              <DrawerItem label="Session Pricing" onPress={() => router.push("/mentor-dashboard?section=pricing" as never)} />
-              <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
-              <DrawerItem label="News & Updates" onPress={() => router.push("/news-updates" as never)} />
-              <DrawerItem label="Collaborate" onPress={() => router.push("/collaborate" as never)} />
-              <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
+              <DrawerItem label="Domains" onPress={() => openDrawerRoute("/mentor-profile")} />
+              <DrawerItem label="Availability" onPress={() => openDrawerRoute("/mentor-dashboard?section=availability")} />
+              <DrawerItem label="Session Pricing" onPress={() => openDrawerRoute("/mentor-dashboard?section=pricing")} />
+              <DrawerItem label="AI Assistant" onPress={() => openDrawerRoute("/ai-assistant")} />
+              <DrawerItem label="News & Updates" onPress={() => openDrawerRoute("/news-updates")} />
+              <DrawerItem label="Collaborate" onPress={() => openDrawerRoute("/collaborate")} />
+              <DrawerItem label="Settings" onPress={() => openDrawerRoute("/settings")} />
             </>
           ) : (
             <>
-              <DrawerItem label="Domains" onPress={() => router.push("/domains" as never)} />
+              <DrawerItem label="Domains" onPress={() => openDrawerRoute("/domains")} />
               <DrawerItem
                 label="Daily Quiz"
-                onPress={() => router.push("/student-dashboard?section=overview&openQuiz=1" as never)}
+                onPress={() => openDrawerRoute("/student-dashboard?section=overview&openQuiz=1")}
               />
-              <DrawerItem label="AI Assistant" onPress={() => router.push("/ai-assistant" as never)} />
-              <DrawerItem label="News & Updates" onPress={() => router.push("/news-updates" as never)} />
-              <DrawerItem label="Collaborate" onPress={() => router.push("/collaborate" as never)} />
-              <DrawerItem label="Settings" onPress={() => router.push("/settings" as never)} />
+              <DrawerItem label="AI Assistant" onPress={() => openDrawerRoute("/ai-assistant")} />
+              <DrawerItem label="News & Updates" onPress={() => openDrawerRoute("/news-updates")} />
+              <DrawerItem label="Collaborate" onPress={() => openDrawerRoute("/collaborate")} />
+              <DrawerItem label="Settings" onPress={() => openDrawerRoute("/settings")} />
             </>
           )}
         </View>

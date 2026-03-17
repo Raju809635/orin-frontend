@@ -218,9 +218,13 @@ type LiveSessionItem = {
   id: string;
   title: string;
   topic?: string;
+  description?: string;
   startsAt: string;
+  posterImageUrl?: string;
+  interestedCount?: number;
+  isInterested?: boolean;
   meetingLink?: string;
-  mentor?: { name?: string };
+  mentor?: { id?: string; name?: string };
 };
 
 type ResumeResponse = {
@@ -361,6 +365,7 @@ export default function StudentDashboard() {
   const [opportunities, setOpportunities] = useState<OpportunityItem[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
+  const [togglingLiveInterestId, setTogglingLiveInterestId] = useState<string | null>(null);
   const [resumePreview, setResumePreview] = useState<ResumeResponse | null>(null);
   const [skillGap, setSkillGap] = useState<SkillGapResponse | null>(null);
   const [verifiedMentors, setVerifiedMentors] = useState<VerifiedMentor[]>([]);
@@ -1028,6 +1033,30 @@ export default function StudentDashboard() {
     }
   }
 
+  async function toggleLiveSessionInterest(liveSessionId: string) {
+    try {
+      setTogglingLiveInterestId(liveSessionId);
+      setError(null);
+      const { data } = await api.post(`/api/network/live-sessions/${liveSessionId}/interest`);
+      setLiveSessions((prev) =>
+        prev.map((item) =>
+          item.id === liveSessionId
+            ? {
+                ...item,
+                interestedCount: data?.liveSession?.interestedCount ?? item.interestedCount ?? 0,
+                isInterested: data?.liveSession?.isInterested ?? item.isInterested ?? false
+              }
+            : item
+        )
+      );
+      notify(data?.message || "Interest updated.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to update interest.");
+    } finally {
+      setTogglingLiveInterestId(null);
+    }
+  }
+
   if (user?.role !== "student") {
     return (
       <View style={styles.centered}>
@@ -1450,11 +1479,27 @@ export default function StudentDashboard() {
         ) : (
           liveSessions.slice(0, 5).map((item) => (
             <View key={item.id} style={styles.liveCard}>
+              {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveImage} /> : null}
               <Text style={styles.liveTitle}>{item.title}</Text>
               <Text style={styles.liveMeta}>{item.topic || "Live mentoring session"}</Text>
+              {item.description ? <Text style={styles.liveMeta}>{item.description}</Text> : null}
               <Text style={styles.liveMeta}>
                 Mentor: {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
               </Text>
+              <Text style={styles.liveMeta}>Interested: {item.interestedCount || 0}</Text>
+              <TouchableOpacity
+                style={[styles.matchBtn, togglingLiveInterestId === item.id && styles.disabledButton]}
+                onPress={() => toggleLiveSessionInterest(item.id)}
+                disabled={togglingLiveInterestId === item.id}
+              >
+                <Text style={styles.matchBtnText}>
+                  {togglingLiveInterestId === item.id
+                    ? "Updating..."
+                    : item.isInterested
+                      ? "Interested"
+                      : "I'm Interested"}
+                </Text>
+              </TouchableOpacity>
             </View>
           ))
         )}
@@ -2213,6 +2258,13 @@ const styles = StyleSheet.create({
     borderColor: "#D5E9DB",
     borderRadius: 12,
     padding: 11
+  },
+  liveImage: {
+    width: "100%",
+    height: 170,
+    borderRadius: 12,
+    marginBottom: 6,
+    backgroundColor: "#F8FAFC"
   },
   liveTitle: { color: "#1E2B24", fontWeight: "800" },
   liveMeta: { marginTop: 3, color: "#667085" },

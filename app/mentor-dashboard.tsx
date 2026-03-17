@@ -15,7 +15,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
-import { FEATURE_FLAGS } from "@/constants/featureFlags";
+import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
 
 type Booking = {
   _id: string;
@@ -72,42 +72,6 @@ type MentorProfilePayload = {
   verifiedBadge?: boolean;
 };
 
-type NetworkPost = {
-  _id: string;
-  authorId?: { _id?: string; name?: string; role?: string } | null;
-  content: string;
-  postType: string;
-  likeCount?: number;
-  commentCount?: number;
-  shareCount?: number;
-  saveCount?: number;
-};
-
-type DailyTask = {
-  key: string;
-  title: string;
-  completed: boolean;
-};
-
-type DailyDashboard = {
-  tasks: DailyTask[];
-  streakDays: number;
-  xp: number;
-  levelTag: string;
-  reputationScore: number;
-  leaderboard?: {
-    globalRank?: number | null;
-    collegeRank?: number | null;
-  };
-};
-
-type SmartSuggestion = {
-  id: string;
-  name: string;
-  role: "student" | "mentor";
-  reason: string;
-};
-
 type VerifiedMentor = {
   mentorId: string;
   name: string;
@@ -143,7 +107,12 @@ type LiveSessionItem = {
   id: string;
   title: string;
   topic?: string;
+  description?: string;
   startsAt: string;
+  posterImageUrl?: string;
+  interestedCount?: number;
+  isInterested?: boolean;
+  mentor?: { id?: string | null; name?: string };
 };
 
 type CertificationItem = {
@@ -184,6 +153,21 @@ function toDateLabel(dateStr: string) {
 function toDayFromDate(dateStr: string): AvailabilitySlot["day"] {
   const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
   return WEEKDAY_LABELS[dateObj.getUTCDay()] as AvailabilitySlot["day"];
+}
+
+function toMeridiemTime(timeStr: string) {
+  const [hourRaw, minuteRaw] = String(timeStr || "").split(":");
+  const hour = Number(hourRaw);
+  const minute = Number(minuteRaw);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return timeStr;
+  const normalizedHour = ((hour % 24) + 24) % 24;
+  const meridiem = normalizedHour >= 12 ? "PM" : "AM";
+  const displayHour = normalizedHour % 12 === 0 ? 12 : normalizedHour % 12;
+  return `${displayHour}:${String(minute).padStart(2, "0")} ${meridiem}`;
+}
+
+function toTimeRangeLabel(startTime: string, endTime: string) {
+  return `${toMeridiemTime(startTime)} - ${toMeridiemTime(endTime)}`;
 }
 
 function nextDates(days = 14) {
@@ -229,10 +213,6 @@ export default function MentorDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
-  const [networkFeed, setNetworkFeed] = useState<NetworkPost[]>([]);
-  const [dailyDashboard, setDailyDashboard] = useState<DailyDashboard | null>(null);
-  const [completingTaskKey, setCompletingTaskKey] = useState<string | null>(null);
-  const [suggestions, setSuggestions] = useState<SmartSuggestion[]>([]);
   const [verifiedMentors, setVerifiedMentors] = useState<VerifiedMentor[]>([]);
   const [challenges, setChallenges] = useState<ChallengeItem[]>([]);
   const [mentorGroups, setMentorGroups] = useState<MentorGroupItem[]>([]);
@@ -241,37 +221,22 @@ export default function MentorDashboard() {
   const [certifications, setCertifications] = useState<CertificationItem[]>([]);
   const [liveTitle, setLiveTitle] = useState("");
   const [liveTopic, setLiveTopic] = useState("");
+  const [liveDescription, setLiveDescription] = useState("");
   const [liveStartsAt, setLiveStartsAt] = useState("");
+  const [livePosterImageUrl, setLivePosterImageUrl] = useState("");
+  const [uploadingLivePoster, setUploadingLivePoster] = useState(false);
   const [creatingLiveSession, setCreatingLiveSession] = useState(false);
   const [mentorProfileSummary, setMentorProfileSummary] = useState<MentorProfilePayload | null>(null);
   const calendarDateOptions = useMemo(() => nextDates(14), []);
   const mentorServices = [
     {
-      key: "notifications",
-      label: "Alerts",
-      icon: "notifications",
-      tint: "#C11574",
-      bg: "#FCE7F6",
-      border: "#FBCFE8",
-      onPress: () => router.push("/notifications" as never)
-    },
-    {
-      key: "ai",
-      label: "AI Bot",
-      icon: "sparkles",
-      tint: "#7C3AED",
-      bg: "#F0E9FF",
-      border: "#E1D5FF",
-      onPress: () => router.push("/ai-assistant" as never)
-    },
-    {
-      key: "availability",
-      label: "Availability",
-      icon: "calendar",
+      key: "requests",
+      label: "Booking Requests",
+      icon: "mail-open",
       tint: "#165DFF",
       bg: "#EAF2FF",
       border: "#D7E6FF",
-      onPress: () => setActiveSection("availability")
+      onPress: () => setActiveSection("requests")
     },
     {
       key: "sessions",
@@ -292,13 +257,16 @@ export default function MentorDashboard() {
       onPress: () => router.push("/chat" as never)
     },
     {
-      key: "pricing",
-      label: "Pricing",
-      icon: "cash",
-      tint: "#B45309",
-      bg: "#FFF4E5",
-      border: "#F8E2C2",
-      onPress: () => setActiveSection("pricing")
+      key: "live",
+      label: "Live Sessions",
+      icon: "radio",
+      tint: "#7C3AED",
+      bg: "#F0E9FF",
+      border: "#E1D5FF",
+      onPress: () => {
+        setActiveSection("growth");
+        setMentorGrowthSection("live");
+      }
     },
     {
       key: "admin",
@@ -310,13 +278,13 @@ export default function MentorDashboard() {
       onPress: () => setActiveSection("adminChat")
     },
     {
-      key: "policy",
-      label: "Mentor Policy",
-      icon: "document-text",
-      tint: "#9A3412",
-      bg: "#FFF3ED",
-      border: "#F7DCCB",
-      onPress: () => router.push("/mentor-policy" as never)
+      key: "reviews",
+      label: "Mentor Stats",
+      icon: "bar-chart",
+      tint: "#B45309",
+      bg: "#FFF4E5",
+      border: "#F8E2C2",
+      onPress: () => setActiveSection("overview")
     }
   ] as const;
 
@@ -391,33 +359,6 @@ export default function MentorDashboard() {
       border: "#F7DCCB"
     }
   ] as const;
-  const mentorFeedPreview = [
-    {
-      _id: "preview-mentor-post-1",
-      authorId: { name: "Mentor Community" },
-      content: "Share one real student win this week to build profile trust.",
-      postType: "learning_progress",
-      likeCount: 8,
-      commentCount: 2,
-      shareCount: 1,
-      saveCount: 3
-    },
-    {
-      _id: "preview-mentor-post-2",
-      authorId: { name: "ORIN Team" },
-      content: "Update your slots every weekend so students see current availability.",
-      postType: "project_update",
-      likeCount: 5,
-      commentCount: 1,
-      shareCount: 0,
-      saveCount: 4
-    }
-  ] as const;
-  const mentorSuggestionsPreview = [
-    { id: "preview-1", name: "Ravi P", role: "student" as const, reason: "Student interested in your domain" },
-    { id: "preview-2", name: "Neha S", role: "mentor" as const, reason: "Similar mentoring track" }
-  ];
-
   const fetchDashboard = useCallback(async (refresh = false) => {
     try {
       if (refresh) setIsRefreshing(true);
@@ -428,9 +369,6 @@ export default function MentorDashboard() {
         bookingRes,
         sessionRes,
         profileRes,
-        feedRes,
-        dailyRes,
-        suggestionsRes,
         verifiedRes,
         challengeRes,
         groupRes,
@@ -441,13 +379,6 @@ export default function MentorDashboard() {
         api.get<Booking[]>("/api/bookings/mentor"),
         api.get<Session[]>("/api/sessions/mentor/me"),
         api.get<{ profile?: MentorProfilePayload }>("/api/profiles/mentor/me"),
-        FEATURE_FLAGS.networking ? api.get<NetworkPost[]>("/api/network/feed") : Promise.resolve({ data: [] as NetworkPost[] }),
-        FEATURE_FLAGS.dailyEngagement
-          ? api.get<DailyDashboard>("/api/network/daily-dashboard")
-          : Promise.resolve({ data: null as DailyDashboard | null }),
-        FEATURE_FLAGS.smartSuggestions
-          ? api.get<SmartSuggestion[]>("/api/network/suggestions")
-          : Promise.resolve({ data: [] as SmartSuggestion[] }),
         api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
         api.get<ChallengeItem[]>("/api/network/challenges"),
         api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
@@ -492,9 +423,6 @@ export default function MentorDashboard() {
       setMentorTitle(profileRes.value.data?.profile?.title || "");
       setProfilePhotoUrl(profileRes.value.data?.profile?.profilePhotoUrl || "");
       setMentorProfileSummary(profileRes.value.data?.profile || null);
-      setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
-      setDailyDashboard(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
-      setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
       setVerifiedMentors(verifiedRes.status === "fulfilled" ? verifiedRes.value.data || [] : []);
       setChallenges(challengeRes.status === "fulfilled" ? challengeRes.value.data || [] : []);
       setMentorGroups(groupRes.status === "fulfilled" ? groupRes.value.data || [] : []);
@@ -601,7 +529,6 @@ export default function MentorDashboard() {
   }, [messages, searchQuery]);
 
   const normalizedQuery = searchQuery.trim();
-  const hasLiveSuggestions = suggestions.length > 0;
   const totalSearchMatches = useMemo(
     () => filteredConfirmedPaidSessions.length + filteredBookings.length + filteredMessages.length,
     [filteredConfirmedPaidSessions.length, filteredBookings.length, filteredMessages.length]
@@ -743,45 +670,10 @@ export default function MentorDashboard() {
     }
   }
 
-  async function connectWithSuggestion(targetId: string) {
-    try {
-      await api.post("/api/network/connections/request", { recipientId: targetId });
-      notify("Connection request sent.");
-      await fetchDashboard(true);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to send connection request.");
-    }
-  }
-
-  async function followSuggestion(targetId: string) {
-    try {
-      const { data } = await api.post<{ following: boolean }>(`/api/network/follow/${targetId}`);
-      notify(data?.following ? "Now following." : "Unfollowed.");
-      await fetchDashboard(true);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update follow.");
-    }
-  }
-
-  async function completeDailyTask(taskKey: string) {
-    try {
-      setCompletingTaskKey(taskKey);
-      setError(null);
-      const { data } = await api.post<{ message?: string; xpEarned?: number }>("/api/network/daily-task/complete", {
-        taskKey
-      });
-      notify(data?.message || "Task completed.");
-      await fetchDashboard(true);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to complete daily task.");
-    } finally {
-      setCompletingTaskKey(null);
-    }
-  }
-
   async function createMentorLiveSession() {
     const title = liveTitle.trim();
     const topic = liveTopic.trim();
+    const description = liveDescription.trim();
     const startsAt = liveStartsAt.trim();
 
     if (!title || !startsAt) {
@@ -800,17 +692,36 @@ export default function MentorDashboard() {
       await api.post("/api/network/live-sessions", {
         title,
         topic,
+        description,
+        posterImageUrl: livePosterImageUrl.trim(),
         startsAt: parsed.toISOString()
       });
       setLiveTitle("");
       setLiveTopic("");
+      setLiveDescription("");
       setLiveStartsAt("");
+      setLivePosterImageUrl("");
       notify("Live session created.");
       await fetchDashboard(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to create live session.");
     } finally {
       setCreatingLiveSession(false);
+    }
+  }
+
+  async function uploadLiveSessionPoster() {
+    try {
+      setUploadingLivePoster(true);
+      setError(null);
+      const uploadedUrl = await pickAndUploadPostImage();
+      if (!uploadedUrl) return;
+      setLivePosterImageUrl(uploadedUrl);
+      notify("Poster uploaded.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Failed to upload poster.");
+    } finally {
+      setUploadingLivePoster(false);
     }
   }
 
@@ -1016,59 +927,6 @@ export default function MentorDashboard() {
         ))}
       </View>
 
-      {FEATURE_FLAGS.networking ? (
-        <>
-          <Text style={styles.sectionHeader}>Mentor Network Feed</Text>
-          <View style={styles.feedWrap}>
-            {(networkFeed.length ? networkFeed : mentorFeedPreview).slice(0, 6).map((post) => (
-              <View key={post._id} style={styles.feedCard}>
-                <Text style={styles.feedAuthor}>{post.authorId?.name || "ORIN User"}</Text>
-                <Text style={styles.feedLine}>{post.content}</Text>
-                <Text style={styles.feedMeta}>
-                  {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0}
-                </Text>
-                <View style={styles.feedActions}>
-                  <Text style={styles.feedActionText}>Like</Text>
-                  <Text style={styles.feedActionText}>Comment</Text>
-                  <Text style={styles.feedActionText}>Share</Text>
-                  <Text style={styles.feedActionText}>Save</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </>
-      ) : null}
-
-      {FEATURE_FLAGS.smartSuggestions ? (
-        <>
-          <Text style={styles.sectionHeader}>Suggested Connections</Text>
-          <View style={styles.suggestionWrap}>
-            {(hasLiveSuggestions ? suggestions : mentorSuggestionsPreview).slice(0, 8).map((item, index) => (
-              <View key={`${item.id}-${index}`} style={styles.suggestionCard}>
-                <Text style={styles.suggestionName}>{item.name}</Text>
-                <Text style={styles.suggestionReason}>{item.reason}</Text>
-                <View style={styles.suggestionActions}>
-                  <TouchableOpacity
-                    onPress={() =>
-                      hasLiveSuggestions ? connectWithSuggestion(item.id) : notify("Live suggestions will appear after more network activity.")
-                    }
-                  >
-                    <Text style={styles.suggestionAction}>Connect</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() =>
-                      hasLiveSuggestions ? followSuggestion(item.id) : notify("Live suggestions will appear after more network activity.")
-                    }
-                  >
-                    <Text style={styles.suggestionAction}>Follow</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ))}
-          </View>
-        </>
-      ) : null}
-
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectionNav}>
         <View style={styles.sectionNavRow}>
           {sectionOrder.map((section) => {
@@ -1170,11 +1028,24 @@ export default function MentorDashboard() {
               onChangeText={setLiveTopic}
             />
             <TextInput
+              style={[styles.input, styles.textAreaInput]}
+              placeholder="Description (optional)"
+              value={liveDescription}
+              onChangeText={setLiveDescription}
+              multiline
+            />
+            <TextInput
               style={styles.input}
               placeholder="Start (YYYY-MM-DDTHH:MM)"
               value={liveStartsAt}
               onChangeText={setLiveStartsAt}
             />
+            <TouchableOpacity style={styles.secondaryButton} onPress={uploadLiveSessionPoster} disabled={uploadingLivePoster}>
+              <Text style={styles.secondaryButtonText}>
+                {uploadingLivePoster ? "Uploading Poster..." : livePosterImageUrl ? "Change Poster" : "Upload Session Poster"}
+              </Text>
+            </TouchableOpacity>
+            {livePosterImageUrl ? <Image source={{ uri: livePosterImageUrl }} style={styles.livePosterPreview} /> : null}
             <TouchableOpacity style={styles.primaryButton} onPress={createMentorLiveSession} disabled={creatingLiveSession}>
               <Text style={styles.primaryButtonText}>{creatingLiveSession ? "Creating..." : "Create Live Session"}</Text>
             </TouchableOpacity>
@@ -1186,9 +1057,14 @@ export default function MentorDashboard() {
               <Text style={styles.empty}>No live sessions scheduled.</Text>
             ) : (
               liveSessions.slice(0, 5).map((item) => (
-                <Text key={item.id} style={styles.meta}>
-                  {item.title} | {new Date(item.startsAt).toLocaleString()}
-                </Text>
+                <View key={item.id} style={styles.liveSessionCard}>
+                  {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
+                  <Text style={styles.liveSessionTitle}>{item.title}</Text>
+                  <Text style={styles.meta}>{item.topic || "Live mentor session"}</Text>
+                  {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
+                  <Text style={styles.meta}>Date: {new Date(item.startsAt).toLocaleString()}</Text>
+                  <Text style={styles.meta}>Interested learners: {item.interestedCount || 0}</Text>
+                </View>
               ))
             )}
           </View>
@@ -1373,7 +1249,7 @@ export default function MentorDashboard() {
               <Text style={styles.metaStrong}>Weekly Slots</Text>
               {availabilitySlots.map((slot) => (
                 <Text key={slot._id} style={styles.meta}>
-                  {slot.day}: {slot.startTime} - {slot.endTime} ({slot.sessionDurationMinutes} min)
+                  {slot.day}: {toTimeRangeLabel(slot.startTime, slot.endTime)} ({slot.sessionDurationMinutes} min)
                 </Text>
               ))}
             </>
@@ -1383,7 +1259,7 @@ export default function MentorDashboard() {
               <Text style={styles.metaStrong}>Date-Specific Slots</Text>
               {dateSpecificSlots.map((slot) => (
                 <Text key={slot._id} style={styles.meta}>
-                  {slot.specificDate} ({slot.day}): {slot.startTime} - {slot.endTime} ({slot.sessionDurationMinutes} min)
+                  {slot.specificDate} ({slot.day}): {toTimeRangeLabel(slot.startTime, slot.endTime)} ({slot.sessionDurationMinutes} min)
                 </Text>
               ))}
             </>
@@ -1821,6 +1697,35 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: "#B42318", fontWeight: "700" },
   disabledButton: { opacity: 0.5 },
   primaryButtonText: { color: "#fff", fontWeight: "700" },
+  textAreaInput: {
+    minHeight: 92,
+    textAlignVertical: "top"
+  },
+  livePosterPreview: {
+    width: "100%",
+    height: 180,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#DDE6E1",
+    backgroundColor: "#F8FAFC"
+  },
+  liveSessionCard: {
+    borderWidth: 1,
+    borderColor: "#DDE6E1",
+    borderRadius: 12,
+    backgroundColor: "#FCFFFD",
+    padding: 12,
+    marginTop: 10,
+    gap: 4
+  },
+  liveSessionImage: {
+    width: "100%",
+    height: 170,
+    borderRadius: 10,
+    marginBottom: 6,
+    backgroundColor: "#F8FAFC"
+  },
+  liveSessionTitle: { color: "#1E2B24", fontWeight: "800", fontSize: 15 },
   actions: { flexDirection: "row", gap: 10, marginTop: 10 },
   actionButton: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
   approveButton: { backgroundColor: "#1F7A4C" },

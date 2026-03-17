@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, BackHandler, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, BackHandler, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
@@ -10,7 +10,17 @@ type MentorshipSectionId = "discovery" | "interaction" | "session_management";
 
 type VerifiedMentor = { mentorId: string; name: string; title?: string; rating?: number; verifiedBadge?: boolean };
 type MentorGroupItem = { id: string; name: string; schedule?: string; membersCount?: number; mentor?: { name?: string } };
-type LiveSessionItem = { id: string; title: string; topic?: string; startsAt: string; mentor?: { name?: string } };
+type LiveSessionItem = {
+  id: string;
+  title: string;
+  topic?: string;
+  description?: string;
+  startsAt: string;
+  posterImageUrl?: string;
+  interestedCount?: number;
+  isInterested?: boolean;
+  mentor?: { id?: string | null; name?: string };
+};
 type SessionHistoryItem = { sessionId: string; mentorName: string; date: string; time: string; notes?: string };
 type SessionItem = {
   _id: string;
@@ -39,6 +49,7 @@ export default function MentorshipHubScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [togglingInterestId, setTogglingInterestId] = useState<string | null>(null);
 
   const loadData = useCallback(async (refresh = false) => {
     try {
@@ -102,6 +113,32 @@ export default function MentorshipHubScreen() {
   const completedSessions = useMemo(
     () => sessions.filter((s) => s.sessionStatus === "completed" || s.status === "completed"),
     [sessions]
+  );
+
+  const toggleLiveSessionInterest = useCallback(
+    async (liveSessionId: string) => {
+      try {
+        setTogglingInterestId(liveSessionId);
+        setError(null);
+        const { data } = await api.post(`/api/network/live-sessions/${liveSessionId}/interest`);
+        setLiveSessions((prev) =>
+          prev.map((item) =>
+            item.id === liveSessionId
+              ? {
+                  ...item,
+                  interestedCount: data?.liveSession?.interestedCount ?? item.interestedCount ?? 0,
+                  isInterested: data?.liveSession?.isInterested ?? item.isInterested ?? false
+                }
+              : item
+          )
+        );
+      } catch (e: any) {
+        setError(e?.response?.data?.message || "Failed to update interest.");
+      } finally {
+        setTogglingInterestId(null);
+      }
+    },
+    []
   );
 
   const sections: {
@@ -271,9 +308,16 @@ export default function MentorshipHubScreen() {
                   <Text style={styles.meta}>No live sessions scheduled.</Text>
                 ) : (
                   liveSessions.slice(0, 6).map((item) => (
-                    <Text key={item.id} style={styles.meta}>
-                      {item.title} | {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
-                    </Text>
+                    <View key={item.id} style={styles.liveSessionCard}>
+                      {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
+                      <Text style={styles.cardTitle}>{item.title}</Text>
+                      <Text style={styles.meta}>{item.topic || "Live mentor session"}</Text>
+                      {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
+                      <Text style={styles.meta}>
+                        {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
+                      </Text>
+                      <Text style={styles.meta}>Interested: {item.interestedCount || 0}</Text>
+                    </View>
                   ))
                 )}
               </View>
@@ -298,9 +342,25 @@ export default function MentorshipHubScreen() {
                   <Text style={styles.meta}>No live sessions scheduled.</Text>
                 ) : (
                   liveSessions.slice(0, 6).map((item) => (
-                    <Text key={item.id} style={styles.meta}>
-                      {item.title} | {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
-                    </Text>
+                    <View key={item.id} style={styles.liveSessionCard}>
+                      {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
+                      <Text style={styles.cardTitle}>{item.title}</Text>
+                      <Text style={styles.meta}>{item.topic || "Live mentor session"}</Text>
+                      {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
+                      <Text style={styles.meta}>
+                        {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
+                      </Text>
+                      <Text style={styles.meta}>Interested: {item.interestedCount || 0}</Text>
+                      <TouchableOpacity
+                        style={styles.openBtn}
+                        onPress={() => toggleLiveSessionInterest(item.id)}
+                        disabled={togglingInterestId === item.id}
+                      >
+                        <Text style={styles.openBtnText}>
+                          {togglingInterestId === item.id ? "Updating..." : item.isInterested ? "Interested" : "I'm Interested"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   ))
                 )}
               </View>
@@ -428,6 +488,22 @@ const styles = StyleSheet.create({
   cardOrange: { backgroundColor: "#FFF7ED", borderColor: "#F9DBAF" },
   cardTitle: { color: "#1E2B24", fontWeight: "800" },
   meta: { color: "#667085" },
+  liveSessionCard: {
+    borderWidth: 1,
+    borderColor: "#CDE5D6",
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.78)",
+    padding: 10,
+    gap: 4,
+    marginTop: 8
+  },
+  liveSessionImage: {
+    width: "100%",
+    height: 170,
+    borderRadius: 10,
+    marginBottom: 4,
+    backgroundColor: "#F8FAFC"
+  },
   openBtn: {
     marginTop: 2,
     alignSelf: "flex-start",
