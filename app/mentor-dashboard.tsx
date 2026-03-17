@@ -1015,28 +1015,36 @@ export default function MentorDashboard() {
             <>
           <View style={styles.card}>
             <Text style={styles.title}>Create Live Mentor Session</Text>
+            <Text style={styles.formFieldLabel}>Session Title</Text>
             <TextInput
               style={styles.input}
-              placeholder="Session title"
+              placeholder="e.g. AI Career Roadmap Live Session"
+              placeholderTextColor="#98A2B3"
               value={liveTitle}
               onChangeText={setLiveTitle}
             />
+            <Text style={styles.formFieldLabel}>Topic</Text>
             <TextInput
               style={styles.input}
-              placeholder="Topic (optional)"
+              placeholder="e.g. Machine Learning for Beginners"
+              placeholderTextColor="#98A2B3"
               value={liveTopic}
               onChangeText={setLiveTopic}
             />
+            <Text style={styles.formFieldLabel}>Description</Text>
             <TextInput
               style={[styles.input, styles.textAreaInput]}
-              placeholder="Description (optional)"
+              placeholder="Tell students what this live session will cover and who should join."
+              placeholderTextColor="#98A2B3"
               value={liveDescription}
               onChangeText={setLiveDescription}
               multiline
             />
+            <Text style={styles.formFieldLabel}>Start Date & Time</Text>
             <TextInput
               style={styles.input}
-              placeholder="Start (YYYY-MM-DDTHH:MM)"
+              placeholder="e.g. 2026-03-20T18:30"
+              placeholderTextColor="#98A2B3"
               value={liveStartsAt}
               onChangeText={setLiveStartsAt}
             />
@@ -1697,6 +1705,12 @@ const styles = StyleSheet.create({
   secondaryButtonText: { color: "#B42318", fontWeight: "700" },
   disabledButton: { opacity: 0.5 },
   primaryButtonText: { color: "#fff", fontWeight: "700" },
+  formFieldLabel: {
+    color: "#344054",
+    fontWeight: "700",
+    marginTop: 4,
+    marginBottom: 6
+  },
   textAreaInput: {
     minHeight: 92,
     textAlignVertical: "top"
