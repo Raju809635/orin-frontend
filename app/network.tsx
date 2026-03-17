@@ -1,8 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
+  Alert,
   ActivityIndicator,
   Dimensions,
   Image,
+  Linking,
   Modal,
   RefreshControl,
   ScrollView,
@@ -20,6 +22,28 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadPostImages } from "@/utils/postMediaUpload";
+
+function normalizeUrl(rawUrl: string) {
+  const cleaned = rawUrl.replace(/[),.;!?]+$/, "");
+  if (/^https?:\/\//i.test(cleaned)) return cleaned;
+  return `https://${cleaned}`;
+}
+
+function splitByUrls(text: string) {
+  const regex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+  const out: { text: string; url?: string }[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text)) !== null) {
+    const start = match.index;
+    const raw = match[0];
+    if (start > lastIndex) out.push({ text: text.slice(lastIndex, start) });
+    out.push({ text: raw, url: raw });
+    lastIndex = start + raw.length;
+  }
+  if (lastIndex < text.length) out.push({ text: text.slice(lastIndex) });
+  return out;
+}
 
 type FeedPost = {
   _id: string;
@@ -139,6 +163,8 @@ export default function NetworkScreen() {
   const [editingCommentId, setEditingCommentId] = useState<string>("");
   const [editingCommentText, setEditingCommentText] = useState("");
   const [reactionMenuFor, setReactionMenuFor] = useState<string | null>(null);
+  const [editingPost, setEditingPost] = useState<{ postId: string; content: string } | null>(null);
+  const [savingPostEdit, setSavingPostEdit] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -254,6 +280,61 @@ export default function NetworkScreen() {
       setError(e?.response?.data?.message || e?.message || "Failed to upload post image.");
     } finally {
       setUploadingPostImage(false);
+    }
+  }
+
+  function openPostOptions(post: FeedPost) {
+    setReactionMenuFor(null);
+    Alert.alert("Post options", "Manage your post", [
+      {
+        text: "Edit",
+        onPress: () => setEditingPost({ postId: post._id, content: post.content || "" })
+      },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: () => confirmDeletePost(post._id)
+      },
+      { text: "Cancel", style: "cancel" }
+    ]);
+  }
+
+  function confirmDeletePost(postId: string) {
+    Alert.alert("Delete post?", "This will remove your post permanently.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => removePost(postId) }
+    ]);
+  }
+
+  async function removePost(postId: string) {
+    try {
+      setError(null);
+      await api.delete(`/api/network/feed/${postId}`);
+      notify("Post deleted.");
+      await loadData(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to delete post.");
+    }
+  }
+
+  async function savePostEdit() {
+    if (!editingPost?.postId) return;
+    const nextContent = editingPost.content.trim();
+    if (nextContent.length < 3) {
+      setError("Post content is required.");
+      return;
+    }
+    try {
+      setSavingPostEdit(true);
+      setError(null);
+      await api.patch(`/api/network/feed/${editingPost.postId}`, { content: nextContent });
+      setEditingPost(null);
+      notify("Post updated.");
+      await loadData(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to update post.");
+    } finally {
+      setSavingPostEdit(false);
     }
   }
 
@@ -526,6 +607,11 @@ export default function NetworkScreen() {
                   (sum, type) => sum + Number(post.reactionCounts?.[type] || 0),
                   0
                 );
+                const topReactions = REACTION_ORDER
+                  .map((type) => ({ type, count: Number(post.reactionCounts?.[type] || 0) }))
+                  .filter((item) => item.count > 0)
+                  .sort((a, b) => b.count - a.count)
+                  .slice(0, 3);
 
                 return (
                   <View key={post._id} style={styles.postCard}>
@@ -558,9 +644,28 @@ export default function NetworkScreen() {
                           </Text>
                         </TouchableOpacity>
                       ) : null}
+                      {isOwnPost ? (
+                        <TouchableOpacity style={styles.postMenuBtn} onPress={() => openPostOptions(post)}>
+                          <Ionicons name="ellipsis-horizontal" size={18} color="#475467" />
+                        </TouchableOpacity>
+                      ) : null}
                     </View>
 
-                    <Text style={styles.postText}>{post.content}</Text>
+                    <Text style={styles.postText}>
+                      {splitByUrls(post.content || "").map((part, idx) =>
+                        part.url ? (
+                          <Text
+                            key={`${post._id}-url-${idx}`}
+                            style={styles.postLink}
+                            onPress={() => Linking.openURL(normalizeUrl(part.url || ""))}
+                          >
+                            {part.text}
+                          </Text>
+                        ) : (
+                          <Text key={`${post._id}-txt-${idx}`}>{part.text}</Text>
+                        )
+                      )}
+                    </Text>
 
                     {media.length ? (
                       <>
@@ -587,12 +692,26 @@ export default function NetworkScreen() {
                     <Text style={styles.meta}>
                       {post.postType} • Comments {post.commentCount || 0} • Shares {post.shareCount || 0} • Saved {post.saveCount || 0}
                     </Text>
-                    <View style={styles.likeSummaryRow}>
-                      <View style={styles.likeSummaryIcon}>
-                        <Ionicons name="thumbs-up" size={12} color="#FFFFFF" />
+                    {Math.max(totalReactions, Number(post.likeCount || 0)) > 0 ? (
+                      <View style={styles.reactionSummaryRow}>
+                        <View style={styles.reactionIconStack}>
+                          {topReactions.map((item, idx) => (
+                            <View
+                              key={`${post._id}-rx-${item.type}`}
+                              style={[
+                                styles.reactionIconBubble,
+                                idx > 0 ? styles.reactionIconBubbleOverlap : null
+                              ]}
+                            >
+                              <Text style={styles.reactionIconEmoji}>{REACTION_OPTIONS[item.type].emoji}</Text>
+                            </View>
+                          ))}
+                        </View>
+                        <Text style={styles.reactionSummaryText}>
+                          {Math.max(totalReactions, Number(post.likeCount || 0))}
+                        </Text>
                       </View>
-                      <Text style={styles.likeSummaryText}>{Math.max(totalReactions, Number(post.likeCount || 0))}</Text>
-                    </View>
+                    ) : null}
                     {reactionMenuFor === post._id ? (
                       <View style={styles.reactionDropdown}>
                         {REACTION_ORDER.map((type) => (
@@ -676,12 +795,11 @@ export default function NetworkScreen() {
                         </TouchableOpacity>
                       </View>
                     ) : null}
-                    {(post.comments || []).slice(0, 2).map((item) => (
-                      <Text key={item._id} style={styles.commentLine}>
-                        <Text style={{ fontWeight: "700", color: "#1E2B24" }}>{item.authorId?.name || "User"}: </Text>
-                        {item.content}
-                      </Text>
-                    ))}
+                    {(post.commentCount || 0) > 0 ? (
+                      <TouchableOpacity onPress={() => openComments(post._id)}>
+                        <Text style={styles.viewCommentsLink}>View comments ({post.commentCount || 0})</Text>
+                      </TouchableOpacity>
+                    ) : null}
                   </View>
                 );
               })
@@ -712,6 +830,44 @@ export default function NetworkScreen() {
               </ScrollView>
             ))}
           </ScrollView>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={Boolean(editingPost)}
+        transparent
+        animationType="fade"
+        onRequestClose={() => (savingPostEdit ? null : setEditingPost(null))}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.editModalCard}>
+            <Text style={styles.cardTitle}>Edit Post</Text>
+            <Text style={styles.meta}>Update your description. Links will remain clickable.</Text>
+            <TextInput
+              style={styles.editPostInput}
+              multiline
+              placeholder="Update your post..."
+              value={editingPost?.content || ""}
+              onChangeText={(text) => setEditingPost((prev) => (prev ? { ...prev, content: text } : prev))}
+              editable={!savingPostEdit}
+            />
+            <View style={styles.editModalActions}>
+              <TouchableOpacity
+                style={[styles.secondaryBtn, savingPostEdit && styles.disabledBtn]}
+                onPress={() => setEditingPost(null)}
+                disabled={savingPostEdit}
+              >
+                <Text style={styles.secondaryBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.primaryBtn, savingPostEdit && styles.disabledBtn]}
+                onPress={savePostEdit}
+                disabled={savingPostEdit}
+              >
+                <Text style={styles.primaryBtnText}>{savingPostEdit ? "Saving..." : "Save"}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -873,7 +1029,19 @@ const styles = StyleSheet.create({
   followingBtn: { borderColor: "#1F7A4C", backgroundColor: "#EAF6EF" },
   followBtnText: { color: "#175CD3", fontWeight: "700", fontSize: 12 },
   followingBtnText: { color: "#1F7A4C" },
+  postMenuBtn: {
+    marginLeft: 6,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#EAECF0",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center"
+  },
   postText: { marginTop: 8, color: "#344054", lineHeight: 19 },
+  postLink: { color: "#175CD3", fontWeight: "700" },
   postImage: {
     width: carouselWidth,
     height: 240,
@@ -900,6 +1068,21 @@ const styles = StyleSheet.create({
   },
   postActionText: { color: "#475467", fontWeight: "700", fontSize: 12 },
   postActionTextActive: { color: "#175CD3" },
+  reactionSummaryRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 8 },
+  reactionIconStack: { flexDirection: "row", alignItems: "center" },
+  reactionIconBubble: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
+    backgroundColor: "#F2F4F7",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  reactionIconBubbleOverlap: { marginLeft: -6 },
+  reactionIconEmoji: { fontSize: 11 },
+  reactionSummaryText: { color: "#475467", fontWeight: "800", fontSize: 12 },
   likeSummaryRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 8 },
   likeSummaryIcon: {
     width: 18,
@@ -959,6 +1142,46 @@ const styles = StyleSheet.create({
   },
   commentInput: { flex: 1, minHeight: 32, color: "#344054" },
   commentLine: { marginTop: 6, color: "#475467" },
+  viewCommentsLink: { marginTop: 8, color: "#175CD3", fontWeight: "800" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(15,23,42,0.45)", alignItems: "center", justifyContent: "center", padding: 18 },
+  editModalCard: {
+    width: "100%",
+    maxWidth: 520,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    padding: 14
+  },
+  editPostInput: {
+    marginTop: 10,
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: "#fff",
+    textAlignVertical: "top"
+  },
+  editModalActions: { marginTop: 12, flexDirection: "row", gap: 10, justifyContent: "flex-end" },
+  secondaryBtn: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14
+  },
+  secondaryBtnText: { color: "#344054", fontWeight: "800" },
+  primaryBtn: {
+    backgroundColor: "#1F7A4C",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16
+  },
+  primaryBtnText: { color: "#fff", fontWeight: "900" },
+  disabledBtn: { opacity: 0.6 },
   commentsModalRoot: {
     flex: 1,
     backgroundColor: "rgba(15,23,42,0.45)",
