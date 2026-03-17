@@ -40,7 +40,10 @@ export default function AiMentorMatchingPage() {
         setDomainTree(tree);
         setSelectedDomain((prev) => prev || tree.primaryCategories?.[0] || "");
       })
-      .catch(() => {});
+      .catch(() => {
+        // Fallback keeps the page usable even if /api/meta/domain-tree is temporarily unavailable.
+        setSelectedDomain((prev) => prev || "Technology & AI");
+      });
 
     return () => {
       mounted = false;
