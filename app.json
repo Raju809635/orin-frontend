@@ -63,6 +63,7 @@
     },
     "extra": {
       "router": {},
+      "apiBaseUrl": "https://orin-backend.onrender.com",
       "eas": {
         "projectId": "1fde3021-6058-4be9-8148-bda56364d426"
       }

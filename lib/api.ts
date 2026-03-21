@@ -3,7 +3,8 @@ import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 function getApiBaseUrl() {
-  const explicitUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+  const extraApiUrl = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
+  const explicitUrl = process.env.EXPO_PUBLIC_API_BASE_URL || extraApiUrl;
   const isDev = typeof __DEV__ !== "undefined" ? __DEV__ : process.env.NODE_ENV !== "production";
 
   if (explicitUrl) {
@@ -11,7 +12,9 @@ function getApiBaseUrl() {
   }
 
   if (!isDev) {
-    throw new Error("EXPO_PUBLIC_API_BASE_URL is required in production builds.");
+    // Keep production web exports working even if env vars are missing on the build server.
+    // You can always override with EXPO_PUBLIC_API_BASE_URL.
+    return "https://orin-backend.onrender.com";
   }
 
   if (Platform.OS === "android") {
