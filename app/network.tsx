@@ -109,7 +109,7 @@ const networkSections: { id: NetworkSectionId; label: string }[] = [
 
 const FEED_BOTTOM_NAV_SPACE = 108;
 const POST_COLLAPSED_LINES = 4;
-const WEB_EXPAND_THRESHOLD = 180;
+const EXPAND_FALLBACK_THRESHOLD = 140;
 const { width } = Dimensions.get("window");
 const carouselWidth = Math.max(width - 56, 280);
 const REACTION_ORDER = ["like", "love", "care", "haha", "wow", "sad", "angry"] as const;
@@ -658,10 +658,10 @@ export default function NetworkScreen() {
 
                     {(() => {
                       const expanded = Boolean(expandedPosts[post._id]);
-                      const webExpandable =
-                        Platform.OS === "web" &&
-                        ((post.content || "").length > WEB_EXPAND_THRESHOLD || (post.content || "").includes("\n"));
-                      const canExpand = Boolean(expandablePosts[post._id]) || webExpandable;
+                      const contentText = String(post.content || "");
+                      const heuristicExpandable =
+                        contentText.length > EXPAND_FALLBACK_THRESHOLD || contentText.includes("\n");
+                      const canExpand = Boolean(expandablePosts[post._id]) || heuristicExpandable;
 
                       return (
                         <>
@@ -669,7 +669,8 @@ export default function NetworkScreen() {
                             style={styles.postText}
                             numberOfLines={expanded ? undefined : POST_COLLAPSED_LINES}
                             onTextLayout={(e) => {
-                              if (Platform.OS === "web") return;
+                              // Some devices/versions are flaky with onTextLayout for nested <Text>;
+                              // keep a heuristic fallback so "View more" still shows for long posts.
                               const lineCount = e?.nativeEvent?.lines?.length || 0;
                               const next = lineCount > POST_COLLAPSED_LINES;
                               setExpandablePosts((prev) => (prev[post._id] === next ? prev : { ...prev, [post._id]: next }));
@@ -782,7 +783,7 @@ export default function NetworkScreen() {
                         }}
                       >
                         <Ionicons name="chatbubble-outline" size={16} color="#475467" />
-                        <Text style={styles.postActionText}>Comment</Text>
+                        <Text style={styles.postActionText} numberOfLines={1}>Comment</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.postActionBtn}
@@ -792,7 +793,7 @@ export default function NetworkScreen() {
                         }}
                       >
                         <Ionicons name="eye-outline" size={16} color="#475467" />
-                        <Text style={styles.postActionText}>View</Text>
+                        <Text style={styles.postActionText} numberOfLines={1}>View</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.postActionBtn}
@@ -802,7 +803,7 @@ export default function NetworkScreen() {
                         }}
                       >
                         <Ionicons name="share-social-outline" size={16} color="#475467" />
-                        <Text style={styles.postActionText}>Share</Text>
+                        <Text style={styles.postActionText} numberOfLines={1}>Share</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.postActionBtn}
@@ -812,7 +813,7 @@ export default function NetworkScreen() {
                         }}
                       >
                         <Ionicons name={post.isSaved ? "bookmark" : "bookmark-outline"} size={16} color="#475467" />
-                        <Text style={styles.postActionText}>{post.isSaved ? "Saved" : "Save"}</Text>
+                        <Text style={styles.postActionText} numberOfLines={1}>{post.isSaved ? "Saved" : "Save"}</Text>
                       </TouchableOpacity>
                     </View>
 
@@ -1090,19 +1091,22 @@ const styles = StyleSheet.create({
   dotRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#D0D5DD" },
   dotActive: { width: 14, backgroundColor: "#1F7A4C", borderRadius: 7 },
-  postActionRow: { marginTop: 8, flexDirection: "row", justifyContent: "space-between" },
+  postActionRow: { marginTop: 8, flexDirection: "row", gap: 6 },
   postActionBtn: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 6,
-    paddingHorizontal: 10,
+    paddingHorizontal: 6,
     paddingVertical: 7,
     borderRadius: 8,
     backgroundColor: "#F9FAFB",
     borderWidth: 1,
     borderColor: "#EAECF0"
   },
-  postActionText: { color: "#475467", fontWeight: "700", fontSize: 12 },
+  postActionText: { color: "#475467", fontWeight: "700", fontSize: 11 },
   postActionTextActive: { color: "#175CD3" },
   reactionSummaryRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 8 },
   reactionIconStack: { flexDirection: "row", alignItems: "center" },
