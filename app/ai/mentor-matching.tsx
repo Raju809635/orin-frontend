@@ -5,6 +5,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
+import { notify } from "@/utils/notify";
+import { saveAiItem } from "@/utils/aiSaves";
 
 type MentorMatch = {
   mentorId: string;
@@ -171,6 +173,28 @@ export default function AiMentorMatchingPage() {
           }}
         >
           <Text style={styles.primaryBtnText}>Book a Session</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.secondaryBtn}
+          onPress={async () => {
+            if (!filtered.length) {
+              notify("No results to save yet.");
+              return;
+            }
+            await saveAiItem({
+              type: "mentor_matching",
+              title: `Mentor Matches: ${selectedDomain} (${selectedLevel})`,
+              payload: {
+                domain: selectedDomain,
+                level: selectedLevel,
+                savedCount: Math.min(filtered.length, 12),
+                results: filtered.slice(0, 12)
+              }
+            });
+            notify("Saved to Saved AI.");
+          }}
+        >
+          <Text style={styles.secondaryBtnText}>Save Results</Text>
         </TouchableOpacity>
       </View>
 

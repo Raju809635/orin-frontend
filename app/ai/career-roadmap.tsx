@@ -4,6 +4,8 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
+import { notify } from "@/utils/notify";
+import { saveAiItem } from "@/utils/aiSaves";
 
 type CareerRoadmapResponse = { goal: string; steps: Array<{ stepNumber: number; title: string }> };
 
@@ -147,7 +149,32 @@ export default function AiCareerRoadmapPage() {
         ) : null}
       </View>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="flash" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View><TouchableOpacity style={styles.primaryBtn}><Text style={styles.primaryBtnText}>Save Roadmap</Text></TouchableOpacity></View>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}><Ionicons name="flash" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={async () => {
+            if (!data) {
+              notify("Generate roadmap first.");
+              return;
+            }
+            await saveAiItem({
+              type: "career_roadmap",
+              title: `Roadmap: ${goalLabel || data.goal}`,
+              payload: {
+                primaryCategory,
+                subCategory,
+                focus,
+                goal: data.goal,
+                steps: data.steps || []
+              }
+            });
+            notify("Saved to Saved AI.");
+          }}
+        >
+          <Text style={styles.primaryBtnText}>Save Roadmap</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Resources</Text></View><Text style={styles.meta}>Pair each milestone with one mini project and one mentor session.</Text></View>
     </ScrollView>
   );

@@ -4,6 +4,8 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
+import { notify } from "@/utils/notify";
+import { saveAiItem } from "@/utils/aiSaves";
 
 type SkillGapResponse = { goal: string; currentSkills: string[]; missingSkills: string[]; suggestions?: { courses?: string[] } };
 
@@ -174,7 +176,31 @@ export default function AiSkillGapPage() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}><Ionicons name="flash" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View>
-        <TouchableOpacity style={styles.primaryBtn}><Text style={styles.primaryBtnText}>Update Learning Plan</Text></TouchableOpacity>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={async () => {
+            if (!data) {
+              notify("Run analysis first.");
+              return;
+            }
+            await saveAiItem({
+              type: "skill_gap",
+              title: `Skill Gap: ${primaryCategory}${subCategory ? ` > ${subCategory}` : ""}${focus ? ` > ${focus}` : ""}`,
+              payload: {
+                primaryCategory,
+                subCategory,
+                focus,
+                goal: data.goal,
+                currentSkills: data.currentSkills || enteredSkills,
+                missingSkills: data.missingSkills || [],
+                suggestions: data.suggestions || {}
+              }
+            });
+            notify("Saved to Saved AI.");
+          }}
+        >
+          <Text style={styles.primaryBtnText}>Save Analysis</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>

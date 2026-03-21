@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Image,
+  Linking,
   PanResponder,
   ScrollView,
   StyleSheet,
@@ -14,6 +16,7 @@ import {
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
 import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
+import { pickAndUploadResumeFile } from "@/utils/resumeUpload";
 
 type MentorProfile = {
   profilePhotoUrl: string;
@@ -25,6 +28,7 @@ type MentorProfile = {
   about: string;
   achievements: string[];
   linkedInUrl: string;
+  resumeUrl: string;
   profileCompleteness: number;
   primaryCategory: string;
   subCategory: string;
@@ -56,6 +60,7 @@ export default function MentorProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingResume, setUploadingResume] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const dragOffset = useRef(new Animated.Value(0)).current;
@@ -81,6 +86,7 @@ export default function MentorProfileScreen() {
           about: profilePayload.about || "",
           achievements: Array.isArray(profilePayload.achievements) ? profilePayload.achievements : [],
           linkedInUrl: profilePayload.linkedInUrl || "",
+          resumeUrl: profilePayload.resumeUrl || "",
           profileCompleteness: Number(profilePayload.profileCompleteness || 0),
           primaryCategory: profilePayload.primaryCategory || "",
           subCategory: profilePayload.subCategory || "",
@@ -120,6 +126,62 @@ export default function MentorProfileScreen() {
       return { ...prev, specializations };
     });
   };
+
+  async function uploadResume() {
+    if (!profile) return;
+    try {
+      setError(null);
+      setUploadingResume(true);
+      const uploaded = await pickAndUploadResumeFile();
+      if (!uploaded) return;
+      const nextUrl = uploaded.url;
+      setProfile((prev) => (prev ? { ...prev, resumeUrl: nextUrl } : prev));
+      await api.patch("/api/profiles/mentor/me", { resumeUrl: nextUrl });
+      notify("Resume uploaded successfully.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Failed to upload resume");
+    } finally {
+      setUploadingResume(false);
+    }
+  }
+
+  async function removeResume() {
+    if (!profile?.resumeUrl) return;
+    const confirmed = await new Promise<boolean>((resolve) => {
+      Alert.alert("Remove resume?", "This will remove the resume link from your mentor profile.", [
+        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+        { text: "Remove", style: "destructive", onPress: () => resolve(true) }
+      ]);
+    });
+    if (!confirmed) return;
+
+    try {
+      setError(null);
+      setUploadingResume(true);
+      await api.patch("/api/profiles/mentor/me", { resumeUrl: "" });
+      setProfile((prev) => (prev ? { ...prev, resumeUrl: "" } : prev));
+      notify("Resume removed.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to remove resume");
+    } finally {
+      setUploadingResume(false);
+    }
+  }
+
+  async function openResume() {
+    const url = (profile?.resumeUrl || "").trim();
+    if (!url) return;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        notify("Unable to open resume on this device.");
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      notify("Unable to open resume. Please try again.");
+    }
+  }
 
   const panResponders = useMemo(() => {
     if (!profile) return [];
@@ -407,6 +469,37 @@ export default function MentorProfileScreen() {
         onChangeText={(linkedInUrl) => setProfile((prev) => (prev ? { ...prev, linkedInUrl } : prev))}
       />
 
+      <View style={styles.resumeSection}>
+        <Text style={styles.resumeTitle}>Resume (PDF/DOC)</Text>
+        <Text style={styles.resumeSub}>Upload your resume for students to view when deciding to book sessions.</Text>
+        <View style={styles.resumeActions}>
+          <TouchableOpacity style={styles.uploadBtn} onPress={uploadResume} disabled={uploadingResume}>
+            <Text style={styles.uploadBtnText}>
+              {uploadingResume ? "Uploading..." : profile.resumeUrl ? "Replace Resume" : "Upload Resume"}
+            </Text>
+          </TouchableOpacity>
+          {profile.resumeUrl ? (
+            <TouchableOpacity style={styles.resumeOpenBtn} onPress={openResume} disabled={uploadingResume}>
+              <Text style={styles.resumeOpenBtnText}>Open</Text>
+            </TouchableOpacity>
+          ) : null}
+          {profile.resumeUrl ? (
+            <TouchableOpacity style={styles.resumeRemoveBtn} onPress={removeResume} disabled={uploadingResume}>
+              <Text style={styles.resumeRemoveBtnText}>Remove</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        <Text style={styles.resumeLinkLabel}>Resume link (auto-filled after upload)</Text>
+        <TextInput
+          style={styles.input}
+          value={profile.resumeUrl}
+          onChangeText={(resumeUrl) => setProfile((prev) => (prev ? { ...prev, resumeUrl } : prev))}
+          placeholder="https://..."
+          autoCapitalize="none"
+        />
+      </View>
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <TouchableOpacity style={styles.button} onPress={save} disabled={saving}>
         <Text style={styles.buttonText}>{saving ? "Saving..." : "Save Profile"}</Text>
@@ -467,5 +560,21 @@ const styles = StyleSheet.create({
   photoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
   photoFallbackText: { color: "#0B3D2E", fontSize: 30, fontWeight: "700" },
   uploadBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#0B3D2E" },
-  uploadBtnText: { color: "#0B3D2E", fontWeight: "700" }
+  uploadBtnText: { color: "#0B3D2E", fontWeight: "700" },
+  resumeSection: {
+    marginTop: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    padding: 12
+  },
+  resumeTitle: { fontSize: 16, fontWeight: "800", color: "#1E2B24" },
+  resumeSub: { marginTop: 4, color: "#667085", lineHeight: 18 },
+  resumeActions: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" },
+  resumeOpenBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: "#1F7A4C" },
+  resumeOpenBtnText: { color: "#fff", fontWeight: "800" },
+  resumeRemoveBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#B42318" },
+  resumeRemoveBtnText: { color: "#B42318", fontWeight: "800" },
+  resumeLinkLabel: { marginTop: 10, marginBottom: 6, fontWeight: "700", color: "#344054" }
 });

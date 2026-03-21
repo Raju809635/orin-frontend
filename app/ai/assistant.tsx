@@ -3,6 +3,8 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextIn
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { notify } from "@/utils/notify";
+import { saveAiItem } from "@/utils/aiSaves";
 
 type AiHistoryItem = { _id?: string; prompt: string; response: string; createdAt?: string };
 
@@ -84,6 +86,28 @@ export default function AiAssistantEntryPage() {
             <Text style={styles.a}>A: {item.response}</Text>
           </View>
         ))}
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}><Ionicons name="bookmark" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={async () => {
+            const latest = conversations[0];
+            if (!latest) {
+              notify("No conversation to save yet.");
+              return;
+            }
+            await saveAiItem({
+              type: "assistant",
+              title: `AI Assistant: ${latest.prompt.slice(0, 48)}${latest.prompt.length > 48 ? "..." : ""}`,
+              payload: { prompt: latest.prompt, answer: latest.response }
+            });
+            notify("Saved to Saved AI.");
+          }}
+        >
+          <Text style={styles.primaryBtnText}>Save Latest Answer</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Tips</Text></View><Text style={styles.meta}>Ask specific questions with goal and timeline for better answers.</Text></View>

@@ -4,6 +4,8 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
+import { notify } from "@/utils/notify";
+import { saveAiItem } from "@/utils/aiSaves";
 
 type ProjectIdeasResponse = { goal: string; ideas: Array<{ title: string }> };
 
@@ -151,7 +153,34 @@ export default function AiProjectIdeasPage() {
         ))}
       </View>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="flash" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View><TouchableOpacity style={styles.primaryBtn}><Text style={styles.primaryBtnText}>Save to My Projects</Text></TouchableOpacity></View>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}><Ionicons name="flash" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View>
+        <TouchableOpacity
+          style={styles.primaryBtn}
+          onPress={async () => {
+            if (!data || !(data.ideas || []).length) {
+              notify("Generate ideas first.");
+              return;
+            }
+            await saveAiItem({
+              type: "project_ideas",
+              title: `Project Ideas: ${primaryCategory}${subCategory ? ` > ${subCategory}` : ""}`,
+              payload: {
+                primaryCategory,
+                subCategory,
+                focus,
+                level,
+                difficulty,
+                suggestedStack,
+                ideas: data.ideas || []
+              }
+            });
+            notify("Saved to Saved AI.");
+          }}
+        >
+          <Text style={styles.primaryBtnText}>Save Ideas</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Tips</Text></View><Text style={styles.meta}>Start with a mini MVP and add one new feature per week.</Text></View>
     </ScrollView>
   );

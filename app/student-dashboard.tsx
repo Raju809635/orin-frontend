@@ -25,6 +25,7 @@ import { notify } from "@/utils/notify";
 import { submitManualPaymentWithPicker } from "@/utils/manualPaymentUpload";
 import { FEATURE_FLAGS } from "@/constants/featureFlags";
 import { getStoredNewsLanguage, NewsLanguageCode } from "@/utils/newsLanguage";
+import { markdownToPlainText } from "@/utils/textFormat";
 
 const DASHBOARD_STALE_MS = 2 * 60 * 1000;
 const NEWS_STALE_MS = 5 * 60 * 1000;
@@ -1678,7 +1679,7 @@ export default function StudentDashboard() {
             <Text style={styles.resumeTitle}>Resume generated</Text>
             <Text style={styles.resumeMeta}>File: {resumePreview.export?.fileName || "orin_resume.md"}</Text>
             <Text style={styles.resumeSnippet} numberOfLines={5}>
-              {resumePreview.markdown}
+              {markdownToPlainText(resumePreview.markdown)}
             </Text>
           </>
         )}
