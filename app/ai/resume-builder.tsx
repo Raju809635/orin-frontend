@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
@@ -82,6 +82,30 @@ export default function AiResumeBuilderPage() {
     if (!plainText) {
       notify("Generate resume first.");
       return;
+    }
+
+    // Web: download a real PDF file (no print dialog).
+    if (Platform.OS === "web") {
+      try {
+        const res = await api.get("/api/network/resume/pdf", {
+          responseType: "blob",
+          timeout: 30000
+        } as any);
+
+        const blob: Blob = (res as any).data;
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "orin_resume.pdf";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        return;
+      } catch (e: any) {
+        notify(e?.response?.data?.message || "Failed to download PDF.");
+        return;
+      }
     }
 
     let Print: any;
