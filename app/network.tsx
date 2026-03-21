@@ -23,6 +23,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadPostImages } from "@/utils/postMediaUpload";
+import GlobalHeader from "@/components/global-header";
 
 function normalizeUrl(rawUrl: string) {
   const cleaned = rawUrl.replace(/[),.;!?]+$/, "");
@@ -170,6 +171,7 @@ export default function NetworkScreen() {
   const [reactionMenuFor, setReactionMenuFor] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<{ postId: string; content: string } | null>(null);
   const [savingPostEdit, setSavingPostEdit] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -241,6 +243,36 @@ export default function NetworkScreen() {
       loadData();
     }, [loadData])
   );
+
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+
+  const filteredSuggestions = normalizedSearch
+    ? suggestions.filter((item) => {
+        const name = String(item.name || "").toLowerCase();
+        const role = String(item.role || "").toLowerCase();
+        const reason = String(item.reason || "").toLowerCase();
+        return (
+          name.includes(normalizedSearch) ||
+          role.includes(normalizedSearch) ||
+          reason.includes(normalizedSearch)
+        );
+      })
+    : suggestions;
+
+  const filteredPosts = normalizedSearch
+    ? posts.filter((post) => {
+        const authorName = String(post.authorId?.name || "").toLowerCase();
+        const authorRole = String(post.authorId?.role || "").toLowerCase();
+        const content = String(post.content || "").toLowerCase();
+        const postType = String(post.postType || "").toLowerCase();
+        return (
+          authorName.includes(normalizedSearch) ||
+          authorRole.includes(normalizedSearch) ||
+          content.includes(normalizedSearch) ||
+          postType.includes(normalizedSearch)
+        );
+      })
+    : posts;
 
   async function publishPost() {
     const content = postText.trim();
@@ -467,7 +499,12 @@ export default function NetworkScreen() {
   }
 
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: "#F4F9F6" }}>
+      <GlobalHeader
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        searchPlaceholder="Search circle, posts, people"
+      />
       <ScrollView
         contentContainerStyle={[styles.container, { paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
@@ -544,10 +581,10 @@ export default function NetworkScreen() {
               <Text style={styles.primaryButtonText}>{submitting ? "Posting..." : "Publish Insight"}</Text>
             </TouchableOpacity>
             <Text style={[styles.cardTitle, { marginTop: 14 }]}>People You May Know</Text>
-            {suggestions.length === 0 ? (
+            {filteredSuggestions.length === 0 ? (
               <Text style={styles.meta}>No suggestions yet.</Text>
             ) : (
-              suggestions.slice(0, 8).map((item) => {
+              filteredSuggestions.slice(0, 8).map((item) => {
                 const inCircle = Boolean(circleMemberIds[item.id]);
                 const requested = Boolean(requestedCircleIds[item.id]);
                 return (
@@ -598,10 +635,10 @@ export default function NetworkScreen() {
         {activeSection === "feed" ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Circle Activity</Text>
-            {posts.length === 0 ? (
+            {filteredPosts.length === 0 ? (
               <Text style={styles.meta}>No posts yet. Create the first one.</Text>
             ) : (
-              posts.map((post) => {
+              filteredPosts.map((post) => {
                 const authorId = String(post.authorId?._id || "");
                 const isOwnPost = authorId && String(authorId) === String(user?.id || "");
                 const isFollowing = authorId ? Boolean(followingState[authorId]) : false;
@@ -980,7 +1017,7 @@ export default function NetworkScreen() {
           </View>
         </View>
       </Modal>
-    </>
+    </View>
   );
 }
 
