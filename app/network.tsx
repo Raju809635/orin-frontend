@@ -6,6 +6,7 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   Share,
@@ -107,6 +108,8 @@ const networkSections: { id: NetworkSectionId; label: string }[] = [
 ];
 
 const FEED_BOTTOM_NAV_SPACE = 108;
+const POST_COLLAPSED_LINES = 4;
+const WEB_EXPAND_THRESHOLD = 180;
 const { width } = Dimensions.get("window");
 const carouselWidth = Math.max(width - 56, 280);
 const REACTION_ORDER = ["like", "love", "care", "haha", "wow", "sad", "angry"] as const;
@@ -134,6 +137,8 @@ export default function NetworkScreen() {
   const insets = useSafeAreaInsets();
   const [activeSection, setActiveSection] = useState<NetworkSectionId>("feed");
   const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({});
+  const [expandablePosts, setExpandablePosts] = useState<Record<string, boolean>>({});
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [pendingIncoming, setPendingIncoming] = useState<ConnectionRow[]>([]);
   const [requestedCircleIds, setRequestedCircleIds] = useState<Record<string, boolean>>({});
@@ -644,14 +649,32 @@ export default function NetworkScreen() {
                           </Text>
                         </TouchableOpacity>
                       ) : null}
-                      {isOwnPost ? (
-                        <TouchableOpacity style={styles.postMenuBtn} onPress={() => openPostOptions(post)}>
-                          <Ionicons name="ellipsis-horizontal" size={18} color="#475467" />
-                        </TouchableOpacity>
-                      ) : null}
+                    {isOwnPost ? (
+                      <TouchableOpacity style={styles.postMenuBtn} onPress={() => openPostOptions(post)}>
+                        <Ionicons name="ellipsis-horizontal" size={18} color="#475467" />
+                      </TouchableOpacity>
+                    ) : null}
                     </View>
 
-                    <Text style={styles.postText}>
+                    {(() => {
+                      const expanded = Boolean(expandedPosts[post._id]);
+                      const webExpandable =
+                        Platform.OS === "web" &&
+                        ((post.content || "").length > WEB_EXPAND_THRESHOLD || (post.content || "").includes("\n"));
+                      const canExpand = Boolean(expandablePosts[post._id]) || webExpandable;
+
+                      return (
+                        <>
+                          <Text
+                            style={styles.postText}
+                            numberOfLines={expanded ? undefined : POST_COLLAPSED_LINES}
+                            onTextLayout={(e) => {
+                              if (Platform.OS === "web") return;
+                              const lineCount = e?.nativeEvent?.lines?.length || 0;
+                              const next = lineCount > POST_COLLAPSED_LINES;
+                              setExpandablePosts((prev) => (prev[post._id] === next ? prev : { ...prev, [post._id]: next }));
+                            }}
+                          >
                       {splitByUrls(post.content || "").map((part, idx) =>
                         part.url ? (
                           <Text
@@ -665,7 +688,18 @@ export default function NetworkScreen() {
                           <Text key={`${post._id}-txt-${idx}`}>{part.text}</Text>
                         )
                       )}
-                    </Text>
+                          </Text>
+                          {canExpand ? (
+                            <TouchableOpacity
+                              style={styles.viewMoreBtn}
+                              onPress={() => setExpandedPosts((prev) => ({ ...prev, [post._id]: !expanded }))}
+                            >
+                              <Text style={styles.viewMoreText}>{expanded ? "View less" : "View more"}</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </>
+                      );
+                    })()}
 
                     {media.length ? (
                       <>
@@ -1042,6 +1076,8 @@ const styles = StyleSheet.create({
   },
   postText: { marginTop: 8, color: "#344054", lineHeight: 19 },
   postLink: { color: "#175CD3", fontWeight: "700" },
+  viewMoreBtn: { marginTop: 6, alignSelf: "flex-start" },
+  viewMoreText: { color: "#175CD3", fontWeight: "800" },
   postImage: {
     width: carouselWidth,
     height: 240,
