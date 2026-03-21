@@ -16,6 +16,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
+import GlobalHeader from "@/components/global-header";
 
 type Booking = {
   _id: string;
@@ -756,46 +757,17 @@ export default function MentorDashboard() {
   }
 
   return (
+    <View style={{ flex: 1, backgroundColor: "#F3F5F7" }}>
+      <GlobalHeader
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSubmitSearch={() => null}
+        searchPlaceholder="Search students, sessions or chat"
+      />
     <ScrollView
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchDashboard(true)} />}
     >
-      <View style={styles.topRow}>
-        <View>
-          <Text style={styles.heading}>Mentor Home</Text>
-          <Text style={styles.subheading}>Manage profile, pricing, timings and sessions.</Text>
-        </View>
-        <View style={styles.topRightWrap}>
-          <TouchableOpacity style={styles.topIconBtn} onPress={() => router.push("/chat" as never)}>
-            <Ionicons name="chatbubble-ellipses" size={18} color="#1E2B24" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.topIconBtn} onPress={() => router.push("/notifications" as never)}>
-            <Ionicons name="notifications" size={18} color="#1E2B24" />
-          </TouchableOpacity>
-          <View style={styles.profileMenuWrap}>
-          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push("/my-profile" as never)}>
-            {profilePhotoUrl ? (
-              <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
-            ) : (
-              <View style={[styles.avatarImage, styles.avatarFallback]}>
-                <Text style={styles.avatarText}>{user.name?.charAt(0)?.toUpperCase() || "M"}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.searchBox}>
-        <Ionicons name="search" size={18} color="#667085" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search students, sessions or chat"
-          placeholderTextColor="#98A2B3"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
       {normalizedQuery ? (
         <>
           <Text style={styles.searchMeta}>
@@ -1424,6 +1396,7 @@ export default function MentorDashboard() {
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
     </ScrollView>
+    </View>
   );
 }
 

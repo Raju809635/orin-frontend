@@ -26,6 +26,7 @@ import { submitManualPaymentWithPicker } from "@/utils/manualPaymentUpload";
 import { FEATURE_FLAGS } from "@/constants/featureFlags";
 import { getStoredNewsLanguage, NewsLanguageCode } from "@/utils/newsLanguage";
 import { markdownToPlainText } from "@/utils/textFormat";
+import GlobalHeader from "@/components/global-header";
 
 const DASHBOARD_STALE_MS = 2 * 60 * 1000;
 const NEWS_STALE_MS = 5 * 60 * 1000;
@@ -1076,47 +1077,17 @@ export default function StudentDashboard() {
   const canFinalizeQuiz = selectedAnswersCount === 5 && !quizResult;
 
   return (
-    <>
+    <View style={{ flex: 1, backgroundColor: "#F3F5F7" }}>
+    <GlobalHeader
+      searchValue={searchQuery}
+      onSearchChange={setSearchQuery}
+      onSubmitSearch={() => null}
+      searchPlaceholder="Search mentors, dates or sessions"
+    />
     <ScrollView
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchDashboard(true)} />}
     >
-      <View style={styles.topRow}>
-        <View>
-          <Text style={styles.heading}>Home</Text>
-          <Text style={styles.subheading}>Welcome back, {user.name}</Text>
-        </View>
-        <View style={styles.topRightWrap}>
-          <TouchableOpacity style={styles.topIconBtn} onPress={() => router.push("/chat" as never)}>
-            <Ionicons name="chatbubble-ellipses" size={18} color="#1E2B24" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.topIconBtn} onPress={() => router.push("/notifications" as never)}>
-            <Ionicons name="notifications" size={18} color="#1E2B24" />
-          </TouchableOpacity>
-          <View style={styles.profileMenuWrap}>
-          <TouchableOpacity style={styles.avatarButton} onPress={() => router.push("/my-profile" as never)}>
-            {profilePhotoUrl ? (
-              <Image source={{ uri: profilePhotoUrl }} style={styles.avatarImage} />
-            ) : (
-              <View style={[styles.avatarImage, styles.avatarFallback]}>
-                <Text style={styles.avatarText}>{user.name?.charAt(0)?.toUpperCase() || "S"}</Text>
-              </View>
-            )}
-          </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-
-      <View style={styles.searchBox}>
-        <Ionicons name="search" size={18} color="#667085" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search mentors, dates or sessions"
-          placeholderTextColor="#98A2B3"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-      </View>
       {normalizedQuery ? (
         <>
           <Text style={styles.searchMeta}>
@@ -2005,7 +1976,7 @@ export default function StudentDashboard() {
         )}
       </View>
     </Modal>
-    </>
+    </View>
   );
 }
 

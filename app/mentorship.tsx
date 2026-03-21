@@ -5,6 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import GlobalHeader from "@/components/global-header";
 
 type MentorshipSectionId = "discovery" | "interaction" | "session_management";
 
@@ -51,6 +52,7 @@ export default function MentorshipHubScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [togglingInterestId, setTogglingInterestId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const loadData = useCallback(async (refresh = false) => {
     try {
@@ -123,6 +125,26 @@ export default function MentorshipHubScreen() {
     [sessions]
   );
 
+  const filteredVerifiedMentors = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return verifiedMentors;
+    return verifiedMentors.filter((item) => `${item.name || ""} ${item.title || ""}`.toLowerCase().includes(query));
+  }, [searchQuery, verifiedMentors]);
+
+  const filteredMentorGroups = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return mentorGroups;
+    return mentorGroups.filter((item) => `${item.name || ""} ${item.schedule || ""} ${item.mentor?.name || ""}`.toLowerCase().includes(query));
+  }, [mentorGroups, searchQuery]);
+
+  const filteredLiveSessions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return liveSessions;
+    return liveSessions.filter((item) =>
+      `${item.title || ""} ${item.topic || ""} ${item.description || ""} ${item.mentor?.name || ""}`.toLowerCase().includes(query)
+    );
+  }, [liveSessions, searchQuery]);
+
   const toggleLiveSessionInterest = useCallback(
     async (liveSessionId: string) => {
       try {
@@ -194,6 +216,13 @@ export default function MentorshipHubScreen() {
   ];
 
   return (
+    <View style={{ flex: 1, backgroundColor: "#F3F6FB" }}>
+      <GlobalHeader
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSubmitSearch={() => null}
+        searchPlaceholder={isMentor ? "Search sessions, groups, live sessions" : "Search mentors, groups, sessions"}
+      />
     <ScrollView
       contentContainerStyle={styles.container}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
@@ -255,7 +284,7 @@ export default function MentorshipHubScreen() {
               </TouchableOpacity>
               <View style={[styles.card, styles.cardBlue]}>
                 <Text style={styles.cardTitle}>Verified Mentor System</Text>
-                {verifiedMentors.some((item) => item.mentorId === user?.id && item.verifiedBadge) ? (
+                {filteredVerifiedMentors.some((item) => item.mentorId === user?.id && item.verifiedBadge) ? (
                   <Text style={styles.meta}>Your mentor profile currently carries a verified badge.</Text>
                 ) : (
                   <Text style={styles.meta}>Verification status is managed by ORIN admin review and mentor profile quality.</Text>
@@ -274,10 +303,10 @@ export default function MentorshipHubScreen() {
               </TouchableOpacity>
               <View style={[styles.card, styles.cardBlue]}>
                 <Text style={styles.cardTitle}>Verified Mentor System</Text>
-                {verifiedMentors.length === 0 ? (
+                {filteredVerifiedMentors.length === 0 ? (
                   <Text style={styles.meta}>No verified mentors available now.</Text>
                 ) : (
-                  verifiedMentors.slice(0, 6).map((item) => (
+                  filteredVerifiedMentors.slice(0, 6).map((item) => (
                     <Text key={item.mentorId} style={styles.meta}>
                       {item.name} {item.verifiedBadge ? "(Verified)" : ""} | Rating {item.rating || 0}
                     </Text>
@@ -307,10 +336,10 @@ export default function MentorshipHubScreen() {
               </TouchableOpacity>
               <View style={[styles.card, styles.cardGreen]}>
                 <Text style={styles.cardTitle}>Mentor Groups</Text>
-                {mentorGroups.length === 0 ? (
+                {filteredMentorGroups.length === 0 ? (
                   <Text style={styles.meta}>No mentor groups available.</Text>
                 ) : (
-                  mentorGroups.slice(0, 6).map((item) => (
+                  filteredMentorGroups.slice(0, 6).map((item) => (
                     <Text key={item.id} style={styles.meta}>
                       {item.name} | Mentor: {item.mentor?.name || "Mentor"} | Students: {item.membersCount || 0}
                     </Text>
@@ -319,10 +348,10 @@ export default function MentorshipHubScreen() {
               </View>
               <View style={[styles.card, styles.cardGreen]}>
                 <Text style={styles.cardTitle}>Mentor Live Sessions</Text>
-                {liveSessions.length === 0 ? (
+                {filteredLiveSessions.length === 0 ? (
                   <Text style={styles.meta}>No live sessions scheduled.</Text>
                 ) : (
-                  liveSessions.slice(0, 6).map((item) => (
+                  filteredLiveSessions.slice(0, 6).map((item) => (
                     <View key={item.id} style={styles.liveSessionCard}>
                       {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
                       <Text style={styles.cardTitle}>{item.title}</Text>
@@ -341,10 +370,10 @@ export default function MentorshipHubScreen() {
             <>
               <View style={[styles.card, styles.cardGreen]}>
                 <Text style={styles.cardTitle}>Mentor Groups</Text>
-                {mentorGroups.length === 0 ? (
+                {filteredMentorGroups.length === 0 ? (
                   <Text style={styles.meta}>No mentor groups available.</Text>
                 ) : (
-                  mentorGroups.slice(0, 6).map((item) => (
+                  filteredMentorGroups.slice(0, 6).map((item) => (
                     <Text key={item.id} style={styles.meta}>
                       {item.name} | Mentor: {item.mentor?.name || "Mentor"} | Students: {item.membersCount || 0}
                     </Text>
@@ -353,10 +382,10 @@ export default function MentorshipHubScreen() {
               </View>
               <View style={[styles.card, styles.cardGreen]}>
                 <Text style={styles.cardTitle}>Mentor Live Sessions</Text>
-                {liveSessions.length === 0 ? (
+                {filteredLiveSessions.length === 0 ? (
                   <Text style={styles.meta}>No live sessions scheduled.</Text>
                 ) : (
-                  liveSessions.slice(0, 6).map((item) => (
+                  filteredLiveSessions.slice(0, 6).map((item) => (
                     <View key={item.id} style={styles.liveSessionCard}>
                       {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
                       <Text style={styles.cardTitle}>{item.title}</Text>
@@ -452,6 +481,7 @@ export default function MentorshipHubScreen() {
         </View>
       ) : null}
     </ScrollView>
+    </View>
   );
 }
 

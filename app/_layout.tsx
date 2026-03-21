@@ -422,17 +422,17 @@ function RootDrawer() {
           <Drawer.Screen name="notifications" options={{ title: "Notifications", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="saved-ai" options={{ title: "Saved AI", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="saved-posts" options={{ title: "Saved Posts", drawerItemStyle: { display: "none" } }} />
-          <Drawer.Screen name="student-dashboard" options={{ title: "Student Dashboard", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="student-dashboard" options={{ title: "Student Dashboard", drawerItemStyle: { display: "none" }, headerShown: false }} />
           <Drawer.Screen name="student-sessions" options={{ title: "Session Management", drawerItemStyle: { display: "none" } }} />
-          <Drawer.Screen name="mentorship" options={{ title: "Mentorship", drawerItemStyle: { display: "none" } }} />
-          <Drawer.Screen name="ai-hub" options={{ title: "AI", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="mentorship" options={{ title: "Mentorship", drawerItemStyle: { display: "none" }, headerShown: false }} />
+          <Drawer.Screen name="ai-hub" options={{ title: "AI", drawerItemStyle: { display: "none" }, headerShown: false }} />
           <Drawer.Screen name="ai/mentor-matching" options={{ title: "AI Mentor Matching", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/skill-gap" options={{ title: "AI Skill Gap Analysis", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/career-roadmap" options={{ title: "AI Career Roadmap", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/project-ideas" options={{ title: "AI Project Ideas", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/resume-builder" options={{ title: "AI Resume Builder", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/assistant" options={{ title: "AI Assistant", drawerItemStyle: { display: "none" } }} />
-          <Drawer.Screen name="community-growth" options={{ title: "Community & Growth", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community-growth" options={{ title: "Community & Growth", drawerItemStyle: { display: "none" }, headerShown: false }} />
           <Drawer.Screen name="community/collaboration" options={{ title: "Community & Collaboration", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/challenges" options={{ title: "Community Challenges", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/certifications" options={{ title: "Certifications", drawerItemStyle: { display: "none" } }} />
@@ -442,7 +442,7 @@ function RootDrawer() {
           <Drawer.Screen name="community/reputation" options={{ title: "Reputation & Ranking", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="my-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="student-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
-          <Drawer.Screen name="mentor-dashboard" options={{ title: "Mentor Dashboard", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="mentor-dashboard" options={{ title: "Mentor Dashboard", drawerItemStyle: { display: "none" }, headerShown: false }} />
           <Drawer.Screen name="mentor-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor-policy" options={{ title: "Mentor Policy", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentors" options={{ title: "Mentors", drawerItemStyle: { display: "none" } }} />
@@ -450,7 +450,7 @@ function RootDrawer() {
           <Drawer.Screen name="mentor-pending" options={{ title: "Mentor Pending", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor-awaiting" options={{ title: "Mentor Awaiting", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="admin-dashboard" options={{ title: "Admin Dashboard", drawerItemStyle: { display: "none" } }} />
-          <Drawer.Screen name="network" options={{ title: "Network", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="network" options={{ title: "Network", drawerItemStyle: { display: "none" }, headerShown: false }} />
           <Drawer.Screen name="posts" options={{ title: "Posts", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="public-profile/[userId]" options={{ title: "Profile", drawerItemStyle: { display: "none" } }} />
         </Drawer>

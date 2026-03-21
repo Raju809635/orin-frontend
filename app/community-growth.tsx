@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/context/AuthContext";
+import GlobalHeader from "@/components/global-header";
 
 type CommunityModule = {
   id: string;
@@ -19,6 +20,7 @@ export default function CommunityGrowthScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const isMentor = user?.role === "mentor";
+  const [searchQuery, setSearchQuery] = React.useState("");
 
   const modules: CommunityModule[] = [
     {
@@ -100,7 +102,18 @@ export default function CommunityGrowthScreen() {
     }
   ];
 
+  const filteredModules = modules.filter((item) =>
+    `${item.label} ${item.description}`.toLowerCase().includes(searchQuery.trim().toLowerCase())
+  );
+
   return (
+    <View style={{ flex: 1, backgroundColor: "#F3F6FB" }}>
+      <GlobalHeader
+        searchValue={searchQuery}
+        onSearchChange={setSearchQuery}
+        onSubmitSearch={() => null}
+        searchPlaceholder="Search community tools"
+      />
     <ScrollView contentContainerStyle={styles.container}>
       <Text style={styles.title}>Community & Growth</Text>
       <Text style={styles.sub}>
@@ -110,7 +123,7 @@ export default function CommunityGrowthScreen() {
       </Text>
 
       <View style={styles.moduleStack}>
-        {modules.map((item) => (
+        {filteredModules.map((item) => (
           <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={() => router.push(item.path as never)}>
             <LinearGradient colors={item.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.moduleCard, { borderColor: item.border }]}>
               <View style={styles.moduleIconWrap}>
@@ -126,6 +139,7 @@ export default function CommunityGrowthScreen() {
         ))}
       </View>
     </ScrollView>
+    </View>
   );
 }
 

@@ -17,29 +17,25 @@ import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
 import { pickAndUploadResumeFile } from "@/utils/resumeUpload";
 
 type ProfileProject = {
-  name?: string;
-  summary?: string;
-  link?: string;
-  techStack?: string[];
-  demoVideoUrl?: string;
-  screenshots?: string[];
+  title: string;
+  tech: string[];
+  link: string;
+  description: string;
 };
 
 type ProfileAchievement = {
-  title?: string;
-  type?: string;
-  issuer?: string;
-  date?: string;
-  description?: string;
-  url?: string;
+  title: string;
+  issuer: string;
+  date: string;
+  url: string;
 };
 
 type ProfileExperience = {
-  organization?: string;
-  role?: string;
-  startDate?: string;
-  endDate?: string;
-  description?: string;
+  organization: string;
+  role: string;
+  start: string;
+  end: string;
+  description: string;
 };
 
 type StudentProfile = {
@@ -56,6 +52,10 @@ type StudentProfile = {
   experiences: ProfileExperience[];
 };
 
+const emptyProject = (): ProfileProject => ({ title: "", tech: [], link: "", description: "" });
+const emptyAchievement = (): ProfileAchievement => ({ title: "", issuer: "", date: "", url: "" });
+const emptyExperience = (): ProfileExperience => ({ organization: "", role: "", start: "", end: "", description: "" });
+
 const emptyProfile: StudentProfile = {
   profilePhotoUrl: "",
   headline: "",
@@ -70,90 +70,40 @@ const emptyProfile: StudentProfile = {
   experiences: []
 };
 
-function projectsToText(projects: ProfileProject[]) {
-  return projects
-    .map((project) =>
-      [project.name || "", (project.techStack || []).join(","), project.link || "", project.summary || ""].join(" | ")
-    )
-    .filter((line) => line.trim())
-    .join("\n");
+function normalizeProject(project: any = {}): ProfileProject {
+  return {
+    title: String(project?.title || project?.name || "").trim(),
+    tech: Array.isArray(project?.tech)
+      ? project.tech.map((item: any) => String(item || "").trim()).filter(Boolean)
+      : Array.isArray(project?.techStack)
+        ? project.techStack.map((item: any) => String(item || "").trim()).filter(Boolean)
+        : [],
+    link: String(project?.link || "").trim(),
+    description: String(project?.description || project?.summary || "").trim()
+  };
 }
 
-function achievementsToText(achievements: ProfileAchievement[]) {
-  return achievements
-    .map((item) => [item.title || "", item.issuer || "", item.date || "", item.url || ""].join(" | "))
-    .filter((line) => line.trim())
-    .join("\n");
+function normalizeAchievement(achievement: any = {}): ProfileAchievement {
+  return {
+    title: String(achievement?.title || "").trim(),
+    issuer: String(achievement?.issuer || "").trim(),
+    date: String(achievement?.date || "").trim(),
+    url: String(achievement?.url || "").trim()
+  };
 }
 
-function experiencesToText(experiences: ProfileExperience[]) {
-  return experiences
-    .map((item) =>
-      [item.organization || "", item.role || "", item.startDate || "", item.endDate || "", item.description || ""].join(
-        " | "
-      )
-    )
-    .filter((line) => line.trim())
-    .join("\n");
-}
-
-function textToProjects(value: string): ProfileProject[] {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [name, techStack, link, summary] = line.split("|").map((s) => s.trim());
-      return {
-        name: name || "",
-        techStack: (techStack || "")
-          .split(",")
-          .map((item) => item.trim())
-          .filter(Boolean),
-        link: link || "",
-        summary: summary || ""
-      };
-    });
-}
-
-function textToAchievements(value: string): ProfileAchievement[] {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [title, issuer, date, url] = line.split("|").map((s) => s.trim());
-      return {
-        title: title || "",
-        issuer: issuer || "",
-        date: date || "",
-        url: url || ""
-      };
-    });
-}
-
-function textToExperiences(value: string): ProfileExperience[] {
-  return value
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [organization, role, startDate, endDate, description] = line.split("|").map((s) => s.trim());
-      return {
-        organization: organization || "",
-        role: role || "",
-        startDate: startDate || "",
-        endDate: endDate || "",
-        description: description || ""
-      };
-    });
+function normalizeExperience(experience: any = {}): ProfileExperience {
+  return {
+    organization: String(experience?.organization || "").trim(),
+    role: String(experience?.role || "").trim(),
+    start: String(experience?.start || experience?.startDate || "").trim(),
+    end: String(experience?.end || experience?.endDate || "").trim(),
+    description: String(experience?.description || "").trim()
+  };
 }
 
 export default function StudentProfileScreen() {
   const [profile, setProfile] = useState<StudentProfile>(emptyProfile);
-  const [projectsText, setProjectsText] = useState("");
-  const [achievementsText, setAchievementsText] = useState("");
-  const [experiencesText, setExperiencesText] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -167,24 +117,22 @@ export default function StudentProfileScreen() {
         const { data } = await api.get("/api/profiles/student/me");
         if (!mounted) return;
         const profileData = data.profile || {};
-        const nextProfile: StudentProfile = {
+        setProfile({
           ...emptyProfile,
           profilePhotoUrl: profileData.profilePhotoUrl || "",
           headline: profileData.headline || "",
           about: profileData.about || "",
-          skills: Array.isArray(profileData.skills) ? profileData.skills : [],
+          skills: Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : [],
           careerGoals: profileData.careerGoals || "",
           profileCompleteness: Number(profileData.profileCompleteness || 0),
           resumeUrl: profileData.resumeUrl || "",
           collegeName: profileData.collegeName || "",
-          projects: Array.isArray(profileData.projects) ? profileData.projects : [],
-          achievements: Array.isArray(profileData.achievements) ? profileData.achievements : [],
-          experiences: Array.isArray(profileData.experiences) ? profileData.experiences : []
-        };
-        setProfile(nextProfile);
-        setProjectsText(projectsToText(nextProfile.projects));
-        setAchievementsText(achievementsToText(nextProfile.achievements));
-        setExperiencesText(experiencesToText(nextProfile.experiences));
+          projects: Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : [],
+          achievements: Array.isArray(profileData.achievements)
+            ? profileData.achievements.map(normalizeAchievement)
+            : [],
+          experiences: Array.isArray(profileData.experiences) ? profileData.experiences.map(normalizeExperience) : []
+        });
       } catch (e: any) {
         if (mounted) setError(e?.response?.data?.message || "Failed to load profile");
       } finally {
@@ -198,6 +146,31 @@ export default function StudentProfileScreen() {
 
   const skillsValue = useMemo(() => (profile.skills || []).join(", "), [profile.skills]);
 
+  const updateProject = (index: number, key: keyof ProfileProject, value: string | string[]) => {
+    setProfile((prev) => ({
+      ...prev,
+      projects: prev.projects.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item))
+    }));
+  };
+
+  const updateAchievement = (index: number, key: keyof ProfileAchievement, value: string) => {
+    setProfile((prev) => ({
+      ...prev,
+      achievements: prev.achievements.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [key]: value } : item
+      )
+    }));
+  };
+
+  const updateExperience = (index: number, key: keyof ProfileExperience, value: string) => {
+    setProfile((prev) => ({
+      ...prev,
+      experiences: prev.experiences.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [key]: value } : item
+      )
+    }));
+  };
+
   async function save() {
     try {
       setSaving(true);
@@ -205,19 +178,25 @@ export default function StudentProfileScreen() {
       const payload = {
         ...profile,
         skills: profile.skills,
-        projects: textToProjects(projectsText),
-        achievements: textToAchievements(achievementsText),
-        experiences: textToExperiences(experiencesText)
+        projects: profile.projects.filter((item) => item.title || item.description || item.link || item.tech.length),
+        achievements: profile.achievements.filter((item) => item.title || item.issuer || item.date || item.url),
+        experiences: profile.experiences.filter(
+          (item) => item.organization || item.role || item.start || item.end || item.description
+        )
       };
       const { data } = await api.patch("/api/profiles/student/me", payload);
-      const updated = {
-        ...profile,
-        ...(data.profile || {})
-      };
-      setProfile(updated);
-      setProjectsText(projectsToText(updated.projects || []));
-      setAchievementsText(achievementsToText(updated.achievements || []));
-      setExperiencesText(experiencesToText(updated.experiences || []));
+      const profileData = data.profile || {};
+      setProfile((prev) => ({
+        ...prev,
+        ...profileData,
+        projects: Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects,
+        achievements: Array.isArray(profileData.achievements)
+          ? profileData.achievements.map(normalizeAchievement)
+          : payload.achievements,
+        experiences: Array.isArray(profileData.experiences)
+          ? profileData.experiences.map(normalizeExperience)
+          : payload.experiences
+      }));
       notify("Student profile updated");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Save failed");
@@ -249,7 +228,6 @@ export default function StudentProfileScreen() {
       if (!uploaded) return;
 
       setProfile((prev) => ({ ...prev, resumeUrl: uploaded.url }));
-      // Save immediately so students don't forget to hit "Save Profile".
       await api.patch("/api/profiles/student/me", { resumeUrl: uploaded.url });
       notify("Resume uploaded successfully.");
     } catch (e: any) {
@@ -346,14 +324,92 @@ export default function StudentProfileScreen() {
         }
       />
 
-      <Text style={styles.label}>Projects (one per line: title | tech1,tech2 | github/demo link | summary)</Text>
-      <TextInput style={[styles.input, styles.multiline]} multiline value={projectsText} onChangeText={setProjectsText} />
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Projects</Text>
+            <Text style={styles.sectionSub}>Add projects with tech stack, link, and description.</Text>
+          </View>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => ({ ...prev, projects: [...prev.projects, emptyProject()] }))}>
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
+        {profile.projects.length === 0 ? <Text style={styles.emptyText}>No projects added yet.</Text> : null}
+        {profile.projects.map((item, index) => (
+          <View key={`project-${index}`} style={styles.entryCard}>
+            <View style={styles.entryHeader}>
+              <Text style={styles.entryTitle}>Project {index + 1}</Text>
+              <TouchableOpacity onPress={() => setProfile((prev) => ({ ...prev, projects: prev.projects.filter((_, itemIndex) => itemIndex !== index) }))}>
+                <Text style={styles.removeText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput style={styles.input} placeholder="Title" value={item.title} onChangeText={(value) => updateProject(index, "title", value)} />
+            <TextInput
+              style={styles.input}
+              placeholder="Tech stack (comma separated)"
+              value={item.tech.join(", ")}
+              onChangeText={(value) => updateProject(index, "tech", value.split(",").map((tech) => tech.trim()).filter(Boolean))}
+            />
+            <TextInput style={styles.input} placeholder="GitHub / Demo link" value={item.link} onChangeText={(value) => updateProject(index, "link", value)} autoCapitalize="none" />
+            <TextInput style={[styles.input, styles.multilineSmall]} placeholder="Description" multiline value={item.description} onChangeText={(value) => updateProject(index, "description", value)} />
+          </View>
+        ))}
+      </View>
 
-      <Text style={styles.label}>Achievements (one per line: title | issuer | date | url)</Text>
-      <TextInput style={[styles.input, styles.multiline]} multiline value={achievementsText} onChangeText={setAchievementsText} />
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Achievements</Text>
+            <Text style={styles.sectionSub}>Add certifications, awards, and recognitions.</Text>
+          </View>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => ({ ...prev, achievements: [...prev.achievements, emptyAchievement()] }))}>
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
+        {profile.achievements.length === 0 ? <Text style={styles.emptyText}>No achievements added yet.</Text> : null}
+        {profile.achievements.map((item, index) => (
+          <View key={`achievement-${index}`} style={styles.entryCard}>
+            <View style={styles.entryHeader}>
+              <Text style={styles.entryTitle}>Achievement {index + 1}</Text>
+              <TouchableOpacity onPress={() => setProfile((prev) => ({ ...prev, achievements: prev.achievements.filter((_, itemIndex) => itemIndex !== index) }))}>
+                <Text style={styles.removeText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput style={styles.input} placeholder="Title" value={item.title} onChangeText={(value) => updateAchievement(index, "title", value)} />
+            <TextInput style={styles.input} placeholder="Issuer" value={item.issuer} onChangeText={(value) => updateAchievement(index, "issuer", value)} />
+            <TextInput style={styles.input} placeholder="Date" value={item.date} onChangeText={(value) => updateAchievement(index, "date", value)} />
+            <TextInput style={styles.input} placeholder="URL (optional)" value={item.url} onChangeText={(value) => updateAchievement(index, "url", value)} autoCapitalize="none" />
+          </View>
+        ))}
+      </View>
 
-      <Text style={styles.label}>Experience (one per line: organization | role | start | end | description)</Text>
-      <TextInput style={[styles.input, styles.multiline]} multiline value={experiencesText} onChangeText={setExperiencesText} />
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Experience</Text>
+            <Text style={styles.sectionSub}>Add internships, work, research, or volunteer roles.</Text>
+          </View>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => ({ ...prev, experiences: [...prev.experiences, emptyExperience()] }))}>
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
+        {profile.experiences.length === 0 ? <Text style={styles.emptyText}>No experience added yet.</Text> : null}
+        {profile.experiences.map((item, index) => (
+          <View key={`experience-${index}`} style={styles.entryCard}>
+            <View style={styles.entryHeader}>
+              <Text style={styles.entryTitle}>Experience {index + 1}</Text>
+              <TouchableOpacity onPress={() => setProfile((prev) => ({ ...prev, experiences: prev.experiences.filter((_, itemIndex) => itemIndex !== index) }))}>
+                <Text style={styles.removeText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput style={styles.input} placeholder="Organization" value={item.organization} onChangeText={(value) => updateExperience(index, "organization", value)} />
+            <TextInput style={styles.input} placeholder="Role" value={item.role} onChangeText={(value) => updateExperience(index, "role", value)} />
+            <TextInput style={styles.input} placeholder="Start" value={item.start} onChangeText={(value) => updateExperience(index, "start", value)} />
+            <TextInput style={styles.input} placeholder="End" value={item.end} onChangeText={(value) => updateExperience(index, "end", value)} />
+            <TextInput style={[styles.input, styles.multilineSmall]} placeholder="Description" multiline value={item.description} onChangeText={(value) => updateExperience(index, "description", value)} />
+          </View>
+        ))}
+      </View>
 
       <Text style={styles.label}>Career Goals</Text>
       <TextInput style={styles.input} value={profile.careerGoals} onChangeText={(careerGoals) => setProfile((prev) => ({ ...prev, careerGoals }))} />
@@ -361,7 +417,7 @@ export default function StudentProfileScreen() {
       <View style={styles.resumeSection}>
         <Text style={styles.resumeTitle}>Resume (PDF/DOC)</Text>
         <Text style={styles.resumeSub}>
-          Upload your resume file. Students/mentors can open it from your profile when needed.
+          Upload your resume file. Students and mentors can open it from your profile when needed.
         </Text>
 
         <View style={styles.resumeActions}>
@@ -410,9 +466,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D0D5DD",
     paddingHorizontal: 12,
-    paddingVertical: 11
+    paddingVertical: 11,
+    marginBottom: 10
   },
   multiline: { minHeight: 110, textAlignVertical: "top" },
+  multilineSmall: { minHeight: 90, textAlignVertical: "top" },
   button: { marginTop: 18, backgroundColor: "#0B3D2E", borderRadius: 12, paddingVertical: 13, alignItems: "center" },
   buttonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   error: { marginTop: 10, color: "#B42318" },
@@ -422,6 +480,31 @@ const styles = StyleSheet.create({
   photoFallbackText: { color: "#0B3D2E", fontSize: 30, fontWeight: "700" },
   uploadBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#0B3D2E" },
   uploadBtnText: { color: "#0B3D2E", fontWeight: "700" },
+  sectionCard: {
+    marginTop: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    padding: 14
+  },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 },
+  sectionTitle: { fontSize: 17, fontWeight: "800", color: "#1E2B24" },
+  sectionSub: { marginTop: 2, color: "#667085", maxWidth: 240 },
+  addBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: "#E8F5EE" },
+  addBtnText: { color: "#0B3D2E", fontWeight: "800" },
+  emptyText: { color: "#667085", marginBottom: 4 },
+  entryCard: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#DDE6DF",
+    backgroundColor: "#FAFCFA"
+  },
+  entryHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  entryTitle: { fontSize: 15, fontWeight: "700", color: "#1E2B24" },
+  removeText: { color: "#B42318", fontWeight: "700" },
   resumeSection: {
     marginTop: 14,
     backgroundColor: "#FFFFFF",

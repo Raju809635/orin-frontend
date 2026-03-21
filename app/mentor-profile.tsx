@@ -18,6 +18,28 @@ import { notify } from "@/utils/notify";
 import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
 import { pickAndUploadResumeFile } from "@/utils/resumeUpload";
 
+type ProfileAchievement = {
+  title: string;
+  issuer: string;
+  date: string;
+  url: string;
+};
+
+type ProfileProject = {
+  title: string;
+  tech: string[];
+  link: string;
+  description: string;
+};
+
+type ProfileExperience = {
+  organization: string;
+  role: string;
+  start: string;
+  end: string;
+  description: string;
+};
+
 type MentorProfile = {
   profilePhotoUrl: string;
   title: string;
@@ -26,7 +48,9 @@ type MentorProfile = {
   experienceYears: number;
   sessionPrice: number;
   about: string;
-  achievements: string[];
+  achievements: ProfileAchievement[];
+  projects: ProfileProject[];
+  experiences: ProfileExperience[];
   linkedInUrl: string;
   resumeUrl: string;
   profileCompleteness: number;
@@ -46,12 +70,50 @@ type CategoryOption = {
 };
 
 const DRAG_ROW_HEIGHT = 50;
+const emptyAchievement = (): ProfileAchievement => ({ title: "", issuer: "", date: "", url: "" });
+const emptyProject = (): ProfileProject => ({ title: "", tech: [], link: "", description: "" });
+const emptyExperience = (): ProfileExperience => ({ organization: "", role: "", start: "", end: "", description: "" });
 
 function reorderArray<T>(items: T[], fromIndex: number, toIndex: number) {
   const next = [...items];
   const [moved] = next.splice(fromIndex, 1);
   next.splice(toIndex, 0, moved);
   return next;
+}
+
+function normalizeAchievement(value: any = {}): ProfileAchievement {
+  if (typeof value === "string") {
+    return { title: value.trim(), issuer: "", date: "", url: "" };
+  }
+  return {
+    title: String(value?.title || "").trim(),
+    issuer: String(value?.issuer || "").trim(),
+    date: String(value?.date || "").trim(),
+    url: String(value?.url || "").trim()
+  };
+}
+
+function normalizeProject(value: any = {}): ProfileProject {
+  return {
+    title: String(value?.title || value?.name || "").trim(),
+    tech: Array.isArray(value?.tech)
+      ? value.tech.map((item: any) => String(item || "").trim()).filter(Boolean)
+      : Array.isArray(value?.techStack)
+        ? value.techStack.map((item: any) => String(item || "").trim()).filter(Boolean)
+        : [],
+    link: String(value?.link || "").trim(),
+    description: String(value?.description || value?.summary || "").trim()
+  };
+}
+
+function normalizeExperience(value: any = {}): ProfileExperience {
+  return {
+    organization: String(value?.organization || "").trim(),
+    role: String(value?.role || "").trim(),
+    start: String(value?.start || value?.startDate || "").trim(),
+    end: String(value?.end || value?.endDate || "").trim(),
+    description: String(value?.description || "").trim()
+  };
 }
 
 export default function MentorProfileScreen() {
@@ -84,14 +146,20 @@ export default function MentorProfileScreen() {
           experienceYears: Number(profilePayload.experienceYears || 0),
           sessionPrice: Number(profilePayload.sessionPrice || 0),
           about: profilePayload.about || "",
-          achievements: Array.isArray(profilePayload.achievements) ? profilePayload.achievements : [],
+          achievements: Array.isArray(profilePayload.achievements)
+            ? profilePayload.achievements.map(normalizeAchievement)
+            : [],
+          projects: Array.isArray(profilePayload.projects) ? profilePayload.projects.map(normalizeProject) : [],
+          experiences: Array.isArray(profilePayload.experiences)
+            ? profilePayload.experiences.map(normalizeExperience)
+            : [],
           linkedInUrl: profilePayload.linkedInUrl || "",
           resumeUrl: profilePayload.resumeUrl || "",
           profileCompleteness: Number(profilePayload.profileCompleteness || 0),
           primaryCategory: profilePayload.primaryCategory || "",
           subCategory: profilePayload.subCategory || "",
           specializations: Array.isArray(profilePayload.specializations)
-            ? profilePayload.specializations
+            ? profilePayload.specializations.filter(Boolean)
             : []
         });
         setCategories(Array.isArray(categoryData.categories) ? categoryData.categories : []);
@@ -125,6 +193,45 @@ export default function MentorProfileScreen() {
         : [...prev.specializations, value];
       return { ...prev, specializations };
     });
+  };
+
+  const updateAchievement = (index: number, key: keyof ProfileAchievement, value: string) => {
+    setProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            achievements: prev.achievements.map((item, itemIndex) =>
+              itemIndex === index ? { ...item, [key]: value } : item
+            )
+          }
+        : prev
+    );
+  };
+
+  const updateProject = (index: number, key: keyof ProfileProject, value: string | string[]) => {
+    setProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            projects: prev.projects.map((item, itemIndex) =>
+              itemIndex === index ? { ...item, [key]: value } : item
+            )
+          }
+        : prev
+    );
+  };
+
+  const updateExperience = (index: number, key: keyof ProfileExperience, value: string) => {
+    setProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            experiences: prev.experiences.map((item, itemIndex) =>
+              itemIndex === index ? { ...item, [key]: value } : item
+            )
+          }
+        : prev
+    );
   };
 
   async function uploadResume() {
@@ -225,14 +332,30 @@ export default function MentorProfileScreen() {
       setError(null);
       const payload = {
         ...profile,
-        expertiseDomains: profile.specializations
+        expertiseDomains: profile.specializations,
+        achievements: profile.achievements.filter((item) => item.title || item.issuer || item.date || item.url),
+        projects: profile.projects.filter((item) => item.title || item.description || item.link || item.tech.length),
+        experiences: profile.experiences.filter(
+          (item) => item.organization || item.role || item.start || item.end || item.description
+        )
       };
       const { data } = await api.patch("/api/profiles/mentor/me", payload);
+      const profileData = data.profile || {};
       setProfile((prev) =>
         prev
           ? {
               ...prev,
-              profileCompleteness: data?.profile?.profileCompleteness || prev.profileCompleteness
+              ...profileData,
+              achievements: Array.isArray(profileData.achievements)
+                ? profileData.achievements.map(normalizeAchievement)
+                : payload.achievements,
+              projects: Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects,
+              experiences: Array.isArray(profileData.experiences)
+                ? profileData.experiences.map(normalizeExperience)
+                : payload.experiences,
+              specializations: Array.isArray(profileData.specializations)
+                ? profileData.specializations.filter(Boolean)
+                : prev.specializations
             }
           : prev
       );
@@ -443,24 +566,92 @@ export default function MentorProfileScreen() {
         onChangeText={(about) => setProfile((prev) => (prev ? { ...prev, about } : prev))}
       />
 
-      <Text style={styles.label}>Achievements (comma separated)</Text>
-      <TextInput
-        style={styles.input}
-        value={(profile.achievements || []).join(", ")}
-        onChangeText={(val) =>
-          setProfile((prev) =>
-            prev
-              ? {
-                  ...prev,
-                  achievements: val
-                    .split(",")
-                    .map((s) => s.trim())
-                    .filter(Boolean)
-                }
-              : prev
-          )
-        }
-      />
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Achievements</Text>
+            <Text style={styles.sectionSub}>Add certifications, badges, and recognitions.</Text>
+          </View>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => (prev ? { ...prev, achievements: [...prev.achievements, emptyAchievement()] } : prev))}>
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
+        {profile.achievements.length === 0 ? <Text style={styles.emptyText}>No achievements added yet.</Text> : null}
+        {profile.achievements.map((item, index) => (
+          <View key={`achievement-${index}`} style={styles.entryCard}>
+            <View style={styles.entryHeader}>
+              <Text style={styles.entryTitle}>Achievement {index + 1}</Text>
+              <TouchableOpacity onPress={() => setProfile((prev) => (prev ? { ...prev, achievements: prev.achievements.filter((_, itemIndex) => itemIndex !== index) } : prev))}>
+                <Text style={styles.removeText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput style={styles.input} placeholder="Title" value={item.title} onChangeText={(value) => updateAchievement(index, "title", value)} />
+            <TextInput style={styles.input} placeholder="Issuer" value={item.issuer} onChangeText={(value) => updateAchievement(index, "issuer", value)} />
+            <TextInput style={styles.input} placeholder="Date" value={item.date} onChangeText={(value) => updateAchievement(index, "date", value)} />
+            <TextInput style={styles.input} placeholder="URL (optional)" value={item.url} onChangeText={(value) => updateAchievement(index, "url", value)} autoCapitalize="none" />
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Projects</Text>
+            <Text style={styles.sectionSub}>Show mentor projects, case studies, or learning resources.</Text>
+          </View>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => (prev ? { ...prev, projects: [...prev.projects, emptyProject()] } : prev))}>
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
+        {profile.projects.length === 0 ? <Text style={styles.emptyText}>No projects added yet.</Text> : null}
+        {profile.projects.map((item, index) => (
+          <View key={`project-${index}`} style={styles.entryCard}>
+            <View style={styles.entryHeader}>
+              <Text style={styles.entryTitle}>Project {index + 1}</Text>
+              <TouchableOpacity onPress={() => setProfile((prev) => (prev ? { ...prev, projects: prev.projects.filter((_, itemIndex) => itemIndex !== index) } : prev))}>
+                <Text style={styles.removeText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput style={styles.input} placeholder="Title" value={item.title} onChangeText={(value) => updateProject(index, "title", value)} />
+            <TextInput
+              style={styles.input}
+              placeholder="Tech stack (comma separated)"
+              value={item.tech.join(", ")}
+              onChangeText={(value) => updateProject(index, "tech", value.split(",").map((tech) => tech.trim()).filter(Boolean))}
+            />
+            <TextInput style={styles.input} placeholder="GitHub / Link" value={item.link} onChangeText={(value) => updateProject(index, "link", value)} autoCapitalize="none" />
+            <TextInput style={[styles.input, styles.multilineSmall]} placeholder="Description" multiline value={item.description} onChangeText={(value) => updateProject(index, "description", value)} />
+          </View>
+        ))}
+      </View>
+
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Experience</Text>
+            <Text style={styles.sectionSub}>List mentoring, work, startup, or leadership experience.</Text>
+          </View>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => (prev ? { ...prev, experiences: [...prev.experiences, emptyExperience()] } : prev))}>
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
+        {profile.experiences.length === 0 ? <Text style={styles.emptyText}>No experience added yet.</Text> : null}
+        {profile.experiences.map((item, index) => (
+          <View key={`experience-${index}`} style={styles.entryCard}>
+            <View style={styles.entryHeader}>
+              <Text style={styles.entryTitle}>Experience {index + 1}</Text>
+              <TouchableOpacity onPress={() => setProfile((prev) => (prev ? { ...prev, experiences: prev.experiences.filter((_, itemIndex) => itemIndex !== index) } : prev))}>
+                <Text style={styles.removeText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput style={styles.input} placeholder="Organization" value={item.organization} onChangeText={(value) => updateExperience(index, "organization", value)} />
+            <TextInput style={styles.input} placeholder="Role" value={item.role} onChangeText={(value) => updateExperience(index, "role", value)} />
+            <TextInput style={styles.input} placeholder="Start" value={item.start} onChangeText={(value) => updateExperience(index, "start", value)} />
+            <TextInput style={styles.input} placeholder="End" value={item.end} onChangeText={(value) => updateExperience(index, "end", value)} />
+            <TextInput style={[styles.input, styles.multilineSmall]} placeholder="Description" multiline value={item.description} onChangeText={(value) => updateExperience(index, "description", value)} />
+          </View>
+        ))}
+      </View>
 
       <Text style={styles.label}>LinkedIn URL</Text>
       <TextInput
@@ -520,9 +711,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D0D5DD",
     paddingHorizontal: 12,
-    paddingVertical: 11
+    paddingVertical: 11,
+    marginBottom: 10
   },
   multiline: { minHeight: 110, textAlignVertical: "top" },
+  multilineSmall: { minHeight: 90, textAlignVertical: "top" },
   selectionWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   optionChip: {
     borderRadius: 999,
@@ -561,6 +754,31 @@ const styles = StyleSheet.create({
   photoFallbackText: { color: "#0B3D2E", fontSize: 30, fontWeight: "700" },
   uploadBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#0B3D2E" },
   uploadBtnText: { color: "#0B3D2E", fontWeight: "700" },
+  sectionCard: {
+    marginTop: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    padding: 14
+  },
+  sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 10 },
+  sectionTitle: { fontSize: 17, fontWeight: "800", color: "#1E2B24" },
+  sectionSub: { marginTop: 2, color: "#667085", maxWidth: 240 },
+  addBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: "#E8F5EE" },
+  addBtnText: { color: "#0B3D2E", fontWeight: "800" },
+  emptyText: { color: "#667085", marginBottom: 4 },
+  entryCard: {
+    marginTop: 10,
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#DDE6DF",
+    backgroundColor: "#FAFCFA"
+  },
+  entryHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  entryTitle: { fontSize: 15, fontWeight: "700", color: "#1E2B24" },
+  removeText: { color: "#B42318", fontWeight: "700" },
   resumeSection: {
     marginTop: 14,
     backgroundColor: "#FFFFFF",
