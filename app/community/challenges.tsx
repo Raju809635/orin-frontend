@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
@@ -34,6 +34,21 @@ export default function CommunityChallengesPage() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const active = useMemo(() => items[0], [items]);
+  const [joining, setJoining] = useState(false);
+
+  async function participate() {
+    if (!active?.id) return;
+    try {
+      setJoining(true);
+      await api.post(`/api/network/challenges/${active.id}/join`, {});
+      Alert.alert("Joined", "You have joined the challenge. Your progress will reflect in reputation and leaderboard.");
+      await load(true);
+    } catch (e: any) {
+      Alert.alert("Failed", e?.response?.data?.message || "Unable to join challenge.");
+    } finally {
+      setJoining(false);
+    }
+  }
 
   return (
     <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
@@ -42,7 +57,7 @@ export default function CommunityChallengesPage() {
 
       <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="trophy" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Active Challenge Banner</Text></View>{active ? <View style={styles.banner}><Text style={styles.bannerTitle}>{active.title}</Text><Text style={styles.meta}>{active.domain || "General"} | Deadline: {new Date(active.deadline).toLocaleDateString()}</Text></View> : <Text style={styles.meta}>No active challenge.</Text>}</View>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="flag" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Challenge Details</Text></View>{items.map((item) => <View key={item.id} style={styles.card}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.meta}>Participants: {item.participantsCount || 0}</Text></View>)}<TouchableOpacity style={styles.primaryBtn}><Text style={styles.primaryBtnText}>Participate</Text></TouchableOpacity></View>
+      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="flag" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Challenge Details</Text></View>{items.map((item) => <View key={item.id} style={styles.card}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.meta}>Participants: {item.participantsCount || 0}</Text></View>)}<TouchableOpacity style={[styles.primaryBtn, joining && styles.primaryBtnDisabled]} onPress={participate} disabled={joining || !active}><Text style={styles.primaryBtnText}>{joining ? "Joining..." : "Participate"}</Text></TouchableOpacity></View>
 
       <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="podium" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Leaderboard</Text></View>{error ? <Text style={styles.error}>{error}</Text> : null}{loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}{(leaderboard?.globalTop || []).slice(0,5).map((u) => <Text key={`${u.rank}-${u.name}`} style={styles.meta}>{u.rank}. {u.name} - {u.score}</Text>)}</View>
 
@@ -65,5 +80,6 @@ const styles = StyleSheet.create({
   meta: { color: "#667085" },
   error: { color: "#B42318" },
   primaryBtn: { alignSelf: "flex-start", backgroundColor: "#1F7A4C", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  primaryBtnDisabled: { opacity: 0.7 },
   primaryBtnText: { color: "#fff", fontWeight: "700" }
 });

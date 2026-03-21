@@ -1,10 +1,10 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Linking, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 
-type OpportunityItem = { _id: string; title: string; company?: string; role?: string; type?: string; duration?: string };
+type OpportunityItem = { _id: string; title: string; company?: string; role?: string; type?: string; duration?: string; applicationUrl?: string };
 
 const FILTERS = ["All", "Remote", "Paid", "Domain"];
 
@@ -44,7 +44,7 @@ export default function CommunityOpportunitiesPage() {
 
       <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="funnel" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Filters</Text></View><View style={styles.chips}>{FILTERS.map((f) => <TouchableOpacity key={f} style={[styles.chip, filter===f && styles.chipActive]} onPress={() => setFilter(f)}><Text style={[styles.chipText, filter===f && styles.chipTextActive]}>{f}</Text></TouchableOpacity>)}</View></View>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="list" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Listings</Text></View>{error ? <Text style={styles.error}>{error}</Text> : null}{loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}{!loading && filtered.length===0 ? <Text style={styles.meta}>No internships available.</Text> : null}{filtered.map((item) => <View key={item._id} style={styles.card}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.meta}>{item.company || "ORIN Network"}</Text><Text style={styles.meta}>Role: {item.role || item.type || "Intern"} | Duration: {item.duration || "Flexible"}</Text><TouchableOpacity style={styles.secondaryBtn}><Text style={styles.secondaryBtnText}>Apply</Text></TouchableOpacity></View>)}</View>
+      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="list" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Listings</Text></View>{error ? <Text style={styles.error}>{error}</Text> : null}{loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}{!loading && filtered.length===0 ? <Text style={styles.meta}>No internships available.</Text> : null}{filtered.map((item) => <View key={item._id} style={styles.card}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.meta}>{item.company || "ORIN Network"}</Text><Text style={styles.meta}>Role: {item.role || item.type || "Intern"} | Duration: {item.duration || "Flexible"}</Text><TouchableOpacity style={styles.secondaryBtn} onPress={() => (item.applicationUrl ? Linking.openURL(item.applicationUrl) : undefined)} disabled={!item.applicationUrl}><Text style={styles.secondaryBtnText}>{item.applicationUrl ? "Apply" : "Link not available"}</Text></TouchableOpacity></View>)}</View>
 
       <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Tips</Text></View><Text style={styles.meta}>Apply to 3 to 5 relevant opportunities every week for better response rate.</Text></View>
     </ScrollView>
