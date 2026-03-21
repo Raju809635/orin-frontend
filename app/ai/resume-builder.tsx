@@ -1,8 +1,9 @@
-import React, { useCallback, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { notify } from "@/utils/notify";
 
 type ResumeResponse = { markdown?: string; export?: { fileName?: string } };
 
@@ -27,6 +28,52 @@ export default function AiResumeBuilderPage() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
+  const fileName = useMemo(() => {
+    const raw = data?.export?.fileName || "orin_resume.md";
+    const safe = raw.replace(/[^\w.\-]+/g, "_");
+    return safe.toLowerCase().endsWith(".md") || safe.toLowerCase().endsWith(".txt") ? safe : `${safe}.md`;
+  }, [data?.export?.fileName]);
+
+  const download = useCallback(async () => {
+    if (!data?.markdown) {
+      notify("Generate resume first.");
+      return;
+    }
+
+    let FileSystem: any;
+    let Sharing: any;
+    try {
+      FileSystem = await import("expo-file-system");
+      Sharing = await import("expo-sharing");
+    } catch {
+      Alert.alert("Update required", "Resume download requires latest app build. Please install updated APK.");
+      return;
+    }
+
+    if (!FileSystem?.writeAsStringAsync || !FileSystem?.cacheDirectory) {
+      notify("File system is not available on this device.");
+      return;
+    }
+
+    const targetPath = `${FileSystem.cacheDirectory}${fileName}`;
+    await FileSystem.writeAsStringAsync(targetPath, data.markdown, {
+      encoding: FileSystem.EncodingType.UTF8
+    });
+
+    if (Sharing?.isAvailableAsync) {
+      const available = await Sharing.isAvailableAsync();
+      if (available && Sharing.shareAsync) {
+        await Sharing.shareAsync(targetPath, {
+          dialogTitle: "Share resume file",
+          mimeType: "text/markdown"
+        });
+        return;
+      }
+    }
+
+    notify(`Saved to cache: ${fileName}`);
+  }, [data?.markdown, fileName]);
+
   return (
     <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
       <Text style={styles.pageTitle}>AI Resume Builder</Text>
@@ -44,7 +91,15 @@ export default function AiResumeBuilderPage() {
         {data?.markdown ? <View style={styles.previewCard}><Text style={styles.meta}>{data.markdown}</Text></View> : null}
       </View>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="download" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View><TouchableOpacity style={styles.primaryBtn}><Text style={styles.primaryBtnText}>Download ({data?.export?.fileName || "orin_resume.md"})</Text></TouchableOpacity></View>
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="download" size={16} color="#1F7A4C" />
+          <Text style={styles.sectionTitle}>Actions</Text>
+        </View>
+        <TouchableOpacity style={styles.primaryBtn} onPress={download}>
+          <Text style={styles.primaryBtnText}>Download / Share ({fileName})</Text>
+        </TouchableOpacity>
+      </View>
       <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Tips</Text></View><Text style={styles.meta}>Keep projects quantified with outcomes for stronger resume impact.</Text></View>
     </ScrollView>
   );

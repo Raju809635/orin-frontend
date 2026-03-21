@@ -1,8 +1,20 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
 import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
+import { pickAndUploadResumeFile } from "@/utils/resumeUpload";
 
 type ProfileProject = {
   name?: string;
@@ -145,6 +157,7 @@ export default function StudentProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [uploadingResume, setUploadingResume] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -228,6 +241,61 @@ export default function StudentProfileScreen() {
     }
   }
 
+  async function uploadResume() {
+    try {
+      setError(null);
+      setUploadingResume(true);
+      const uploaded = await pickAndUploadResumeFile();
+      if (!uploaded) return;
+
+      setProfile((prev) => ({ ...prev, resumeUrl: uploaded.url }));
+      // Save immediately so students don't forget to hit "Save Profile".
+      await api.patch("/api/profiles/student/me", { resumeUrl: uploaded.url });
+      notify("Resume uploaded successfully.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Failed to upload resume");
+    } finally {
+      setUploadingResume(false);
+    }
+  }
+
+  async function removeResume() {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      Alert.alert("Remove resume?", "This will remove the resume link from your profile.", [
+        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+        { text: "Remove", style: "destructive", onPress: () => resolve(true) }
+      ]);
+    });
+    if (!confirmed) return;
+
+    try {
+      setError(null);
+      setUploadingResume(true);
+      await api.patch("/api/profiles/student/me", { resumeUrl: "" });
+      setProfile((prev) => ({ ...prev, resumeUrl: "" }));
+      notify("Resume removed.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to remove resume");
+    } finally {
+      setUploadingResume(false);
+    }
+  }
+
+  async function openResume() {
+    const url = (profile.resumeUrl || "").trim();
+    if (!url) return;
+    try {
+      const supported = await Linking.canOpenURL(url);
+      if (!supported) {
+        notify("Unable to open resume on this device.");
+        return;
+      }
+      await Linking.openURL(url);
+    } catch {
+      notify("Unable to open resume. Please try again.");
+    }
+  }
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -290,8 +358,37 @@ export default function StudentProfileScreen() {
       <Text style={styles.label}>Career Goals</Text>
       <TextInput style={styles.input} value={profile.careerGoals} onChangeText={(careerGoals) => setProfile((prev) => ({ ...prev, careerGoals }))} />
 
-      <Text style={styles.label}>Resume URL</Text>
-      <TextInput style={styles.input} value={profile.resumeUrl} onChangeText={(resumeUrl) => setProfile((prev) => ({ ...prev, resumeUrl }))} />
+      <View style={styles.resumeSection}>
+        <Text style={styles.resumeTitle}>Resume (PDF/DOC)</Text>
+        <Text style={styles.resumeSub}>
+          Upload your resume file. Students/mentors can open it from your profile when needed.
+        </Text>
+
+        <View style={styles.resumeActions}>
+          <TouchableOpacity style={styles.uploadBtn} onPress={uploadResume} disabled={uploadingResume}>
+            <Text style={styles.uploadBtnText}>{uploadingResume ? "Uploading..." : profile.resumeUrl ? "Replace Resume" : "Upload Resume"}</Text>
+          </TouchableOpacity>
+          {profile.resumeUrl ? (
+            <TouchableOpacity style={styles.resumeOpenBtn} onPress={openResume} disabled={uploadingResume}>
+              <Text style={styles.resumeOpenBtnText}>Open</Text>
+            </TouchableOpacity>
+          ) : null}
+          {profile.resumeUrl ? (
+            <TouchableOpacity style={styles.resumeRemoveBtn} onPress={removeResume} disabled={uploadingResume}>
+              <Text style={styles.resumeRemoveBtnText}>Remove</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        <Text style={styles.resumeLinkLabel}>Resume link (auto-filled after upload)</Text>
+        <TextInput
+          style={styles.input}
+          value={profile.resumeUrl}
+          onChangeText={(resumeUrl) => setProfile((prev) => ({ ...prev, resumeUrl }))}
+          placeholder="https://..."
+          autoCapitalize="none"
+        />
+      </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <TouchableOpacity style={styles.button} onPress={save} disabled={saving}>
@@ -324,5 +421,21 @@ const styles = StyleSheet.create({
   photoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
   photoFallbackText: { color: "#0B3D2E", fontSize: 30, fontWeight: "700" },
   uploadBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#0B3D2E" },
-  uploadBtnText: { color: "#0B3D2E", fontWeight: "700" }
+  uploadBtnText: { color: "#0B3D2E", fontWeight: "700" },
+  resumeSection: {
+    marginTop: 14,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    padding: 12
+  },
+  resumeTitle: { fontSize: 16, fontWeight: "800", color: "#1E2B24" },
+  resumeSub: { marginTop: 4, color: "#667085", lineHeight: 18 },
+  resumeActions: { marginTop: 10, flexDirection: "row", flexWrap: "wrap", gap: 10, alignItems: "center" },
+  resumeOpenBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, backgroundColor: "#1F7A4C" },
+  resumeOpenBtnText: { color: "#fff", fontWeight: "800" },
+  resumeRemoveBtn: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#B42318" },
+  resumeRemoveBtnText: { color: "#B42318", fontWeight: "800" },
+  resumeLinkLabel: { marginTop: 10, marginBottom: 6, fontWeight: "700", color: "#344054" }
 });
