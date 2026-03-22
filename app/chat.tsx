@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
   Image,
   KeyboardAvoidingView,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -335,204 +335,207 @@ export default function ChatScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 84 : 0}
     >
-      <View style={styles.screenHeader}>
-        <Text style={styles.heading}>Circle Conversations</Text>
-        <Text style={styles.subTitle}>Fast, live conversations with your mentoring circle.</Text>
-      </View>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.screenHeader}>
+          <Text style={styles.heading}>Circle Conversations</Text>
+          <Text style={styles.subTitle}>Fast, live conversations with your mentoring circle.</Text>
+        </View>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <View style={styles.quickActionsRow}>
-        <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push("/mentors" as never)}>
-          <Ionicons name="search-outline" size={16} color="#1F7A4C" />
-          <Text style={styles.quickActionText}>Find Mentor</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push("/network" as never)}>
-          <Ionicons name="add-outline" size={16} color="#1F7A4C" />
-          <Text style={styles.quickActionText}>New Chat</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.quickActionsRow}>
+          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push("/mentors" as never)}>
+            <Ionicons name="search-outline" size={16} color="#1F7A4C" />
+            <Text style={styles.quickActionText}>Find Mentor</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push("/network" as never)}>
+            <Ionicons name="add-outline" size={16} color="#1F7A4C" />
+            <Text style={styles.quickActionText}>New Chat</Text>
+          </TouchableOpacity>
+        </View>
 
-      {user?.role === "student" ? (
-        <>
-          <Text style={styles.sectionTitle}>Confirmed Mentors</Text>
-          <FlatList
-            horizontal
-            data={confirmedMentors}
-            keyExtractor={(item) => item._id}
-            style={styles.confirmedList}
-            showsHorizontalScrollIndicator={false}
-            renderItem={({ item }) => (
-              <TouchableOpacity style={styles.mentorProfileCard} onPress={() => setActiveUserId(item._id)}>
-                {item.profilePhotoUrl ? (
-                  <Image source={{ uri: item.profilePhotoUrl }} style={styles.avatar} />
-                ) : (
-                  <View style={[styles.avatar, styles.avatarFallback]}>
-                    <Text style={styles.avatarText}>{getInitial(item.name)}</Text>
-                  </View>
-                )}
-                <Text style={styles.mentorName} numberOfLines={1}>
-                  {item.name}
-                </Text>
-                <Text style={styles.mentorMail} numberOfLines={1}>
-                  {item.email || "Confirmed mentor"}
-                </Text>
-              </TouchableOpacity>
-            )}
-            ListEmptyComponent={
+        {user?.role === "student" ? (
+          <>
+            <Text style={styles.sectionTitle}>Confirmed Mentors</Text>
+            {confirmedMentors.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.confirmedList}
+                contentContainerStyle={styles.confirmedListContent}
+              >
+                {confirmedMentors.map((item) => (
+                  <TouchableOpacity key={item._id} style={styles.mentorProfileCard} onPress={() => setActiveUserId(item._id)}>
+                    {item.profilePhotoUrl ? (
+                      <Image source={{ uri: item.profilePhotoUrl }} style={styles.avatar} />
+                    ) : (
+                      <View style={[styles.avatar, styles.avatarFallback]}>
+                        <Text style={styles.avatarText}>{getInitial(item.name)}</Text>
+                      </View>
+                    )}
+                    <Text style={styles.mentorName} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={styles.mentorMail} numberOfLines={1}>
+                      {item.email || "Confirmed mentor"}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
               <View style={styles.emptyCard}>
                 <Text style={styles.emptyEmoji}>💬</Text>
                 <Text style={styles.emptyTitle}>Start a conversation</Text>
                 <Text style={styles.emptyText}>Connect with people from Network or confirm a mentor session to begin chatting.</Text>
               </View>
-            }
-          />
-        </>
-      ) : null}
-
-      <Text style={styles.sectionTitle}>Recent Chats</Text>
-      <FlatList
-        data={conversations}
-        keyExtractor={(item) => item.counterpartId}
-        style={styles.conversationList}
-        contentContainerStyle={conversations.length === 0 ? styles.conversationEmptyWrap : undefined}
-        renderItem={({ item }) => {
-          const isActive = activeUserId === item.counterpartId;
-          return (
-            <TouchableOpacity
-              style={[styles.conversationRow, isActive && styles.conversationRowActive]}
-              onPress={() => setActiveUserId(item.counterpartId)}
-            >
-              <View>
-                {item.counterpart.profilePhotoUrl ? (
-                  <Image source={{ uri: item.counterpart.profilePhotoUrl }} style={styles.avatarLarge} />
-                ) : (
-                  <View style={[styles.avatarLarge, styles.avatarFallback]}>
-                    <Text style={styles.avatarText}>{getInitial(item.counterpart.name)}</Text>
-                  </View>
-                )}
-                {item.counterpart.isOnline ? <View style={styles.onlineDot} /> : null}
-              </View>
-              <View style={styles.conversationBody}>
-                <View style={styles.conversationTopLine}>
-                  <Text style={styles.conversationName}>{item.counterpart.name}</Text>
-                  <Text style={styles.conversationTime}>{formatConversationTime(item.lastMessageAt)}</Text>
-                </View>
-                <Text style={styles.conversationMeta}>
-                  {item.counterpart.isTyping
-                    ? `${item.counterpart.name.split(" ")[0]} is typing...`
-                    : item.lastMessage || "Start chatting"}
-                </Text>
-              </View>
-              {item.unreadCount > 0 ? (
-                <View style={styles.unreadBadge}>
-                  <Text style={styles.unreadText}>{item.unreadCount > 9 ? "9+" : item.unreadCount}</Text>
-                </View>
-              ) : null}
-            </TouchableOpacity>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyEmoji}>💬</Text>
-            <Text style={styles.emptyTitle}>No conversations yet</Text>
-            <Text style={styles.emptyText}>Connect with people from Network to start your first ORIN chat.</Text>
-          </View>
-        }
-      />
-
-      <View style={styles.threadCard}>
-        <View style={styles.threadHeader}>
-          <View style={styles.threadIdentity}>
-            {activeUser?.profilePhotoUrl ? (
-              <Image source={{ uri: activeUser.profilePhotoUrl }} style={styles.avatarLarge} />
-            ) : (
-              <View style={[styles.avatarLarge, styles.avatarFallback]}>
-                <Text style={styles.avatarText}>{getInitial(activeUser?.name)}</Text>
-              </View>
             )}
-            <View style={styles.threadHeaderText}>
-              <Text style={styles.threadTitle}>{activeUser?.name || "Select a conversation"}</Text>
-              <Text style={styles.threadPresence}>{formatPresence(activeUser, activeTyping)}</Text>
-            </View>
-          </View>
-          {activeUser?.isOnline ? <View style={styles.threadOnlinePill}><Text style={styles.threadOnlineText}>Online</Text></View> : null}
-        </View>
-
-        <FlatList
-          data={messages}
-          keyExtractor={(item) => item._id}
-          contentContainerStyle={styles.messageList}
-          renderItem={({ item }) => {
-            const mine = item.sender === user?.id;
-            const isLastMine = mine && item._id === lastOutgoingMessageId;
-            const statusText = item.readAt ? "Seen" : "Sent";
-            return (
-              <View style={[styles.messageRow, mine ? styles.messageRowMine : styles.messageRowOther]}>
-                <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
-                  <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>
-                  <View style={styles.bubbleFooter}>
-                    <Text style={[styles.bubbleMeta, mine && styles.bubbleMetaMine]}>
-                      {formatMessageTime(item.createdAt)}
-                    </Text>
-                    {isLastMine ? (
-                      <View style={styles.readStateWrap}>
-                        <Ionicons
-                          name={item.readAt ? "checkmark-done" : "checkmark"}
-                          size={12}
-                          color={mine ? "#D1FADF" : "#98A2B3"}
-                        />
-                        <Text style={[styles.readStateText, mine && styles.readStateTextMine]}>{statusText}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
-              </View>
-            );
-          }}
-          ListEmptyComponent={
-            <View style={styles.emptyThread}>
-              <Text style={styles.emptyEmoji}>💬</Text>
-              <Text style={styles.emptyTitle}>Start a conversation</Text>
-              <Text style={styles.emptyText}>Choose a chat above and send the first message.</Text>
-            </View>
-          }
-        />
-
-        {showEmojiBar ? (
-          <View style={styles.emojiBar}>
-            {QUICK_EMOJIS.map((emoji) => (
-              <TouchableOpacity key={emoji} style={styles.emojiBtn} onPress={() => appendEmoji(emoji)}>
-                <Text style={styles.emojiText}>{emoji}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          </>
         ) : null}
 
-        <View style={styles.composer}>
-          <TouchableOpacity style={styles.iconBtn} onPress={handleAttachment} disabled={!activeUserId}>
-            <Ionicons name="add" size={20} color="#475467" />
-          </TouchableOpacity>
-          <TextInput
-            style={styles.input}
-            value={text}
-            onChangeText={handleTextChange}
-            placeholder={activeUserId ? "Message..." : "Select a chat first"}
-            editable={!!activeUserId && !sending}
-            multiline
-          />
-          <TouchableOpacity style={styles.iconBtn} onPress={() => setShowEmojiBar((prev) => !prev)} disabled={!activeUserId}>
-            <Ionicons name="happy-outline" size={20} color="#475467" />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.sendBtn, (!activeUserId || sending || !text.trim()) && styles.sendBtnDisabled]}
-            onPress={sendMessage}
-            disabled={!activeUserId || sending || !text.trim()}
-          >
-            <Ionicons name="send" size={16} color="#fff" />
-          </TouchableOpacity>
+        <Text style={styles.sectionTitle}>Recent Chats</Text>
+        <View style={styles.conversationList}>
+          {conversations.length > 0 ? (
+            conversations.map((item) => {
+              const isActive = activeUserId === item.counterpartId;
+              return (
+                <TouchableOpacity
+                  key={item.counterpartId}
+                  style={[styles.conversationRow, isActive && styles.conversationRowActive]}
+                  onPress={() => setActiveUserId(item.counterpartId)}
+                >
+                  <View>
+                    {item.counterpart.profilePhotoUrl ? (
+                      <Image source={{ uri: item.counterpart.profilePhotoUrl }} style={styles.avatarLarge} />
+                    ) : (
+                      <View style={[styles.avatarLarge, styles.avatarFallback]}>
+                        <Text style={styles.avatarText}>{getInitial(item.counterpart.name)}</Text>
+                      </View>
+                    )}
+                    {item.counterpart.isOnline ? <View style={styles.onlineDot} /> : null}
+                  </View>
+                  <View style={styles.conversationBody}>
+                    <View style={styles.conversationTopLine}>
+                      <Text style={styles.conversationName}>{item.counterpart.name}</Text>
+                      <Text style={styles.conversationTime}>{formatConversationTime(item.lastMessageAt)}</Text>
+                    </View>
+                    <Text style={styles.conversationMeta}>
+                      {item.counterpart.isTyping
+                        ? `${item.counterpart.name.split(" ")[0]} is typing...`
+                        : item.lastMessage || "Start chatting"}
+                    </Text>
+                  </View>
+                  {item.unreadCount > 0 ? (
+                    <View style={styles.unreadBadge}>
+                      <Text style={styles.unreadText}>{item.unreadCount > 9 ? "9+" : item.unreadCount}</Text>
+                    </View>
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyEmoji}>💬</Text>
+              <Text style={styles.emptyTitle}>No conversations yet</Text>
+              <Text style={styles.emptyText}>Connect with people from Network to start your first ORIN chat.</Text>
+            </View>
+          )}
         </View>
-      </View>
+
+        <View style={styles.threadCard}>
+          <View style={styles.threadHeader}>
+            <View style={styles.threadIdentity}>
+              {activeUser?.profilePhotoUrl ? (
+                <Image source={{ uri: activeUser.profilePhotoUrl }} style={styles.avatarLarge} />
+              ) : (
+                <View style={[styles.avatarLarge, styles.avatarFallback]}>
+                  <Text style={styles.avatarText}>{getInitial(activeUser?.name)}</Text>
+                </View>
+              )}
+              <View style={styles.threadHeaderText}>
+                <Text style={styles.threadTitle}>{activeUser?.name || "Select a conversation"}</Text>
+                <Text style={styles.threadPresence}>{formatPresence(activeUser, activeTyping)}</Text>
+              </View>
+            </View>
+            {activeUser?.isOnline ? (
+              <View style={styles.threadOnlinePill}>
+                <Text style={styles.threadOnlineText}>Online</Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.messageList}>
+            {messages.length > 0 ? (
+              messages.map((item) => {
+                const mine = item.sender === user?.id;
+                const isLastMine = mine && item._id === lastOutgoingMessageId;
+                const statusText = item.readAt ? "Seen" : "Sent";
+                return (
+                  <View key={item._id} style={[styles.messageRow, mine ? styles.messageRowMine : styles.messageRowOther]}>
+                    <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
+                      <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>
+                      <View style={styles.bubbleFooter}>
+                        <Text style={[styles.bubbleMeta, mine && styles.bubbleMetaMine]}>
+                          {formatMessageTime(item.createdAt)}
+                        </Text>
+                        {isLastMine ? (
+                          <View style={styles.readStateWrap}>
+                            <Ionicons
+                              name={item.readAt ? "checkmark-done" : "checkmark"}
+                              size={12}
+                              color={mine ? "#D1FADF" : "#98A2B3"}
+                            />
+                            <Text style={[styles.readStateText, mine && styles.readStateTextMine]}>{statusText}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <View style={styles.emptyThread}>
+                <Text style={styles.emptyEmoji}>💬</Text>
+                <Text style={styles.emptyTitle}>Start a conversation</Text>
+                <Text style={styles.emptyText}>Choose a chat above and send the first message.</Text>
+              </View>
+            )}
+          </View>
+
+          {showEmojiBar ? (
+            <View style={styles.emojiBar}>
+              {QUICK_EMOJIS.map((emoji) => (
+                <TouchableOpacity key={emoji} style={styles.emojiBtn} onPress={() => appendEmoji(emoji)}>
+                  <Text style={styles.emojiText}>{emoji}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={styles.composer}>
+            <TouchableOpacity style={styles.iconBtn} onPress={handleAttachment} disabled={!activeUserId}>
+              <Ionicons name="add" size={20} color="#475467" />
+            </TouchableOpacity>
+            <TextInput
+              style={styles.input}
+              value={text}
+              onChangeText={handleTextChange}
+              placeholder={activeUserId ? "Message..." : "Select a chat first"}
+              editable={!!activeUserId && !sending}
+              multiline
+            />
+            <TouchableOpacity style={styles.iconBtn} onPress={() => setShowEmojiBar((prev) => !prev)} disabled={!activeUserId}>
+              <Ionicons name="happy-outline" size={20} color="#475467" />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.sendBtn, (!activeUserId || sending || !text.trim()) && styles.sendBtnDisabled]}
+              onPress={sendMessage}
+              disabled={!activeUserId || sending || !text.trim()}
+            >
+              <Ionicons name="send" size={16} color="#fff" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
@@ -542,6 +545,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F4F9F6",
     padding: 16
+  },
+  scrollContent: {
+    paddingBottom: 120
   },
   center: {
     flex: 1,
@@ -593,8 +599,10 @@ const styles = StyleSheet.create({
     fontWeight: "800"
   },
   confirmedList: {
-    maxHeight: 122,
     marginBottom: 14
+  },
+  confirmedListContent: {
+    paddingRight: 8
   },
   mentorProfileCard: {
     width: 132,
@@ -643,7 +651,6 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   conversationList: {
-    maxHeight: 220,
     marginBottom: 14
   },
   conversationEmptyWrap: {
@@ -714,7 +721,6 @@ const styles = StyleSheet.create({
     borderColor: "#FFFFFF"
   },
   threadCard: {
-    flex: 1,
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E4E7EC",
