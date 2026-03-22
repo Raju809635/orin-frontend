@@ -309,7 +309,7 @@ function RootDrawer() {
             <Text style={styles.drawerProfileName}>{user.name || "ORIN User"}</Text>
             <Text style={styles.drawerProfileRole}>{user.role === "mentor" ? "Mentor" : "Student"}</Text>
             <Text style={styles.drawerProfileMeta}>
-              {drawerReputation?.levelTag || "Starter"} | XP {drawerReputation?.xp ?? 0} | Score {drawerReputation?.score ?? 0}
+              {drawerReputation?.levelTag || "Starter"} | XP {drawerReputation?.xp ?? drawerReputation?.score ?? 0}
             </Text>
             {user.role === "mentor" ? (
               <Text style={styles.drawerProfileMeta}>

@@ -220,8 +220,8 @@ export default function MyProfileScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Reputation</Text>
-        <Text style={styles.meta}>Score: {overview?.reputation?.score ?? 0}</Text>
-        <Text style={styles.meta}>Tag: {overview?.reputation?.levelTag || "Starter"}</Text>
+        <Text style={styles.meta}>⚡ XP: {overview?.reputation?.score ?? 0}</Text>
+        <Text style={styles.meta}>🔥 Level: {overview?.reputation?.levelTag || "Starter"}</Text>
       </View>
 
       {user?.role === "mentor" ? (
