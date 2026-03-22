@@ -1011,17 +1011,19 @@ export default function NetworkScreen() {
                               <Text style={styles.action}>Reply</Text>
                             </TouchableOpacity>
                             {isMine ? (
-                              <TouchableOpacity
-                                onPress={() => {
-                                  setEditingCommentId(item._id);
-                                  setEditingCommentText(item.content || "");
-                                }}
-                              >
-                                <Text style={styles.action}>Edit</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity onPress={() => removeComment(item._id)}>
-                                <Text style={styles.actionDanger}>Delete</Text>
-                              </TouchableOpacity>
+                              <>
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    setEditingCommentId(item._id);
+                                    setEditingCommentText(item.content || "");
+                                  }}
+                                >
+                                  <Text style={styles.action}>Edit</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => removeComment(item._id)}>
+                                  <Text style={styles.actionDanger}>Delete</Text>
+                                </TouchableOpacity>
+                              </>
                             ) : null}
                           </View>
                         </>
