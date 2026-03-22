@@ -113,15 +113,14 @@ const POST_COLLAPSED_LINES = 4;
 const EXPAND_FALLBACK_THRESHOLD = 140;
 const { width } = Dimensions.get("window");
 const carouselWidth = Math.max(width - 56, 280);
-const REACTION_ORDER = ["like", "love", "care", "haha", "wow", "sad", "angry"] as const;
+const REACTION_ORDER = ["like", "love", "wow", "care", "sad", "angry"] as const;
 const REACTION_OPTIONS: Record<(typeof REACTION_ORDER)[number], { emoji: string; label: string }> = {
-  like: { emoji: "👍", label: "Like" },
-  love: { emoji: "❤️", label: "Love" },
-  care: { emoji: "🤗", label: "Care" },
-  haha: { emoji: "😂", label: "Haha" },
-  wow: { emoji: "😮", label: "Wow" },
-  sad: { emoji: "😢", label: "Sad" },
-  angry: { emoji: "😡", label: "Angry" }
+  like: { emoji: "\u{1F44D}", label: "Like" },
+  love: { emoji: "\u2764\uFE0F", label: "Love" },
+  wow: { emoji: "\u{1F680}", label: "Boost" },
+  care: { emoji: "\u{1F4A1}", label: "Insight" },
+  sad: { emoji: "\u{1F622}", label: "Sad" },
+  angry: { emoji: "\u{1F621}", label: "Angry" }
 };
 
 function formatPostTime(dateValue?: string) {
@@ -145,7 +144,6 @@ export default function NetworkScreen() {
   const [requestedCircleIds, setRequestedCircleIds] = useState<Record<string, boolean>>({});
   const [circleMemberIds, setCircleMemberIds] = useState<Record<string, boolean>>({});
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
-  const [openCommentFor, setOpenCommentFor] = useState<Record<string, boolean>>({});
   const [postText, setPostText] = useState("");
   const [postImageUrls, setPostImageUrls] = useState<string[]>([]);
   const [postType, setPostType] = useState<FeedPost["postType"]>("learning_progress");
@@ -170,9 +168,11 @@ export default function NetworkScreen() {
   const [editingCommentText, setEditingCommentText] = useState("");
   const [reactionMenuFor, setReactionMenuFor] = useState<string | null>(null);
   const [editingPost, setEditingPost] = useState<{ postId: string; content: string } | null>(null);
+  const [postOptionsFor, setPostOptionsFor] = useState<FeedPost | null>(null);
   const [savingPostEdit, setSavingPostEdit] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [hiddenPostIds, setHiddenPostIds] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const section = String(params.section || "");
@@ -322,18 +322,7 @@ export default function NetworkScreen() {
 
   function openPostOptions(post: FeedPost) {
     setReactionMenuFor(null);
-    Alert.alert("Post options", "Manage your post", [
-      {
-        text: "Edit",
-        onPress: () => setEditingPost({ postId: post._id, content: post.content || "" })
-      },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: () => confirmDeletePost(post._id)
-      },
-      { text: "Cancel", style: "cancel" }
-    ]);
+    setPostOptionsFor(post);
   }
 
   function confirmDeletePost(postId: string) {
@@ -391,6 +380,33 @@ export default function NetworkScreen() {
     }
   }
 
+  async function copyPostLink(post: FeedPost) {
+    const postUrl = `https://orin-frontend.vercel.app/network?post=${post._id}`;
+    try {
+      if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(postUrl);
+        notify("Post link copied.");
+      } else {
+        Alert.alert("Copy Link", postUrl, [{ text: "OK" }]);
+      }
+    } catch {
+      Alert.alert("Copy Link", postUrl, [{ text: "OK" }]);
+    } finally {
+      setPostOptionsFor(null);
+    }
+  }
+
+  function hidePost(postId: string) {
+    setHiddenPostIds((prev) => ({ ...prev, [postId]: true }));
+    setPostOptionsFor(null);
+    notify("Post hidden from your feed.");
+  }
+
+  function reportPost() {
+    setPostOptionsFor(null);
+    notify("Post reported. We will review it.");
+  }
+
   async function comment(postId: string) {
     const content = (commentDrafts[postId] || "").trim();
     if (!content) return;
@@ -413,6 +429,15 @@ export default function NetworkScreen() {
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load comments.");
     }
+  }
+
+  function replyToComment(item: FeedComment) {
+    const authorName = String(item.authorId?.name || "").trim();
+    if (!commentsModal.postId) return;
+    setCommentDrafts((prev) => ({
+      ...prev,
+      [commentsModal.postId]: authorName ? `@${authorName} ` : ""
+    }));
   }
 
   async function saveCommentEdit() {
@@ -598,7 +623,7 @@ export default function NetworkScreen() {
                       disabled={inCircle || requested}
                     >
                       <Text style={styles.action}>
-                        {inCircle ? "✓ In Your Circle" : requested ? "Request Sent" : "+ Add to Circle"}
+                        {inCircle ? "\u2713 In Your Circle" : requested ? "Request Sent" : "+ Add to Circle"}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -621,7 +646,7 @@ export default function NetworkScreen() {
                     <Text style={styles.meta}>Wants to join your circle</Text>
                   </View>
                   <TouchableOpacity onPress={() => respondConnection(item._id, "accept")}>
-                    <Text style={styles.action}>✓ In Your Circle</Text>
+                    <Text style={styles.action}>{"\u2713 In Your Circle"}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => respondConnection(item._id, "reject")}>
                     <Text style={styles.actionDanger}>Reject</Text>
@@ -635,10 +660,10 @@ export default function NetworkScreen() {
         {activeSection === "feed" ? (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>Circle Activity</Text>
-            {filteredPosts.length === 0 ? (
+            {filteredPosts.filter((post) => !hiddenPostIds[post._id]).length === 0 ? (
               <Text style={styles.meta}>No posts yet. Create the first one.</Text>
             ) : (
-              filteredPosts.map((post) => {
+              filteredPosts.filter((post) => !hiddenPostIds[post._id]).map((post) => {
                 const authorId = String(post.authorId?._id || "");
                 const isOwnPost = authorId && String(authorId) === String(user?.id || "");
                 const isFollowing = authorId ? Boolean(followingState[authorId]) : false;
@@ -654,6 +679,13 @@ export default function NetworkScreen() {
                   .filter((item) => item.count > 0)
                   .sort((a, b) => b.count - a.count)
                   .slice(0, 3);
+                const summaryReactionCount = Math.max(totalReactions, Number(post.likeCount || 0));
+                const summaryReactionIcons = topReactions.length
+                  ? topReactions.map((item) => REACTION_OPTIONS[item.type].emoji).join(" ")
+                  : summaryReactionCount > 0
+                    ? REACTION_OPTIONS.like.emoji
+                    : "";
+                const summaryCommentCount = Number(post.commentCount || 0);
 
                 return (
                   <View key={post._id} style={styles.postCard}>
@@ -675,7 +707,7 @@ export default function NetworkScreen() {
                         <View style={{ flex: 1 }}>
                           <Text style={styles.rowTitle}>{post.authorId?.name || "ORIN User"}</Text>
                           <Text style={styles.metaSmall}>
-                            {(post.authorId?.role || "member").toUpperCase()} • {formatPostTime(post.createdAt)}
+                            {(post.authorId?.role || "member").toUpperCase()} {"\u2022"} {formatPostTime(post.createdAt)}
                           </Text>
                         </View>
                       </TouchableOpacity>
@@ -761,26 +793,12 @@ export default function NetworkScreen() {
                       </>
                     ) : null}
 
-                    <Text style={styles.meta}>
-                      {post.postType} • Comments {post.commentCount || 0} • Shares {post.shareCount || 0} • Saved {post.saveCount || 0}
-                    </Text>
-                    {Math.max(totalReactions, Number(post.likeCount || 0)) > 0 ? (
-                      <View style={styles.reactionSummaryRow}>
-                        <View style={styles.reactionIconStack}>
-                          {topReactions.map((item, idx) => (
-                            <View
-                              key={`${post._id}-rx-${item.type}`}
-                              style={[
-                                styles.reactionIconBubble,
-                                idx > 0 ? styles.reactionIconBubbleOverlap : null
-                              ]}
-                            >
-                              <Text style={styles.reactionIconEmoji}>{REACTION_OPTIONS[item.type].emoji}</Text>
-                            </View>
-                          ))}
-                        </View>
-                        <Text style={styles.reactionSummaryText}>
-                          {Math.max(totalReactions, Number(post.likeCount || 0))}
+                    {(summaryReactionCount > 0 || summaryCommentCount > 0) ? (
+                      <View style={styles.feedStatsRow}>
+                        <Text style={styles.feedStatsText}>
+                          {summaryReactionCount > 0 ? `${summaryReactionIcons} ${summaryReactionCount}` : ""}
+                          {summaryReactionCount > 0 && summaryCommentCount > 0 ? "   •   " : ""}
+                          {summaryCommentCount > 0 ? `${summaryCommentCount} comments` : ""}
                         </Text>
                       </View>
                     ) : null}
@@ -793,34 +811,32 @@ export default function NetworkScreen() {
                             onPress={() => react(post._id, "react", type)}
                           >
                             <Text style={styles.reactionDropdownEmoji}>{REACTION_OPTIONS[type].emoji}</Text>
-                            <Text style={styles.reactionDropdownLabel}>{REACTION_OPTIONS[type].label}</Text>
                           </TouchableOpacity>
                         ))}
                       </View>
                     ) : null}
                     <View style={styles.postActionRow}>
                       <TouchableOpacity
-                        style={styles.postActionBtn}
-                        onPress={() => setReactionMenuFor((prev) => (prev === post._id ? null : post._id))}
+                        style={[styles.postActionBtn, userReaction ? styles.postActionBtnActive : null]}
+                        onPress={() => react(post._id, "react", "like")}
+                        onLongPress={() => setReactionMenuFor((prev) => (prev === post._id ? null : post._id))}
                       >
-                        <Ionicons
-                          name={userReaction ? "thumbs-up" : "thumbs-up-outline"}
-                          size={16}
-                          color={userReaction ? "#175CD3" : "#475467"}
-                        />
+                        {userReaction ? (
+                          <Text style={styles.selectedReactionEmoji}>
+                            {REACTION_OPTIONS[(userReaction in REACTION_OPTIONS
+                              ? userReaction
+                              : "like") as keyof typeof REACTION_OPTIONS]?.emoji || REACTION_OPTIONS.like.emoji}
+                          </Text>
+                        ) : (
+                          <Ionicons name="thumbs-up-outline" size={16} color="#475467" />
+                        )}
                         <Text style={[styles.postActionText, userReaction ? styles.postActionTextActive : null]}>
-                          {userReaction ? REACTION_OPTIONS[userReaction].label : "Like"}
+                          {userReaction
+                            ? REACTION_OPTIONS[(userReaction in REACTION_OPTIONS
+                                ? userReaction
+                                : "like") as keyof typeof REACTION_OPTIONS]?.label || "Like"
+                            : "Like"}
                         </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.postActionBtn}
-                        onPress={() => {
-                          setReactionMenuFor(null);
-                          setOpenCommentFor((prev) => ({ ...prev, [post._id]: !prev[post._id] }));
-                        }}
-                      >
-                        <Ionicons name="chatbubble-outline" size={16} color="#475467" />
-                        <Text style={styles.postActionText} numberOfLines={1}>Comment</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.postActionBtn}
@@ -829,8 +845,8 @@ export default function NetworkScreen() {
                           openComments(post._id);
                         }}
                       >
-                        <Ionicons name="eye-outline" size={16} color="#475467" />
-                        <Text style={styles.postActionText} numberOfLines={1}>View</Text>
+                        <Ionicons name="chatbubble-outline" size={16} color="#475467" />
+                        <Text style={styles.postActionText} numberOfLines={1}>Comment</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         style={styles.postActionBtn}
@@ -846,30 +862,16 @@ export default function NetworkScreen() {
                         style={styles.postActionBtn}
                         onPress={() => {
                           setReactionMenuFor(null);
-                          react(post._id, "save");
+                          openPostOptions(post);
                         }}
                       >
-                        <Ionicons name={post.isSaved ? "bookmark" : "bookmark-outline"} size={16} color="#475467" />
-                        <Text style={styles.postActionText} numberOfLines={1}>{post.isSaved ? "Saved" : "Save"}</Text>
+                        <Ionicons name="ellipsis-horizontal" size={16} color="#475467" />
+                        <Text style={styles.postActionText} numberOfLines={1}>More</Text>
                       </TouchableOpacity>
                     </View>
-
-                    {openCommentFor[post._id] ? (
-                      <View style={styles.commentComposer}>
-                        <TextInput
-                          style={styles.commentInput}
-                          placeholder="Write a comment..."
-                          value={commentDrafts[post._id] || ""}
-                          onChangeText={(text) => setCommentDrafts((prev) => ({ ...prev, [post._id]: text }))}
-                        />
-                        <TouchableOpacity onPress={() => comment(post._id)}>
-                          <Text style={styles.action}>Post</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : null}
                     {(post.commentCount || 0) > 0 ? (
                       <TouchableOpacity onPress={() => openComments(post._id)}>
-                        <Text style={styles.viewCommentsLink}>View comments ({post.commentCount || 0})</Text>
+                        <Text style={styles.viewCommentsLink}>View all {post.commentCount || 0} comments</Text>
                       </TouchableOpacity>
                     ) : null}
                   </View>
@@ -959,14 +961,27 @@ export default function NetworkScreen() {
             </View>
             <ScrollView style={{ maxHeight: 360 }}>
               {commentsModal.comments.length === 0 ? (
-                <Text style={styles.meta}>No comments yet.</Text>
+                <View style={styles.commentsEmptyState}>
+                  <Text style={styles.commentsEmptyEmoji}>💬</Text>
+                  <Text style={styles.commentsEmptyTitle}>No comments yet</Text>
+                  <Text style={styles.commentsEmptyText}>Be the first to comment!</Text>
+                </View>
               ) : (
                 commentsModal.comments.map((item) => {
                   const isMine = String(item.authorId?._id || "") === String(user?.id || "");
                   const editing = editingCommentId === item._id;
+                  const commentInitial = String(item.authorId?.name || "U").trim().charAt(0).toUpperCase();
                   return (
                     <View key={item._id} style={styles.commentItem}>
-                      <Text style={styles.commentAuthor}>{item.authorId?.name || "User"}</Text>
+                      <View style={styles.commentTopRow}>
+                        <View style={styles.commentAvatar}>
+                          <Text style={styles.commentAvatarText}>{commentInitial}</Text>
+                        </View>
+                        <View style={styles.commentMetaBlock}>
+                          <Text style={styles.commentAuthor}>{item.authorId?.name || "User"}</Text>
+                          <Text style={styles.metaSmall}>{item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}</Text>
+                        </View>
+                      </View>
                       {editing ? (
                         <>
                           <TextInput
@@ -991,9 +1006,11 @@ export default function NetworkScreen() {
                       ) : (
                         <>
                           <Text style={styles.commentBody}>{item.content}</Text>
-                          <Text style={styles.metaSmall}>{item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}</Text>
-                          {isMine ? (
-                            <View style={styles.commentActionsRow}>
+                          <View style={styles.commentActionsRow}>
+                            <TouchableOpacity onPress={() => replyToComment(item)}>
+                              <Text style={styles.action}>Reply</Text>
+                            </TouchableOpacity>
+                            {isMine ? (
                               <TouchableOpacity
                                 onPress={() => {
                                   setEditingCommentId(item._id);
@@ -1005,8 +1022,8 @@ export default function NetworkScreen() {
                               <TouchableOpacity onPress={() => removeComment(item._id)}>
                                 <Text style={styles.actionDanger}>Delete</Text>
                               </TouchableOpacity>
-                            </View>
-                          ) : null}
+                            ) : null}
+                          </View>
                         </>
                       )}
                     </View>
@@ -1014,8 +1031,97 @@ export default function NetworkScreen() {
                 })
               )}
             </ScrollView>
+            <View style={styles.commentComposerSheet}>
+              <View style={styles.commentAvatar}>
+                <Text style={styles.commentAvatarText}>{String(user?.name || "U").trim().charAt(0).toUpperCase()}</Text>
+              </View>
+              <TextInput
+                style={styles.commentInput}
+                placeholder="Write a comment..."
+                value={commentDrafts[commentsModal.postId] || ""}
+                onChangeText={(text) => setCommentDrafts((prev) => ({ ...prev, [commentsModal.postId]: text }))}
+              />
+              <TouchableOpacity onPress={() => comment(commentsModal.postId)}>
+                <Text style={styles.action}>Send</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
+      </Modal>
+
+      <Modal
+        visible={Boolean(postOptionsFor)}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPostOptionsFor(null)}
+      >
+        <TouchableOpacity style={styles.sheetOverlay} activeOpacity={1} onPress={() => setPostOptionsFor(null)}>
+          <TouchableOpacity activeOpacity={1} style={styles.optionsSheet}>
+            <View style={styles.sheetHandle} />
+            <Text style={styles.optionsTitle}>Post options</Text>
+
+            <TouchableOpacity style={styles.optionRow} onPress={() => postOptionsFor && react(postOptionsFor._id, "save")}>
+              <Ionicons name={postOptionsFor?.isSaved ? "bookmark" : "bookmark-outline"} size={18} color="#344054" />
+              <Text style={styles.optionText}>{postOptionsFor?.isSaved ? "Unsave Post" : "Save Post"}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.optionRow} onPress={() => postOptionsFor && copyPostLink(postOptionsFor)}>
+              <Ionicons name="copy-outline" size={18} color="#344054" />
+              <Text style={styles.optionText}>Copy Link</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.optionRow} onPress={reportPost}>
+              <Ionicons name="flag-outline" size={18} color="#344054" />
+              <Text style={styles.optionText}>Report Post</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.optionRow} onPress={() => postOptionsFor && hidePost(postOptionsFor._id)}>
+              <Ionicons name="eye-off-outline" size={18} color="#344054" />
+              <Text style={styles.optionText}>Hide Post</Text>
+            </TouchableOpacity>
+
+            {postOptionsFor?.authorId?._id ? (
+              <TouchableOpacity
+                style={styles.optionRow}
+                onPress={() => {
+                  const authorId = String(postOptionsFor.authorId?._id || "");
+                  setPostOptionsFor(null);
+                  if (authorId) router.push(`/public-profile/${authorId}` as never);
+                }}
+              >
+                <Ionicons name="person-outline" size={18} color="#344054" />
+                <Text style={styles.optionText}>View Profile</Text>
+              </TouchableOpacity>
+            ) : null}
+
+            {postOptionsFor?.authorId?._id && String(postOptionsFor.authorId._id) === String(user?.id || "") ? (
+              <>
+                <TouchableOpacity
+                  style={styles.optionRow}
+                  onPress={() => {
+                    setEditingPost({ postId: postOptionsFor._id, content: postOptionsFor.content || "" });
+                    setPostOptionsFor(null);
+                  }}
+                >
+                  <Ionicons name="create-outline" size={18} color="#344054" />
+                  <Text style={styles.optionText}>Edit Post</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.optionRow}
+                  onPress={() => {
+                    const postId = postOptionsFor._id;
+                    setPostOptionsFor(null);
+                    confirmDeletePost(postId);
+                  }}
+                >
+                  <Ionicons name="trash-outline" size={18} color="#B42318" />
+                  <Text style={styles.optionTextDanger}>Delete Post</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </View>
   );
@@ -1075,7 +1181,7 @@ const styles = StyleSheet.create({
   rowTitle: { color: "#1E2B24", fontWeight: "700" },
   action: { color: "#175CD3", fontWeight: "700" },
   actionDanger: { color: "#B42318", fontWeight: "700" },
-  postCard: { borderWidth: 1, borderColor: "#E4E7EC", borderRadius: 10, padding: 10, marginBottom: 8 },
+  postCard: { borderWidth: 1, borderColor: "#E4E7EC", borderRadius: 12, padding: 12, marginVertical: 8, backgroundColor: "#FFFFFF" },
   postHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   authorWrap: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
   authorAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: "#D0D5DD" },
@@ -1128,7 +1234,7 @@ const styles = StyleSheet.create({
   dotRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#D0D5DD" },
   dotActive: { width: 14, backgroundColor: "#1F7A4C", borderRadius: 7 },
-  postActionRow: { marginTop: 8, flexDirection: "row", gap: 6 },
+  postActionRow: { marginTop: 10, flexDirection: "row", gap: 6 },
   postActionBtn: {
     flex: 1,
     minWidth: 0,
@@ -1138,62 +1244,44 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 6,
     paddingVertical: 7,
-    borderRadius: 8,
+    borderRadius: 10,
     backgroundColor: "#F9FAFB",
     borderWidth: 1,
     borderColor: "#EAECF0"
   },
   postActionText: { color: "#475467", fontWeight: "700", fontSize: 11 },
   postActionTextActive: { color: "#175CD3" },
-  reactionSummaryRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 8 },
-  reactionIconStack: { flexDirection: "row", alignItems: "center" },
-  reactionIconBubble: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    borderWidth: 1,
-    borderColor: "#FFFFFF",
-    backgroundColor: "#F2F4F7",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  reactionIconBubbleOverlap: { marginLeft: -6 },
-  reactionIconEmoji: { fontSize: 11 },
-  reactionSummaryText: { color: "#475467", fontWeight: "800", fontSize: 12 },
-  likeSummaryRow: { marginTop: 6, flexDirection: "row", alignItems: "center", gap: 8 },
-  likeSummaryIcon: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: "#175CD3",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  likeSummaryText: { color: "#475467", fontWeight: "700", fontSize: 12 },
+  postActionBtnActive: { backgroundColor: "#EEF4FF", borderColor: "#B2DDFF" },
+  selectedReactionEmoji: { fontSize: 15 },
+  feedStatsRow: { marginTop: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#EAECF0" },
+  feedStatsText: { color: "#475467", fontWeight: "700", fontSize: 12 },
   reactionDropdown: {
-    marginTop: 8,
+    position: "absolute",
+    left: 12,
+    bottom: 56,
     borderWidth: 1,
     borderColor: "#E4E7EC",
-    borderRadius: 12,
+    borderRadius: 999,
     backgroundColor: "#FFFFFF",
-    padding: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6
+    gap: 6,
+    shadowColor: "#101828",
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 8
   },
   reactionDropdownItem: {
-    flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    borderColor: "#D0D5DD",
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
+    justifyContent: "center",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: "#F9FAFB"
   },
   reactionDropdownEmoji: { fontSize: 14 },
-  reactionDropdownLabel: { color: "#344054", fontWeight: "700", fontSize: 11 },
   chipsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
   chip: {
     borderWidth: 1,
@@ -1210,7 +1298,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     borderWidth: 1,
     borderColor: "#E4E7EC",
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 8,
     paddingVertical: 6,
     flexDirection: "row",
@@ -1220,6 +1308,15 @@ const styles = StyleSheet.create({
   commentInput: { flex: 1, minHeight: 32, color: "#344054" },
   commentLine: { marginTop: 6, color: "#475467" },
   viewCommentsLink: { marginTop: 8, color: "#175CD3", fontWeight: "800" },
+  commentComposerSheet: {
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#EAECF0",
+    paddingTop: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
   modalOverlay: { flex: 1, backgroundColor: "rgba(15,23,42,0.45)", alignItems: "center", justifyContent: "center", padding: 18 },
   editModalCard: {
     width: "100%",
@@ -1271,6 +1368,10 @@ const styles = StyleSheet.create({
     padding: 14
   },
   commentsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 8 },
+  commentsEmptyState: { alignItems: "center", justifyContent: "center", paddingVertical: 26, gap: 4 },
+  commentsEmptyEmoji: { fontSize: 24 },
+  commentsEmptyTitle: { color: "#1E2B24", fontWeight: "800", fontSize: 16 },
+  commentsEmptyText: { color: "#667085", fontWeight: "600" },
   commentItem: {
     borderWidth: 1,
     borderColor: "#EAECF0",
@@ -1278,13 +1379,26 @@ const styles = StyleSheet.create({
     padding: 10,
     marginBottom: 8
   },
+  commentTopRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  commentAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#EAF6EF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#CFE8D6"
+  },
+  commentAvatarText: { color: "#1F7A4C", fontWeight: "900" },
+  commentMetaBlock: { flex: 1 },
   commentAuthor: { color: "#1E2B24", fontWeight: "800" },
   commentBody: { color: "#344054", marginTop: 4, lineHeight: 18 },
   commentEditInput: {
     marginTop: 6,
     borderWidth: 1,
     borderColor: "#D0D5DD",
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 8
   },
@@ -1295,7 +1409,55 @@ const styles = StyleSheet.create({
   viewerClose: { position: "absolute", right: 16, top: 50, zIndex: 10, padding: 8 },
   zoomWrap: { width },
   zoomInner: { width, height: "100%", alignItems: "center", justifyContent: "center" },
-  viewerImage: { width, height: "85%" }
+  viewerImage: { width, height: "85%" },
+  sheetOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15,23,42,0.45)",
+    justifyContent: "flex-end"
+  },
+  optionsSheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 20
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 44,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: "#D0D5DD",
+    marginBottom: 12
+  },
+  optionsTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#101828",
+    marginBottom: 10
+  },
+  optionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 14
+  },
+  optionText: {
+    color: "#344054",
+    fontWeight: "700",
+    fontSize: 14
+  },
+  optionTextDanger: {
+    color: "#B42318",
+    fontWeight: "700",
+    fontSize: 14
+  }
 });
+
+
+
+
+
 
 
