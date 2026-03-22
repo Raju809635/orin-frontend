@@ -1,13 +1,29 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 
-type CareerRoadmapResponse = { goal: string; steps: Array<{ stepNumber: number; title: string }> };
+type RoadmapStep = { stepNumber: number; title: string; completed?: boolean };
+type CareerRoadmapResponse = { goal: string; steps: RoadmapStep[] };
+
+const GENERATION_STAGES = ["Analyzing goal...", "Building steps...", "Optimizing path..."];
+const MISSION_XP = 20;
+const STORAGE_PREFIX = "orin:career-roadmap-progress:";
 
 export default function AiCareerRoadmapPage() {
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
@@ -18,7 +34,11 @@ export default function AiCareerRoadmapPage() {
   const [data, setData] = useState<CareerRoadmapResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generationStage, setGenerationStage] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const initialLoadRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -56,68 +76,204 @@ export default function AiCareerRoadmapPage() {
     if (!focuses.includes(focus)) setFocus(focuses[0]);
   }, [domainTree, primaryCategory, subCategory, focus]);
 
-  const goalLabel = useMemo(() => [primaryCategory, subCategory, focus].filter(Boolean).join(" > "), [primaryCategory, subCategory, focus]);
+  const goalLabel = useMemo(
+    () => [primaryCategory, subCategory, focus].filter(Boolean).join(" > "),
+    [primaryCategory, subCategory, focus]
+  );
 
-  const load = useCallback(async (refresh = false) => {
+  const roadmapKey = useMemo(() => {
+    const goal = customGoal.trim() || goalLabel || data?.goal || "career-growth";
+    return `${STORAGE_PREFIX}${goal.toLowerCase()}`;
+  }, [customGoal, data?.goal, goalLabel]);
+
+  const loadProgress = useCallback(async () => {
     try {
-      if (refresh) setRefreshing(true); else setLoading(true);
-      setError(null);
-      const res = await api.get<CareerRoadmapResponse>("/api/network/career-roadmap", {
-        params: {
-          primaryCategory,
-          subCategory,
-          focus,
-          goal: customGoal.trim() || goalLabel
-        }
-      });
-      setData(res.data || null);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load roadmap.");
-    } finally {
-      setLoading(false); setRefreshing(false);
+      const raw = await AsyncStorage.getItem(roadmapKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+      setCompletedSteps(Array.isArray(parsed?.completedSteps) ? parsed.completedSteps : []);
+    } catch {
+      setCompletedSteps([]);
     }
-  }, [primaryCategory, subCategory, focus, goalLabel, customGoal]);
+  }, [roadmapKey]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useEffect(() => {
+    if (!data) return;
+    loadProgress();
+  }, [data, loadProgress]);
+
+  const persistProgress = useCallback(
+    async (steps: number[]) => {
+      setCompletedSteps(steps);
+      try {
+        await AsyncStorage.setItem(roadmapKey, JSON.stringify({ completedSteps: steps }));
+      } catch {}
+    },
+    [roadmapKey]
+  );
+
+  const load = useCallback(
+    async (refresh = false) => {
+      let stageTimer: ReturnType<typeof setInterval> | null = null;
+      try {
+        if (refresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
+        }
+        setError(null);
+        setIsGenerating(true);
+        setGenerationStage(0);
+        stageTimer = setInterval(() => {
+          setGenerationStage((prev) => (prev + 1) % GENERATION_STAGES.length);
+        }, 700);
+
+        const res = await api.get<CareerRoadmapResponse>("/api/network/career-roadmap", {
+          params: {
+            primaryCategory,
+            subCategory,
+            focus,
+            goal: customGoal.trim() || goalLabel
+          }
+        });
+
+        if (stageTimer) clearInterval(stageTimer);
+        await new Promise((resolve) => setTimeout(resolve, 900));
+        setData(res.data || null);
+      } catch (e: any) {
+        if (stageTimer) clearInterval(stageTimer);
+        setError(e?.response?.data?.message || "Failed to load roadmap.");
+      } finally {
+        setIsGenerating(false);
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [primaryCategory, subCategory, focus, goalLabel, customGoal]
+  );
+
+  useEffect(() => {
+    if (!primaryCategory || initialLoadRef.current) return;
+    initialLoadRef.current = true;
+    load();
+  }, [primaryCategory, load]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (data) loadProgress();
+    }, [data, loadProgress])
+  );
+
+  const completedCount = completedSteps.length;
+  const totalSteps = data?.steps.length || 0;
+  const progressPct = totalSteps ? Math.round((completedCount / totalSteps) * 100) : 0;
+  const totalXp = completedCount * MISSION_XP;
+  const currentMission = data?.steps.find((step) => !completedSteps.includes(step.stepNumber));
+  const nextTarget = Math.max(0, 100 - (totalXp % 100 || 0));
+  const streakDays = completedCount ? Math.min(completedCount, 14) : 0;
+  const currentLevelIndex = Math.min(Math.floor(totalXp / 100), 5);
+  const nextLevelIndex = Math.min(currentLevelIndex + 1, 5);
+  const levels = ["Starter", "Explorer", "Builder", "Pro", "Elite", "Legend"];
+  const socialCount = 12 + totalSteps * 14;
+
+  const toggleMission = useCallback(
+    async (stepNumber: number) => {
+      const isCompleted = completedSteps.includes(stepNumber);
+      const next = isCompleted ? completedSteps.filter((item) => item !== stepNumber) : [...completedSteps, stepNumber].sort((a, b) => a - b);
+      await persistProgress(next);
+      notify(isCompleted ? "Mission reopened." : `Mission completed. +${MISSION_XP} XP`);
+    },
+    [completedSteps, persistProgress]
+  );
+
+  const futurePreview = useMemo(() => {
+    if (!data?.steps?.length) return [];
+    const titles = data.steps.slice(-3).map((step) => step.title);
+    return titles.map((title, index) => {
+      if (index === 0) return `Build projects around ${title}`;
+      if (index === 1) return `Gain confidence in ${title}`;
+      return `Move closer to internships after ${title}`;
+    });
+  }, [data]);
 
   return (
-    <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
-      <Text style={styles.pageTitle}>AI Career Roadmap</Text>
-      <Text style={styles.pageSub}>Generate a milestone-based roadmap for your target role.</Text>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="map" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Overview</Text></View>
-        <Text style={styles.meta}>
-          Select your Domain Guide path (domain, sub-domain, focus) and generate a step-by-step roadmap for it.
+    <ScrollView
+      contentContainerStyle={styles.page}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+    >
+      <LinearGradient colors={["#0E6A42", "#1F7A4C", "#5CBF88"]} style={styles.hero}>
+        <View style={styles.heroTopRow}>
+          <View style={styles.heroBadge}>
+            <Ionicons name="sparkles" size={14} color="#0E6A42" />
+            <Text style={styles.heroBadgeText}>AI Journey</Text>
+          </View>
+          <Text style={styles.heroMeta}>⚡ {totalXp} XP</Text>
+        </View>
+        <Text style={styles.heroTitle}>AI Career Roadmap</Text>
+        <Text style={styles.heroSub}>
+          Build a mission-based journey for your domain and return every day to move one step closer.
         </Text>
-      </View>
+        <View style={styles.heroProgressCard}>
+          <View style={styles.heroProgressHeader}>
+            <Text style={styles.heroProgressLabel}>
+              🔥 Level {currentLevelIndex + 1} - {levels[currentLevelIndex]}
+            </Text>
+            <Text style={styles.heroProgressLabel}>{progressPct}% complete</Text>
+          </View>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
+          </View>
+          <Text style={styles.heroProgressMeta}>🎯 Next rank: {nextTarget} XP to {levels[nextLevelIndex]}</Text>
+        </View>
+      </LinearGradient>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="options" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Main Feature</Text></View>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="map" size={16} color="#1F7A4C" />
+          <Text style={styles.sectionTitle}>Roadmap Setup</Text>
+        </View>
+        <Text style={styles.meta}>
+          Choose your Domain Guide path and ORIN will build a guided mission plan around it.
+        </Text>
+
         <Text style={styles.label}>Domain (Domain Guide)</Text>
         <View style={styles.chips}>
-          {(domainTree?.primaryCategories || []).map((p) => (
-            <TouchableOpacity key={p} style={[styles.chip, primaryCategory===p && styles.chipActive]} onPress={() => setPrimaryCategory(p)}>
-              <Text style={[styles.chipText, primaryCategory===p && styles.chipTextActive]}>{p}</Text>
+          {(domainTree?.primaryCategories || []).map((item) => (
+            <TouchableOpacity
+              key={item}
+              style={[styles.chip, primaryCategory === item && styles.chipActive]}
+              onPress={() => setPrimaryCategory(item)}
+            >
+              <Text style={[styles.chipText, primaryCategory === item && styles.chipTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
+
         <Text style={styles.label}>Sub-domain</Text>
         <View style={styles.chips}>
-          {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((s) => (
-            <TouchableOpacity key={s} style={[styles.chip, subCategory===s && styles.chipActive]} onPress={() => setSubCategory(s)}>
-              <Text style={[styles.chipText, subCategory===s && styles.chipTextActive]}>{s}</Text>
+          {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
+            <TouchableOpacity
+              key={item}
+              style={[styles.chip, subCategory === item && styles.chipActive]}
+              onPress={() => setSubCategory(item)}
+            >
+              <Text style={[styles.chipText, subCategory === item && styles.chipTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
+
         <Text style={styles.label}>Focus</Text>
         <View style={styles.chips}>
-          {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((f) => (
-            <TouchableOpacity key={f} style={[styles.chip, focus===f && styles.chipActive]} onPress={() => setFocus(f)}>
-              <Text style={[styles.chipText, focus===f && styles.chipTextActive]}>{f}</Text>
+          {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
+            <TouchableOpacity
+              key={item}
+              style={[styles.chip, focus === item && styles.chipActive]}
+              onPress={() => setFocus(item)}
+            >
+              <Text style={[styles.chipText, focus === item && styles.chipTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
+
         <Text style={styles.label}>Custom Goal (optional)</Text>
         <TextInput
           style={styles.input}
@@ -125,82 +281,299 @@ export default function AiCareerRoadmapPage() {
           onChangeText={setCustomGoal}
           placeholder="Example: UPSC Mains, Backend Developer, Corporate Law"
         />
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => load(true)}><Text style={styles.primaryBtnText}>Generate Roadmap</Text></TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="list" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Results</Text></View>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
-        {!loading && !data ? <Text style={styles.meta}>Roadmap unavailable.</Text> : null}
-        {data ? (
-          <>
-            <Text style={styles.resultTitle}>Generated for: {goalLabel || data.goal}</Text>
-            {data.steps.map((step, idx) => (
-              <View key={`${step.stepNumber}-${step.title}`} style={styles.stepRow}>
-                <View style={styles.stepDot}><Text style={styles.stepDotText}>{idx + 1}</Text></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.stepTitle}>{step.title}</Text>
-                  <Text style={styles.meta}>Timeline: Week {idx + 1} - Week {idx + 2}</Text>
-                </View>
-              </View>
-            ))}
-          </>
-        ) : null}
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="flash" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View>
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={async () => {
-            if (!data) {
-              notify("Generate roadmap first.");
-              return;
-            }
-            await saveAiItem({
-              type: "career_roadmap",
-              title: `Roadmap: ${goalLabel || data.goal}`,
-              payload: {
-                primaryCategory,
-                subCategory,
-                focus,
-                goal: data.goal,
-                steps: data.steps || []
-              }
-            });
-            notify("Saved to Saved AI.");
-          }}
-        >
-          <Text style={styles.primaryBtnText}>Save Roadmap</Text>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => load(true)}>
+          <Text style={styles.primaryBtnText}>Generate Journey</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Resources</Text></View><Text style={styles.meta}>Pair each milestone with one mini project and one mentor session.</Text></View>
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="flash" size={16} color="#1F7A4C" />
+          <Text style={styles.sectionTitle}>Today&apos;s Mission</Text>
+        </View>
+        {currentMission ? (
+          <LinearGradient colors={["#FFF9E8", "#FFF2CC"]} style={styles.todayCard}>
+            <View style={styles.todayHeader}>
+              <Text style={styles.todayTag}>🔥 Today&apos;s Task</Text>
+              <Text style={styles.todayXp}>+{MISSION_XP} XP</Text>
+            </View>
+            <Text style={styles.todayTitle}>{currentMission.title}</Text>
+            <Text style={styles.meta}>Complete 1 more task to move your journey ahead today.</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => toggleMission(currentMission.stepNumber)}>
+              <Text style={styles.primaryBtnText}>Start Mission</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+        ) : (
+          <View style={styles.doneCard}>
+            <Text style={styles.doneTitle}>🏆 Journey completed</Text>
+            <Text style={styles.meta}>You completed every mission in this roadmap. Refresh or choose a new goal to keep going.</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="sparkles" size={16} color="#1F7A4C" />
+          <Text style={styles.sectionTitle}>AI Generation</Text>
+        </View>
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {(loading || isGenerating) ? (
+          <View style={styles.generateCard}>
+            <ActivityIndicator size="large" color="#1F7A4C" />
+            <Text style={styles.generateTitle}>🤖 Creating your roadmap...</Text>
+            <Text style={styles.generateMeta}>{GENERATION_STAGES[generationStage]}</Text>
+          </View>
+        ) : null}
+        {!loading && !isGenerating && !data ? <Text style={styles.meta}>Roadmap unavailable.</Text> : null}
+      </View>
+
+      {data ? (
+        <>
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="git-network" size={16} color="#1F7A4C" />
+              <Text style={styles.sectionTitle}>Journey Timeline</Text>
+            </View>
+            <Text style={styles.resultTitle}>Generated for: {customGoal.trim() || goalLabel || data.goal}</Text>
+            <Text style={styles.meta}>🧠 {socialCount} people are on a similar journey in ORIN right now.</Text>
+            <View style={styles.timeline}>
+              <View style={styles.timelineRail} />
+              {data.steps.map((step, index) => {
+                const isCompleted = completedSteps.includes(step.stepNumber);
+                const isCurrent = currentMission?.stepNumber === step.stepNumber;
+                return (
+                  <View key={`${step.stepNumber}-${step.title}`} style={styles.timelineItem}>
+                    <View
+                      style={[
+                        styles.timelineDot,
+                        isCompleted && styles.timelineDotComplete,
+                        isCurrent && styles.timelineDotCurrent
+                      ]}
+                    >
+                      <Ionicons
+                        name={isCompleted ? "checkmark" : index === 0 ? "rocket" : "flag"}
+                        size={14}
+                        color="#fff"
+                      />
+                    </View>
+                    <View style={[styles.missionCard, isCurrent && styles.missionCardCurrent]}>
+                      <View style={styles.missionHeader}>
+                        <Text style={styles.missionWeek}>📅 Week {index + 1}</Text>
+                        <Text style={styles.missionXp}>⚡ +{MISSION_XP} XP</Text>
+                      </View>
+                      <Text style={styles.missionTitle}>{step.title}</Text>
+                      <Text style={styles.meta}>
+                        {isCompleted
+                          ? "✅ Completed. Badge unlocked and streak continues."
+                          : "Upload proof like a project link or screenshot after completing this mission."}
+                      </Text>
+                      <TouchableOpacity
+                        style={[styles.secondaryBtn, isCompleted && styles.completedBtn]}
+                        onPress={() => toggleMission(step.stepNumber)}
+                      >
+                        <Text style={[styles.secondaryBtnText, isCompleted && styles.completedBtnText]}>
+                          {isCompleted ? "Completed" : isCurrent ? "Start Mission" : "Mark Complete"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+
+          <View style={styles.splitRow}>
+            <View style={[styles.section, styles.halfSection]}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="stats-chart" size={16} color="#1F7A4C" />
+                <Text style={styles.sectionTitle}>Progress</Text>
+              </View>
+              <Text style={styles.progressTitle}>🚀 Journey: {progressPct}% complete</Text>
+              <View style={styles.progressTrackLight}>
+                <View style={[styles.progressFillLight, { width: `${progressPct}%` }]} />
+              </View>
+              <Text style={styles.meta}>🔥 Streak: {streakDays} day{streakDays === 1 ? "" : "s"}</Text>
+            </View>
+
+            <View style={[styles.section, styles.halfSection]}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="trending-up" size={16} color="#1F7A4C" />
+                <Text style={styles.sectionTitle}>Future Preview</Text>
+              </View>
+              {futurePreview.map((item) => (
+                <Text key={item} style={styles.previewItem}>
+                  ✔ {item}
+                </Text>
+              ))}
+            </View>
+          </View>
+        </>
+      ) : null}
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="flash" size={16} color="#1F7A4C" />
+          <Text style={styles.sectionTitle}>Actions</Text>
+        </View>
+        <View style={styles.actionRow}>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => currentMission && toggleMission(currentMission.stepNumber)}>
+            <Text style={styles.primaryBtnText}>Continue Journey</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryOutlineBtn}
+            onPress={async () => {
+              if (!data) {
+                notify("Generate roadmap first.");
+                return;
+              }
+              await saveAiItem({
+                type: "career_roadmap",
+                title: `Roadmap: ${customGoal.trim() || goalLabel || data.goal}`,
+                payload: {
+                  primaryCategory,
+                  subCategory,
+                  focus,
+                  goal: data.goal,
+                  completedSteps,
+                  steps: data.steps || []
+                }
+              });
+              notify("Saved to Saved AI.");
+            }}
+          >
+            <Text style={styles.secondaryOutlineBtnText}>Save Roadmap</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="help-circle" size={16} color="#1F7A4C" />
+          <Text style={styles.sectionTitle}>Resources</Text>
+        </View>
+        <Text style={styles.meta}>Pair each milestone with one mini project, one proof upload, and one mentor session for better results.</Text>
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 16, backgroundColor: "#F3F6FB", gap: 10 },
-  pageTitle: { fontSize: 26, fontWeight: "800", color: "#11261E" },
-  pageSub: { color: "#667085" },
-  section: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#E4E7EC", padding: 12, gap: 8 },
+  page: { padding: 16, backgroundColor: "#F3F6FB", gap: 12 },
+  hero: { borderRadius: 24, padding: 18, gap: 12, shadowColor: "#0F5132", shadowOpacity: 0.18, shadowRadius: 16, elevation: 8 },
+  heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  heroBadge: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#F6FFF8", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  heroBadgeText: { color: "#0E6A42", fontWeight: "800", fontSize: 12 },
+  heroMeta: { color: "#FFFFFF", fontWeight: "800" },
+  heroTitle: { fontSize: 28, fontWeight: "900", color: "#FFFFFF" },
+  heroSub: { color: "#E6FFF1", lineHeight: 20 },
+  heroProgressCard: { backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 16, padding: 14, gap: 8 },
+  heroProgressHeader: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  heroProgressLabel: { color: "#FFFFFF", fontWeight: "700", flexShrink: 1 },
+  heroProgressMeta: { color: "#E6FFF1", fontSize: 12 },
+  progressTrack: { height: 10, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.2)", overflow: "hidden" },
+  progressFill: { height: "100%", borderRadius: 999, backgroundColor: "#FFE08A" },
+  section: { backgroundColor: "#FFFFFF", borderRadius: 18, borderWidth: 1, borderColor: "#E4E7EC", padding: 14, gap: 10, shadowColor: "#101828", shadowOpacity: 0.04, shadowRadius: 10, elevation: 2 },
+  splitRow: { gap: 12 },
+  halfSection: { flex: 1 },
   sectionHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
-  sectionTitle: { fontWeight: "800", color: "#1E2B24" },
+  sectionTitle: { fontWeight: "800", color: "#1E2B24", fontSize: 16 },
+  resultTitle: { fontWeight: "800", color: "#1E2B24", fontSize: 16 },
   label: { color: "#344054", fontWeight: "700", marginTop: 4 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "#fff" },
+  chip: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#fff"
+  },
   chipActive: { borderColor: "#1F7A4C", backgroundColor: "#EAF6EF" },
   chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
   chipTextActive: { color: "#1F7A4C" },
-  input: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 10, backgroundColor: "#fff", paddingHorizontal: 12, paddingVertical: 10, color: "#344054" },
-  resultTitle: { fontWeight: "800", color: "#1E2B24" },
-  stepRow: { flexDirection: "row", gap: 10, alignItems: "center", marginTop: 4 },
-  stepDot: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#1F7A4C", alignItems: "center", justifyContent: "center" },
-  stepDotText: { color: "#fff", fontWeight: "800", fontSize: 12 },
-  stepTitle: { color: "#1E2B24", fontWeight: "700" },
-  meta: { color: "#667085" },
+  input: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    color: "#344054"
+  },
+  todayCard: { borderRadius: 16, padding: 16, gap: 8 },
+  todayHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  todayTag: { color: "#8A5B00", fontWeight: "900" },
+  todayXp: { color: "#8A5B00", fontWeight: "800" },
+  todayTitle: { color: "#1E2B24", fontWeight: "800", fontSize: 18, lineHeight: 24 },
+  doneCard: { padding: 16, borderRadius: 16, backgroundColor: "#EEF8F1", gap: 6 },
+  doneTitle: { color: "#0E6A42", fontSize: 18, fontWeight: "800" },
+  generateCard: { borderRadius: 16, backgroundColor: "#F7FBF8", borderWidth: 1, borderColor: "#D9EFE2", padding: 20, alignItems: "center", gap: 10 },
+  generateTitle: { color: "#0E6A42", fontWeight: "800", fontSize: 18 },
+  generateMeta: { color: "#667085" },
+  timeline: { position: "relative", gap: 12, paddingTop: 2 },
+  timelineRail: { position: "absolute", left: 15, top: 0, bottom: 0, width: 2, backgroundColor: "#DCE4DF" },
+  timelineItem: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
+  timelineDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#98A2B3",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1
+  },
+  timelineDotCurrent: { backgroundColor: "#1F7A4C" },
+  timelineDotComplete: { backgroundColor: "#F59E0B" },
+  missionCard: {
+    flex: 1,
+    borderRadius: 16,
+    backgroundColor: "#FAFBFC",
+    borderWidth: 1,
+    borderColor: "#E6EAF0",
+    padding: 14,
+    gap: 8
+  },
+  missionCardCurrent: {
+    backgroundColor: "#F4FBF7",
+    borderColor: "#1F7A4C"
+  },
+  missionHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  missionWeek: { color: "#475467", fontWeight: "700" },
+  missionXp: { color: "#1F7A4C", fontWeight: "800" },
+  missionTitle: { color: "#101828", fontWeight: "800", fontSize: 16, lineHeight: 22 },
+  progressTitle: { color: "#101828", fontWeight: "800" },
+  progressTrackLight: { height: 10, borderRadius: 999, backgroundColor: "#E9EEF5", overflow: "hidden" },
+  progressFillLight: { height: "100%", borderRadius: 999, backgroundColor: "#1F7A4C" },
+  previewItem: { color: "#344054", lineHeight: 22 },
+  meta: { color: "#667085", lineHeight: 20 },
   error: { color: "#B42318" },
-  primaryBtn: { alignSelf: "flex-start", backgroundColor: "#1F7A4C", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
-  primaryBtnText: { color: "#fff", fontWeight: "700" }
+  primaryBtn: {
+    alignSelf: "flex-start",
+    backgroundColor: "#1F7A4C",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11
+  },
+  primaryBtnText: { color: "#fff", fontWeight: "800" },
+  secondaryBtn: {
+    alignSelf: "flex-start",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: "#EAF6EF"
+  },
+  secondaryBtnText: { color: "#1F7A4C", fontWeight: "800" },
+  completedBtn: { backgroundColor: "#FFF3D9" },
+  completedBtnText: { color: "#8A5B00" },
+  secondaryOutlineBtn: {
+    borderWidth: 1,
+    borderColor: "#1F7A4C",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    backgroundColor: "#fff"
+  },
+  secondaryOutlineBtnText: { color: "#1F7A4C", fontWeight: "800" },
+  actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 }
 });
+
