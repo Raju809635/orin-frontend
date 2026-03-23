@@ -13,6 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 
 type Preferences = {
@@ -36,6 +37,7 @@ const defaultPrefs: Preferences = {
 export default function SettingsScreen() {
   const router = useRouter();
   const { logout, user } = useAuth();
+  const { mode, isDark, colors, setMode } = useAppTheme();
   const [prefs, setPrefs] = useState<Preferences>(defaultPrefs);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -116,20 +118,34 @@ export default function SettingsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0B3D2E" />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Settings</Text>
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>Settings</Text>
 
-      <View style={styles.card}>
-        <Text style={styles.section}>Notification Preferences</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.section, { color: colors.text }]}>Display</Text>
+        <RowSwitch
+          label="Dark Mode"
+          value={isDark}
+          labelColor={colors.text}
+          onValueChange={(value) => setMode(value ? "dark" : "light")}
+        />
+        <Text style={[styles.helperText, { color: colors.textMuted }]}>
+          Current theme: {mode === "dark" ? "Dark" : "Light"}
+        </Text>
+      </View>
+
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.section, { color: colors.text }]}>Notification Preferences</Text>
         <RowSwitch
           label="Email Notifications"
+          labelColor={colors.text}
           value={prefs.notificationPreferences.email}
           onValueChange={(value) =>
             setPrefs((p) => ({ ...p, notificationPreferences: { ...p.notificationPreferences, email: value } }))
@@ -137,6 +153,7 @@ export default function SettingsScreen() {
         />
         <RowSwitch
           label="Push Notifications"
+          labelColor={colors.text}
           value={prefs.notificationPreferences.push}
           onValueChange={(value) =>
             setPrefs((p) => ({ ...p, notificationPreferences: { ...p.notificationPreferences, push: value } }))
@@ -144,6 +161,7 @@ export default function SettingsScreen() {
         />
         <RowSwitch
           label="SMS Notifications"
+          labelColor={colors.text}
           value={prefs.notificationPreferences.sms}
           onValueChange={(value) =>
             setPrefs((p) => ({ ...p, notificationPreferences: { ...p.notificationPreferences, sms: value } }))
@@ -151,30 +169,30 @@ export default function SettingsScreen() {
         />
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.section}>Privacy Settings</Text>
-        <Text style={styles.label}>Profile Visibility</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.section, { color: colors.text }]}>Privacy Settings</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Profile Visibility</Text>
         <View style={styles.row}>
           <TouchableOpacity
-            style={[styles.tag, prefs.privacySettings.profileVisibility === "public" && styles.tagActive]}
+            style={[styles.tag, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }, prefs.privacySettings.profileVisibility === "public" && [styles.tagActive, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]]}
             onPress={() =>
               setPrefs((p) => ({ ...p, privacySettings: { ...p.privacySettings, profileVisibility: "public" } }))
             }
           >
             <Text
-              style={[styles.tagText, prefs.privacySettings.profileVisibility === "public" && styles.tagTextActive]}
+              style={[styles.tagText, { color: colors.text }, prefs.privacySettings.profileVisibility === "public" && [styles.tagTextActive, { color: colors.accent }]]}
             >
               Public
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.tag, prefs.privacySettings.profileVisibility === "private" && styles.tagActive]}
+            style={[styles.tag, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }, prefs.privacySettings.profileVisibility === "private" && [styles.tagActive, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]]}
             onPress={() =>
               setPrefs((p) => ({ ...p, privacySettings: { ...p.privacySettings, profileVisibility: "private" } }))
             }
           >
             <Text
-              style={[styles.tagText, prefs.privacySettings.profileVisibility === "private" && styles.tagTextActive]}
+              style={[styles.tagText, { color: colors.text }, prefs.privacySettings.profileVisibility === "private" && [styles.tagTextActive, { color: colors.accent }]]}
             >
               Private
             </Text>
@@ -182,6 +200,7 @@ export default function SettingsScreen() {
         </View>
         <RowSwitch
           label="Show Email on Profile"
+          labelColor={colors.text}
           value={prefs.privacySettings.showEmail}
           onValueChange={(value) =>
             setPrefs((p) => ({ ...p, privacySettings: { ...p.privacySettings, showEmail: value } }))
@@ -189,6 +208,7 @@ export default function SettingsScreen() {
         />
         <RowSwitch
           label="Show Session History"
+          labelColor={colors.text}
           value={prefs.privacySettings.showSessionHistory}
           onValueChange={(value) =>
             setPrefs((p) => ({ ...p, privacySettings: { ...p.privacySettings, showSessionHistory: value } }))
@@ -196,91 +216,93 @@ export default function SettingsScreen() {
         />
       </View>
 
-      <TouchableOpacity style={styles.saveButton} onPress={savePreferences} disabled={saving}>
-        <Text style={styles.saveButtonText}>{saving ? "Saving..." : "Save Preferences"}</Text>
+      <TouchableOpacity style={[styles.saveButton, { backgroundColor: colors.accent }]} onPress={savePreferences} disabled={saving}>
+        <Text style={[styles.saveButtonText, { color: colors.accentText }]}>{saving ? "Saving..." : "Save Preferences"}</Text>
       </TouchableOpacity>
 
-      <View style={styles.card}>
-        <Text style={styles.section}>Account</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.section, { color: colors.text }]}>Account</Text>
         <TouchableOpacity
-          style={styles.linkRow}
+          style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
           onPress={() => router.push((user?.role === "mentor" ? "/mentor-profile" : "/student-profile") as never)}
         >
-          <Text style={styles.linkText}>My Profile</Text>
+          <Text style={[styles.linkText, { color: colors.text }]}>My Profile</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.section}>Preferences</Text>
-        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/notifications" as never)}>
-          <Text style={styles.linkText}>Notifications</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.section, { color: colors.text }]}>Preferences</Text>
+        <TouchableOpacity style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/notifications" as never)}>
+          <Text style={[styles.linkText, { color: colors.text }]}>Notifications</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/saved-ai" as never)}>
-          <Text style={styles.linkText}>Saved AI</Text>
+        <TouchableOpacity style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/saved-ai" as never)}>
+          <Text style={[styles.linkText, { color: colors.text }]}>Saved AI</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/saved-posts" as never)}>
-          <Text style={styles.linkText}>Saved Posts</Text>
+        <TouchableOpacity style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/saved-posts" as never)}>
+          <Text style={[styles.linkText, { color: colors.text }]}>Saved Posts</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.section}>Support & Legal</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.section, { color: colors.text }]}>Support & Legal</Text>
         {user?.role === "student" ? (
-          <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/complaints" as never)}>
-            <Text style={styles.linkText}>Complaints</Text>
+          <TouchableOpacity style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/complaints" as never)}>
+            <Text style={[styles.linkText, { color: colors.text }]}>Complaints</Text>
           </TouchableOpacity>
         ) : null}
-        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/help" as never)}>
-          <Text style={styles.linkText}>Help & Support</Text>
+        <TouchableOpacity style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/help" as never)}>
+          <Text style={[styles.linkText, { color: colors.text }]}>Help & Support</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/privacy" as never)}>
-          <Text style={styles.linkText}>Privacy Policy</Text>
+        <TouchableOpacity style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/privacy" as never)}>
+          <Text style={[styles.linkText, { color: colors.text }]}>Privacy Policy</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/terms" as never)}>
-          <Text style={styles.linkText}>Terms of Use</Text>
+        <TouchableOpacity style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/terms" as never)}>
+          <Text style={[styles.linkText, { color: colors.text }]}>Terms of Use</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/mentor-policy" as never)}>
-          <Text style={styles.linkText}>Mentor Policy</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.section}>About</Text>
-        <TouchableOpacity style={styles.linkRow} onPress={() => router.push("/about" as never)}>
-          <Text style={styles.linkText}>About ORIN</Text>
+        <TouchableOpacity style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/mentor-policy" as never)}>
+          <Text style={[styles.linkText, { color: colors.text }]}>Mentor Policy</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.section}>Change Password</Text>
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.section, { color: colors.text }]}>About</Text>
+        <TouchableOpacity style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/about" as never)}>
+          <Text style={[styles.linkText, { color: colors.text }]}>About ORIN</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.section, { color: colors.text }]}>Change Password</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.text }]}
           placeholder="Current password"
+          placeholderTextColor={colors.textMuted}
           secureTextEntry
           value={currentPassword}
           onChangeText={setCurrentPassword}
         />
         <TextInput
-          style={styles.input}
+          style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.text }]}
           placeholder="New password"
+          placeholderTextColor={colors.textMuted}
           secureTextEntry
           value={newPassword}
           onChangeText={setNewPassword}
         />
-        <TouchableOpacity style={styles.darkButton} onPress={changePassword} disabled={changingPassword}>
-          <Text style={styles.darkButtonText}>{changingPassword ? "Updating..." : "Change Password"}</Text>
+        <TouchableOpacity style={[styles.darkButton, { backgroundColor: colors.text }]} onPress={changePassword} disabled={changingPassword}>
+          <Text style={[styles.darkButtonText, { color: colors.surface }]}>{changingPassword ? "Updating..." : "Change Password"}</Text>
         </TouchableOpacity>
       </View>
 
-      <TouchableOpacity style={styles.logoutButton} onPress={logout}>
-        <Text style={styles.logoutButtonText}>Logout</Text>
+      <TouchableOpacity style={[styles.logoutButton, { backgroundColor: colors.surfaceAlt }]} onPress={logout}>
+        <Text style={[styles.logoutButtonText, { color: colors.text }]}>Logout</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.deleteButton} onPress={confirmDeleteAccount}>
+      <TouchableOpacity style={[styles.deleteButton, { backgroundColor: isDark ? "#3A1F1F" : "#FEE4E2" }]} onPress={confirmDeleteAccount}>
         <Text style={styles.deleteButtonText}>Delete Account</Text>
       </TouchableOpacity>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
     </ScrollView>
   );
 }
@@ -288,15 +310,17 @@ export default function SettingsScreen() {
 function RowSwitch({
   label,
   value,
+  labelColor,
   onValueChange
 }: {
   label: string;
   value: boolean;
+  labelColor?: string;
   onValueChange: (value: boolean) => void;
 }) {
   return (
     <View style={styles.rowBetween}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, labelColor ? { color: labelColor } : null]}>{label}</Text>
       <Switch value={value} onValueChange={onValueChange} />
     </View>
   );
@@ -351,6 +375,7 @@ const styles = StyleSheet.create({
   deleteButton: { backgroundColor: "#FEE4E2", borderRadius: 12, paddingVertical: 12, alignItems: "center" },
   deleteButtonText: { color: "#B42318", fontWeight: "700" },
   error: { marginTop: 10, color: "#B42318", textAlign: "center" },
+  helperText: { marginTop: -2, marginBottom: 2, fontSize: 12, fontWeight: "600" },
   linkRow: {
     borderWidth: 1,
     borderColor: "#E4E7EC",

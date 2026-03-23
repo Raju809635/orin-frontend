@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import GlobalHeader from "@/components/global-header";
 
 type CounterpartUser = {
@@ -110,6 +111,7 @@ export default function ChatScreen() {
   const params = useLocalSearchParams<{ userId?: string }>();
   const requestedUserId = useMemo(() => (params.userId || "").trim(), [params.userId]);
   const { user } = useAuth();
+  const { colors } = useAppTheme();
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [confirmedMentors, setConfirmedMentors] = useState<CounterpartUser[]>([]);
@@ -133,14 +135,10 @@ export default function ChatScreen() {
   );
 
   const filteredConversations = useMemo(() => {
-    return conversations.filter((item) => {
-      const isMentorshipConversation =
-        user?.role === "mentor"
-          ? item.counterpart.role === "student" || item.counterpart.role === "mentor"
-          : item.counterpart.role === "mentor";
-      return activeTab === "Mentors" ? isMentorshipConversation : !isMentorshipConversation;
-    });
-  }, [activeTab, conversations, user?.role]);
+    return conversations.filter((item) =>
+      activeTab === "Mentors" ? item.counterpart.role === "mentor" : item.counterpart.role !== "mentor"
+    );
+  }, [activeTab, conversations]);
 
   useEffect(() => {
     if (!filteredConversations.length) return;
@@ -337,34 +335,34 @@ export default function ChatScreen() {
 
   if (user?.role !== "student" && user?.role !== "mentor") {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>Chat is only available for students and mentors.</Text>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={[styles.error, { color: colors.danger }]}>Chat is only available for students and mentors.</Text>
       </View>
     );
   }
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#1F7A4C" />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 84 : 0}
     >
       <GlobalHeader searchPlaceholder="Search mentors or circle chats" />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.screenHeader}>
-          <Text style={styles.heading}>Messages</Text>
-          <Text style={styles.subTitle}>Stay close to mentors and your circle from one clean conversation hub.</Text>
+          <Text style={[styles.heading, { color: colors.text }]}>Messages</Text>
+          <Text style={[styles.subTitle, { color: colors.textMuted }]}>Stay close to mentors and your circle from one clean conversation hub.</Text>
         </View>
 
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
         <View style={styles.tabRow}>
           {MESSAGE_TABS.map((tab) => {
@@ -372,29 +370,33 @@ export default function ChatScreen() {
             return (
               <TouchableOpacity
                 key={tab}
-                style={[styles.tabChip, active && styles.tabChipActive]}
+                style={[
+                  styles.tabChip,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                  active && [styles.tabChipActive, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]
+                ]}
                 onPress={() => setActiveTab(tab)}
               >
-                <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab}</Text>
+                <Text style={[styles.tabChipText, { color: colors.textMuted }, active && [styles.tabChipTextActive, { color: colors.accent }]]}>{tab}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
 
         <View style={styles.quickActionsRow}>
-          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push("/mentors" as never)}>
-            <Ionicons name="search-outline" size={16} color="#1F7A4C" />
+          <TouchableOpacity style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => router.push("/mentors" as never)}>
+            <Ionicons name="search-outline" size={16} color={colors.accent} />
             <Text style={styles.quickActionText}>{activeTab === "Mentors" ? "Find Mentor" : "Find People"}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push("/network?section=connections" as never)}>
-            <Ionicons name="add-outline" size={16} color="#1F7A4C" />
+          <TouchableOpacity style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => router.push("/network?section=connections" as never)}>
+            <Ionicons name="add-outline" size={16} color={colors.accent} />
             <Text style={styles.quickActionText}>New Chat</Text>
           </TouchableOpacity>
         </View>
 
         {user?.role === "student" && activeTab === "Mentors" ? (
           <>
-            <Text style={styles.sectionTitle}>Confirmed Mentors</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Confirmed Mentors</Text>
             {confirmedMentors.length > 0 ? (
               <ScrollView
                 horizontal
@@ -403,34 +405,34 @@ export default function ChatScreen() {
                 contentContainerStyle={styles.confirmedListContent}
               >
                 {confirmedMentors.map((item) => (
-                  <TouchableOpacity key={item._id} style={styles.mentorProfileCard} onPress={() => setActiveUserId(item._id)}>
+                  <TouchableOpacity key={item._id} style={[styles.mentorProfileCard, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => setActiveUserId(item._id)}>
                     {item.profilePhotoUrl ? (
                       <Image source={{ uri: item.profilePhotoUrl }} style={styles.avatar} />
                     ) : (
-                      <View style={[styles.avatar, styles.avatarFallback]}>
+                      <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.accentSoft }]}>
                         <Text style={styles.avatarText}>{getInitial(item.name)}</Text>
                       </View>
                     )}
-                    <Text style={styles.mentorName} numberOfLines={1}>
+                    <Text style={[styles.mentorName, { color: colors.text }]} numberOfLines={1}>
                       {item.name}
                     </Text>
-                    <Text style={styles.mentorMail} numberOfLines={1}>
+                    <Text style={[styles.mentorMail, { color: colors.textMuted }]} numberOfLines={1}>
                       {item.email || "Confirmed mentor"}
                     </Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
             ) : (
-              <View style={styles.emptyCard}>
+              <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                 <Text style={styles.emptyEmoji}>💬</Text>
-                <Text style={styles.emptyTitle}>Start a conversation</Text>
-                <Text style={styles.emptyText}>Connect with people from Network or confirm a mentor session to begin chatting.</Text>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>Start a conversation</Text>
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>Connect with people from Network or confirm a mentor session to begin chatting.</Text>
               </View>
             )}
           </>
         ) : null}
 
-        <Text style={styles.sectionTitle}>Recent Chats</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Chats</Text>
         <View style={styles.conversationList}>
           {filteredConversations.length > 0 ? (
             filteredConversations.map((item) => {
@@ -438,14 +440,18 @@ export default function ChatScreen() {
               return (
                 <TouchableOpacity
                   key={item.counterpartId}
-                  style={[styles.conversationRow, isActive && styles.conversationRowActive]}
+                  style={[
+                    styles.conversationRow,
+                    { backgroundColor: colors.surface, borderColor: colors.border },
+                    isActive && [styles.conversationRowActive, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]
+                  ]}
                   onPress={() => setActiveUserId(item.counterpartId)}
                 >
                   <View>
                     {item.counterpart.profilePhotoUrl ? (
                       <Image source={{ uri: item.counterpart.profilePhotoUrl }} style={styles.avatarLarge} />
                     ) : (
-                      <View style={[styles.avatarLarge, styles.avatarFallback]}>
+                      <View style={[styles.avatarLarge, styles.avatarFallback, { backgroundColor: colors.accentSoft }]}>
                         <Text style={styles.avatarText}>{getInitial(item.counterpart.name)}</Text>
                       </View>
                     )}
@@ -453,10 +459,10 @@ export default function ChatScreen() {
                   </View>
                   <View style={styles.conversationBody}>
                     <View style={styles.conversationTopLine}>
-                      <Text style={styles.conversationName}>{item.counterpart.name}</Text>
-                      <Text style={styles.conversationTime}>{formatConversationTime(item.lastMessageAt)}</Text>
+                      <Text style={[styles.conversationName, { color: colors.text }]}>{item.counterpart.name}</Text>
+                      <Text style={[styles.conversationTime, { color: colors.textMuted }]}>{formatConversationTime(item.lastMessageAt)}</Text>
                     </View>
-                    <Text style={styles.conversationMeta}>
+                    <Text style={[styles.conversationMeta, { color: colors.textMuted }]}>
                       {item.counterpart.isTyping
                         ? `${item.counterpart.name.split(" ")[0]} is typing...`
                         : item.lastMessage || "Start chatting"}
@@ -471,36 +477,36 @@ export default function ChatScreen() {
               );
             })
           ) : (
-            <View style={styles.emptyCard}>
+            <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <Text style={styles.emptyEmoji}>💬</Text>
-              <Text style={styles.emptyTitle}>No {activeTab.toLowerCase()} conversations yet</Text>
-              <Text style={styles.emptyText}>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No {activeTab.toLowerCase()} conversations yet</Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
                 {activeTab === "Mentors"
                   ? "Connect with mentors or confirm a mentorship session to start chatting."
-                  : "Connect with people from your network to start your first circle chat."}
+                  : "Connect with accepted circle friends to start your first circle chat."}
               </Text>
             </View>
           )}
         </View>
 
-        <View style={styles.threadCard}>
-          <View style={styles.threadHeader}>
+        <View style={[styles.threadCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={[styles.threadHeader, { borderBottomColor: colors.border }]}>
             <View style={styles.threadIdentity}>
               {activeUser?.profilePhotoUrl ? (
                 <Image source={{ uri: activeUser.profilePhotoUrl }} style={styles.avatarLarge} />
               ) : (
-                <View style={[styles.avatarLarge, styles.avatarFallback]}>
+                <View style={[styles.avatarLarge, styles.avatarFallback, { backgroundColor: colors.accentSoft }]}>
                   <Text style={styles.avatarText}>{getInitial(activeUser?.name)}</Text>
                 </View>
               )}
               <View style={styles.threadHeaderText}>
-                <Text style={styles.threadTitle}>{activeUser?.name || "Select a conversation"}</Text>
-                <Text style={styles.threadPresence}>{formatPresence(activeUser, activeTyping)}</Text>
+                <Text style={[styles.threadTitle, { color: colors.text }]}>{activeUser?.name || "Select a conversation"}</Text>
+                <Text style={[styles.threadPresence, { color: colors.textMuted }]}>{formatPresence(activeUser, activeTyping)}</Text>
               </View>
             </View>
             {activeUser?.isOnline ? (
-              <View style={styles.threadOnlinePill}>
-                <Text style={styles.threadOnlineText}>Online</Text>
+              <View style={[styles.threadOnlinePill, { backgroundColor: colors.accentSoft }]}>
+                <Text style={[styles.threadOnlineText, { color: colors.accent }]}>Online</Text>
               </View>
             ) : null}
           </View>
@@ -513,7 +519,14 @@ export default function ChatScreen() {
                 const statusText = item.readAt ? "Seen" : "Sent";
                 return (
                   <View key={item._id} style={[styles.messageRow, mine ? styles.messageRowMine : styles.messageRowOther]}>
-                    <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleOther]}>
+                    <View
+                      style={[
+                        styles.bubble,
+                        mine
+                          ? [styles.bubbleMine, { backgroundColor: colors.accent }]
+                          : [styles.bubbleOther, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]
+                      ]}
+                    >
                       <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>
                       <View style={styles.bubbleFooter}>
                         <Text style={[styles.bubbleMeta, mine && styles.bubbleMetaMine]}>
@@ -537,39 +550,40 @@ export default function ChatScreen() {
             ) : (
               <View style={styles.emptyThread}>
                 <Text style={styles.emptyEmoji}>💬</Text>
-                <Text style={styles.emptyTitle}>Start a conversation</Text>
-                <Text style={styles.emptyText}>Choose a chat above and send the first message.</Text>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>Start a conversation</Text>
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>Choose a chat above and send the first message.</Text>
               </View>
             )}
           </View>
 
           {showEmojiBar ? (
-            <View style={styles.emojiBar}>
+            <View style={[styles.emojiBar, { borderTopColor: colors.border }]}>
               {QUICK_EMOJIS.map((emoji) => (
-                <TouchableOpacity key={emoji} style={styles.emojiBtn} onPress={() => appendEmoji(emoji)}>
+                <TouchableOpacity key={emoji} style={[styles.emojiBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => appendEmoji(emoji)}>
                   <Text style={styles.emojiText}>{emoji}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           ) : null}
 
-          <View style={styles.composer}>
-            <TouchableOpacity style={styles.iconBtn} onPress={handleAttachment} disabled={!activeUserId}>
-              <Ionicons name="add" size={20} color="#475467" />
+          <View style={[styles.composer, { borderTopColor: colors.border }]}>
+            <TouchableOpacity style={[styles.iconBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={handleAttachment} disabled={!activeUserId}>
+              <Ionicons name="add" size={20} color={colors.textMuted} />
             </TouchableOpacity>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
               value={text}
               onChangeText={handleTextChange}
               placeholder={activeUserId ? "Message..." : "Select a chat first"}
+              placeholderTextColor={colors.textMuted}
               editable={!!activeUserId && !sending}
               multiline
             />
-            <TouchableOpacity style={styles.iconBtn} onPress={() => setShowEmojiBar((prev) => !prev)} disabled={!activeUserId}>
-              <Ionicons name="happy-outline" size={20} color="#475467" />
+            <TouchableOpacity style={[styles.iconBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => setShowEmojiBar((prev) => !prev)} disabled={!activeUserId}>
+              <Ionicons name="happy-outline" size={20} color={colors.textMuted} />
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.sendBtn, (!activeUserId || sending || !text.trim()) && styles.sendBtnDisabled]}
+              style={[styles.sendBtn, { backgroundColor: colors.accent }, (!activeUserId || sending || !text.trim()) && styles.sendBtnDisabled]}
               onPress={sendMessage}
               disabled={!activeUserId || sending || !text.trim()}
             >

@@ -13,6 +13,7 @@ import { DrawerActions } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
+import { useAppTheme } from "@/context/ThemeContext";
 
 type GlobalHeaderProps = {
   searchValue?: string;
@@ -39,6 +40,7 @@ export default function GlobalHeader({
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { colors } = useAppTheme();
   const [profilePhotoUrl, setProfilePhotoUrl] = useState("");
   const [messageUnreadCount, setMessageUnreadCount] = useState(0);
   const [notificationUnreadCount, setNotificationUnreadCount] = useState(0);
@@ -101,7 +103,7 @@ export default function GlobalHeader({
   }
 
   return (
-    <View style={[styles.safeWrap, { paddingTop: insets.top + 8 }]}>
+    <View style={[styles.safeWrap, { paddingTop: insets.top + 8, backgroundColor: colors.background }]}>
       <View style={styles.row}>
         <TouchableOpacity
           style={styles.avatarTap}
@@ -111,18 +113,18 @@ export default function GlobalHeader({
             {profilePhotoUrl ? (
               <Image source={{ uri: profilePhotoUrl }} style={styles.avatar} />
             ) : (
-              <View style={[styles.avatar, styles.avatarFallback]}>
-                <Text style={styles.avatarFallbackText}>{user?.name?.charAt(0)?.toUpperCase() || "O"}</Text>
+              <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
+                <Text style={[styles.avatarFallbackText, { color: colors.accent }]}>{user?.name?.charAt(0)?.toUpperCase() || "O"}</Text>
               </View>
             )}
           </TouchableOpacity>
 
-        <View style={styles.searchWrap}>
-          <Ionicons name="search" size={18} color="#667085" />
+        <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+          <Ionicons name="search" size={18} color={colors.textMuted} />
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: colors.text }]}
             placeholder={searchPlaceholder}
-            placeholderTextColor="#98A2B3"
+            placeholderTextColor={colors.textMuted}
             value={currentSearchValue}
             onChangeText={handleSearchChange}
             onSubmitEditing={onSubmitSearch}
@@ -130,8 +132,8 @@ export default function GlobalHeader({
           />
         </View>
 
-        <TouchableOpacity style={styles.messageButton} onPress={() => router.push("/chat" as never)}>
-          <Ionicons name="chatbubble-ellipses-outline" size={22} color="#1E2B24" />
+        <TouchableOpacity style={[styles.messageButton, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/chat" as never)}>
+          <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.text} />
           {messageUnreadCount > 0 ? (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{messageUnreadCount > 99 ? "99+" : messageUnreadCount}</Text>

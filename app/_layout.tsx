@@ -19,6 +19,7 @@ import { useNavigation, usePathname, useRouter } from "expo-router";
 import { DrawerContentScrollView, DrawerItem, DrawerContentComponentProps } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { ThemeProvider, useAppTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -38,6 +39,7 @@ function RootDrawer() {
   const router = useRouter();
   const navigation = useNavigation();
   const pathname = usePathname();
+  const { colors } = useAppTheme();
   const { user, isAuthenticated, isBootstrapping, logout } = useAuth();
   const [drawerPhotoUrl, setDrawerPhotoUrl] = useState("");
   const [drawerReputation, setDrawerReputation] = useState<{ levelTag?: string; xp?: number; score?: number } | null>(null);
@@ -280,9 +282,9 @@ function RootDrawer() {
 
   if (isBootstrapping) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#1F7A4C" />
-        <Text style={styles.loadingText}>Loading ORIN...</Text>
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={[styles.loadingText, { color: colors.text }]}>Loading ORIN...</Text>
       </View>
     );
   }
@@ -297,23 +299,23 @@ function RootDrawer() {
     return (
       <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContent}>
         {user ? (
-          <View style={styles.drawerProfileCard}>
+          <View style={[styles.drawerProfileCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
             <View style={styles.drawerProfileHead}>
               {drawerPhotoUrl ? (
                 <Image source={{ uri: drawerPhotoUrl }} style={styles.drawerAvatarImage} />
               ) : (
-                <View style={styles.drawerAvatarFallback}>
-                  <Text style={styles.drawerAvatarText}>{user.name?.charAt(0)?.toUpperCase() || "U"}</Text>
+                <View style={[styles.drawerAvatarFallback, { borderColor: colors.border, backgroundColor: colors.accentSoft }]}>
+                  <Text style={[styles.drawerAvatarText, { color: colors.accent }]}>{user.name?.charAt(0)?.toUpperCase() || "U"}</Text>
                 </View>
               )}
               <View style={styles.drawerProfileTextWrap}>
-            <Text style={styles.drawerProfileName}>{user.name || "ORIN User"}</Text>
-            <Text style={styles.drawerProfileRole}>{user.role === "mentor" ? "Mentor" : "Student"}</Text>
-            <Text style={styles.drawerProfileMeta}>
+            <Text style={[styles.drawerProfileName, { color: colors.text }]}>{user.name || "ORIN User"}</Text>
+            <Text style={[styles.drawerProfileRole, { color: colors.textMuted }]}>{user.role === "mentor" ? "Mentor" : "Student"}</Text>
+            <Text style={[styles.drawerProfileMeta, { color: colors.text }]}>
               {drawerReputation?.levelTag || "Starter"} | XP {drawerReputation?.xp ?? drawerReputation?.score ?? 0}
             </Text>
             {user.role === "mentor" ? (
-              <Text style={styles.drawerProfileMeta}>
+              <Text style={[styles.drawerProfileMeta, { color: colors.text }]}>
                 Rating {Number(drawerMentorStats?.rating || 0).toFixed(1)} | Students Mentored {drawerMentorStats?.studentsMentored ?? 0}
               </Text>
             ) : null}
@@ -322,7 +324,7 @@ function RootDrawer() {
             <TouchableOpacity
               onPress={() => openDrawerRoute(profilePath)}
             >
-            <Text style={styles.drawerProfileLink}>View Profile</Text>
+            <Text style={[styles.drawerProfileLink, { color: colors.accent }]}>View Profile</Text>
             </TouchableOpacity>
           </View>
         ) : null}
@@ -385,13 +387,17 @@ function RootDrawer() {
   };
 
   return (
-    <View style={styles.appRoot}>
+    <View style={[styles.appRoot, { backgroundColor: colors.background }]}>
       <View style={styles.contentArea}>
         <Drawer
           drawerContent={renderDrawerContent}
           screenOptions={{
             headerShown: false,
-            drawerActiveTintColor: "#1F7A4C"
+            drawerActiveTintColor: colors.accent,
+            drawerInactiveTintColor: colors.textMuted,
+            drawerStyle: { backgroundColor: colors.surface },
+            drawerActiveBackgroundColor: colors.accentSoft,
+            sceneStyle: { backgroundColor: colors.background }
           }}
         >
           <Drawer.Screen name="index" options={{ title: "Home", drawerItemStyle: { display: "none" } }} />
@@ -448,7 +454,7 @@ function RootDrawer() {
         </Drawer>
       </View>
       {showBottomNav() ? (
-        <View style={[styles.bottomNav, { paddingBottom: Math.max(insets.bottom, 8), minHeight: 66 + Math.max(insets.bottom, 8) }]}>
+        <View style={[styles.bottomNav, { backgroundColor: colors.surface, borderColor: colors.border, paddingBottom: Math.max(insets.bottom, 8), minHeight: 66 + Math.max(insets.bottom, 8) }]}>
           {tabs.map((tab) => {
             const active = isTabActive(tab.key, tab.path);
             return (
@@ -456,6 +462,7 @@ function RootDrawer() {
                 key={tab.key}
                 tab={tab}
                 active={active}
+                colors={colors}
                 onPress={() => router.push(tab.path as never)}
               />
             );
@@ -469,10 +476,12 @@ function RootDrawer() {
 function AnimatedTabButton({
   tab,
   active,
+  colors,
   onPress
 }: {
   tab: { key: string; label: string; icon: string; path: string };
   active: boolean;
+  colors: { accent: string; textMuted: string; accentSoft: string; surfaceAlt: string; border: string };
   onPress: () => void;
 }) {
   const scale = useRef(new Animated.Value(active ? 1 : 0.96)).current;
@@ -502,15 +511,15 @@ function AnimatedTabButton({
       <Animated.View
         style={[
           styles.bottomNavItem,
-          isCenter && styles.bottomNavItemCenter,
-          active && styles.bottomNavItemActive,
+          isCenter && [styles.bottomNavItemCenter, { backgroundColor: colors.accentSoft, borderColor: colors.border }],
+          active && [styles.bottomNavItemActive, { backgroundColor: colors.surfaceAlt }],
           {
             transform: [{ scale }, { translateY: lift }]
           }
         ]}
       >
-        <Ionicons name={tab.icon as any} size={isCenter ? 22 : 20} color={active ? "#1F7A4C" : "#667085"} />
-        <Text style={[styles.bottomNavLabel, active && styles.bottomNavLabelActive]}>{tab.label}</Text>
+        <Ionicons name={tab.icon as any} size={isCenter ? 22 : 20} color={active ? colors.accent : colors.textMuted} />
+        <Text style={[styles.bottomNavLabel, { color: colors.textMuted }, active && [styles.bottomNavLabelActive, { color: colors.accent }]]}>{tab.label}</Text>
       </Animated.View>
     </TouchableOpacity>
   );
@@ -518,9 +527,11 @@ function AnimatedTabButton({
 
 export default function Layout() {
   return (
-    <AuthProvider>
-      <RootDrawer />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <RootDrawer />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

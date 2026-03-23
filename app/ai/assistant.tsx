@@ -6,6 +6,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
+import { useAppTheme } from "@/context/ThemeContext";
 
 type AiHistoryItem = { _id?: string; prompt: string; response: string; createdAt?: string };
 type AssistantTab = "general" | "personalized";
@@ -39,6 +40,7 @@ export default function AiAssistantEntryPage() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<AssistantTab>("personalized");
+  const { colors, isDark } = useAppTheme();
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -81,7 +83,7 @@ export default function AiAssistantEntryPage() {
           assistantMode: activeTab
         }
       });
-      const answer = res.data?.answer || "";
+      const answer = String(res.data?.answer || "").trim() || "I could not generate a good answer right now. Please try again.";
       setHistory((prev) => [{ ...pending, response: answer }, ...prev.filter((item) => item !== pending)]);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
     } catch (e: any) {
@@ -106,6 +108,7 @@ export default function AiAssistantEntryPage() {
         scrollRef.current = ref;
       }}
       contentContainerStyle={styles.page}
+      style={{ backgroundColor: colors.background }}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
       <LinearGradient colors={["#3B5BFF", "#6C63FF", "#8F67FF"]} style={styles.hero}>
@@ -129,7 +132,15 @@ export default function AiAssistantEntryPage() {
         {ASSISTANT_TABS.map((tab) => {
           const active = activeTab === tab.key;
           return (
-            <TouchableOpacity key={tab.key} style={[styles.tabChip, active && styles.tabChipActive]} onPress={() => setActiveTab(tab.key)}>
+            <TouchableOpacity
+              key={tab.key}
+              style={[
+                styles.tabChip,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+                active && { borderColor: "#5B4DFF", backgroundColor: isDark ? "#261E49" : "#EEF2FF" }
+              ]}
+              onPress={() => setActiveTab(tab.key)}
+            >
               <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab.label}</Text>
             </TouchableOpacity>
           );
@@ -137,8 +148,8 @@ export default function AiAssistantEntryPage() {
       </View>
 
       {activeTab === "personalized" ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Personalized Actions</Text>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Personalized Actions</Text>
           <View style={styles.actionRow}>
             <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/skill-gap" as never)}>
               <Text style={styles.secondaryBtnText}>Analyze Skills</Text>
@@ -150,12 +161,12 @@ export default function AiAssistantEntryPage() {
               <Text style={styles.secondaryBtnText}>Get Projects</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.helperText}>Use Personalized mode when you want ORIN to respond based on your goal and journey state.</Text>
+          <Text style={[styles.helperText, { color: colors.textMuted }]}>Use Personalized mode when you want ORIN to respond based on your goal and journey state.</Text>
         </View>
       ) : null}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{activeTab === "general" ? "General Questions" : "Suggested Personalized Prompts"}</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{activeTab === "general" ? "General Questions" : "Suggested Personalized Prompts"}</Text>
         <View style={styles.chips}>
           {suggestedPrompts.map((item) => (
             <TouchableOpacity key={item} style={styles.chip} onPress={() => sendQuestion(item)}>
@@ -165,15 +176,15 @@ export default function AiAssistantEntryPage() {
         </View>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Conversation</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Conversation</Text>
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
         {loading ? <ActivityIndicator size="large" color="#5B4DFF" /> : null}
         {!loading && !conversations.length && !sending ? (
           <View style={styles.emptyState}>
             <Ionicons name="chatbubbles-outline" size={28} color="#98A2B3" />
-            <Text style={styles.emptyTitle}>{activeTab === "general" ? "Start your AI Q&A" : "Start your AI mentor chat"}</Text>
-            <Text style={styles.meta}>
+            <Text style={[styles.emptyTitle, { color: colors.text }]}>{activeTab === "general" ? "Start your AI Q&A" : "Start your AI mentor chat"}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
               {activeTab === "general"
                 ? "Ask anything and get a clean, direct answer."
                 : "Ask a goal-based question and ORIN will connect it to your next action."}
@@ -183,24 +194,31 @@ export default function AiAssistantEntryPage() {
 
         {conversations.map((item, index) => (
           <View key={`${item._id || index}-${item.createdAt || index}`} style={styles.chatGroup}>
-            <View style={[styles.bubble, styles.userBubble]}>
+            <View style={[styles.bubble, styles.userBubble, { backgroundColor: isDark ? "#253142" : "#F2F4F7" }]}>
               <Text style={styles.userBubbleText}>{item.prompt}</Text>
             </View>
-            <LinearGradient colors={["#EEF2FF", "#F5F3FF"]} style={[styles.bubble, styles.aiBubble]}>
+            <LinearGradient
+              colors={activeTab === "general" ? ["#E8F0FF", "#F5F7FF"] : ["#EEF2FF", "#F5F3FF"]}
+              style={[styles.bubble, styles.aiBubble, activeTab === "general" && styles.aiBubbleWide]}
+            >
               {item.response ? (
                 <>
                   <Text style={styles.aiIntro}>{activeTab === "general" ? "Answer" : "Here is your guided plan"}</Text>
-                  {item.response
-                    .split(/\n+/)
-                    .map((line) => line.trim())
-                    .filter(Boolean)
-                    .slice(0, 6)
-                    .map((line, lineIndex) => (
-                      <View key={`${line}-${lineIndex}`} style={styles.aiStepRow}>
-                        <Ionicons name={activeTab === "general" ? "help-circle-outline" : "sparkles"} size={14} color="#5B4DFF" />
-                        <Text style={styles.aiBubbleText}>{line.replace(/^[\-\*\d\.\s]+/, "").trim()}</Text>
-                      </View>
-                    ))}
+                  {activeTab === "general" ? (
+                    <Text style={styles.aiGeneralText}>{item.response}</Text>
+                  ) : (
+                    item.response
+                      .split(/\n+/)
+                      .map((line) => line.trim())
+                      .filter(Boolean)
+                      .slice(0, 6)
+                      .map((line, lineIndex) => (
+                        <View key={`${line}-${lineIndex}`} style={styles.aiStepRow}>
+                          <Ionicons name="sparkles" size={14} color="#5B4DFF" />
+                          <Text style={styles.aiBubbleText}>{line.replace(/^[\-\*\d\.\s]+/, "").trim()}</Text>
+                        </View>
+                      ))
+                  )}
                 </>
               ) : (
                 <View style={styles.typingRow}>
@@ -213,7 +231,7 @@ export default function AiAssistantEntryPage() {
         ))}
 
         {activeTab === "personalized" && latest?.response ? (
-          <View style={styles.actionCard}>
+          <View style={[styles.actionCard, { backgroundColor: isDark ? "#1B1E36" : "#F8F7FF", borderColor: isDark ? "#31395C" : "#DBD8FF" }]}>
             <Text style={styles.actionTitle}>Turn this into action</Text>
             <View style={styles.actionRow}>
               <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/skill-gap" as never)}>
@@ -239,22 +257,23 @@ export default function AiAssistantEntryPage() {
         ) : null}
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>{activeTab === "general" ? "Ask anything" : "Ask ORIN about your journey"}</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{activeTab === "general" ? "Ask anything" : "Ask ORIN about your journey"}</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.text }]}
           multiline
           value={message}
           onChangeText={setMessage}
           placeholder={activeTab === "general" ? "Ask any general question..." : "What do you want to achieve today?"}
+          placeholderTextColor={colors.textMuted}
         />
         <TouchableOpacity style={styles.primaryBtn} onPress={() => sendQuestion()} disabled={sending}>
           <Text style={styles.primaryBtnText}>{sending ? "Sending..." : activeTab === "general" ? "Ask AI" : "Send to AI Mentor"}</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Actions</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Actions</Text>
         <TouchableOpacity
           style={styles.primaryBtn}
           onPress={async () => {
@@ -312,8 +331,10 @@ const styles = StyleSheet.create({
   bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12, maxWidth: "90%" },
   userBubble: { alignSelf: "flex-end", backgroundColor: "#F2F4F7" },
   aiBubble: { alignSelf: "flex-start" },
+  aiBubbleWide: { width: "88%" },
   userBubbleText: { color: "#1F2937", fontWeight: "600" },
   aiIntro: { color: "#4338CA", fontWeight: "800", marginBottom: 4 },
+  aiGeneralText: { color: "#312E81", lineHeight: 22, fontSize: 15, fontWeight: "600" },
   aiStepRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, marginTop: 4 },
   aiBubbleText: { flex: 1, color: "#312E81", lineHeight: 20 },
   typingRow: { flexDirection: "row", alignItems: "center", gap: 8 },
