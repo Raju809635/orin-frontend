@@ -1,15 +1,22 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 
-type SkillGapResponse = { goal: string; currentSkills: string[]; missingSkills: string[]; suggestions?: { courses?: string[] } };
+type SkillGapResponse = {
+  goal: string;
+  currentSkills: string[];
+  missingSkills: string[];
+  suggestions?: { courses?: string[] };
+};
 
 export default function AiSkillGapPage() {
+  const router = useRouter();
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
   const [primaryCategory, setPrimaryCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
@@ -20,6 +27,7 @@ export default function AiSkillGapPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,10 +43,7 @@ export default function AiSkillGapPage() {
         setSubCategory((prev) => prev || s);
         setFocus((prev) => prev || f);
       })
-      .catch(() => {
-        // If this fails, backend still falls back to saved user profile + goal.
-      });
-
+      .catch(() => {});
     return () => {
       mounted = false;
     };
@@ -48,9 +53,7 @@ export default function AiSkillGapPage() {
     if (!domainTree || !primaryCategory) return;
     const subs = domainTree.subCategoriesByPrimary?.[primaryCategory] || [];
     if (!subs.length) return;
-    if (!subs.includes(subCategory)) {
-      setSubCategory(subs[0]);
-    }
+    if (!subs.includes(subCategory)) setSubCategory(subs[0]);
   }, [domainTree, primaryCategory, subCategory]);
 
   useEffect(() => {
@@ -60,174 +63,252 @@ export default function AiSkillGapPage() {
       setFocus("");
       return;
     }
-    if (!focuses.includes(focus)) {
-      setFocus(focuses[0]);
-    }
+    if (!focuses.includes(focus)) setFocus(focuses[0]);
   }, [domainTree, primaryCategory, subCategory, focus]);
 
-  const load = useCallback(async (refresh = false) => {
-    try {
-      if (refresh) setRefreshing(true); else setLoading(true);
-      setError(null);
-      const res = await api.get<SkillGapResponse>("/api/network/skill-gap", {
-        params: {
-          primaryCategory,
-          subCategory,
-          focus,
-          goal: customGoal.trim() || [primaryCategory, subCategory, focus].filter(Boolean).join(" > "),
-          // CSV override; if empty the backend falls back to saved profile skills.
-          skills: skillsInput
-        }
-      });
-      setData(res.data || null);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load skill gap.");
-    } finally {
-      setLoading(false); setRefreshing(false); setAnalyzing(false);
-    }
-  }, [primaryCategory, subCategory, focus, customGoal, skillsInput]);
+  const goalLabel = useMemo(
+    () => customGoal.trim() || [primaryCategory, subCategory, focus].filter(Boolean).join(" > "),
+    [customGoal, primaryCategory, subCategory, focus]
+  );
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const enteredSkills = useMemo(
+    () => skillsInput.split(",").map((item) => item.trim()).filter(Boolean),
+    [skillsInput]
+  );
 
-  const enteredSkills = useMemo(() => skillsInput.split(",").map((s) => s.trim()).filter(Boolean), [skillsInput]);
+  const load = useCallback(
+    async (refresh = false) => {
+      try {
+        if (refresh) setRefreshing(true);
+        else setLoading(true);
+        setError(null);
+        const res = await api.get<SkillGapResponse>("/api/network/skill-gap", {
+          params: {
+            primaryCategory,
+            subCategory,
+            focus,
+            goal: goalLabel,
+            skills: skillsInput
+          }
+        });
+        setData(res.data || null);
+        setSelectedSkill(null);
+      } catch (e: any) {
+        setError(e?.response?.data?.message || "Failed to load skill gap.");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        setAnalyzing(false);
+      }
+    },
+    [primaryCategory, subCategory, focus, goalLabel, skillsInput]
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  const currentSkills = data?.currentSkills?.length ? data.currentSkills : enteredSkills;
+  const missingSkills = data?.missingSkills || [];
+  const totalSkillCount = currentSkills.length + missingSkills.length;
+  const readiness = totalSkillCount ? Math.round((currentSkills.length / totalSkillCount) * 100) : 0;
+  const selectedSkillResources = useMemo(() => {
+    const courses = data?.suggestions?.courses || [];
+    if (!selectedSkill) return courses.slice(0, 4);
+    return courses.filter((item) => item.toLowerCase().includes(selectedSkill.toLowerCase())).slice(0, 4);
+  }, [data?.suggestions?.courses, selectedSkill]);
 
   return (
     <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
-      <Text style={styles.pageTitle}>AI Skill Gap Analysis</Text>
-      <Text style={styles.pageSub}>Analyze missing skills for your target career and get learning recommendations.</Text>
+      <LinearGradient colors={["#304FFE", "#6C63FF", "#8E7CFF"]} style={styles.hero}>
+        <Text style={styles.heroTitle}>Skill Dashboard</Text>
+        <Text style={styles.heroSub}>Your personal readiness report for the next career jump.</Text>
+        <View style={styles.heroCard}>
+          <Text style={styles.heroGoal}>Goal: {data?.goal || goalLabel || "Career Growth"}</Text>
+          <Text style={styles.heroReadiness}>Readiness: {readiness}%</Text>
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${readiness}%` }]} />
+          </View>
+          <Text style={styles.heroMeta}>Missing {missingSkills.length} key skill{missingSkills.length === 1 ? "" : "s"}</Text>
+        </View>
+      </LinearGradient>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="analytics" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Overview</Text></View>
-        <Text style={styles.meta}>
-          Select your path from the Domain Guide (domain, sub-domain, focus). ORIN then checks what skills/topics you're missing and suggests next steps.
-        </Text>
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="build" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Main Feature</Text></View>
-        <Text style={styles.label}>Domain (Domain Guide)</Text>
+        <Text style={styles.sectionTitle}>Analyze Your Path</Text>
+        <Text style={styles.label}>Domain</Text>
         <View style={styles.chips}>
-          {(domainTree?.primaryCategories || []).map((p) => (
-            <TouchableOpacity
-              key={p}
-              style={[styles.chip, primaryCategory === p && styles.chipActive]}
-              onPress={() => setPrimaryCategory(p)}
-            >
-              <Text style={[styles.chipText, primaryCategory === p && styles.chipTextActive]}>{p}</Text>
+          {(domainTree?.primaryCategories || []).map((item) => (
+            <TouchableOpacity key={item} style={[styles.chip, primaryCategory === item && styles.chipActive]} onPress={() => setPrimaryCategory(item)}>
+              <Text style={[styles.chipText, primaryCategory === item && styles.chipTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
         <Text style={styles.label}>Sub-domain</Text>
         <View style={styles.chips}>
-          {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((s) => (
-            <TouchableOpacity
-              key={s}
-              style={[styles.chip, subCategory === s && styles.chipActive]}
-              onPress={() => setSubCategory(s)}
-            >
-              <Text style={[styles.chipText, subCategory === s && styles.chipTextActive]}>{s}</Text>
+          {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
+            <TouchableOpacity key={item} style={[styles.chip, subCategory === item && styles.chipActive]} onPress={() => setSubCategory(item)}>
+              <Text style={[styles.chipText, subCategory === item && styles.chipTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
         <Text style={styles.label}>Focus</Text>
         <View style={styles.chips}>
-          {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((f) => (
-            <TouchableOpacity
-              key={f}
-              style={[styles.chip, focus === f && styles.chipActive]}
-              onPress={() => setFocus(f)}
-            >
-              <Text style={[styles.chipText, focus === f && styles.chipTextActive]}>{f}</Text>
+          {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
+            <TouchableOpacity key={item} style={[styles.chip, focus === item && styles.chipActive]} onPress={() => setFocus(item)}>
+              <Text style={[styles.chipText, focus === item && styles.chipTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Custom Goal (optional)</Text>
-        <TextInput
-          style={styles.input}
-          value={customGoal}
-          onChangeText={setCustomGoal}
-          placeholder="Example: UPSC Prelims, Frontend Developer, Constitutional Law"
-        />
+        <Text style={styles.label}>Custom Goal</Text>
+        <TextInput style={styles.input} value={customGoal} onChangeText={setCustomGoal} placeholder="Example: AI Engineer, UPSC Mains, Corporate Lawyer" />
 
-        <Text style={styles.label}>Current Skills (comma separated)</Text>
-        <TextInput style={styles.input} value={skillsInput} onChangeText={setSkillsInput} placeholder="Python, SQL, React" />
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => { setAnalyzing(true); load(true); }}><Text style={styles.primaryBtnText}>{analyzing ? "Analyzing..." : "Analyze"}</Text></TouchableOpacity>
+        <Text style={styles.label}>Current Skills</Text>
+        <TextInput style={styles.input} value={skillsInput} onChangeText={setSkillsInput} placeholder="Python, SQL, Research Basics" />
+
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => { setAnalyzing(true); load(true); }}>
+          <Text style={styles.primaryBtnText}>{analyzing ? "Analyzing..." : "Analyze Skills"}</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="list" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Results</Text></View>
+        <Text style={styles.sectionTitle}>Visual Skill Report</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
-        {!loading && !data ? <Text style={styles.meta}>No analysis data available.</Text> : null}
+        {loading ? <ActivityIndicator size="large" color="#5B4DFF" /> : null}
+        {!loading && !data ? <Text style={styles.meta}>No analysis available yet.</Text> : null}
         {data ? (
           <>
-            <Text style={styles.meta}>Goal: {data.goal}</Text>
-            <Text style={styles.meta}>Skills Used: {(data.currentSkills || enteredSkills).join(", ") || "None"}</Text>
-            <Text style={styles.resultTitle}>Missing Skills</Text>
-            {(data.missingSkills || []).map((s) => <Text key={s} style={styles.meta}>• {s}</Text>)}
-            <Text style={styles.resultTitle}>Recommended Resources</Text>
-            {(data.suggestions?.courses || []).slice(0, 8).map((c, i) => <Text key={`${c}-${i}`} style={styles.meta}>• {c}</Text>)}
+            <View style={styles.grid}>
+              <View style={[styles.skillCard, styles.knownCard]}>
+                <Text style={styles.skillCardTitle}>You Know</Text>
+                {currentSkills.length ? (
+                  currentSkills.map((item) => (
+                    <TouchableOpacity key={item} style={styles.skillPillKnown} onPress={() => setSelectedSkill(item)}>
+                      <Text style={styles.skillPillKnownText}>✔ {item}</Text>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <Text style={styles.meta}>No skills detected yet.</Text>
+                )}
+              </View>
+
+              <View style={[styles.skillCard, styles.missingCard]}>
+                <Text style={styles.skillCardTitle}>Missing</Text>
+                {missingSkills.length ? (
+                  missingSkills.map((item, index) => (
+                    <TouchableOpacity key={item} style={styles.skillPillMissing} onPress={() => setSelectedSkill(item)}>
+                      <Text style={styles.skillPillMissingText}>{index < 2 ? "⚠ High Priority" : "⚠ Missing"}  {item}</Text>
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <Text style={styles.meta}>Great job. No major gaps detected.</Text>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.resourceCard}>
+              <View style={styles.resourceHeader}>
+                <Text style={styles.resourceTitle}>{selectedSkill ? `${selectedSkill} Resources` : "Recommended Resources"}</Text>
+                {selectedSkill ? <Text style={styles.resourceTag}>Tap another skill to switch</Text> : null}
+              </View>
+              {(selectedSkillResources.length ? selectedSkillResources : data.suggestions?.courses || []).slice(0, 5).map((item, index) => (
+                <View key={`${item}-${index}`} style={styles.resourceRow}>
+                  <Ionicons name="school-outline" size={16} color="#5B4DFF" />
+                  <Text style={styles.resourceText}>{item}</Text>
+                </View>
+              ))}
+              {missingSkills.length ? (
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/career-roadmap" as never)}>
+                  <Text style={styles.secondaryBtnText}>Start Learning</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
           </>
         ) : null}
       </View>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="flash" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View>
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={async () => {
-            if (!data) {
-              notify("Run analysis first.");
-              return;
-            }
-            await saveAiItem({
-              type: "skill_gap",
-              title: `Skill Gap: ${primaryCategory}${subCategory ? ` > ${subCategory}` : ""}${focus ? ` > ${focus}` : ""}`,
-              payload: {
-                primaryCategory,
-                subCategory,
-                focus,
-                goal: data.goal,
-                currentSkills: data.currentSkills || enteredSkills,
-                missingSkills: data.missingSkills || [],
-                suggestions: data.suggestions || {}
+        <Text style={styles.sectionTitle}>Actions</Text>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={async () => {
+              if (!data) {
+                notify("Run analysis first.");
+                return;
               }
-            });
-            notify("Saved to Saved AI.");
-          }}
-        >
-          <Text style={styles.primaryBtnText}>Save Analysis</Text>
-        </TouchableOpacity>
-      </View>
+              await saveAiItem({
+                type: "skill_gap",
+                title: `Skill Gap: ${primaryCategory}${subCategory ? ` > ${subCategory}` : ""}${focus ? ` > ${focus}` : ""}`,
+                payload: {
+                  primaryCategory,
+                  subCategory,
+                  focus,
+                  goal: data.goal,
+                  currentSkills,
+                  missingSkills,
+                  suggestions: data.suggestions || {}
+                }
+              });
+              notify("Saved to Saved AI.");
+            }}
+          >
+            <Text style={styles.primaryBtnText}>Save Dashboard</Text>
+          </TouchableOpacity>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Tips</Text></View>
-        <Text style={styles.meta}>Add both core and tool-specific skills for better gap analysis.</Text>
+          <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/project-ideas" as never)}>
+            <Text style={styles.secondaryBtnText}>Get Projects</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 16, backgroundColor: "#F3F6FB", gap: 10 },
-  pageTitle: { fontSize: 26, fontWeight: "800", color: "#11261E" },
-  pageSub: { color: "#667085" },
-  section: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#E4E7EC", padding: 12, gap: 8 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
-  sectionTitle: { fontWeight: "800", color: "#1E2B24" },
-  label: { color: "#344054", fontWeight: "700", marginTop: 4 },
+  page: { padding: 16, backgroundColor: "#F3F6FB", gap: 12 },
+  hero: { borderRadius: 24, padding: 18, gap: 12 },
+  heroTitle: { color: "#FFFFFF", fontSize: 28, fontWeight: "900" },
+  heroSub: { color: "#E8E7FF" },
+  heroCard: { backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 16, padding: 14, gap: 8 },
+  heroGoal: { color: "#FFFFFF", fontWeight: "800", fontSize: 16 },
+  heroReadiness: { color: "#FFFFFF", fontWeight: "800" },
+  heroMeta: { color: "#E8E7FF", fontWeight: "700" },
+  progressTrack: { height: 10, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.2)", overflow: "hidden" },
+  progressFill: { height: "100%", borderRadius: 999, backgroundColor: "#8CFFB8" },
+  section: { backgroundColor: "#FFFFFF", borderRadius: 18, borderWidth: 1, borderColor: "#E4E7EC", padding: 14, gap: 10 },
+  sectionTitle: { fontWeight: "800", color: "#1E2B24", fontSize: 17 },
+  label: { color: "#344054", fontWeight: "700", marginTop: 2 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "#fff" },
-  chipActive: { borderColor: "#1F7A4C", backgroundColor: "#EAF6EF" },
+  chip: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#fff" },
+  chipActive: { borderColor: "#5B4DFF", backgroundColor: "#F0EEFF" },
   chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
-  chipTextActive: { color: "#1F7A4C" },
-  input: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 10, backgroundColor: "#fff", paddingHorizontal: 12, paddingVertical: 10, color: "#344054" },
-  resultTitle: { marginTop: 4, fontWeight: "800", color: "#1E2B24" },
-  meta: { color: "#667085" },
+  chipTextActive: { color: "#5B4DFF" },
+  input: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 12, paddingVertical: 12, color: "#344054" },
+  grid: { gap: 12 },
+  skillCard: { borderRadius: 16, padding: 14, gap: 8 },
+  knownCard: { backgroundColor: "#ECFDF3", borderWidth: 1, borderColor: "#B7E4C7" },
+  missingCard: { backgroundColor: "#FFF7ED", borderWidth: 1, borderColor: "#F7C99A" },
+  skillCardTitle: { color: "#1E2B24", fontSize: 16, fontWeight: "800" },
+  skillPillKnown: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#D1FADF" },
+  skillPillKnownText: { color: "#166534", fontWeight: "700" },
+  skillPillMissing: { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#FEE4E2" },
+  skillPillMissingText: { color: "#B42318", fontWeight: "700" },
+  resourceCard: { borderRadius: 16, backgroundColor: "#F8F7FF", borderWidth: 1, borderColor: "#DBD8FF", padding: 14, gap: 8 },
+  resourceHeader: { gap: 4 },
+  resourceTitle: { color: "#312E81", fontWeight: "800", fontSize: 16 },
+  resourceTag: { color: "#667085", fontSize: 12 },
+  resourceRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  resourceText: { flex: 1, color: "#344054" },
+  actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  meta: { color: "#667085", lineHeight: 20 },
   error: { color: "#B42318" },
-  primaryBtn: { alignSelf: "flex-start", backgroundColor: "#1F7A4C", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
-  primaryBtnText: { color: "#fff", fontWeight: "700" }
+  primaryBtn: { alignSelf: "flex-start", backgroundColor: "#5B4DFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11 },
+  primaryBtnText: { color: "#fff", fontWeight: "800" },
+  secondaryBtn: { alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: "#EAF6EF" },
+  secondaryBtnText: { color: "#1F7A4C", fontWeight: "800" }
 });

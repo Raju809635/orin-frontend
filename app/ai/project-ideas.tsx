@@ -1,15 +1,20 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Ionicons } from "@expo/vector-icons";
+import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 
-type ProjectIdeasResponse = { goal: string; ideas: Array<{ title: string }> };
+type ProjectIdea = { title: string };
+type ProjectIdeasResponse = { goal: string; ideas: ProjectIdea[] };
+type ProjectMissionState = { tasks: { id: string; title: string; done: boolean }[] };
 
 const LEVEL_OPTIONS = ["Beginner", "Intermediate", "Advanced"];
+const STORAGE_PREFIX = "orin:project-build:";
 
 export default function AiProjectIdeasPage() {
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
@@ -22,6 +27,8 @@ export default function AiProjectIdeasPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeProject, setActiveProject] = useState<string | null>(null);
+  const [missions, setMissions] = useState<Record<string, ProjectMissionState>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -59,102 +66,202 @@ export default function AiProjectIdeasPage() {
     if (!focuses.includes(focus)) setFocus(focuses[0]);
   }, [domainTree, primaryCategory, subCategory, focus]);
 
-  const load = useCallback(async (refresh = false) => {
-    try {
-      if (refresh) setRefreshing(true); else setLoading(true);
-      setError(null);
-      const res = await api.get<ProjectIdeasResponse>("/api/network/project-ideas", {
-        params: {
-          primaryCategory,
-          subCategory,
-          focus,
-          domain: primaryCategory,
-          level,
-          goal: customGoal.trim() || [primaryCategory, subCategory, focus].filter(Boolean).join(" > ")
-        }
-      });
-      setData(res.data || null);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load project ideas.");
-    } finally {
-      setLoading(false); setRefreshing(false);
-    }
-  }, [primaryCategory, subCategory, focus, level, customGoal]);
+  const goalLabel = useMemo(
+    () => customGoal.trim() || [primaryCategory, subCategory, focus].filter(Boolean).join(" > "),
+    [customGoal, primaryCategory, subCategory, focus]
+  );
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  const load = useCallback(
+    async (refresh = false) => {
+      try {
+        if (refresh) setRefreshing(true);
+        else setLoading(true);
+        setError(null);
+        const res = await api.get<ProjectIdeasResponse>("/api/network/project-ideas", {
+          params: {
+            primaryCategory,
+            subCategory,
+            focus,
+            domain: primaryCategory,
+            level,
+            goal: goalLabel
+          }
+        });
+        setData(res.data || null);
+      } catch (e: any) {
+        setError(e?.response?.data?.message || "Failed to load project ideas.");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [primaryCategory, subCategory, focus, level, goalLabel]
+  );
 
-  const difficulty = useMemo(() => (level === "Beginner" ? "Easy" : level === "Intermediate" ? "Medium" : "Hard"), [level]);
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  useEffect(() => {
+    const ideas = data?.ideas || [];
+    if (!ideas.length) return;
+    let mounted = true;
+    (async () => {
+      const pairs = await Promise.all(
+        ideas.map(async (idea) => {
+          const raw = await AsyncStorage.getItem(`${STORAGE_PREFIX}${idea.title.toLowerCase()}`);
+          return [idea.title, raw ? (JSON.parse(raw) as ProjectMissionState) : buildMissionTemplate(idea.title)] as const;
+        })
+      );
+      if (!mounted) return;
+      setMissions(Object.fromEntries(pairs));
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [data]);
+
+  const difficulty = useMemo(() => {
+    if (level === "Beginner") return "Easy";
+    if (level === "Intermediate") return "Medium";
+    return "Hard";
+  }, [level]);
+
+  const difficultyColor = useMemo(() => {
+    if (difficulty === "Easy") return "#1F7A4C";
+    if (difficulty === "Medium") return "#B54708";
+    return "#B42318";
+  }, [difficulty]);
+
   const suggestedStack = useMemo(() => {
     if (primaryCategory === "Technology & AI") {
       if (subCategory === "Web Development") return "React, Node.js, MongoDB";
       if (subCategory === "Data Science") return "Python, Pandas, Matplotlib";
-      if (subCategory === "AI/ML") return "Python, ML libraries, APIs";
+      if (subCategory === "AI/ML") return "Python, APIs, ML libraries";
       return "JavaScript, Python, Git";
     }
-    return "Notes, planning, practice systems (ORIN tools)";
+    if (primaryCategory === "Law & Governance") return "Reading system, case analysis, note bank";
+    if (primaryCategory === "Competitive Exams") return "Mocks, revision planner, PYQs";
+    return "Research, notes, execution tracker";
   }, [primaryCategory, subCategory]);
+
+  const toggleTask = useCallback(async (title: string, taskId: string) => {
+    const current = missions[title] || buildMissionTemplate(title);
+    const next: ProjectMissionState = {
+      tasks: current.tasks.map((task) => (task.id === taskId ? { ...task, done: !task.done } : task))
+    };
+    setMissions((prev) => ({ ...prev, [title]: next }));
+    await AsyncStorage.setItem(`${STORAGE_PREFIX}${title.toLowerCase()}`, JSON.stringify(next));
+    const completedCount = next.tasks.filter((task) => task.done).length;
+    if (completedCount === next.tasks.length) {
+      notify("Project completed. +50 XP and certificate unlocked.");
+    } else {
+      notify("Task updated. Streak +1");
+    }
+  }, [missions]);
 
   return (
     <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
-      <Text style={styles.pageTitle}>AI Project Ideas</Text>
-      <Text style={styles.pageSub}>Generate practical projects with difficulty and stack suggestions.</Text>
-
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="bulb" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Overview</Text></View><Text style={styles.meta}>Pick your Domain Guide path and skill level to generate ideas you can start today.</Text></View>
+      <LinearGradient colors={["#0E6A42", "#1F7A4C", "#7AD39D"]} style={styles.hero}>
+        <Text style={styles.heroTitle}>Build Mode</Text>
+        <Text style={styles.heroSub}>Choose a project and turn it into a real execution system.</Text>
+      </LinearGradient>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="options" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Main Feature</Text></View>
-        <Text style={styles.label}>Domain (Domain Guide)</Text>
+        <Text style={styles.sectionTitle}>Generate Ideas</Text>
+        <Text style={styles.label}>Domain</Text>
         <View style={styles.chips}>
-          {(domainTree?.primaryCategories || []).map((p) => (
-            <TouchableOpacity key={p} style={[styles.chip, primaryCategory===p && styles.chipActive]} onPress={() => setPrimaryCategory(p)}>
-              <Text style={[styles.chipText, primaryCategory===p && styles.chipTextActive]}>{p}</Text>
+          {(domainTree?.primaryCategories || []).map((item) => (
+            <TouchableOpacity key={item} style={[styles.chip, primaryCategory === item && styles.chipActive]} onPress={() => setPrimaryCategory(item)}>
+              <Text style={[styles.chipText, primaryCategory === item && styles.chipTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
+
         <Text style={styles.label}>Sub-domain</Text>
         <View style={styles.chips}>
-          {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((s) => (
-            <TouchableOpacity key={s} style={[styles.chip, subCategory===s && styles.chipActive]} onPress={() => setSubCategory(s)}>
-              <Text style={[styles.chipText, subCategory===s && styles.chipTextActive]}>{s}</Text>
+          {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
+            <TouchableOpacity key={item} style={[styles.chip, subCategory === item && styles.chipActive]} onPress={() => setSubCategory(item)}>
+              <Text style={[styles.chipText, subCategory === item && styles.chipTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
+
         <Text style={styles.label}>Focus</Text>
         <View style={styles.chips}>
-          {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((f) => (
-            <TouchableOpacity key={f} style={[styles.chip, focus===f && styles.chipActive]} onPress={() => setFocus(f)}>
-              <Text style={[styles.chipText, focus===f && styles.chipTextActive]}>{f}</Text>
+          {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
+            <TouchableOpacity key={item} style={[styles.chip, focus === item && styles.chipActive]} onPress={() => setFocus(item)}>
+              <Text style={[styles.chipText, focus === item && styles.chipTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
-        <Text style={styles.label}>Custom Goal (optional)</Text>
-        <TextInput
-          style={styles.input}
-          value={customGoal}
-          onChangeText={setCustomGoal}
-          placeholder="Example: UPSC Prelims, Frontend, Personal Finance"
-        />
+
+        <Text style={styles.label}>Custom Goal</Text>
+        <TextInput style={styles.input} value={customGoal} onChangeText={setCustomGoal} placeholder="Example: AI Chatbot, UPSC Revision App, Legal Draft Helper" />
+
         <Text style={styles.label}>Skill Level</Text>
-        <View style={styles.chips}>{LEVEL_OPTIONS.map((d) => <TouchableOpacity key={d} style={[styles.chip, level===d && styles.chipActive]} onPress={() => setLevel(d)}><Text style={[styles.chipText, level===d && styles.chipTextActive]}>{d}</Text></TouchableOpacity>)}</View>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => load(true)}><Text style={styles.primaryBtnText}>Generate Ideas</Text></TouchableOpacity>
+        <View style={styles.chips}>
+          {LEVEL_OPTIONS.map((item) => (
+            <TouchableOpacity key={item} style={[styles.chip, level === item && styles.chipActive]} onPress={() => setLevel(item)}>
+              <Text style={[styles.chipText, level === item && styles.chipTextActive]}>{item}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => load(true)}>
+          <Text style={styles.primaryBtnText}>Generate Ideas</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="list" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Results</Text></View>
+        <Text style={styles.sectionTitle}>Project Ideas</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
-        {!loading && !data ? <Text style={styles.meta}>No ideas available.</Text> : null}
-        {data?.ideas.slice(0, 12).map((item, idx) => (
-          <View key={`${item.title}-${idx}`} style={styles.ideaCard}>
-            <Text style={styles.resultTitle}>{item.title}</Text>
-            <Text style={styles.meta}>Difficulty: {difficulty}</Text>
-            <Text style={styles.meta}>Suggested Stack: {suggestedStack}</Text>
-          </View>
-        ))}
+        {!loading && !data ? <Text style={styles.meta}>No ideas available yet.</Text> : null}
+        {(data?.ideas || []).slice(0, 8).map((idea, index) => {
+          const mission = missions[idea.title] || buildMissionTemplate(idea.title);
+          const completed = mission.tasks.filter((task) => task.done).length;
+          const progress = mission.tasks.length ? Math.round((completed / mission.tasks.length) * 100) : 0;
+          const isOpen = activeProject === idea.title;
+          return (
+            <View key={`${idea.title}-${index}`} style={styles.projectCard}>
+              <View style={styles.projectTop}>
+                <Text style={styles.projectTitle}>{idea.title}</Text>
+                <Text style={[styles.difficultyBadge, { color: difficultyColor }]}>{difficulty}</Text>
+              </View>
+              <Text style={styles.meta}>Learn: {suggestedStack}</Text>
+              <Text style={styles.meta}>People building: {18 + index * 3}</Text>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setActiveProject((prev) => (prev === idea.title ? null : idea.title))}>
+                <Text style={styles.secondaryBtnText}>{isOpen ? "Hide Build Plan" : "Start Project"}</Text>
+              </TouchableOpacity>
+
+              {isOpen ? (
+                <View style={styles.buildBox}>
+                  <View style={styles.buildHeader}>
+                    <Text style={styles.buildTitle}>Execution Tasks</Text>
+                    <Text style={styles.buildProgress}>{progress}%</Text>
+                  </View>
+                  <View style={styles.progressTrack}>
+                    <View style={[styles.progressFill, { width: `${progress}%` }]} />
+                  </View>
+                  {mission.tasks.map((task) => (
+                    <TouchableOpacity key={task.id} style={styles.taskRow} onPress={() => toggleTask(idea.title, task.id)}>
+                      <Ionicons name={task.done ? "checkmark-circle" : "ellipse-outline"} size={20} color={task.done ? "#1F7A4C" : "#98A2B3"} />
+                      <Text style={[styles.taskText, task.done && styles.taskTextDone]}>{task.title}</Text>
+                    </TouchableOpacity>
+                  ))}
+                  {progress === 100 ? <Text style={styles.completeText}>Project completed. +50 XP and certificate unlocked.</Text> : null}
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
       </View>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="flash" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View>
+        <Text style={styles.sectionTitle}>Actions</Text>
         <TouchableOpacity
           style={styles.primaryBtn}
           onPress={async () => {
@@ -172,38 +279,63 @@ export default function AiProjectIdeasPage() {
                 level,
                 difficulty,
                 suggestedStack,
-                ideas: data.ideas || []
+                ideas: data.ideas || [],
+                missions
               }
             });
             notify("Saved to Saved AI.");
           }}
         >
-          <Text style={styles.primaryBtnText}>Save Ideas</Text>
+          <Text style={styles.primaryBtnText}>Save Build Mode</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Tips</Text></View><Text style={styles.meta}>Start with a mini MVP and add one new feature per week.</Text></View>
     </ScrollView>
   );
 }
 
+function buildMissionTemplate(title: string): ProjectMissionState {
+  const taskBase = title.toLowerCase();
+  const tasks = [
+    { id: `${taskBase}-setup`, title: "Setup project structure", done: false },
+    { id: `${taskBase}-ui`, title: "Build core UI / workflow", done: false },
+    { id: `${taskBase}-logic`, title: "Implement core logic", done: false },
+    { id: `${taskBase}-deploy`, title: "Test and publish outcome", done: false }
+  ];
+  return { tasks };
+}
+
 const styles = StyleSheet.create({
-  page: { padding: 16, backgroundColor: "#F3F6FB", gap: 10 },
-  pageTitle: { fontSize: 26, fontWeight: "800", color: "#11261E" },
-  pageSub: { color: "#667085" },
-  section: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#E4E7EC", padding: 12, gap: 8 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
-  sectionTitle: { fontWeight: "800", color: "#1E2B24" },
-  label: { color: "#344054", fontWeight: "700", marginTop: 4 },
+  page: { padding: 16, backgroundColor: "#F3F6FB", gap: 12 },
+  hero: { borderRadius: 24, padding: 18, gap: 10 },
+  heroTitle: { color: "#FFFFFF", fontSize: 28, fontWeight: "900" },
+  heroSub: { color: "#E8FFF0" },
+  section: { backgroundColor: "#FFFFFF", borderRadius: 18, borderWidth: 1, borderColor: "#E4E7EC", padding: 14, gap: 10 },
+  sectionTitle: { fontWeight: "800", color: "#1E2B24", fontSize: 17 },
+  label: { color: "#344054", fontWeight: "700", marginTop: 2 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "#fff" },
+  chip: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#fff" },
   chipActive: { borderColor: "#1F7A4C", backgroundColor: "#EAF6EF" },
   chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
   chipTextActive: { color: "#1F7A4C" },
-  input: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 10, backgroundColor: "#fff", paddingHorizontal: 12, paddingVertical: 10, color: "#344054" },
-  ideaCard: { backgroundColor: "#FFF7ED", borderColor: "#F9DBAF", borderWidth: 1, borderRadius: 12, padding: 10, gap: 3 },
-  resultTitle: { fontWeight: "800", color: "#1E2B24" },
-  meta: { color: "#667085" },
+  input: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 12, paddingVertical: 12, color: "#344054" },
+  projectCard: { borderWidth: 1, borderColor: "#E6EAF0", borderRadius: 16, padding: 14, gap: 8, backgroundColor: "#FCFCFD" },
+  projectTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
+  projectTitle: { flex: 1, color: "#101828", fontWeight: "800", fontSize: 16 },
+  difficultyBadge: { fontWeight: "800" },
+  buildBox: { backgroundColor: "#F8FAFC", borderRadius: 14, padding: 12, gap: 8, borderWidth: 1, borderColor: "#E4E7EC" },
+  buildHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  buildTitle: { color: "#1E2B24", fontWeight: "800" },
+  buildProgress: { color: "#1F7A4C", fontWeight: "800" },
+  progressTrack: { height: 10, borderRadius: 999, backgroundColor: "#E8EEF3", overflow: "hidden" },
+  progressFill: { height: "100%", borderRadius: 999, backgroundColor: "#1F7A4C" },
+  taskRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 2 },
+  taskText: { color: "#344054", flex: 1 },
+  taskTextDone: { color: "#667085", textDecorationLine: "line-through" },
+  completeText: { color: "#1F7A4C", fontWeight: "800" },
+  meta: { color: "#667085", lineHeight: 20 },
   error: { color: "#B42318" },
-  primaryBtn: { alignSelf: "flex-start", backgroundColor: "#1F7A4C", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
-  primaryBtnText: { color: "#fff", fontWeight: "700" }
+  primaryBtn: { alignSelf: "flex-start", backgroundColor: "#1F7A4C", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11 },
+  primaryBtnText: { color: "#fff", fontWeight: "800" },
+  secondaryBtn: { alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: "#FFF3D9" },
+  secondaryBtnText: { color: "#B54708", fontWeight: "800" }
 });
