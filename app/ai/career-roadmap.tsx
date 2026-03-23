@@ -38,6 +38,7 @@ export default function AiCareerRoadmapPage() {
   const [generationStage, setGenerationStage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [claimingCertificate, setClaimingCertificate] = useState(false);
   const initialLoadRef = useRef(false);
 
   useEffect(() => {
@@ -195,6 +196,52 @@ export default function AiCareerRoadmapPage() {
     });
   }, [data]);
 
+  const roadmapCertificateRef = useMemo(() => {
+    const raw = customGoal.trim() || goalLabel || data?.goal || "career-growth";
+    return raw.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120);
+  }, [customGoal, goalLabel, data?.goal]);
+
+  const claimRoadmapCertificate = useCallback(async () => {
+    if (!data || progressPct < 100) {
+      notify("Complete every mission before claiming a certificate.");
+      return;
+    }
+    try {
+      setClaimingCertificate(true);
+      const res = await api.post("/api/network/certifications/generate", {
+        type: "roadmap",
+        title: `${customGoal.trim() || goalLabel || data.goal} Roadmap Completion`,
+        domain: focus || subCategory || primaryCategory || "",
+        level: levels[currentLevelIndex],
+        referenceId: roadmapCertificateRef,
+        metadata: {
+          domain: focus || subCategory || primaryCategory || "",
+          level: levels[currentLevelIndex],
+          goal: customGoal.trim() || goalLabel || data.goal,
+          totalSteps,
+          completedSteps: totalSteps
+        }
+      });
+      notify(res.data?.created ? "Certificate generated and added to your achievements." : "Certificate already exists in your achievements.");
+    } catch (e: any) {
+      notify(e?.response?.data?.message || "Unable to claim roadmap certificate.");
+    } finally {
+      setClaimingCertificate(false);
+    }
+  }, [
+    currentLevelIndex,
+    customGoal,
+    data,
+    focus,
+    goalLabel,
+    levels,
+    primaryCategory,
+    progressPct,
+    roadmapCertificateRef,
+    subCategory,
+    totalSteps
+  ]);
+
   return (
     <ScrollView
       contentContainerStyle={styles.page}
@@ -307,6 +354,9 @@ export default function AiCareerRoadmapPage() {
           <View style={styles.doneCard}>
             <Text style={styles.doneTitle}>🏆 Journey completed</Text>
             <Text style={styles.meta}>You completed every mission in this roadmap. Refresh or choose a new goal to keep going.</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
+              <Text style={styles.primaryBtnText}>{claimingCertificate ? "Claiming..." : "Claim Certificate"}</Text>
+            </TouchableOpacity>
           </View>
         )}
       </View>
@@ -419,6 +469,11 @@ export default function AiCareerRoadmapPage() {
           <TouchableOpacity style={styles.primaryBtn} onPress={() => currentMission && toggleMission(currentMission.stepNumber)}>
             <Text style={styles.primaryBtnText}>Continue Journey</Text>
           </TouchableOpacity>
+          {progressPct === 100 ? (
+            <TouchableOpacity style={styles.secondaryOutlineBtn} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
+              <Text style={styles.secondaryOutlineBtnText}>{claimingCertificate ? "Claiming..." : "Claim Certificate"}</Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity
             style={styles.secondaryOutlineBtn}
             onPress={async () => {

@@ -407,6 +407,7 @@ function RootDrawer() {
           <Drawer.Screen name="login" options={{ title: "Login", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="register" options={{ title: "Register", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="verify-email" options={{ title: "Verify Email", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="verify/[certificateId]" options={{ title: "Verify Certificate", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="chat" options={{ title: "Messages", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai-assistant" options={{ title: "AI Assistant", drawerItemStyle: { display: "none" } }} />

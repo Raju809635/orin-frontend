@@ -188,7 +188,7 @@ export default function AiSkillGapPage() {
                 {currentSkills.length ? (
                   currentSkills.map((item) => (
                     <TouchableOpacity key={item} style={styles.skillPillKnown} onPress={() => setSelectedSkill(item)}>
-                      <Text style={styles.skillPillKnownText}>âœ” {item}</Text>
+                      <Text style={styles.skillPillKnownText}>Known · {item}</Text>
                     </TouchableOpacity>
                   ))
                 ) : (
@@ -201,7 +201,7 @@ export default function AiSkillGapPage() {
                 {missingSkills.length ? (
                   missingSkills.map((item, index) => (
                     <TouchableOpacity key={item} style={styles.skillPillMissing} onPress={() => setSelectedSkill(item)}>
-                      <Text style={styles.skillPillMissingText}>{index < 2 ? "âš  High Priority" : "âš  Missing"}  {item}</Text>
+                      <Text style={styles.skillPillMissingText}>{index < 2 ? "High Priority" : "Missing"} · {item}</Text>
                     </TouchableOpacity>
                   ))
                 ) : (
@@ -312,3 +312,4 @@ const styles = StyleSheet.create({
   secondaryBtn: { alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: "#EAF6EF" },
   secondaryBtnText: { color: "#1F7A4C", fontWeight: "800" }
 });
+

@@ -1,19 +1,51 @@
-import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import {
+  ActionButton,
+  CommunityHero,
+  CommunitySection,
+  FilterTabs,
+  StatPill,
+  StatusBadge
+} from "@/components/community/ui";
 
-type LibraryItem = { id: string; title: string; type: string; description?: string };
+type LibraryItem = {
+  id: string;
+  title: string;
+  type: string;
+  description?: string;
+  domain?: string;
+  url?: string;
+  saves?: number;
+  recommended?: boolean;
+  recommendationReason?: string;
+  tags?: string[];
+};
 
-const CATEGORIES = ["All", "AI", "Web", "Career", "Interview Prep"];
+const TABS = ["All", "Recommended", "Trending", "Saved"] as const;
+const STORAGE_KEY = "community-library-saved-v1";
 
 export default function CommunityLibraryPage() {
   const { user } = useAuth();
-  const [category, setCategory] = useState("All");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("All");
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [items, setItems] = useState<LibraryItem[]>([]);
+  const [selectedId, setSelectedId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -28,47 +60,212 @@ export default function CommunityLibraryPage() {
 
   const load = useCallback(async (refresh = false) => {
     try {
-      if (refresh) setRefreshing(true); else setLoading(true);
+      if (refresh) setRefreshing(true);
+      else setLoading(true);
       setError(null);
       const res = await api.get<LibraryItem[]>("/api/network/knowledge-library");
-      setItems(res.data || []);
+      const nextItems = res.data || [];
+      setItems(nextItems);
+      setSelectedId((prev) => prev || nextItems[0]?.id || "");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load library.");
     } finally {
-      setLoading(false); setRefreshing(false);
+      setLoading(false);
+      setRefreshing(false);
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useEffect(() => {
+    AsyncStorage.getItem(STORAGE_KEY)
+      .then((value) => {
+        if (value) setSaved(JSON.parse(value));
+      })
+      .catch(() => undefined);
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(saved)).catch(() => undefined);
+  }, [saved]);
+
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  const selectedItem = items.find((item) => item.id === selectedId) || null;
+
+  const derived = useMemo(() => {
+    const recommended = items.filter((item, index) => {
+      if (item.recommended) return true;
+      const haystack = `${item.type} ${item.title} ${item.domain || ""}`.toLowerCase();
+      if (user?.role === "mentor") return haystack.includes("career") || haystack.includes("guide") || index < 3;
+      return haystack.includes("ai") || haystack.includes("roadmap") || index < 3;
+    });
+    const trending = [...items].sort((a, b) => (b.saves || 0) - (a.saves || 0));
+    const savedOnly = items.filter((item) => saved[item.id]);
+    return { recommended, trending, savedOnly };
+  }, [items, saved, user?.role]);
 
   const filtered = useMemo(() => {
-    if (category === "All") return items;
-    return items.filter((x) => `${x.type} ${x.title}`.toLowerCase().includes(category.toLowerCase()));
-  }, [items, category]);
+    if (tab === "All") return items;
+    if (tab === "Recommended") return derived.recommended;
+    if (tab === "Trending") return derived.trending;
+    return derived.savedOnly;
+  }, [derived.recommended, derived.savedOnly, derived.trending, items, tab]);
 
   return (
-    <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
-      <Text style={styles.pageTitle}>Knowledge Library</Text>
-      <Text style={styles.pageSub}>Explore categorized guides, resources, and prep material.</Text>
+    <ScrollView
+      contentContainerStyle={styles.page}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+    >
+      <CommunityHero
+        eyebrow="Knowledge Library"
+        title="Smart Learning Hub"
+        subtitle="Discover guided resources, keep your best references saved, and move straight into roadmap or challenge actions."
+        stats={[
+          { icon: "library", label: "Resources", value: String(items.length) },
+          { icon: "bookmark", label: "Saved", value: String(Object.values(saved).filter(Boolean).length) },
+          { icon: "trending-up", label: "Trending", value: String(derived.trending.slice(0, 3).length) }
+        ]}
+        colors={["#4457FF", "#5D70FF", "#8A72FF"]}
+      />
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="library" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Categories</Text></View><View style={styles.chips}>{CATEGORIES.map((c) => <TouchableOpacity key={c} style={[styles.chip, category===c && styles.chipActive]} onPress={() => setCategory(c)}><Text style={[styles.chipText, category===c && styles.chipTextActive]}>{c}</Text></TouchableOpacity>)}</View></View>
+      <CommunitySection
+        title="Discover"
+        subtitle="Switch quickly between everything, recommended picks, trending material, and saved learning blocks."
+        icon="compass"
+      >
+        <FilterTabs tabs={TABS.map((item) => ({ label: item, active: tab === item, onPress: () => setTab(item) }))} />
+      </CommunitySection>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="list" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Guides & Resources</Text></View>{error ? <Text style={styles.error}>{error}</Text> : null}{loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}{!loading && filtered.length===0 ? <Text style={styles.meta}>No articles found.</Text> : null}{filtered.map((item) => <View key={item.id} style={styles.card}><Text style={styles.cardTitle}>{item.title}</Text><Text style={styles.meta}>{item.type}</Text>{item.description ? <Text style={styles.meta}>{item.description}</Text> : null}<TouchableOpacity style={styles.bookmarkBtn} onPress={() => setSaved((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}><Text style={styles.bookmarkBtnText}>{saved[item.id] ? "Bookmarked" : "Bookmark"}</Text></TouchableOpacity></View>)}</View>
+      <CommunitySection
+        title="Learning Resources"
+        subtitle="Each card points the learner toward the next action instead of behaving like a static list."
+        icon="book"
+      >
+        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
+        {!loading && !filtered.length ? <Text style={styles.emptyText}>Nothing in this tab yet. Save a resource or switch to another tab.</Text> : null}
+        {filtered.map((item, index) => {
+          const categoryColor = getCategoryTone(item);
+          const isSelected = selectedId === item.id;
+          return (
+            <TouchableOpacity
+              key={item.id}
+              activeOpacity={0.95}
+              style={[styles.resourceCard, isSelected && styles.resourceCardActive]}
+              onPress={() => setSelectedId(item.id)}
+            >
+              <View style={styles.cardTopRow}>
+                <View style={[styles.resourceIconWrap, { backgroundColor: categoryColor.soft }]}>
+                  <Ionicons name={iconForType(item.type)} size={20} color={categoryColor.main} />
+                </View>
+                <View style={styles.cardTopBody}>
+                  <View style={styles.inlineRow}>
+                    <Text style={styles.cardTitle}>{item.title}</Text>
+                    {tab === "Trending" || index < 2 ? <StatusBadge label="Trending" tone="warning" /> : null}
+                  </View>
+                  <Text numberOfLines={2} style={styles.cardDescription}>
+                    {item.description || "A guided ORIN resource you can use in roadmap planning and practice."}
+                  </Text>
+                  {item.recommendationReason ? <Text style={styles.reasonText}>{item.recommendationReason}</Text> : null}
+                </View>
+              </View>
+
+              <View style={styles.tagRow}>
+                <StatusBadge label={item.domain || item.type || "General"} tone="primary" />
+                <StatusBadge label={item.type || "Guide"} tone="neutral" />
+                {item.title.toLowerCase().includes("beginner") ? <StatusBadge label="Beginner" tone="success" /> : null}
+                {item.recommended ? <StatusBadge label="For You" tone="warning" /> : null}
+                {(item.tags || []).slice(0, 2).map((tag) => (
+                  <StatusBadge key={`${item.id}-${tag}`} label={tag} tone="neutral" />
+                ))}
+              </View>
+
+              <View style={styles.pillRow}>
+                <StatPill icon="bookmark" label={`${(item.saves || 0) + (saved[item.id] ? 1 : 0)} saves`} tone="#EEF2FF" />
+                <StatPill icon="flash" label={tab === "Recommended" ? "Recommended for you" : "Ready to use"} tone="#ECFDF3" />
+              </View>
+
+              <View style={styles.actionRow}>
+                <ActionButton
+                  label={saved[item.id] ? "Saved" : "Save"}
+                  icon={saved[item.id] ? "bookmark" : "bookmark-outline"}
+                  variant="secondary"
+                  onPress={() => setSaved((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                  style={styles.flexAction}
+                />
+                <ActionButton label="Start Learning" icon="play" onPress={() => setSelectedId(item.id)} style={styles.flexAction} />
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </CommunitySection>
+
+      {selectedItem ? (
+        <CommunitySection
+          title="Resource Details"
+          subtitle="Make every library item lead into the next step instead of ending at a content card."
+          icon="document-text"
+        >
+          <View style={styles.detailCard}>
+            <View style={styles.inlineRow}>
+              <View style={[styles.resourceIconWrap, { backgroundColor: getCategoryTone(selectedItem).soft }]}>
+                <Ionicons name={iconForType(selectedItem.type)} size={22} color={getCategoryTone(selectedItem).main} />
+              </View>
+              <View style={styles.detailHead}>
+                <Text style={styles.detailTitle}>{selectedItem.title}</Text>
+                <Text style={styles.detailMeta}>{selectedItem.domain || "ORIN Resource"} | {selectedItem.type || "Guide"}</Text>
+              </View>
+            </View>
+            <Text style={styles.detailText}>
+              {selectedItem.description || "Use this item to strengthen your roadmap, practice a topic, or support an active challenge."}
+            </Text>
+            {selectedItem.recommendationReason ? <Text style={styles.reasonText}>{selectedItem.recommendationReason}</Text> : null}
+            <View style={styles.pillRow}>
+              <StatPill icon="git-network" label="Use in Roadmap" tone="#EEF2FF" />
+              <StatPill icon="trophy" label="Practice Challenge" tone="#FFF7ED" />
+            </View>
+            <View style={styles.actionRow}>
+              <ActionButton
+                label={saved[selectedItem.id] ? "Saved" : "Save"}
+                icon={saved[selectedItem.id] ? "bookmark" : "bookmark-outline"}
+                variant="secondary"
+                onPress={() => setSaved((prev) => ({ ...prev, [selectedItem.id]: !prev[selectedItem.id] }))}
+                style={styles.flexAction}
+              />
+              <ActionButton
+                label="Use in Roadmap"
+                icon="trail-sign"
+                onPress={() => Alert.alert("Roadmap Ready", "This resource is now framed as a roadmap support item in the UI. We can wire a deeper roadmap bridge next if you want.")}
+                style={styles.flexAction}
+              />
+            </View>
+            <ActionButton
+              label="Practice Challenge"
+              icon="rocket"
+              variant="ghost"
+              onPress={() => Alert.alert("Practice Challenge", "This CTA is ready. We can next connect it directly to the challenge flow if you want that bridge too.")}
+            />
+          </View>
+        </CommunitySection>
+      ) : null}
 
       {user?.role === "mentor" ? (
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="add-circle" size={16} color="#1F7A4C" />
-            <Text style={styles.sectionTitle}>Submit A Resource (Mentors)</Text>
-          </View>
-          <Text style={styles.meta}>Submitted items require admin approval before they appear to everyone.</Text>
-          <TextInput style={styles.input} placeholder="Domain (optional)" value={submitForm.domain} onChangeText={(t) => setSubmitForm((p) => ({ ...p, domain: t }))} />
-          <TextInput style={styles.input} placeholder="Type (roadmap, interview_questions, coding_resource, career_guide, other)" value={submitForm.type} onChangeText={(t) => setSubmitForm((p) => ({ ...p, type: t }))} />
-          <TextInput style={styles.input} placeholder="Title" value={submitForm.title} onChangeText={(t) => setSubmitForm((p) => ({ ...p, title: t }))} />
-          <TextInput style={[styles.input, styles.textArea]} placeholder="Short description" value={submitForm.description} onChangeText={(t) => setSubmitForm((p) => ({ ...p, description: t }))} multiline />
-          <TextInput style={styles.input} placeholder="URL (optional)" value={submitForm.url} onChangeText={(t) => setSubmitForm((p) => ({ ...p, url: t }))} />
-          <TouchableOpacity
-            style={[styles.primaryBtn, submitting && styles.primaryBtnDisabled]}
+        <CommunitySection
+          title="Contribute to the Library"
+          subtitle="Mentors can submit stronger resources for admin approval without changing the existing review flow."
+          icon="add-circle"
+        >
+          <TextInput style={styles.input} placeholder="Domain (optional)" value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
+          <TextInput style={styles.input} placeholder="Type (roadmap, interview_questions, coding_resource, career_guide, other)" value={submitForm.type} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, type: text }))} />
+          <TextInput style={styles.input} placeholder="Title" value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />
+          <TextInput style={[styles.input, styles.textArea]} placeholder="Short description" value={submitForm.description} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, description: text }))} multiline />
+          <TextInput style={styles.input} placeholder="URL (optional)" value={submitForm.url} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, url: text }))} />
+          <ActionButton
+            label={submitting ? "Submitting..." : "Submit for Review"}
+            icon="send"
             disabled={submitting}
             onPress={async () => {
               try {
@@ -84,7 +281,7 @@ export default function CommunityLibraryPage() {
                   description: submitForm.description.trim(),
                   url: submitForm.url.trim()
                 });
-                Alert.alert("Submitted", "Sent to admin for review.");
+                Alert.alert("Submitted", "Resource sent to admin for review.");
                 setSubmitForm({ domain: "", type: "other", title: "", description: "", url: "" });
               } catch (e: any) {
                 Alert.alert("Failed", e?.response?.data?.message || "Unable to submit resource.");
@@ -92,38 +289,80 @@ export default function CommunityLibraryPage() {
                 setSubmitting(false);
               }
             }}
-          >
-            <Text style={styles.primaryBtnText}>{submitting ? "Submitting..." : "Submit For Review"}</Text>
-          </TouchableOpacity>
-        </View>
+          />
+        </CommunitySection>
       ) : null}
-
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Tips</Text></View><Text style={styles.meta}>Bookmark key resources and review them weekly.</Text></View>
     </ScrollView>
   );
 }
 
+function getCategoryTone(item: { type?: string; domain?: string; title?: string }) {
+  const haystack = `${item.type || ""} ${item.domain || ""} ${item.title || ""}`.toLowerCase();
+  if (haystack.includes("ai")) return { main: "#4457FF", soft: "#EEF2FF" };
+  if (haystack.includes("web")) return { main: "#1F7A4C", soft: "#ECFDF3" };
+  if (haystack.includes("career")) return { main: "#B54708", soft: "#FFF7ED" };
+  if (haystack.includes("interview")) return { main: "#B42318", soft: "#FEF3F2" };
+  return { main: "#7A5AF8", soft: "#F4F3FF" };
+}
+
+function iconForType(type?: string) {
+  const haystack = (type || "").toLowerCase();
+  if (haystack.includes("roadmap")) return "map";
+  if (haystack.includes("interview")) return "chatbubble-ellipses";
+  if (haystack.includes("career")) return "briefcase";
+  if (haystack.includes("coding")) return "code-slash";
+  return "document-text";
+}
+
 const styles = StyleSheet.create({
-  page: { padding: 16, backgroundColor: "#F3F6FB", gap: 10 },
-  pageTitle: { fontSize: 26, fontWeight: "800", color: "#11261E" },
-  pageSub: { color: "#667085" },
-  section: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#E4E7EC", padding: 12, gap: 8 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
-  sectionTitle: { fontWeight: "800", color: "#1E2B24" },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "#fff" },
-  chipActive: { borderColor: "#1F7A4C", backgroundColor: "#EAF6EF" },
-  chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
-  chipTextActive: { color: "#1F7A4C" },
-  card: { backgroundColor: "#EFF8FF", borderColor: "#B2DDFF", borderWidth: 1, borderRadius: 12, padding: 10, gap: 4 },
-  cardTitle: { fontWeight: "800", color: "#1E2B24" },
-  bookmarkBtn: { alignSelf: "flex-start", borderWidth: 1, borderColor: "#175CD3", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 4 },
-  bookmarkBtnText: { color: "#175CD3", fontWeight: "700" },
-  input: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 10, paddingVertical: 9 },
-  textArea: { minHeight: 80, textAlignVertical: "top" },
-  primaryBtn: { alignSelf: "flex-start", backgroundColor: "#1F7A4C", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
-  primaryBtnDisabled: { opacity: 0.7 },
-  primaryBtnText: { color: "#fff", fontWeight: "700" },
-  meta: { color: "#667085" },
-  error: { color: "#B42318" }
+  page: { padding: 16, backgroundColor: "#F4F7FB", gap: 14 },
+  error: { color: "#B42318", fontWeight: "700" },
+  emptyText: { color: "#667085", lineHeight: 20 },
+  resourceCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    backgroundColor: "#FFFFFF",
+    padding: 14,
+    gap: 12
+  },
+  resourceCardActive: { borderColor: "#7A5AF8", shadowColor: "#7A5AF8", shadowOpacity: 0.08, shadowRadius: 12, elevation: 2 },
+  cardTopRow: { flexDirection: "row", gap: 12 },
+  resourceIconWrap: {
+    width: 50,
+    height: 50,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  cardTopBody: { flex: 1, gap: 6 },
+  inlineRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  cardTitle: { flex: 1, color: "#101828", fontWeight: "800", fontSize: 16 },
+  cardDescription: { color: "#475467", lineHeight: 20 },
+  reasonText: { color: "#4457FF", fontWeight: "700", lineHeight: 18 },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  actionRow: { flexDirection: "row", gap: 8 },
+  flexAction: { flex: 1 },
+  detailCard: {
+    borderRadius: 18,
+    padding: 14,
+    backgroundColor: "#FBFBFF",
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    gap: 12
+  },
+  detailHead: { flex: 1, gap: 4 },
+  detailTitle: { color: "#101828", fontWeight: "800", fontSize: 18 },
+  detailMeta: { color: "#667085", fontWeight: "600" },
+  detailText: { color: "#475467", lineHeight: 20 },
+  input: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 14,
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 11
+  },
+  textArea: { minHeight: 92, textAlignVertical: "top" }
 });

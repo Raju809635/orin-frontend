@@ -9,8 +9,24 @@ import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 
-type ProjectIdea = { title: string };
-type ProjectIdeasResponse = { goal: string; ideas: ProjectIdea[] };
+type ProjectIdea = {
+  title: string;
+  level?: string;
+  tags?: string[];
+  recommended?: boolean;
+  why?: string;
+  stage?: string;
+};
+type ProjectIdeasResponse = {
+  goal: string;
+  ideas: ProjectIdea[];
+  journey?: {
+    currentStep?: string;
+    readinessScore?: number;
+    focusLabel?: string;
+    personalizationReason?: string;
+  };
+};
 type ProjectMissionState = { tasks: { id: string; title: string; done: boolean }[] };
 
 const LEVEL_OPTIONS = ["Beginner", "Intermediate", "Advanced"];
@@ -220,6 +236,18 @@ export default function AiProjectIdeasPage() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
         {!loading && !data ? <Text style={styles.meta}>No ideas available yet.</Text> : null}
+        {data?.journey ? (
+          <View style={styles.journeyCard}>
+            <Text style={styles.journeyLabel}>Personalized Build Track</Text>
+            <Text style={styles.journeyTitle}>{data.journey.personalizationReason || `Built for ${data.goal}`}</Text>
+            <Text style={styles.meta}>
+              {data.journey.currentStep
+                ? `Current step: ${data.journey.currentStep}`
+                : `Focus: ${data.journey.focusLabel || data.goal}`}
+            </Text>
+            <Text style={styles.meta}>Readiness: {Math.max(0, Math.round(Number(data.journey.readinessScore || 0)))}%</Text>
+          </View>
+        ) : null}
         {(data?.ideas || []).slice(0, 8).map((idea, index) => {
           const mission = missions[idea.title] || buildMissionTemplate(idea.title);
           const completed = mission.tasks.filter((task) => task.done).length;
@@ -231,8 +259,22 @@ export default function AiProjectIdeasPage() {
                 <Text style={styles.projectTitle}>{idea.title}</Text>
                 <Text style={[styles.difficultyBadge, { color: difficultyColor }]}>{difficulty}</Text>
               </View>
+              <View style={styles.metaRow}>
+                {idea.recommended ? <Text style={styles.recommendedPill}>Recommended</Text> : null}
+                {idea.stage ? <Text style={styles.stagePill}>{idea.stage}</Text> : null}
+              </View>
               <Text style={styles.meta}>Learn: {suggestedStack}</Text>
+              {idea.why ? <Text style={styles.whyText}>{idea.why}</Text> : null}
               <Text style={styles.meta}>People building: {18 + index * 3}</Text>
+              {!!idea.tags?.length ? (
+                <View style={styles.tagRow}>
+                  {idea.tags.map((tag) => (
+                    <Text key={`${idea.title}-${tag}`} style={styles.tagPill}>
+                      {tag}
+                    </Text>
+                  ))}
+                </View>
+              ) : null}
               <TouchableOpacity style={styles.secondaryBtn} onPress={() => setActiveProject((prev) => (prev === idea.title ? null : idea.title))}>
                 <Text style={styles.secondaryBtnText}>{isOpen ? "Hide Build Plan" : "Start Project"}</Text>
               </TouchableOpacity>
@@ -318,10 +360,19 @@ const styles = StyleSheet.create({
   chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
   chipTextActive: { color: "#1F7A4C" },
   input: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 12, paddingVertical: 12, color: "#344054" },
+  journeyCard: { borderWidth: 1, borderColor: "#D9F2E4", borderRadius: 16, backgroundColor: "#F1FBF5", padding: 12, gap: 4 },
+  journeyLabel: { color: "#1F7A4C", fontWeight: "800", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.6 },
+  journeyTitle: { color: "#163A2A", fontWeight: "800", fontSize: 16 },
   projectCard: { borderWidth: 1, borderColor: "#E6EAF0", borderRadius: 16, padding: 14, gap: 8, backgroundColor: "#FCFCFD" },
   projectTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 8 },
   projectTitle: { flex: 1, color: "#101828", fontWeight: "800", fontSize: 16 },
   difficultyBadge: { fontWeight: "800" },
+  metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  recommendedPill: { alignSelf: "flex-start", backgroundColor: "#EEF2FF", color: "#4457FF", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, fontWeight: "800", fontSize: 12 },
+  stagePill: { alignSelf: "flex-start", backgroundColor: "#FFF7ED", color: "#B54708", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, fontWeight: "800", fontSize: 12 },
+  whyText: { color: "#344054", fontWeight: "600", lineHeight: 20 },
+  tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  tagPill: { alignSelf: "flex-start", backgroundColor: "#F2F4F7", color: "#475467", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, fontWeight: "700", fontSize: 12 },
   buildBox: { backgroundColor: "#F8FAFC", borderRadius: 14, padding: 12, gap: 8, borderWidth: 1, borderColor: "#E4E7EC" },
   buildHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   buildTitle: { color: "#1E2B24", fontWeight: "800" },

@@ -1,7 +1,8 @@
+import { Ionicons } from "@expo/vector-icons";
+import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { router, useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
@@ -43,7 +44,6 @@ export default function AiMentorMatchingPage() {
         setSelectedDomain((prev) => prev || tree.primaryCategories?.[0] || "");
       })
       .catch(() => {
-        // Fallback keeps the page usable even if /api/meta/domain-tree is temporarily unavailable.
         setSelectedDomain((prev) => prev || "Technology & AI");
       });
 
@@ -61,7 +61,8 @@ export default function AiMentorMatchingPage() {
         setFinding(false);
         return;
       }
-      if (refresh) setRefreshing(true); else setLoading(true);
+      if (refresh) setRefreshing(true);
+      else setLoading(true);
       setError(null);
       const { data } = await api.get<{ studentSignals?: any; recommendations: MentorMatch[] }>("/api/network/mentor-matches", {
         params: {
@@ -72,7 +73,6 @@ export default function AiMentorMatchingPage() {
       const recs = data?.recommendations || [];
       setItems(recs);
 
-      // Autofill domain once from the student's saved profile/category (if available).
       const suggestedDomain = String(data?.studentSignals?.domain || "").trim();
       if (!didAutofill.current && suggestedDomain) {
         didAutofill.current = true;
@@ -88,144 +88,242 @@ export default function AiMentorMatchingPage() {
     }
   }, [selectedDomain, selectedLevel, domainTree]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const filtered = useMemo(() => {
-    // Backend already applies the filters; this is a safe fallback if stale data is shown.
     return items.filter((item) => {
       const years = Number(item.experienceYears || 0);
-      const byLevel =
-        selectedLevel === "Beginner"
-          ? years <= 3
-          : selectedLevel === "Intermediate"
-            ? years >= 2 && years <= 6
-            : years >= 5;
-      return byLevel;
+      return selectedLevel === "Beginner"
+        ? years <= 3
+        : selectedLevel === "Intermediate"
+          ? years >= 2 && years <= 6
+          : years >= 5;
     });
-  }, [items, selectedDomain, selectedLevel]);
+  }, [items, selectedLevel]);
+
+  const topMatch = filtered[0] || null;
+  const avgScore = filtered.length ? Math.round(filtered.reduce((sum, item) => sum + Number(item.matchScore || 0), 0) / filtered.length) : 0;
 
   return (
     <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
-      <Text style={styles.pageTitle}>AI Mentor Matching</Text>
-      <Text style={styles.pageSub}>
-        {user?.role === "mentor"
-          ? "Find students aligned to your mentoring domains (based on your profile)."
-          : "Match with the right mentor using your domain, goal, and profile skills."}
-      </Text>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="sparkles" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Overview</Text></View>
-        <Text style={styles.meta}>
-          Recommendations are personalized using your saved ORIN profile (domain, sub-domain, goals, skills). You can also filter by domain/level.
+      <LinearGradient colors={["#0E6A42", "#1F7A4C", "#6FCF97"]} style={styles.hero}>
+        <Text style={styles.heroTitle}>AI Mentor Matching</Text>
+        <Text style={styles.heroSub}>
+          {user?.role === "mentor"
+            ? "Discover students who align with your mentoring domains and teaching level."
+            : "Find mentors who fit your domain, skill stage, and career direction."}
         </Text>
-      </View>
+        <View style={styles.heroStatsRow}>
+          <View style={styles.heroStatCard}>
+            <Text style={styles.heroStatValue}>{filtered.length}</Text>
+            <Text style={styles.heroStatLabel}>Matches</Text>
+          </View>
+          <View style={styles.heroStatCard}>
+            <Text style={styles.heroStatValue}>{avgScore}%</Text>
+            <Text style={styles.heroStatLabel}>Avg Match</Text>
+          </View>
+          <View style={styles.heroStatCard}>
+            <Text style={styles.heroStatValue}>{selectedLevel}</Text>
+            <Text style={styles.heroStatLabel}>Level</Text>
+          </View>
+        </View>
+      </LinearGradient>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="options" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Main Feature</Text></View>
+        <Text style={styles.sectionTitle}>Find Your Best Match</Text>
         <Text style={styles.label}>Domain</Text>
         <View style={styles.chips}>
-          {(domainTree?.primaryCategories || []).map((d) => (
-            <TouchableOpacity key={d} style={[styles.chip, selectedDomain===d && styles.chipActive]} onPress={() => setSelectedDomain(d)}>
-              <Text style={[styles.chipText, selectedDomain===d && styles.chipTextActive]}>{d}</Text>
+          {(domainTree?.primaryCategories || []).map((item) => (
+            <TouchableOpacity key={item} style={[styles.chip, selectedDomain === item && styles.chipActive]} onPress={() => setSelectedDomain(item)}>
+              <Text style={[styles.chipText, selectedDomain === item && styles.chipTextActive]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
         <Text style={styles.label}>Experience Level</Text>
-        <View style={styles.chips}>{LEVEL_OPTIONS.map((d) => <TouchableOpacity key={d} style={[styles.chip, selectedLevel===d && styles.chipActive]} onPress={() => setSelectedLevel(d)}><Text style={[styles.chipText, selectedLevel===d && styles.chipTextActive]}>{d}</Text></TouchableOpacity>)}</View>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => { setFinding(true); load(true); }}><Text style={styles.primaryBtnText}>{finding ? "Finding..." : "Find Mentor"}</Text></TouchableOpacity>
+        <View style={styles.chips}>
+          {LEVEL_OPTIONS.map((item) => (
+            <TouchableOpacity key={item} style={[styles.chip, selectedLevel === item && styles.chipActive]} onPress={() => setSelectedLevel(item)}>
+              <Text style={[styles.chipText, selectedLevel === item && styles.chipTextActive]}>{item}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <TouchableOpacity style={styles.primaryBtn} onPress={() => { setFinding(true); load(true); }}>
+          <Text style={styles.primaryBtnText}>{finding ? "Finding..." : "Find Best Match"}</Text>
+        </TouchableOpacity>
       </View>
 
+      {topMatch ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Top Recommendation</Text>
+          <LinearGradient colors={["#EEF4FF", "#F7F8FF"]} style={styles.topCard}>
+            <View style={styles.topCardHeader}>
+              <View>
+                <Text style={styles.topCardName}>{topMatch.name}</Text>
+                <Text style={styles.meta}>{topMatch.title || "Mentor"}</Text>
+              </View>
+              <View style={styles.matchBadge}>
+                <Text style={styles.matchBadgeText}>{topMatch.matchScore}%</Text>
+              </View>
+            </View>
+            <Text style={styles.meta}>
+              {(topMatch.primaryCategory || selectedDomain) ? `${topMatch.primaryCategory || selectedDomain}${topMatch.subCategory ? ` > ${topMatch.subCategory}` : ""}` : ""}
+            </Text>
+            <Text style={styles.meta}>Experience: {topMatch.experienceYears || 0} yrs | Rating: {Number(topMatch.rating || 0).toFixed(1)}</Text>
+            <View style={styles.reasonRow}>
+              {(topMatch.reasons || []).slice(0, 3).map((reason) => (
+                <View key={reason} style={styles.reasonPill}>
+                  <Text style={styles.reasonText}>{reason}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={styles.actionRow}>
+              <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push(`/mentor/${topMatch.mentorId}` as never)}>
+                <Text style={styles.primaryBtnText}>View Profile</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push(`/mentor/${topMatch.mentorId}` as never)}>
+                <Text style={styles.secondaryBtnText}>Book Session</Text>
+              </TouchableOpacity>
+            </View>
+          </LinearGradient>
+        </View>
+      ) : null}
+
       <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="list" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Results</Text></View>
+        <Text style={styles.sectionTitle}>Recommended Mentors</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
-        {!loading && filtered.length === 0 ? <Text style={styles.meta}>No mentors found for current filters.</Text> : null}
+        {!loading && filtered.length === 0 ? <Text style={styles.meta}>No mentors found for the current filters.</Text> : null}
         {filtered.map((item) => (
           <View key={item.mentorId} style={styles.resultCard}>
-            <Text style={styles.resultTitle}>{item.name}</Text>
-            <Text style={styles.meta}>{item.title || "Mentor"}</Text>
-            <Text style={styles.meta}>
-              {(item.primaryCategory || selectedDomain) ? `${item.primaryCategory || selectedDomain}${item.subCategory ? ` > ${item.subCategory}` : ""}` : ""}
-            </Text>
-            <Text style={styles.meta}>Experience: {item.experienceYears || 0} yrs | Rating: {item.rating || 0}</Text>
-            <Text style={styles.score}>Match Score: {item.matchScore}%</Text>
-            {(item.reasons || []).length ? (
-              <Text style={styles.meta}>Why: {(item.reasons || []).slice(0, 3).join(" · ")}</Text>
-            ) : null}
-            <TouchableOpacity
-              style={styles.secondaryBtn}
-              onPress={() => router.push(`/mentor/${item.mentorId}` as never)}
-            >
-              <Text style={styles.secondaryBtnText}>View Profile</Text>
-            </TouchableOpacity>
+            <View style={styles.resultTop}>
+              <View style={styles.avatarPlaceholder}>
+                <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+              </View>
+              <View style={styles.resultBody}>
+                <View style={styles.resultHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.resultTitle}>{item.name}</Text>
+                    <Text style={styles.meta}>{item.title || "Mentor"}</Text>
+                  </View>
+                  <Text style={styles.score}>{item.matchScore}% Match</Text>
+                </View>
+                <Text style={styles.meta}>
+                  {(item.primaryCategory || selectedDomain) ? `${item.primaryCategory || selectedDomain}${item.subCategory ? ` > ${item.subCategory}` : ""}` : ""}
+                </Text>
+                <Text style={styles.meta}>Experience: {item.experienceYears || 0} yrs | Rating: {Number(item.rating || 0).toFixed(1)}</Text>
+                {(item.reasons || []).length ? (
+                  <View style={styles.reasonRow}>
+                    {(item.reasons || []).slice(0, 3).map((reason) => (
+                      <View key={reason} style={styles.reasonPillSoft}>
+                        <Text style={styles.reasonSoftText}>{reason}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                <View style={styles.actionRow}>
+                  <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push(`/mentor/${item.mentorId}` as never)}>
+                    <Text style={styles.secondaryBtnText}>View Profile</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push(`/mentor/${item.mentorId}` as never)}>
+                    <Text style={styles.ghostBtnText}>Connect</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
           </View>
         ))}
       </View>
 
       <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="flash" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Actions</Text></View>
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={() => {
-            const first = filtered[0];
-            if (!first) return;
-            router.push(`/mentor/${first.mentorId}` as never);
-          }}
-        >
-          <Text style={styles.primaryBtnText}>Book a Session</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.secondaryBtn}
-          onPress={async () => {
-            if (!filtered.length) {
-              notify("No results to save yet.");
-              return;
-            }
-            await saveAiItem({
-              type: "mentor_matching",
-              title: `Mentor Matches: ${selectedDomain} (${selectedLevel})`,
-              payload: {
-                domain: selectedDomain,
-                level: selectedLevel,
-                savedCount: Math.min(filtered.length, 12),
-                results: filtered.slice(0, 12)
+        <Text style={styles.sectionTitle}>Actions</Text>
+        <View style={styles.actionRow}>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={() => {
+              const first = filtered[0];
+              if (!first) {
+                notify("No mentor available yet.");
+                return;
               }
-            });
-            notify("Saved to Saved AI.");
-          }}
-        >
-          <Text style={styles.secondaryBtnText}>Save Results</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Tips</Text></View>
-        <Text style={styles.meta}>Choose a narrow domain and realistic level for better matching accuracy.</Text>
+              router.push(`/mentor/${first.mentorId}` as never);
+            }}
+          >
+            <Text style={styles.primaryBtnText}>Open Best Match</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.secondaryBtn}
+            onPress={async () => {
+              if (!filtered.length) {
+                notify("No results to save yet.");
+                return;
+              }
+              await saveAiItem({
+                type: "mentor_matching",
+                title: `Mentor Matches: ${selectedDomain} (${selectedLevel})`,
+                payload: {
+                  domain: selectedDomain,
+                  level: selectedLevel,
+                  savedCount: Math.min(filtered.length, 12),
+                  results: filtered.slice(0, 12)
+                }
+              });
+              notify("Saved to Saved AI.");
+            }}
+          >
+            <Text style={styles.secondaryBtnText}>Save Results</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  page: { padding: 16, backgroundColor: "#F3F6FB", gap: 10 },
-  pageTitle: { fontSize: 26, fontWeight: "800", color: "#11261E" },
-  pageSub: { color: "#667085" },
-  section: { backgroundColor: "#FFFFFF", borderRadius: 14, borderWidth: 1, borderColor: "#E4E7EC", padding: 12, gap: 8 },
-  sectionHeader: { flexDirection: "row", alignItems: "center", gap: 6 },
-  sectionTitle: { fontWeight: "800", color: "#1E2B24" },
-  label: { color: "#344054", fontWeight: "700", marginTop: 4 },
+  page: { padding: 16, backgroundColor: "#F3F6FB", gap: 12 },
+  hero: { borderRadius: 24, padding: 18, gap: 12 },
+  heroTitle: { fontSize: 28, fontWeight: "900", color: "#FFFFFF" },
+  heroSub: { color: "#EAFBF1", lineHeight: 20 },
+  heroStatsRow: { flexDirection: "row", gap: 10 },
+  heroStatCard: { flex: 1, backgroundColor: "rgba(255,255,255,0.14)", borderRadius: 16, padding: 12, gap: 4 },
+  heroStatValue: { color: "#FFFFFF", fontWeight: "900", fontSize: 18 },
+  heroStatLabel: { color: "#EAFBF1", fontSize: 12, fontWeight: "700" },
+  section: { backgroundColor: "#FFFFFF", borderRadius: 18, borderWidth: 1, borderColor: "#E4E7EC", padding: 14, gap: 10 },
+  sectionTitle: { fontWeight: "800", color: "#1E2B24", fontSize: 17 },
+  label: { color: "#344054", fontWeight: "700", marginTop: 2 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  chip: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: "#fff" },
+  chip: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#fff" },
   chipActive: { borderColor: "#1F7A4C", backgroundColor: "#EAF6EF" },
   chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
   chipTextActive: { color: "#1F7A4C" },
-  resultCard: { backgroundColor: "#EEF4FF", borderColor: "#C7D7FE", borderWidth: 1, borderRadius: 12, padding: 10, gap: 4 },
-  resultTitle: { fontWeight: "800", color: "#1E2B24" },
-  score: { color: "#165DFF", fontWeight: "800" },
-  meta: { color: "#667085" },
+  topCard: { borderRadius: 18, padding: 16, gap: 10, borderWidth: 1, borderColor: "#D6E4FF" },
+  topCardHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
+  topCardName: { color: "#101828", fontSize: 20, fontWeight: "900" },
+  matchBadge: { backgroundColor: "#175CD3", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  matchBadgeText: { color: "#FFFFFF", fontWeight: "900" },
+  resultCard: { backgroundColor: "#FCFDFF", borderColor: "#D9E3F0", borderWidth: 1, borderRadius: 16, padding: 12 },
+  resultTop: { flexDirection: "row", gap: 12 },
+  avatarPlaceholder: { width: 54, height: 54, borderRadius: 27, backgroundColor: "#EAF6EF", alignItems: "center", justifyContent: "center" },
+  avatarText: { color: "#1F7A4C", fontWeight: "900", fontSize: 20 },
+  resultBody: { flex: 1, gap: 6 },
+  resultHeader: { flexDirection: "row", justifyContent: "space-between", gap: 8 },
+  resultTitle: { fontWeight: "800", color: "#1E2B24", fontSize: 16 },
+  score: { color: "#175CD3", fontWeight: "900" },
+  reasonRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  reasonPill: { backgroundColor: "#FFFFFF", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: "#D6E4FF" },
+  reasonText: { color: "#344054", fontWeight: "700", fontSize: 12 },
+  reasonPillSoft: { backgroundColor: "#F5F8FF", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
+  reasonSoftText: { color: "#175CD3", fontWeight: "700", fontSize: 12 },
+  meta: { color: "#667085", lineHeight: 20 },
   error: { color: "#B42318" },
-  primaryBtn: { alignSelf: "flex-start", backgroundColor: "#1F7A4C", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 9 },
-  primaryBtnText: { color: "#fff", fontWeight: "700" },
-  secondaryBtn: { alignSelf: "flex-start", borderWidth: 1, borderColor: "#175CD3", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, marginTop: 4 },
-  secondaryBtnText: { color: "#175CD3", fontWeight: "700" }
+  actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  primaryBtn: { alignSelf: "flex-start", backgroundColor: "#1F7A4C", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11 },
+  primaryBtnText: { color: "#fff", fontWeight: "800" },
+  secondaryBtn: { alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: "#EEF4FF" },
+  secondaryBtnText: { color: "#175CD3", fontWeight: "800" },
+  ghostBtn: { alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: "#F4FBF7", borderWidth: 1, borderColor: "#B7E4C7" },
+  ghostBtnText: { color: "#1F7A4C", fontWeight: "800" }
 });
