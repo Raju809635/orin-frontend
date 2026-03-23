@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import GlobalHeader from "@/components/global-header";
 
 type CounterpartUser = {
   _id: string;
@@ -61,6 +62,8 @@ type StudentSession = {
 };
 
 const QUICK_EMOJIS = ["😊", "🔥", "👏", "💡", "🚀", "🙏"];
+
+const MESSAGE_TABS = ["Mentors", "Circle"] as const;
 
 function formatMessageTime(dateValue?: string) {
   if (!dateValue) return "";
@@ -119,6 +122,7 @@ export default function ChatScreen() {
   const [activeTyping, setActiveTyping] = useState(false);
   const [showEmojiBar, setShowEmojiBar] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<(typeof MESSAGE_TABS)[number]>("Mentors");
 
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingActiveRef = useRef(false);
@@ -127,6 +131,24 @@ export default function ChatScreen() {
     () => conversations.find((item) => item.counterpartId === activeUserId) || null,
     [activeUserId, conversations]
   );
+
+  const filteredConversations = useMemo(() => {
+    return conversations.filter((item) => {
+      const isMentorshipConversation =
+        user?.role === "mentor"
+          ? item.counterpart.role === "student" || item.counterpart.role === "mentor"
+          : item.counterpart.role === "mentor";
+      return activeTab === "Mentors" ? isMentorshipConversation : !isMentorshipConversation;
+    });
+  }, [activeTab, conversations, user?.role]);
+
+  useEffect(() => {
+    if (!filteredConversations.length) return;
+    const stillVisible = filteredConversations.some((item) => item.counterpartId === activeUserId);
+    if (!stillVisible) {
+      setActiveUserId(filteredConversations[0].counterpartId);
+    }
+  }, [activeUserId, filteredConversations]);
 
   const lastOutgoingMessageId = useMemo(() => {
     const lastMine = [...messages].reverse().find((item) => item.sender === user?.id);
@@ -335,26 +357,42 @@ export default function ChatScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 84 : 0}
     >
+      <GlobalHeader searchPlaceholder="Search mentors or circle chats" />
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.screenHeader}>
-          <Text style={styles.heading}>Circle Conversations</Text>
-          <Text style={styles.subTitle}>Fast, live conversations with your mentoring circle.</Text>
+          <Text style={styles.heading}>Messages</Text>
+          <Text style={styles.subTitle}>Stay close to mentors and your circle from one clean conversation hub.</Text>
         </View>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
+        <View style={styles.tabRow}>
+          {MESSAGE_TABS.map((tab) => {
+            const active = activeTab === tab;
+            return (
+              <TouchableOpacity
+                key={tab}
+                style={[styles.tabChip, active && styles.tabChipActive]}
+                onPress={() => setActiveTab(tab)}
+              >
+                <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <View style={styles.quickActionsRow}>
           <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push("/mentors" as never)}>
             <Ionicons name="search-outline" size={16} color="#1F7A4C" />
-            <Text style={styles.quickActionText}>Find Mentor</Text>
+            <Text style={styles.quickActionText}>{activeTab === "Mentors" ? "Find Mentor" : "Find People"}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push("/network" as never)}>
+          <TouchableOpacity style={styles.quickActionBtn} onPress={() => router.push("/network?section=connections" as never)}>
             <Ionicons name="add-outline" size={16} color="#1F7A4C" />
             <Text style={styles.quickActionText}>New Chat</Text>
           </TouchableOpacity>
         </View>
 
-        {user?.role === "student" ? (
+        {user?.role === "student" && activeTab === "Mentors" ? (
           <>
             <Text style={styles.sectionTitle}>Confirmed Mentors</Text>
             {confirmedMentors.length > 0 ? (
@@ -394,8 +432,8 @@ export default function ChatScreen() {
 
         <Text style={styles.sectionTitle}>Recent Chats</Text>
         <View style={styles.conversationList}>
-          {conversations.length > 0 ? (
-            conversations.map((item) => {
+          {filteredConversations.length > 0 ? (
+            filteredConversations.map((item) => {
               const isActive = activeUserId === item.counterpartId;
               return (
                 <TouchableOpacity
@@ -435,8 +473,12 @@ export default function ChatScreen() {
           ) : (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyEmoji}>💬</Text>
-              <Text style={styles.emptyTitle}>No conversations yet</Text>
-              <Text style={styles.emptyText}>Connect with people from Network to start your first ORIN chat.</Text>
+              <Text style={styles.emptyTitle}>No {activeTab.toLowerCase()} conversations yet</Text>
+              <Text style={styles.emptyText}>
+                {activeTab === "Mentors"
+                  ? "Connect with mentors or confirm a mentorship session to start chatting."
+                  : "Connect with people from your network to start your first circle chat."}
+              </Text>
             </View>
           )}
         </View>
@@ -582,6 +624,32 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 10,
     marginBottom: 14
+  },
+  tabRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 14
+  },
+  tabChip: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 11,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#FFFFFF"
+  },
+  tabChipActive: {
+    borderColor: "#1F7A4C",
+    backgroundColor: "#EAF6EF"
+  },
+  tabChipText: {
+    color: "#475467",
+    fontWeight: "800"
+  },
+  tabChipTextActive: {
+    color: "#1F7A4C"
   },
   quickActionBtn: {
     flexDirection: "row",

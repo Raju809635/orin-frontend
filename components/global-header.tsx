@@ -103,14 +103,11 @@ export default function GlobalHeader({
   return (
     <View style={[styles.safeWrap, { paddingTop: insets.top + 8 }]}>
       <View style={styles.row}>
-        <View style={styles.leftCluster}>
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
-          >
-            <Ionicons name="menu" size={20} color="#1E2B24" />
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.avatarTap} onPress={() => router.push("/my-profile" as never)}>
+        <TouchableOpacity
+          style={styles.avatarTap}
+          onPress={() => navigation.dispatch(DrawerActions.openDrawer())}
+          activeOpacity={0.9}
+        >
             {profilePhotoUrl ? (
               <Image source={{ uri: profilePhotoUrl }} style={styles.avatar} />
             ) : (
@@ -119,7 +116,6 @@ export default function GlobalHeader({
               </View>
             )}
           </TouchableOpacity>
-        </View>
 
         <View style={styles.searchWrap}>
           <Ionicons name="search" size={18} color="#667085" />
@@ -160,23 +156,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12
   },
-  leftCluster: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10
-  },
-  iconButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-    borderWidth: 1,
-    borderColor: "#E4E7EC"
-  },
   avatarTap: {
-    borderRadius: 20
+    borderRadius: 20,
+    transform: [{ scale: 1 }]
   },
   avatar: {
     width: 40,

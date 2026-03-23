@@ -2,6 +2,7 @@ import "react-native-gesture-handler";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Alert,
   AppState,
   AppStateStatus,
@@ -22,8 +23,7 @@ import { api } from "@/lib/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function defaultRouteByRole(role: "student" | "mentor") {
-  if (role === "student") return "/student-dashboard?section=overview";
-  return "/mentor-dashboard?section=overview";
+  return "/network?section=feed";
 }
 
 function homeRouteForUser(user: { role: "student" | "mentor"; approvalStatus?: "pending" | "approved" | "rejected" }) {
@@ -38,7 +38,7 @@ function RootDrawer() {
   const router = useRouter();
   const navigation = useNavigation();
   const pathname = usePathname();
-  const { user, isAuthenticated, isBootstrapping } = useAuth();
+  const { user, isAuthenticated, isBootstrapping, logout } = useAuth();
   const [drawerPhotoUrl, setDrawerPhotoUrl] = useState("");
   const [drawerReputation, setDrawerReputation] = useState<{ levelTag?: string; xp?: number; score?: number } | null>(null);
   const [drawerMentorStats, setDrawerMentorStats] = useState<{ rating?: number; studentsMentored?: number } | null>(null);
@@ -292,6 +292,7 @@ function RootDrawer() {
       props.navigation.closeDrawer();
       router.replace(path as never);
     };
+    const profilePath = user?.role === "mentor" ? "/mentor-profile" : "/my-profile";
 
     return (
       <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContent}>
@@ -319,36 +320,27 @@ function RootDrawer() {
               </View>
             </View>
             <TouchableOpacity
-              onPress={() => router.push("/my-profile" as never)}
+              onPress={() => openDrawerRoute(profilePath)}
             >
             <Text style={styles.drawerProfileLink}>View Profile</Text>
             </TouchableOpacity>
           </View>
         ) : null}
         <View style={styles.drawerFlatList}>
-          {user?.role === "mentor" ? (
-            <>
-              <DrawerItem label="Domains" onPress={() => openDrawerRoute("/mentor-profile")} />
-              <DrawerItem label="Availability" onPress={() => openDrawerRoute("/mentor-dashboard?section=availability")} />
-              <DrawerItem label="Session Pricing" onPress={() => openDrawerRoute("/mentor-dashboard?section=pricing")} />
-              <DrawerItem label="AI Assistant" onPress={() => openDrawerRoute("/ai-assistant")} />
-              <DrawerItem label="News & Updates" onPress={() => openDrawerRoute("/news-updates")} />
-              <DrawerItem label="Collaborate" onPress={() => openDrawerRoute("/collaborate")} />
-              <DrawerItem label="Settings" onPress={() => openDrawerRoute("/settings")} />
-            </>
-          ) : (
-            <>
-              <DrawerItem label="Domains" onPress={() => openDrawerRoute("/domains")} />
-              <DrawerItem
-                label="Daily Quiz"
-                onPress={() => openDrawerRoute("/student-dashboard?section=overview&openQuiz=1")}
-              />
-              <DrawerItem label="AI Assistant" onPress={() => openDrawerRoute("/ai-assistant")} />
-              <DrawerItem label="News & Updates" onPress={() => openDrawerRoute("/news-updates")} />
-              <DrawerItem label="Collaborate" onPress={() => openDrawerRoute("/collaborate")} />
-              <DrawerItem label="Settings" onPress={() => openDrawerRoute("/settings")} />
-            </>
-          )}
+          <DrawerItem label="Profile" icon={({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />} onPress={() => openDrawerRoute(profilePath)} />
+          <DrawerItem label="Certificates" icon={({ color, size }) => <Ionicons name="ribbon-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/community/certifications")} />
+          <DrawerItem label="Saved" icon={({ color, size }) => <Ionicons name="bookmark-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/saved-posts")} />
+          <DrawerItem label="Settings" icon={({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/settings")} />
+          <DrawerItem label="Notifications" icon={({ color, size }) => <Ionicons name="notifications-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/notifications")} />
+          <DrawerItem
+            label="Logout"
+            icon={({ color, size }) => <Ionicons name="log-out-outline" size={size} color={color} />}
+            onPress={async () => {
+              props.navigation.closeDrawer();
+              await logout();
+              router.replace("/login" as never);
+            }}
+          />
         </View>
       </DrawerContentScrollView>
     );
@@ -362,17 +354,17 @@ function RootDrawer() {
   }
 
   const studentTabs = [
-    { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/student-dashboard?section=overview" },
+    { key: "home", label: "Home", icon: "home", path: "/network?section=feed" },
     { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
-    { key: "network", label: "Network", icon: "people", path: "/network?section=feed" },
+    { key: "journey", label: "Journey", icon: "map", path: "/student-dashboard?section=overview" },
     { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
     { key: "community", label: "Community", icon: "trophy", path: "/community-growth" }
   ] as const;
 
   const mentorTabs = [
-    { key: "dashboard", label: "Dashboard", icon: "speedometer", path: "/mentor-dashboard?section=overview" },
+    { key: "home", label: "Home", icon: "home", path: "/network?section=feed" },
     { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
-    { key: "network", label: "Network", icon: "people", path: "/network?section=feed" },
+    { key: "journey", label: "Journey", icon: "map", path: "/mentor-dashboard?section=overview" },
     { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
     { key: "community", label: "Community", icon: "trophy", path: "/community-growth" }
   ] as const;
@@ -381,13 +373,13 @@ function RootDrawer() {
   const isTabActive = (tabKey: string, path: string) => {
     const basePath = path.split("?")[0];
     if (basePath === "/") return pathname === "/";
-    if (tabKey === "dashboard" && basePath.startsWith("/student-dashboard")) return pathname.startsWith("/student-dashboard");
-    if (tabKey === "dashboard" && basePath.startsWith("/mentor-dashboard")) return pathname.startsWith("/mentor-dashboard");
+    if (tabKey === "journey" && basePath.startsWith("/student-dashboard")) return pathname.startsWith("/student-dashboard");
+    if (tabKey === "journey" && basePath.startsWith("/mentor-dashboard")) return pathname.startsWith("/mentor-dashboard");
     if (tabKey === "mentorship") {
       return pathname.startsWith("/mentorship") || pathname.startsWith("/domains") || pathname.startsWith("/domain-guide") || pathname.startsWith("/mentor/");
     }
     if (tabKey === "ai") return pathname.startsWith("/ai-hub") || pathname.startsWith("/ai-assistant");
-    if (tabKey === "network") return pathname.startsWith("/network") || pathname.startsWith("/posts");
+    if (tabKey === "home") return pathname.startsWith("/network") || pathname.startsWith("/posts");
     if (tabKey === "community") return pathname.startsWith("/community-growth") || pathname.startsWith("/collaborate");
     return pathname.startsWith(basePath);
   };
@@ -398,8 +390,7 @@ function RootDrawer() {
         <Drawer
           drawerContent={renderDrawerContent}
           screenOptions={{
-            headerStyle: { backgroundColor: "#1F7A4C" },
-            headerTintColor: "#fff",
+            headerShown: false,
             drawerActiveTintColor: "#1F7A4C"
           }}
         >
@@ -461,15 +452,67 @@ function RootDrawer() {
           {tabs.map((tab) => {
             const active = isTabActive(tab.key, tab.path);
             return (
-              <TouchableOpacity key={tab.key} style={styles.bottomNavItem} onPress={() => router.push(tab.path as never)}>
-                <Ionicons name={tab.icon as any} size={20} color={active ? "#1F7A4C" : "#667085"} />
-                <Text style={[styles.bottomNavLabel, active && styles.bottomNavLabelActive]}>{tab.label}</Text>
-              </TouchableOpacity>
+              <AnimatedTabButton
+                key={tab.key}
+                tab={tab}
+                active={active}
+                onPress={() => router.push(tab.path as never)}
+              />
             );
           })}
         </View>
       ) : null}
     </View>
+  );
+}
+
+function AnimatedTabButton({
+  tab,
+  active,
+  onPress
+}: {
+  tab: { key: string; label: string; icon: string; path: string };
+  active: boolean;
+  onPress: () => void;
+}) {
+  const scale = useRef(new Animated.Value(active ? 1 : 0.96)).current;
+  const lift = useRef(new Animated.Value(active ? -2 : 0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.spring(scale, {
+        toValue: active ? 1.08 : 1,
+        useNativeDriver: true,
+        friction: 5,
+        tension: 140
+      }),
+      Animated.spring(lift, {
+        toValue: active ? -2 : 0,
+        useNativeDriver: true,
+        friction: 6,
+        tension: 130
+      })
+    ]).start();
+  }, [active, lift, scale]);
+
+  const isCenter = tab.key === "journey";
+
+  return (
+    <TouchableOpacity style={styles.bottomNavTouch} activeOpacity={0.9} onPress={onPress}>
+      <Animated.View
+        style={[
+          styles.bottomNavItem,
+          isCenter && styles.bottomNavItemCenter,
+          active && styles.bottomNavItemActive,
+          {
+            transform: [{ scale }, { translateY: lift }]
+          }
+        ]}
+      >
+        <Ionicons name={tab.icon as any} size={isCenter ? 22 : 20} color={active ? "#1F7A4C" : "#667085"} />
+        <Text style={[styles.bottomNavLabel, active && styles.bottomNavLabelActive]}>{tab.label}</Text>
+      </Animated.View>
+    </TouchableOpacity>
   );
 }
 
@@ -528,8 +571,23 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingHorizontal: 8
   },
-  bottomNavItem: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2, paddingVertical: 4 },
-  bottomNavLabel: { fontSize: 11, color: "#667085", fontWeight: "600" },
+  bottomNavTouch: { flex: 1 },
+  bottomNavItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: 6,
+    borderRadius: 16
+  },
+  bottomNavItemCenter: {
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#CFE8D6"
+  },
+  bottomNavItemActive: {
+    backgroundColor: "#F7FAF8"
+  },
+  bottomNavLabel: { fontSize: 11, color: "#667085", fontWeight: "700" },
   bottomNavLabelActive: { color: "#1F7A4C" },
   loadingContainer: {
     flex: 1,

@@ -103,9 +103,9 @@ type ConnectionRow = {
 type NetworkSectionId = "compose" | "feed" | "connections";
 
 const networkSections: { id: NetworkSectionId; label: string }[] = [
-  { id: "connections", label: "My Circle" },
-  { id: "compose", label: "Discover Circle" },
-  { id: "feed", label: "Circle Activity" }
+  { id: "feed", label: "Home Feed" },
+  { id: "compose", label: "Post" },
+  { id: "connections", label: "My Circle" }
 ];
 
 const FEED_BOTTOM_NAV_SPACE = 108;
@@ -534,9 +534,9 @@ export default function NetworkScreen() {
         contentContainerStyle={[styles.container, { paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
       >
-        <Text style={styles.heading}>Circle</Text>
+        <Text style={styles.heading}>Home</Text>
         <Text style={styles.subheading}>
-          {user?.role === "mentor" ? "Share insights and build your mentor presence." : "Build your learning network and share progress."}
+          {user?.role === "mentor" ? "Your professional feed for mentor insights, conversations, and visibility." : "Your student growth feed with people, ideas, and progress that match your journey."}
         </Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
@@ -557,7 +557,7 @@ export default function NetworkScreen() {
 
         {activeSection === "compose" ? (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>Discover Circle</Text>
+            <Text style={styles.cardTitle}>Start a post</Text>
             <View style={styles.chipsRow}>
               {[
                 ["learning_progress", "Learning"],
@@ -658,8 +658,19 @@ export default function NetworkScreen() {
         ) : null}
 
         {activeSection === "feed" ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Circle Activity</Text>
+          <View style={styles.feedSection}>
+            <TouchableOpacity
+              activeOpacity={0.92}
+              style={styles.startPostCard}
+              onPress={() => setActiveSection("compose")}
+            >
+              <View style={styles.startPostAvatar}>
+                <Text style={styles.startPostAvatarText}>{user?.name?.charAt(0)?.toUpperCase() || "O"}</Text>
+              </View>
+              <View style={styles.startPostInput}>
+                <Text style={styles.startPostPlaceholder}>Start a post...</Text>
+              </View>
+            </TouchableOpacity>
             {filteredPosts.filter((post) => !hiddenPostIds[post._id]).length === 0 ? (
               <Text style={styles.meta}>No posts yet. Create the first one.</Text>
             ) : (
@@ -704,12 +715,12 @@ export default function NetworkScreen() {
                             </Text>
                           </View>
                         )}
-                        <View style={{ flex: 1 }}>
-                          <Text style={styles.rowTitle}>{post.authorId?.name || "ORIN User"}</Text>
-                          <Text style={styles.metaSmall}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.rowTitle}>{post.authorId?.name || "ORIN User"}</Text>
+                            <Text style={styles.metaSmall}>
                             {(post.authorId?.role || "member").toUpperCase()} {"\u2022"} {formatPostTime(post.createdAt)}
                           </Text>
-                        </View>
+                          </View>
                       </TouchableOpacity>
                       {!isOwnPost && authorId ? (
                         <TouchableOpacity style={[styles.followBtn, isFollowing && styles.followingBtn]} onPress={() => follow(authorId)}>
@@ -874,7 +885,7 @@ export default function NetworkScreen() {
                         <Text style={styles.viewCommentsLink}>View all {post.commentCount || 0} comments</Text>
                       </TouchableOpacity>
                     ) : null}
-                  </View>
+                      </View>
                 );
               })
             )}
@@ -1132,8 +1143,8 @@ export default function NetworkScreen() {
 const styles = StyleSheet.create({
   container: { backgroundColor: "#F3F5F7", padding: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F3F5F7" },
-  heading: { fontSize: 26, fontWeight: "800", color: "#13251E" },
-  subheading: { marginTop: 4, marginBottom: 12, color: "#475467" },
+  heading: { fontSize: 30, fontWeight: "900", color: "#13251E" },
+  subheading: { marginTop: 6, marginBottom: 14, color: "#475467", lineHeight: 21 },
   error: { color: "#B42318", marginBottom: 8 },
   card: {
     backgroundColor: "#FFFFFF",
@@ -1183,7 +1194,47 @@ const styles = StyleSheet.create({
   rowTitle: { color: "#1E2B24", fontWeight: "700" },
   action: { color: "#175CD3", fontWeight: "700" },
   actionDanger: { color: "#B42318", fontWeight: "700" },
-  postCard: { borderWidth: 1, borderColor: "#E4E7EC", borderRadius: 12, padding: 12, marginVertical: 8, backgroundColor: "#FFFFFF" },
+  feedSection: { gap: 14 },
+  startPostCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    padding: 14,
+    marginBottom: 4
+  },
+  startPostAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#EAF6EF",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  startPostAvatarText: { color: "#1F7A4C", fontWeight: "900", fontSize: 18 },
+  startPostInput: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    backgroundColor: "#FAFAFA"
+  },
+  startPostPlaceholder: { color: "#667085", fontWeight: "600" },
+  postCard: {
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 14,
+    marginVertical: 2,
+    backgroundColor: "#FFFFFF"
+  },
   postHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   authorWrap: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
   authorAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, borderColor: "#D0D5DD" },
@@ -1220,16 +1271,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center"
   },
-  postText: { marginTop: 8, color: "#344054", lineHeight: 19 },
+  postText: { marginTop: 10, color: "#344054", lineHeight: 24, fontWeight: "500", fontSize: 15.5 },
   postLink: { color: "#175CD3", fontWeight: "700" },
   viewMoreBtn: { marginTop: 6, alignSelf: "flex-start" },
   viewMoreText: { color: "#175CD3", fontWeight: "800" },
   postImage: {
     width: carouselWidth,
     height: 240,
-    borderRadius: 10,
-    marginTop: 8,
-    marginRight: 6,
+    borderRadius: 14,
+    marginTop: 10,
+    marginRight: 8,
     borderWidth: 1,
     borderColor: "#E4E7EC"
   },
