@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Linking,
   RefreshControl,
   ScrollView,
   Share,
@@ -15,6 +14,8 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as Print from "expo-print";
+import * as Sharing from "expo-sharing";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import {
@@ -168,17 +169,29 @@ export default function CommunityCertificationsPage() {
   }
 
   async function handleDownload(item: SelectedCertificate) {
-    const url = item.certificateUrl || item.verificationUrl || item.qrCodeUrl || "";
-    if (!url) {
-      Alert.alert("Not ready", "This certificate does not have a downloadable file yet.");
-      return;
+    try {
+      const html = buildCertificateHtml({
+        recipientName: user?.name || "ORIN User",
+        title: item.title,
+        certificateId: item.certificateId || item.id,
+        issuedBy: item.issuedBy || "ORIN",
+        issuedAt: formatDate(item.issuedAt),
+        domain: item.domain || item.metadata?.domain || "ORIN",
+        level: item.level || item.metadata?.level || "Verified",
+        verificationUrl: item.verificationUrl || ""
+      });
+      const { uri } = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          mimeType: "application/pdf",
+          dialogTitle: `${item.title} certificate`
+        });
+      } else {
+        Alert.alert("Certificate ready", "PDF generated successfully.");
+      }
+    } catch {
+      Alert.alert("Unable to generate", "The certificate PDF could not be created right now.");
     }
-    const supported = await Linking.canOpenURL(url);
-    if (!supported) {
-      Alert.alert("Unable to open", "This certificate link could not be opened on this device.");
-      return;
-    }
-    await Linking.openURL(url);
   }
 
   async function handleVerify(item: SelectedCertificate) {
@@ -248,7 +261,7 @@ export default function CommunityCertificationsPage() {
                     <Text style={styles.cardTitle}>{mapped.title}</Text>
                     <StatusBadge label={item.level?.toLowerCase().includes("advanced") ? "Top Performer" : (item.status || "Completed")} tone={badgeTone} />
                   </View>
-                  <Text style={styles.cardMeta}>{mapped.domain || "ORIN Track"} � {formatDate(mapped.issuedAt)}</Text>
+                  <Text style={styles.cardMeta}>{mapped.domain || "ORIN Track"} - {formatDate(mapped.issuedAt)}</Text>
                   <Text style={styles.cardMetaSmall}>Certificate ID: {mapped.certificateId || mapped.id}</Text>
                 </View>
               </View>
@@ -275,7 +288,7 @@ export default function CommunityCertificationsPage() {
               </View>
               <View style={styles.previewHeaderBody}>
                 <Text style={styles.previewTitle}>{selected.title}</Text>
-                <Text style={styles.previewMeta}>{selected.domain || "ORIN"} � {selected.level || "Verified"}</Text>
+                <Text style={styles.previewMeta}>{selected.domain || "ORIN"} - {selected.level || "Verified"}</Text>
               </View>
             </View>
             <View style={styles.qrRow}>
@@ -317,7 +330,7 @@ export default function CommunityCertificationsPage() {
               <Text style={styles.cardTitle}>{item.title}</Text>
               <StatusBadge label={item.level || "Beginner"} tone="primary" />
             </View>
-            <Text style={styles.cardMeta}>{item.domain || "General"} � {(item.requirements || []).length} requirements</Text>
+            <Text style={styles.cardMeta}>{item.domain || "General"} - {(item.requirements || []).length} requirements</Text>
             {item.description ? <Text style={styles.cardDescription}>{item.description}</Text> : null}
             <View style={styles.pillRow}>
               {(item.requirements || []).slice(0, 3).map((req) => (
@@ -369,7 +382,7 @@ export default function CommunityCertificationsPage() {
               <Text style={styles.cardTitle}>{request.track?.title || "Certification request"}</Text>
               <StatusBadge label={request.status} tone={requestStatusTone(request.status)} />
             </View>
-            <Text style={styles.cardMeta}>{request.track?.domain || "ORIN"} � {request.track?.level || "Track review"}</Text>
+            <Text style={styles.cardMeta}>{request.track?.domain || "ORIN"} - {request.track?.level || "Track review"}</Text>
             {request.note ? <Text style={styles.cardDescription}>{request.note}</Text> : null}
           </View>
         ))}
@@ -403,6 +416,81 @@ function formatDate(value?: string | null) {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
+function buildCertificateHtml({
+  recipientName,
+  title,
+  certificateId,
+  issuedBy,
+  issuedAt,
+  domain,
+  level,
+  verificationUrl
+}: {
+  recipientName: string;
+  title: string;
+  certificateId: string;
+  issuedBy: string;
+  issuedAt: string;
+  domain: string;
+  level: string;
+  verificationUrl: string;
+}) {
+  return `
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <style>
+          body { font-family: Helvetica, Arial, sans-serif; margin: 0; padding: 32px; color: #12261d; background: #f6fbf8; }
+          .shell { border: 8px solid #0e6a42; border-radius: 24px; background: white; padding: 36px; box-shadow: 0 10px 30px rgba(16,24,40,0.08); }
+          .brand { text-align: center; color: #0e6a42; font-weight: 800; letter-spacing: 2px; font-size: 14px; text-transform: uppercase; }
+          h1 { text-align: center; margin: 18px 0 6px; font-size: 34px; color: #101828; }
+          .subtitle { text-align: center; color: #667085; font-size: 15px; margin-bottom: 28px; }
+          .recipient { text-align: center; font-size: 36px; font-weight: 800; color: #0e6a42; margin: 10px 0 18px; }
+          .course { text-align: center; font-size: 22px; font-weight: 700; color: #101828; margin-bottom: 28px; }
+          .meta-grid { display: table; width: 100%; margin-top: 18px; }
+          .meta-row { display: table-row; }
+          .meta-item { display: table-cell; width: 33.3%; padding: 12px 8px; text-align: center; }
+          .label { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #667085; margin-bottom: 6px; }
+          .value { font-size: 16px; font-weight: 700; color: #101828; }
+          .footer { margin-top: 34px; padding-top: 20px; border-top: 1px solid #e4e7ec; text-align: center; color: #667085; font-size: 12px; line-height: 1.6; }
+          .seal { margin: 28px auto 0; width: 94px; height: 94px; border-radius: 47px; background: linear-gradient(135deg, #0e6a42, #63d297); color: white; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 16px; text-align: center; }
+        </style>
+      </head>
+      <body>
+        <div class="shell">
+          <div class="brand">ORIN Certificate of Achievement</div>
+          <h1>Certificate of Completion</h1>
+          <div class="subtitle">This certifies that</div>
+          <div class="recipient">${escapeHtml(recipientName)}</div>
+          <div class="subtitle">has successfully completed</div>
+          <div class="course">${escapeHtml(title)}</div>
+          <div class="meta-grid">
+            <div class="meta-row">
+              <div class="meta-item"><div class="label">Domain</div><div class="value">${escapeHtml(domain)}</div></div>
+              <div class="meta-item"><div class="label">Level</div><div class="value">${escapeHtml(level)}</div></div>
+              <div class="meta-item"><div class="label">Issued On</div><div class="value">${escapeHtml(issuedAt)}</div></div>
+            </div>
+          </div>
+          <div class="seal">Verified<br/>ORIN</div>
+          <div class="footer">
+            Certificate ID: ${escapeHtml(certificateId)}<br/>
+            Issued by ${escapeHtml(issuedBy)}<br/>
+            ${verificationUrl ? `Verify at: ${escapeHtml(verificationUrl)}` : ""}
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+function escapeHtml(value: string) {
+  return String(value || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 const styles = StyleSheet.create({
   page: { padding: 16, backgroundColor: "#F4F7FB", gap: 14 },
   progressHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
@@ -506,3 +594,7 @@ const styles = StyleSheet.create({
     paddingVertical: 11
   }
 });
+
+
+
+

@@ -1,4 +1,4 @@
-﻿import AsyncStorage from "@react-native-async-storage/async-storage";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -38,6 +38,7 @@ export default function AiCareerRoadmapPage() {
   const [generationStage, setGenerationStage] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
+  const [activeStepNumber, setActiveStepNumber] = useState<number | null>(null);
   const [claimingCertificate, setClaimingCertificate] = useState(false);
   const initialLoadRef = useRef(false);
 
@@ -92,8 +93,10 @@ export default function AiCareerRoadmapPage() {
       const raw = await AsyncStorage.getItem(roadmapKey);
       const parsed = raw ? JSON.parse(raw) : null;
       setCompletedSteps(Array.isArray(parsed?.completedSteps) ? parsed.completedSteps : []);
+      setActiveStepNumber(Number.isFinite(parsed?.activeStepNumber) ? Number(parsed.activeStepNumber) : null);
     } catch {
       setCompletedSteps([]);
+      setActiveStepNumber(null);
     }
   }, [roadmapKey]);
 
@@ -103,10 +106,17 @@ export default function AiCareerRoadmapPage() {
   }, [data, loadProgress]);
 
   const persistProgress = useCallback(
-    async (steps: number[]) => {
+    async (steps: number[], nextActiveStepNumber: number | null) => {
       setCompletedSteps(steps);
+      setActiveStepNumber(nextActiveStepNumber);
       try {
-        await AsyncStorage.setItem(roadmapKey, JSON.stringify({ completedSteps: steps }));
+        await AsyncStorage.setItem(
+          roadmapKey,
+          JSON.stringify({
+            completedSteps: steps,
+            activeStepNumber: nextActiveStepNumber
+          })
+        );
       } catch {}
     },
     [roadmapKey]
@@ -176,14 +186,33 @@ export default function AiCareerRoadmapPage() {
   const levels = ["Starter", "Explorer", "Builder", "Pro", "Elite", "Legend"];
   const socialCount = 12 + totalSteps * 14;
 
-  const toggleMission = useCallback(
+  const startMission = useCallback(
     async (stepNumber: number) => {
-      const isCompleted = completedSteps.includes(stepNumber);
-      const next = isCompleted ? completedSteps.filter((item) => item !== stepNumber) : [...completedSteps, stepNumber].sort((a, b) => a - b);
-      await persistProgress(next);
-      notify(isCompleted ? "Mission reopened." : `Mission completed. +${MISSION_XP} XP`);
+      if (!currentMission || currentMission.stepNumber !== stepNumber) {
+        notify("Finish your current mission first.");
+        return;
+      }
+      if (completedSteps.includes(stepNumber)) {
+        notify("This mission is already completed.");
+        return;
+      }
+      await persistProgress(completedSteps, stepNumber);
+      notify("Mission started. Complete it after you finish the work.");
     },
-    [completedSteps, persistProgress]
+    [completedSteps, currentMission, persistProgress]
+  );
+
+  const completeMission = useCallback(
+    async (stepNumber: number) => {
+      if (activeStepNumber !== stepNumber) {
+        notify("Start this mission before completing it.");
+        return;
+      }
+      const next = [...completedSteps, stepNumber].sort((a, b) => a - b);
+      await persistProgress(next, null);
+      notify(`Mission completed. +${MISSION_XP} XP`);
+    },
+    [activeStepNumber, completedSteps, persistProgress]
   );
 
   const futurePreview = useMemo(() => {
@@ -253,7 +282,7 @@ export default function AiCareerRoadmapPage() {
             <Ionicons name="sparkles" size={14} color="#0E6A42" />
             <Text style={styles.heroBadgeText}>AI Journey</Text>
           </View>
-          <Text style={styles.heroMeta}>⚡ {totalXp} XP</Text>
+          <Text style={styles.heroMeta}>{totalXp} XP</Text>
         </View>
         <Text style={styles.heroTitle}>AI Career Roadmap</Text>
         <Text style={styles.heroSub}>
@@ -262,14 +291,14 @@ export default function AiCareerRoadmapPage() {
         <View style={styles.heroProgressCard}>
           <View style={styles.heroProgressHeader}>
             <Text style={styles.heroProgressLabel}>
-              🔥 Level {currentLevelIndex + 1} - {levels[currentLevelIndex]}
+              Level {currentLevelIndex + 1} - {levels[currentLevelIndex]}
             </Text>
             <Text style={styles.heroProgressLabel}>{progressPct}% complete</Text>
           </View>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
           </View>
-          <Text style={styles.heroProgressMeta}>🎯 Next rank: {nextTarget} XP to {levels[nextLevelIndex]}</Text>
+          <Text style={styles.heroProgressMeta}>Next rank: {nextTarget} XP to {levels[nextLevelIndex]}</Text>
         </View>
       </LinearGradient>
 
@@ -341,18 +370,18 @@ export default function AiCareerRoadmapPage() {
         {currentMission ? (
           <LinearGradient colors={["#FFF9E8", "#FFF2CC"]} style={styles.todayCard}>
             <View style={styles.todayHeader}>
-              <Text style={styles.todayTag}>🔥 Today&apos;s Task</Text>
+              <Text style={styles.todayTag}>Today's Task</Text>
               <Text style={styles.todayXp}>+{MISSION_XP} XP</Text>
             </View>
             <Text style={styles.todayTitle}>{currentMission.title}</Text>
             <Text style={styles.meta}>Complete 1 more task to move your journey ahead today.</Text>
-            <TouchableOpacity style={styles.primaryBtn} onPress={() => toggleMission(currentMission.stepNumber)}>
-              <Text style={styles.primaryBtnText}>Start Mission</Text>
+            <TouchableOpacity style={styles.primaryBtn} onPress={() => startMission(currentMission.stepNumber)} disabled={activeStepNumber === currentMission.stepNumber}>
+              <Text style={styles.primaryBtnText}>{activeStepNumber === currentMission.stepNumber ? "Mission In Progress" : "Start Mission"}</Text>
             </TouchableOpacity>
           </LinearGradient>
         ) : (
           <View style={styles.doneCard}>
-            <Text style={styles.doneTitle}>🏆 Journey completed</Text>
+            <Text style={styles.doneTitle}>Journey completed</Text>
             <Text style={styles.meta}>You completed every mission in this roadmap. Refresh or choose a new goal to keep going.</Text>
             <TouchableOpacity style={styles.primaryBtn} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
               <Text style={styles.primaryBtnText}>{claimingCertificate ? "Claiming..." : "Claim Certificate"}</Text>
@@ -370,7 +399,7 @@ export default function AiCareerRoadmapPage() {
         {(loading || isGenerating) ? (
           <View style={styles.generateCard}>
             <ActivityIndicator size="large" color="#1F7A4C" />
-            <Text style={styles.generateTitle}>🤖 Creating your roadmap...</Text>
+            <Text style={styles.generateTitle}>Creating your roadmap...</Text>
             <Text style={styles.generateMeta}>{GENERATION_STAGES[generationStage]}</Text>
           </View>
         ) : null}
@@ -385,7 +414,7 @@ export default function AiCareerRoadmapPage() {
               <Text style={styles.sectionTitle}>Journey Timeline</Text>
             </View>
             <Text style={styles.resultTitle}>Generated for: {customGoal.trim() || goalLabel || data.goal}</Text>
-            <Text style={styles.meta}>🧠 {socialCount} people are on a similar journey in ORIN right now.</Text>
+            <Text style={styles.meta}>{socialCount} people are on a similar journey in ORIN right now.</Text>
             <View style={styles.timeline}>
               <View style={styles.timelineRail} />
               {data.steps.map((step, index) => {
@@ -408,21 +437,31 @@ export default function AiCareerRoadmapPage() {
                     </View>
                     <View style={[styles.missionCard, isCurrent && styles.missionCardCurrent]}>
                       <View style={styles.missionHeader}>
-                        <Text style={styles.missionWeek}>📅 Week {index + 1}</Text>
-                        <Text style={styles.missionXp}>⚡ +{MISSION_XP} XP</Text>
+                        <Text style={styles.missionWeek}>Week {index + 1}</Text>
+                        <Text style={styles.missionXp}>+{MISSION_XP} XP</Text>
                       </View>
                       <Text style={styles.missionTitle}>{step.title}</Text>
                       <Text style={styles.meta}>
                         {isCompleted
-                          ? "✅ Completed. Badge unlocked and streak continues."
+                          ? "Completed. Badge unlocked and streak continues."
                           : "Upload proof like a project link or screenshot after completing this mission."}
                       </Text>
                       <TouchableOpacity
-                        style={[styles.secondaryBtn, isCompleted && styles.completedBtn]}
-                        onPress={() => toggleMission(step.stepNumber)}
+                        style={[
+                          styles.secondaryBtn,
+                          isCompleted && styles.completedBtn,
+                          activeStepNumber === step.stepNumber && styles.inProgressBtn,
+                          !isCompleted && !isCurrent && styles.lockedBtn
+                        ]}
+                        disabled={isCompleted || (!isCurrent && activeStepNumber !== step.stepNumber)}
+                        onPress={() => (activeStepNumber === step.stepNumber ? completeMission(step.stepNumber) : startMission(step.stepNumber))}
                       >
-                        <Text style={[styles.secondaryBtnText, isCompleted && styles.completedBtnText]}>
-                          {isCompleted ? "Completed" : isCurrent ? "Start Mission" : "Mark Complete"}
+                        <Text style={[
+                          styles.secondaryBtnText,
+                          isCompleted && styles.completedBtnText,
+                          !isCompleted && !isCurrent && styles.lockedBtnText
+                        ]}>
+                          {isCompleted ? "Completed" : activeStepNumber === step.stepNumber ? "Complete Mission" : isCurrent ? "Start Mission" : "Locked"}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -438,11 +477,11 @@ export default function AiCareerRoadmapPage() {
                 <Ionicons name="stats-chart" size={16} color="#1F7A4C" />
                 <Text style={styles.sectionTitle}>Progress</Text>
               </View>
-              <Text style={styles.progressTitle}>🚀 Journey: {progressPct}% complete</Text>
+              <Text style={styles.progressTitle}>Journey: {progressPct}% complete</Text>
               <View style={styles.progressTrackLight}>
                 <View style={[styles.progressFillLight, { width: `${progressPct}%` }]} />
               </View>
-              <Text style={styles.meta}>🔥 Streak: {streakDays} day{streakDays === 1 ? "" : "s"}</Text>
+              <Text style={styles.meta}>Streak: {streakDays} day{streakDays === 1 ? "" : "s"}</Text>
             </View>
 
             <View style={[styles.section, styles.halfSection]}>
@@ -452,7 +491,7 @@ export default function AiCareerRoadmapPage() {
               </View>
               {futurePreview.map((item) => (
                 <Text key={item} style={styles.previewItem}>
-                  ✔ {item}
+                  - {item}
                 </Text>
               ))}
             </View>
@@ -466,8 +505,8 @@ export default function AiCareerRoadmapPage() {
           <Text style={styles.sectionTitle}>Actions</Text>
         </View>
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => currentMission && toggleMission(currentMission.stepNumber)}>
-            <Text style={styles.primaryBtnText}>Continue Journey</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => currentMission && startMission(currentMission.stepNumber)} disabled={!currentMission || activeStepNumber === currentMission?.stepNumber}>
+            <Text style={styles.primaryBtnText}>{activeStepNumber && currentMission?.stepNumber === activeStepNumber ? "Mission In Progress" : "Continue Journey"}</Text>
           </TouchableOpacity>
           {progressPct === 100 ? (
             <TouchableOpacity style={styles.secondaryOutlineBtn} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
@@ -490,6 +529,7 @@ export default function AiCareerRoadmapPage() {
                   focus,
                   goal: data.goal,
                   completedSteps,
+                  activeStepNumber,
                   steps: data.steps || []
                 }
               });
@@ -620,6 +660,9 @@ const styles = StyleSheet.create({
   secondaryBtnText: { color: "#1F7A4C", fontWeight: "800" },
   completedBtn: { backgroundColor: "#FFF3D9" },
   completedBtnText: { color: "#8A5B00" },
+  inProgressBtn: { backgroundColor: "#EAF6EF" },
+  lockedBtn: { backgroundColor: "#F2F4F7" },
+  lockedBtnText: { color: "#98A2B3" },
   secondaryOutlineBtn: {
     borderWidth: 1,
     borderColor: "#1F7A4C",
@@ -631,4 +674,9 @@ const styles = StyleSheet.create({
   secondaryOutlineBtnText: { color: "#1F7A4C", fontWeight: "800" },
   actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 }
 });
+
+
+
+
+
 
