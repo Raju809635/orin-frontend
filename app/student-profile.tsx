@@ -38,15 +38,23 @@ type ProfileExperience = {
   description: string;
 };
 
+type ProfileEducation = {
+  school: string;
+  degree: string;
+  year: string;
+};
+
 type StudentProfile = {
   profilePhotoUrl: string;
   headline: string;
   about: string;
+  state: string;
   skills: string[];
   careerGoals: string;
   profileCompleteness: number;
   resumeUrl: string;
   collegeName: string;
+  education: ProfileEducation[];
   projects: ProfileProject[];
   achievements: ProfileAchievement[];
   experiences: ProfileExperience[];
@@ -55,16 +63,19 @@ type StudentProfile = {
 const emptyProject = (): ProfileProject => ({ title: "", tech: [], link: "", description: "" });
 const emptyAchievement = (): ProfileAchievement => ({ title: "", issuer: "", date: "", url: "" });
 const emptyExperience = (): ProfileExperience => ({ organization: "", role: "", start: "", end: "", description: "" });
+const emptyEducation = (): ProfileEducation => ({ school: "", degree: "", year: "" });
 
 const emptyProfile: StudentProfile = {
   profilePhotoUrl: "",
   headline: "",
   about: "",
+  state: "",
   skills: [],
   careerGoals: "",
   profileCompleteness: 0,
   resumeUrl: "",
   collegeName: "",
+  education: [],
   projects: [],
   achievements: [],
   experiences: []
@@ -102,6 +113,14 @@ function normalizeExperience(experience: any = {}): ProfileExperience {
   };
 }
 
+function normalizeEducation(education: any = {}): ProfileEducation {
+  return {
+    school: String(education?.school || "").trim(),
+    degree: String(education?.degree || "").trim(),
+    year: String(education?.year || "").trim()
+  };
+}
+
 export default function StudentProfileScreen() {
   const [profile, setProfile] = useState<StudentProfile>(emptyProfile);
   const [loading, setLoading] = useState(true);
@@ -122,11 +141,13 @@ export default function StudentProfileScreen() {
           profilePhotoUrl: profileData.profilePhotoUrl || "",
           headline: profileData.headline || "",
           about: profileData.about || "",
+          state: profileData.state || "",
           skills: Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : [],
           careerGoals: profileData.careerGoals || "",
           profileCompleteness: Number(profileData.profileCompleteness || 0),
           resumeUrl: profileData.resumeUrl || "",
           collegeName: profileData.collegeName || "",
+          education: Array.isArray(profileData.education) ? profileData.education.map(normalizeEducation) : [],
           projects: Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : [],
           achievements: Array.isArray(profileData.achievements)
             ? profileData.achievements.map(normalizeAchievement)
@@ -171,6 +192,15 @@ export default function StudentProfileScreen() {
     }));
   };
 
+  const updateEducation = (index: number, key: keyof ProfileEducation, value: string) => {
+    setProfile((prev) => ({
+      ...prev,
+      education: prev.education.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [key]: value } : item
+      )
+    }));
+  };
+
   async function save() {
     try {
       setSaving(true);
@@ -178,6 +208,7 @@ export default function StudentProfileScreen() {
       const payload = {
         ...profile,
         skills: profile.skills,
+        education: profile.education.filter((item) => item.school || item.degree || item.year),
         projects: profile.projects.filter((item) => item.title || item.description || item.link || item.tech.length),
         achievements: profile.achievements.filter((item) => item.title || item.issuer || item.date || item.url),
         experiences: profile.experiences.filter(
@@ -189,6 +220,7 @@ export default function StudentProfileScreen() {
       setProfile((prev) => ({
         ...prev,
         ...profileData,
+        education: Array.isArray(profileData.education) ? profileData.education.map(normalizeEducation) : payload.education,
         projects: Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects,
         achievements: Array.isArray(profileData.achievements)
           ? profileData.achievements.map(normalizeAchievement)
@@ -306,8 +338,37 @@ export default function StudentProfileScreen() {
       <Text style={styles.label}>College</Text>
       <TextInput style={styles.input} value={profile.collegeName} onChangeText={(collegeName) => setProfile((prev) => ({ ...prev, collegeName }))} />
 
+      <Text style={styles.label}>State</Text>
+      <TextInput style={styles.input} value={profile.state} onChangeText={(state) => setProfile((prev) => ({ ...prev, state }))} />
+
       <Text style={styles.label}>About</Text>
       <TextInput style={[styles.input, styles.multiline]} multiline value={profile.about} onChangeText={(about) => setProfile((prev) => ({ ...prev, about }))} />
+
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Education</Text>
+            <Text style={styles.sectionSub}>Add college, degree, and passing year to make your profile more complete.</Text>
+          </View>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => ({ ...prev, education: [...prev.education, emptyEducation()] }))}>
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
+        {profile.education.length === 0 ? <Text style={styles.emptyText}>No education added yet.</Text> : null}
+        {profile.education.map((item, index) => (
+          <View key={`education-${index}`} style={styles.entryCard}>
+            <View style={styles.entryHeader}>
+              <Text style={styles.entryTitle}>Education {index + 1}</Text>
+              <TouchableOpacity onPress={() => setProfile((prev) => ({ ...prev, education: prev.education.filter((_, itemIndex) => itemIndex !== index) }))}>
+                <Text style={styles.removeText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput style={styles.input} placeholder="School / College" value={item.school} onChangeText={(value) => updateEducation(index, "school", value)} />
+            <TextInput style={styles.input} placeholder="Degree / Program" value={item.degree} onChangeText={(value) => updateEducation(index, "degree", value)} />
+            <TextInput style={styles.input} placeholder="Year" value={item.year} onChangeText={(value) => updateEducation(index, "year", value)} />
+          </View>
+        ))}
+      </View>
 
       <Text style={styles.label}>Skills (comma separated)</Text>
       <TextInput

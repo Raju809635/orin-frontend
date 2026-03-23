@@ -40,6 +40,12 @@ type ProfileExperience = {
   description: string;
 };
 
+type ProfileEducation = {
+  school: string;
+  degree: string;
+  year: string;
+};
+
 type MentorProfile = {
   profilePhotoUrl: string;
   title: string;
@@ -48,6 +54,8 @@ type MentorProfile = {
   experienceYears: number;
   sessionPrice: number;
   about: string;
+  state: string;
+  education: ProfileEducation[];
   achievements: ProfileAchievement[];
   projects: ProfileProject[];
   experiences: ProfileExperience[];
@@ -73,6 +81,7 @@ const DRAG_ROW_HEIGHT = 50;
 const emptyAchievement = (): ProfileAchievement => ({ title: "", issuer: "", date: "", url: "" });
 const emptyProject = (): ProfileProject => ({ title: "", tech: [], link: "", description: "" });
 const emptyExperience = (): ProfileExperience => ({ organization: "", role: "", start: "", end: "", description: "" });
+const emptyEducation = (): ProfileEducation => ({ school: "", degree: "", year: "" });
 
 function reorderArray<T>(items: T[], fromIndex: number, toIndex: number) {
   const next = [...items];
@@ -116,6 +125,14 @@ function normalizeExperience(value: any = {}): ProfileExperience {
   };
 }
 
+function normalizeEducation(value: any = {}): ProfileEducation {
+  return {
+    school: String(value?.school || "").trim(),
+    degree: String(value?.degree || "").trim(),
+    year: String(value?.year || "").trim()
+  };
+}
+
 export default function MentorProfileScreen() {
   const [profile, setProfile] = useState<MentorProfile | null>(null);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
@@ -146,6 +163,8 @@ export default function MentorProfileScreen() {
           experienceYears: Number(profilePayload.experienceYears || 0),
           sessionPrice: Number(profilePayload.sessionPrice || 0),
           about: profilePayload.about || "",
+          state: profilePayload.state || "",
+          education: Array.isArray(profilePayload.education) ? profilePayload.education.map(normalizeEducation) : [],
           achievements: Array.isArray(profilePayload.achievements)
             ? profilePayload.achievements.map(normalizeAchievement)
             : [],
@@ -227,6 +246,19 @@ export default function MentorProfileScreen() {
         ? {
             ...prev,
             experiences: prev.experiences.map((item, itemIndex) =>
+              itemIndex === index ? { ...item, [key]: value } : item
+            )
+          }
+        : prev
+    );
+  };
+
+  const updateEducation = (index: number, key: keyof ProfileEducation, value: string) => {
+    setProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            education: prev.education.map((item, itemIndex) =>
               itemIndex === index ? { ...item, [key]: value } : item
             )
           }
@@ -333,6 +365,7 @@ export default function MentorProfileScreen() {
       const payload = {
         ...profile,
         expertiseDomains: profile.specializations,
+        education: profile.education.filter((item) => item.school || item.degree || item.year),
         achievements: profile.achievements.filter((item) => item.title || item.issuer || item.date || item.url),
         projects: profile.projects.filter((item) => item.title || item.description || item.link || item.tech.length),
         experiences: profile.experiences.filter(
@@ -343,12 +376,16 @@ export default function MentorProfileScreen() {
       const profileData = data.profile || {};
       setProfile((prev) =>
         prev
-          ? {
-              ...prev,
-              ...profileData,
-              achievements: Array.isArray(profileData.achievements)
-                ? profileData.achievements.map(normalizeAchievement)
-                : payload.achievements,
+            ? {
+                ...prev,
+                ...profileData,
+                state: profileData.state || prev.state,
+                education: Array.isArray(profileData.education)
+                  ? profileData.education.map(normalizeEducation)
+                  : payload.education,
+                achievements: Array.isArray(profileData.achievements)
+                  ? profileData.achievements.map(normalizeAchievement)
+                  : payload.achievements,
               projects: Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects,
               experiences: Array.isArray(profileData.experiences)
                 ? profileData.experiences.map(normalizeExperience)
@@ -429,6 +466,13 @@ export default function MentorProfileScreen() {
         style={styles.input}
         value={profile.company}
         onChangeText={(company) => setProfile((prev) => (prev ? { ...prev, company } : prev))}
+      />
+
+      <Text style={styles.label}>State</Text>
+      <TextInput
+        style={styles.input}
+        value={profile.state}
+        onChangeText={(state) => setProfile((prev) => (prev ? { ...prev, state } : prev))}
       />
 
       <Text style={styles.label}>Experience Years</Text>
@@ -565,6 +609,32 @@ export default function MentorProfileScreen() {
         value={profile.about}
         onChangeText={(about) => setProfile((prev) => (prev ? { ...prev, about } : prev))}
       />
+
+      <View style={styles.sectionCard}>
+        <View style={styles.sectionHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Education</Text>
+            <Text style={styles.sectionSub}>Show degrees, colleges, or qualifications that support your mentor profile.</Text>
+          </View>
+          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => (prev ? { ...prev, education: [...prev.education, emptyEducation()] } : prev))}>
+            <Text style={styles.addBtnText}>+ Add</Text>
+          </TouchableOpacity>
+        </View>
+        {profile.education.length === 0 ? <Text style={styles.emptyText}>No education added yet.</Text> : null}
+        {profile.education.map((item, index) => (
+          <View key={`education-${index}`} style={styles.entryCard}>
+            <View style={styles.entryHeader}>
+              <Text style={styles.entryTitle}>Education {index + 1}</Text>
+              <TouchableOpacity onPress={() => setProfile((prev) => (prev ? { ...prev, education: prev.education.filter((_, itemIndex) => itemIndex !== index) } : prev))}>
+                <Text style={styles.removeText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+            <TextInput style={styles.input} placeholder="School / College" value={item.school} onChangeText={(value) => updateEducation(index, "school", value)} />
+            <TextInput style={styles.input} placeholder="Degree / Qualification" value={item.degree} onChangeText={(value) => updateEducation(index, "degree", value)} />
+            <TextInput style={styles.input} placeholder="Year" value={item.year} onChangeText={(value) => updateEducation(index, "year", value)} />
+          </View>
+        ))}
+      </View>
 
       <View style={styles.sectionCard}>
         <View style={styles.sectionHeader}>

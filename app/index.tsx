@@ -35,10 +35,17 @@ export default function HomeScreen() {
         : "/mentor-pending"
       : "/student-dashboard?section=overview";
 
+  const homeRoute =
+    user?.role === "mentor"
+      ? user?.approvalStatus === "approved"
+        ? "/network?section=feed"
+        : "/mentor-pending"
+      : "/network?section=feed";
+
   useEffect(() => {
     if (!isAuthenticated || !user) return;
-    router.replace(dashboardRoute as never);
-  }, [dashboardRoute, isAuthenticated, router, user]);
+    router.replace(homeRoute as never);
+  }, [homeRoute, isAuthenticated, router, user]);
 
   return (
     <View style={styles.container}>
@@ -60,8 +67,8 @@ export default function HomeScreen() {
           </View>
         ) : (
           <View style={styles.actions}>
-            <TouchableOpacity style={styles.button} onPress={() => router.push(dashboardRoute as never)}>
-              <Text style={styles.buttonText}>Open Dashboard</Text>
+            <TouchableOpacity style={styles.button} onPress={() => router.push(homeRoute as never)}>
+              <Text style={styles.buttonText}>Open Home</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.secondaryButton}

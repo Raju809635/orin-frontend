@@ -8,12 +8,25 @@ import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 
 type AiHistoryItem = { _id?: string; prompt: string; response: string; createdAt?: string };
+type AssistantTab = "general" | "personalized";
 
-const SUGGESTED = [
-  "Help me become an AI engineer.",
-  "Create a DSA preparation plan.",
-  "Suggest projects for web development beginner.",
-  "How should I prepare for interviews?"
+const ASSISTANT_TABS: { key: AssistantTab; label: string }[] = [
+  { key: "general", label: "General Q&A" },
+  { key: "personalized", label: "Personalized" }
+];
+
+const GENERAL_SUGGESTED = [
+  "What skills are needed for AI engineer?",
+  "How should I prepare for interviews?",
+  "Explain machine learning in simple words.",
+  "How do I improve my resume?"
+];
+
+const PERSONALIZED_SUGGESTED = [
+  "Build a plan for my current goal.",
+  "Analyze what I should learn next.",
+  "Suggest projects for my roadmap stage.",
+  "Show how to become internship-ready."
 ];
 
 export default function AiAssistantEntryPage() {
@@ -25,6 +38,7 @@ export default function AiAssistantEntryPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<AssistantTab>("personalized");
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -49,6 +63,7 @@ export default function AiAssistantEntryPage() {
 
   const conversations = useMemo(() => history.slice(0, 12).reverse(), [history]);
   const latest = useMemo(() => history[0] || null, [history]);
+  const suggestedPrompts = activeTab === "general" ? GENERAL_SUGGESTED : PERSONALIZED_SUGGESTED;
 
   async function sendQuestion(text?: string) {
     const prompt = (text ?? message).trim();
@@ -59,7 +74,13 @@ export default function AiAssistantEntryPage() {
       const pending: AiHistoryItem = { prompt, response: "", createdAt: new Date().toISOString() };
       setHistory((prev) => [pending, ...prev]);
       setMessage("");
-      const res = await api.post<{ answer: string }>("/api/ai/chat", { message: prompt, context: { source: "ai-assistant-page" } });
+      const res = await api.post<{ answer: string }>("/api/ai/chat", {
+        message: prompt,
+        context: {
+          source: "ai-assistant-page",
+          assistantMode: activeTab
+        }
+      });
       const answer = res.data?.answer || "";
       setHistory((prev) => [{ ...pending, response: answer }, ...prev.filter((item) => item !== pending)]);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
@@ -88,22 +109,55 @@ export default function AiAssistantEntryPage() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
       <LinearGradient colors={["#3B5BFF", "#6C63FF", "#8F67FF"]} style={styles.hero}>
-        <Text style={styles.heroTitle}>AI Mentor</Text>
-        <Text style={styles.heroSub}>Ask ORIN anything and turn the answer into action right away.</Text>
+        <Text style={styles.heroTitle}>{activeTab === "general" ? "AI Assistant" : "AI Mentor"}</Text>
+        <Text style={styles.heroSub}>
+          {activeTab === "general"
+            ? "Ask general questions and get fast, clear answers from ORIN."
+            : "Get guidance shaped around your goal, roadmap, and current progress."}
+        </Text>
         <View style={styles.flowRow}>
-          {["AI Plan", "Skill Gap", "Roadmap", "Build"].map((item, index) => (
+          {(activeTab === "general" ? ["Ask", "Understand", "Decide"] : ["AI Plan", "Skill Gap", "Roadmap", "Build"]).map((item, index, arr) => (
             <View key={item} style={styles.flowItem}>
               <Text style={styles.flowText}>{item}</Text>
-              {index < 3 ? <Ionicons name="arrow-forward" size={12} color="#E8E7FF" /> : null}
+              {index < arr.length - 1 ? <Ionicons name="arrow-forward" size={12} color="#E8E7FF" /> : null}
             </View>
           ))}
         </View>
       </LinearGradient>
 
+      <View style={styles.tabRow}>
+        {ASSISTANT_TABS.map((tab) => {
+          const active = activeTab === tab.key;
+          return (
+            <TouchableOpacity key={tab.key} style={[styles.tabChip, active && styles.tabChipActive]} onPress={() => setActiveTab(tab.key)}>
+              <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {activeTab === "personalized" ? (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Personalized Actions</Text>
+          <View style={styles.actionRow}>
+            <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/skill-gap" as never)}>
+              <Text style={styles.secondaryBtnText}>Analyze Skills</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/career-roadmap" as never)}>
+              <Text style={styles.secondaryBtnText}>Generate Roadmap</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/project-ideas" as never)}>
+              <Text style={styles.secondaryBtnText}>Get Projects</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.helperText}>Use Personalized mode when you want ORIN to respond based on your goal and journey state.</Text>
+        </View>
+      ) : null}
+
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Suggested Prompts</Text>
+        <Text style={styles.sectionTitle}>{activeTab === "general" ? "General Questions" : "Suggested Personalized Prompts"}</Text>
         <View style={styles.chips}>
-          {SUGGESTED.map((item) => (
+          {suggestedPrompts.map((item) => (
             <TouchableOpacity key={item} style={styles.chip} onPress={() => sendQuestion(item)}>
               <Text style={styles.chipText}>{item}</Text>
             </TouchableOpacity>
@@ -118,8 +172,12 @@ export default function AiAssistantEntryPage() {
         {!loading && !conversations.length && !sending ? (
           <View style={styles.emptyState}>
             <Ionicons name="chatbubbles-outline" size={28} color="#98A2B3" />
-            <Text style={styles.emptyTitle}>Start your AI mentor chat</Text>
-            <Text style={styles.meta}>Ask a goal-based question and ORIN will break it into steps.</Text>
+            <Text style={styles.emptyTitle}>{activeTab === "general" ? "Start your AI Q&A" : "Start your AI mentor chat"}</Text>
+            <Text style={styles.meta}>
+              {activeTab === "general"
+                ? "Ask anything and get a clean, direct answer."
+                : "Ask a goal-based question and ORIN will connect it to your next action."}
+            </Text>
           </View>
         ) : null}
 
@@ -131,7 +189,7 @@ export default function AiAssistantEntryPage() {
             <LinearGradient colors={["#EEF2FF", "#F5F3FF"]} style={[styles.bubble, styles.aiBubble]}>
               {item.response ? (
                 <>
-                  <Text style={styles.aiIntro}>Here&apos;s your plan</Text>
+                  <Text style={styles.aiIntro}>{activeTab === "general" ? "Answer" : "Here is your guided plan"}</Text>
                   {item.response
                     .split(/\n+/)
                     .map((line) => line.trim())
@@ -139,7 +197,7 @@ export default function AiAssistantEntryPage() {
                     .slice(0, 6)
                     .map((line, lineIndex) => (
                       <View key={`${line}-${lineIndex}`} style={styles.aiStepRow}>
-                        <Ionicons name="sparkles" size={14} color="#5B4DFF" />
+                        <Ionicons name={activeTab === "general" ? "help-circle-outline" : "sparkles"} size={14} color="#5B4DFF" />
                         <Text style={styles.aiBubbleText}>{line.replace(/^[\-\*\d\.\s]+/, "").trim()}</Text>
                       </View>
                     ))}
@@ -154,7 +212,7 @@ export default function AiAssistantEntryPage() {
           </View>
         ))}
 
-        {latest?.response ? (
+        {activeTab === "personalized" && latest?.response ? (
           <View style={styles.actionCard}>
             <Text style={styles.actionTitle}>Turn this into action</Text>
             <View style={styles.actionRow}>
@@ -182,10 +240,16 @@ export default function AiAssistantEntryPage() {
       </View>
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Ask ORIN</Text>
-        <TextInput style={styles.input} multiline value={message} onChangeText={setMessage} placeholder="What do you want to achieve today?" />
+        <Text style={styles.sectionTitle}>{activeTab === "general" ? "Ask anything" : "Ask ORIN about your journey"}</Text>
+        <TextInput
+          style={styles.input}
+          multiline
+          value={message}
+          onChangeText={setMessage}
+          placeholder={activeTab === "general" ? "Ask any general question..." : "What do you want to achieve today?"}
+        />
         <TouchableOpacity style={styles.primaryBtn} onPress={() => sendQuestion()} disabled={sending}>
-          <Text style={styles.primaryBtnText}>{sending ? "Sending..." : "Send to AI Mentor"}</Text>
+          <Text style={styles.primaryBtnText}>{sending ? "Sending..." : activeTab === "general" ? "Ask AI" : "Send to AI Mentor"}</Text>
         </TouchableOpacity>
       </View>
 
@@ -201,7 +265,7 @@ export default function AiAssistantEntryPage() {
             await saveAiItem({
               type: "assistant",
               title: `AI Assistant: ${latest.prompt.slice(0, 48)}${latest.prompt.length > 48 ? "..." : ""}`,
-              payload: { prompt: latest.prompt, answer: latest.response }
+              payload: { prompt: latest.prompt, answer: latest.response, mode: activeTab }
             });
             notify("Saved to Saved AI.");
           }}
@@ -221,11 +285,29 @@ const styles = StyleSheet.create({
   flowRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
   flowItem: { flexDirection: "row", alignItems: "center", gap: 6 },
   flowText: { color: "#FFFFFF", fontWeight: "700", fontSize: 12 },
+  tabRow: { flexDirection: "row", gap: 10 },
+  tabChip: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 11,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#FFFFFF"
+  },
+  tabChipActive: {
+    borderColor: "#5B4DFF",
+    backgroundColor: "#EEF2FF"
+  },
+  tabChipText: { color: "#475467", fontWeight: "800" },
+  tabChipTextActive: { color: "#4338CA" },
   section: { backgroundColor: "#FFFFFF", borderRadius: 18, borderWidth: 1, borderColor: "#E4E7EC", padding: 14, gap: 10 },
   sectionTitle: { fontWeight: "800", color: "#1E2B24", fontSize: 17 },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#fff" },
   chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
+  helperText: { color: "#667085", lineHeight: 20 },
   chatGroup: { gap: 8, marginBottom: 4 },
   bubble: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 12, maxWidth: "90%" },
   userBubble: { alignSelf: "flex-end", backgroundColor: "#F2F4F7" },

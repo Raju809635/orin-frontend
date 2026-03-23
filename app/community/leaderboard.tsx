@@ -43,9 +43,9 @@ const TAB_CONFIG: { key: LeaderboardTab; label: string; icon: keyof typeof Ionic
 ];
 
 const PODIUM_META = [
-  { slot: 2, emoji: "🥈", bg: "#F4F6F8", accent: "#98A2B3", height: 118 },
-  { slot: 1, emoji: "🥇", bg: "#FFF7D6", accent: "#F59E0B", height: 146 },
-  { slot: 3, emoji: "🥉", bg: "#FBEAE4", accent: "#B45309", height: 104 }
+  { slot: 2, bg: "#F4F6F8", accent: "#98A2B3", minHeight: 170 },
+  { slot: 1, bg: "#FFF7D6", accent: "#F59E0B", minHeight: 198 },
+  { slot: 3, bg: "#FBEAE4", accent: "#B45309", minHeight: 160 }
 ];
 
 function getInitial(name?: string) {
@@ -174,10 +174,10 @@ export default function CommunityLeaderboardPage() {
                   key={slot.slot}
                   style={[
                     styles.podiumCard,
-                    { backgroundColor: slot.bg, borderColor: slot.accent, height: slot.height }
+                    { backgroundColor: slot.bg, borderColor: slot.accent, minHeight: slot.minHeight }
                   ]}
                 >
-                  <Text style={styles.podiumEmoji}>{slot.emoji}</Text>
+                  <Ionicons name="medal-outline" size={24} color={slot.accent} style={styles.podiumEmoji} />
                   {slot.entry?.profilePhotoUrl ? (
                     <Image source={{ uri: slot.entry.profilePhotoUrl }} style={styles.podiumAvatar} />
                   ) : (
@@ -202,13 +202,11 @@ export default function CommunityLeaderboardPage() {
             </View>
             {myEntry ? (
               <>
-                <Text style={styles.myRankText}>
-                  🔥 You are #{myEntry.rank} with {myEntry.score} XP
-                </Text>
+                <Text style={styles.myRankText}>You are #{myEntry.rank} with {myEntry.score} XP</Text>
                 <Text style={styles.gapText}>
                   {xpGap && nextTargetEntry
-                    ? `🎯 You need ${xpGap} XP to reach #${nextTargetEntry.rank} (${nextTargetEntry.name})`
-                    : "🏆 Keep building XP to push toward the top ranks"}
+                    ? `You need ${xpGap} XP to reach #${nextTargetEntry.rank} (${nextTargetEntry.name})`
+                    : "Keep building XP to push toward the top ranks"}
                 </Text>
                 <Text style={styles.percentText}>
                   {activeEntries.length > 0
@@ -335,7 +333,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1,
     alignItems: "center",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     paddingHorizontal: 8,
     paddingVertical: 12
   },
@@ -367,12 +365,17 @@ const styles = StyleSheet.create({
     marginTop: 4,
     color: "#11261E",
     fontWeight: "800",
-    textAlign: "center"
+    textAlign: "center",
+    fontSize: 12,
+    lineHeight: 16,
+    minHeight: 32
   },
   podiumScore: {
-    marginTop: 2,
+    marginTop: 6,
     color: "#667085",
-    fontWeight: "700"
+    fontWeight: "700",
+    fontSize: 12,
+    textAlign: "center"
   },
   myRankText: {
     color: "#11261E",
@@ -460,3 +463,6 @@ const styles = StyleSheet.create({
     color: "#B42318"
   }
 });
+
+
+

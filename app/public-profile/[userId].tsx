@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
@@ -22,6 +22,9 @@ type PublicProfile = {
   headline?: string;
   about?: string;
   bio?: string;
+  state?: string;
+  collegeName?: string;
+  education?: Array<{ school?: string; degree?: string; year?: string }>;
   skills?: string[];
   experienceYears?: number;
   rating?: number;
@@ -47,6 +50,7 @@ type PublicProfileResponse = {
 };
 
 export default function PublicProfileScreen() {
+  const router = useRouter();
   const { user: viewer } = useAuth();
   const params = useLocalSearchParams<{ userId?: string }>();
   const userId = String(params.userId || "").trim();
@@ -150,6 +154,9 @@ export default function PublicProfileScreen() {
 
   const profile = data.profile || {};
   const displayLine = [data.user.primaryCategory, data.user.subCategory].filter(Boolean).join(" > ");
+  const educationLine = (profile.education || []).length
+    ? [profile.education?.[0]?.degree, profile.education?.[0]?.school, profile.education?.[0]?.year].filter(Boolean).join(" • ")
+    : "";
   const isSelf = String(viewer?.id || "") === String(data.user._id || "");
   const connectionStatus = data.social?.connectionStatus || "none";
 
@@ -163,34 +170,64 @@ export default function PublicProfileScreen() {
         </View>
       )}
 
-      <Text style={styles.name}>{data.user.name}</Text>
-      <Text style={styles.role}>{data.user.role}</Text>
-      {profile.title || profile.headline ? <Text style={styles.title}>{profile.title || profile.headline}</Text> : null}
-      {displayLine ? <Text style={styles.domain}>{displayLine}</Text> : null}
-      <View style={styles.statsRow}>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{data.social?.followers ?? 0}</Text>
-          <Text style={styles.statLabel}>Followers</Text>
+      <View style={styles.headerTop}>
+        <View style={styles.identityBlock}>
+          <Text style={styles.name}>{data.user.name}</Text>
+          <Text style={styles.role}>{data.user.role}</Text>
+          {profile.title || profile.headline ? <Text style={styles.title}>{profile.title || profile.headline}</Text> : null}
+          {[profile.collegeName, profile.state].filter(Boolean).join(" • ") ? (
+            <Text style={styles.metaLine}>{[profile.collegeName, profile.state].filter(Boolean).join(" • ")}</Text>
+          ) : null}
         </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{data.social?.following ?? 0}</Text>
-          <Text style={styles.statLabel}>Following</Text>
-        </View>
-        <View style={styles.statCard}>
-          <Text style={styles.statValue}>{data.social?.connections ?? 0}</Text>
-          <Text style={styles.statLabel}>Connections</Text>
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{data.social?.followers ?? 0}</Text>
+            <Text style={styles.statLabel}>Audience</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{data.social?.following ?? 0}</Text>
+            <Text style={styles.statLabel}>Following</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{data.social?.connections ?? 0}</Text>
+            <Text style={styles.statLabel}>Circle</Text>
+          </View>
         </View>
       </View>
-      {typeof profile.rating === "number" ? <Text style={styles.meta}>Rating: {profile.rating}</Text> : null}
-      {typeof profile.experienceYears === "number" && profile.experienceYears > 0 ? (
-        <Text style={styles.meta}>Experience: {profile.experienceYears} years</Text>
-      ) : null}
+      <View style={styles.metaChips}>
+        {displayLine ? (
+          <View style={styles.chip}>
+            <Text style={styles.chipText}>{displayLine}</Text>
+          </View>
+        ) : null}
+        {educationLine ? (
+          <View style={styles.chip}>
+            <Text style={styles.chipText}>{educationLine}</Text>
+          </View>
+        ) : null}
+        {typeof profile.rating === "number" ? (
+          <View style={styles.chip}>
+            <Text style={styles.chipText}>Rating {profile.rating}</Text>
+          </View>
+        ) : null}
+        {typeof profile.experienceYears === "number" && profile.experienceYears > 0 ? (
+          <View style={styles.chip}>
+            <Text style={styles.chipText}>{profile.experienceYears} years exp</Text>
+          </View>
+        ) : null}
+      </View>
       {!isSelf ? (
         <View style={styles.actionRow}>
           <TouchableOpacity style={[styles.actionBtn, styles.followBtn]} onPress={toggleFollow} disabled={updatingFollow}>
             <Text style={styles.followBtnText}>
               {updatingFollow ? "Updating..." : data.social?.isFollowing ? "Unfollow" : "Follow"}
             </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.actionBtn, styles.messageBtn]}
+            onPress={() => router.push(`/chat?userId=${userId}` as never)}
+          >
+            <Text style={styles.messageBtnText}>Message</Text>
           </TouchableOpacity>
           {connectionStatus === "none" || connectionStatus === "rejected" ? (
             <TouchableOpacity style={[styles.actionBtn, styles.connectBtn]} onPress={sendConnectionRequest} disabled={updatingConnection}>
@@ -291,27 +328,33 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8F5EE"
   },
   avatarText: { color: "#0B3D2E", fontSize: 36, fontWeight: "800" },
-  name: { marginTop: 12, fontSize: 24, fontWeight: "800", color: "#1E2B24", textAlign: "center" },
-  role: { marginTop: 4, color: "#667085", textTransform: "capitalize", textAlign: "center" },
-  title: { marginTop: 4, color: "#344054", textAlign: "center" },
-  domain: { marginTop: 4, color: "#1F7A4C", fontWeight: "700", textAlign: "center" },
+  headerTop: { marginTop: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
+  identityBlock: { flex: 1, paddingRight: 6 },
+  name: { fontSize: 24, fontWeight: "800", color: "#1E2B24" },
+  role: { marginTop: 4, color: "#667085", textTransform: "capitalize" },
+  title: { marginTop: 6, color: "#344054", fontWeight: "700" },
+  metaLine: { marginTop: 4, color: "#667085" },
   meta: { marginTop: 4, color: "#667085", textAlign: "center" },
-  statsRow: { marginTop: 12, flexDirection: "row", gap: 8 },
+  statsRow: { flexDirection: "row", gap: 8, flex: 1, justifyContent: "space-between" },
   statCard: {
-    flex: 1,
+    minWidth: 74,
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: "#E4E7EC",
     borderRadius: 10,
     paddingVertical: 8,
+    paddingHorizontal: 10,
     alignItems: "center"
   },
   statValue: { color: "#13251E", fontWeight: "800", fontSize: 16 },
   statLabel: { marginTop: 2, color: "#667085", fontSize: 11, fontWeight: "600" },
+  metaChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
   actionRow: { marginTop: 10, flexDirection: "row", gap: 8 },
   actionBtn: { borderRadius: 999, paddingVertical: 8, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
   followBtn: { backgroundColor: "#1F7A4C", flex: 1 },
   followBtnText: { color: "#fff", fontWeight: "700" },
+  messageBtn: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#98A2B3", flex: 1 },
+  messageBtnText: { color: "#344054", fontWeight: "700" },
   connectBtn: { backgroundColor: "#165DFF", flex: 1 },
   connectBtnText: { color: "#fff", fontWeight: "700" },
   pendingBtn: { backgroundColor: "#F2F4F7", borderWidth: 1, borderColor: "#D0D5DD", flex: 1 },
@@ -334,3 +377,4 @@ const styles = StyleSheet.create({
   chipText: { color: "#344054", fontWeight: "600", fontSize: 12 },
   error: { color: "#B42318" }
 });
+
