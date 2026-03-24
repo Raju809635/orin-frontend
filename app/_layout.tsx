@@ -295,9 +295,21 @@ function RootDrawer() {
       router.replace(path as never);
     };
     const profilePath = user?.role === "mentor" ? "/mentor-profile" : "/my-profile";
+    const drawerItemTheme = {
+      activeTintColor: colors.accent,
+      inactiveTintColor: colors.text,
+      activeBackgroundColor: colors.accentSoft,
+      pressColor: colors.accentSoft,
+      labelStyle: { color: colors.text, fontWeight: "700" as const },
+      style: { borderRadius: 14, marginHorizontal: 6 }
+    };
 
     return (
-      <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContent}>
+      <DrawerContentScrollView
+        {...props}
+        contentContainerStyle={[styles.drawerContent, { backgroundColor: colors.surface }]}
+        style={{ backgroundColor: colors.surface }}
+      >
         {user ? (
           <View style={[styles.drawerProfileCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
             <View style={styles.drawerProfileHead}>
@@ -329,13 +341,14 @@ function RootDrawer() {
           </View>
         ) : null}
         <View style={styles.drawerFlatList}>
-          <DrawerItem label="Profile" icon={({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />} onPress={() => openDrawerRoute(profilePath)} />
-          <DrawerItem label="News & Updates" icon={({ color, size }) => <Ionicons name="newspaper-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/news-updates")} />
-          <DrawerItem label="Certificates" icon={({ color, size }) => <Ionicons name="ribbon-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/community/certifications")} />
-          <DrawerItem label="Saved" icon={({ color, size }) => <Ionicons name="bookmark-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/saved-posts")} />
-          <DrawerItem label="Settings" icon={({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/settings")} />
-          <DrawerItem label="Notifications" icon={({ color, size }) => <Ionicons name="notifications-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/notifications")} />
+          <DrawerItem {...drawerItemTheme} label="Profile" icon={({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />} onPress={() => openDrawerRoute(profilePath)} />
+          <DrawerItem {...drawerItemTheme} label="News & Updates" icon={({ color, size }) => <Ionicons name="newspaper-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/news-updates")} />
+          <DrawerItem {...drawerItemTheme} label="Certificates" icon={({ color, size }) => <Ionicons name="ribbon-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/community/certifications")} />
+          <DrawerItem {...drawerItemTheme} label="Saved" icon={({ color, size }) => <Ionicons name="bookmark-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/saved-posts")} />
+          <DrawerItem {...drawerItemTheme} label="Settings" icon={({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/settings")} />
+          <DrawerItem {...drawerItemTheme} label="Notifications" icon={({ color, size }) => <Ionicons name="notifications-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/notifications")} />
           <DrawerItem
+            {...drawerItemTheme}
             label="Logout"
             icon={({ color, size }) => <Ionicons name="log-out-outline" size={size} color={color} />}
             onPress={async () => {

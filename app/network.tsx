@@ -21,6 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadPostImages } from "@/utils/postMediaUpload";
 import GlobalHeader from "@/components/global-header";
@@ -134,6 +135,7 @@ export default function NetworkScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: string }>();
   const { user } = useAuth();
+  const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const [activeSection, setActiveSection] = useState<NetworkSectionId>("feed");
   const [posts, setPosts] = useState<FeedPost[]>([]);
@@ -517,28 +519,28 @@ export default function NetworkScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#1F7A4C" />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F4F9F6" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <GlobalHeader
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search circle, posts, people"
       />
       <ScrollView
-        contentContainerStyle={[styles.container, { paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
+        contentContainerStyle={[styles.container, { backgroundColor: colors.background, paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} tintColor={colors.accent} />}
       >
-        <Text style={styles.heading}>Home</Text>
-        <Text style={styles.subheading}>
+        <Text style={[styles.heading, { color: colors.text }]}>Home</Text>
+        <Text style={[styles.subheading, { color: colors.textMuted }]}>
           {user?.role === "mentor" ? "Your professional feed for mentor insights, conversations, and visibility." : "Your student growth feed with people, ideas, and progress that match your journey."}
         </Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavRow}>
           {networkSections.map((item) => {
@@ -546,18 +548,22 @@ export default function NetworkScreen() {
             return (
               <TouchableOpacity
                 key={item.id}
-                style={[styles.sectionChip, active && styles.sectionChipActive]}
+                style={[
+                  styles.sectionChip,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  active ? [styles.sectionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }] : null
+                ]}
                 onPress={() => setActiveSection(item.id)}
               >
-                <Text style={[styles.sectionChipText, active && styles.sectionChipTextActive]}>{item.label}</Text>
+                <Text style={[styles.sectionChipText, { color: colors.textMuted }, active && [styles.sectionChipTextActive, { color: colors.accent }]]}>{item.label}</Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
 
         {activeSection === "compose" ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Start a post</Text>
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Start a post</Text>
             <View style={styles.chipsRow}>
               {[
                 ["learning_progress", "Learning"],
@@ -567,23 +573,24 @@ export default function NetworkScreen() {
               ].map(([value, label]) => (
                 <TouchableOpacity
                   key={value}
-                  style={[styles.chip, postType === value ? styles.chipActive : null]}
+                    style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, postType === value ? [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }] : null]}
                   onPress={() => setPostType(value as FeedPost["postType"])}
                 >
-                  <Text style={[styles.chipText, postType === value ? styles.chipTextActive : null]}>{label}</Text>
-                </TouchableOpacity>
+                    <Text style={[styles.chipText, { color: colors.textMuted }, postType === value ? [styles.chipTextActive, { color: colors.accent }] : null]}>{label}</Text>
+                  </TouchableOpacity>
               ))}
             </View>
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
               placeholder="Share update, achievement, project or question..."
+              placeholderTextColor={colors.textMuted}
               value={postText}
               onChangeText={setPostText}
               multiline
             />
             <View style={styles.rowItem}>
               <TouchableOpacity style={styles.secondaryButton} onPress={uploadPostImages} disabled={uploadingPostImage}>
-                <Text style={styles.secondaryButtonText}>{uploadingPostImage ? "Uploading..." : "Add Photos"}</Text>
+                <Text style={[styles.secondaryButtonText, { color: colors.text }]}>{uploadingPostImage ? "Uploading..." : "Add Photos"}</Text>
               </TouchableOpacity>
               {postImageUrls.length ? (
                 <TouchableOpacity
@@ -601,22 +608,22 @@ export default function NetworkScreen() {
                 ))}
               </ScrollView>
             ) : null}
-            <Text style={styles.meta}>Images selected: {postImageUrls.length}/5</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Images selected: {postImageUrls.length}/5</Text>
             <TouchableOpacity style={styles.primaryButton} onPress={publishPost} disabled={submitting}>
               <Text style={styles.primaryButtonText}>{submitting ? "Posting..." : "Publish Insight"}</Text>
             </TouchableOpacity>
-            <Text style={[styles.cardTitle, { marginTop: 14 }]}>People You May Know</Text>
-            {filteredSuggestions.length === 0 ? (
-              <Text style={styles.meta}>No suggestions yet.</Text>
-            ) : (
+              <Text style={[styles.cardTitle, { marginTop: 14, color: colors.text }]}>People You May Know</Text>
+              {filteredSuggestions.length === 0 ? (
+                <Text style={[styles.meta, { color: colors.textMuted }]}>No suggestions yet.</Text>
+              ) : (
               filteredSuggestions.slice(0, 8).map((item) => {
                 const inCircle = Boolean(circleMemberIds[item.id]);
                 const requested = Boolean(requestedCircleIds[item.id]);
                 return (
                   <View key={`discover-${item.id}`} style={styles.rowItem}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.rowTitle}>{item.name}</Text>
-                      <Text style={styles.meta}>{item.reason}</Text>
+                      <Text style={[styles.rowTitle, { color: colors.text }]}>{item.name}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>{item.reason}</Text>
                     </View>
                     <TouchableOpacity
                       onPress={() => (!inCircle && !requested ? connect(item.id) : undefined)}
@@ -634,16 +641,16 @@ export default function NetworkScreen() {
         ) : null}
 
         {activeSection === "connections" ? (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>My Circle Requests</Text>
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>My Circle Requests</Text>
             {pendingIncoming.length === 0 ? (
-              <Text style={styles.meta}>No pending requests.</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>No pending requests.</Text>
             ) : (
               pendingIncoming.map((item) => (
                 <View key={item._id} style={styles.rowItem}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.rowTitle}>{item.requesterId?.name || "User"}</Text>
-                    <Text style={styles.meta}>Wants to join your circle</Text>
+                      <Text style={[styles.rowTitle, { color: colors.text }]}>{item.requesterId?.name || "User"}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>Wants to join your circle</Text>
                   </View>
                   <TouchableOpacity onPress={() => respondConnection(item._id, "accept")}>
                     <Text style={styles.action}>{"\u2713 In Your Circle"}</Text>
@@ -661,18 +668,18 @@ export default function NetworkScreen() {
           <View style={styles.feedSection}>
             <TouchableOpacity
               activeOpacity={0.92}
-              style={styles.startPostCard}
+              style={[styles.startPostCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
               onPress={() => setActiveSection("compose")}
             >
-              <View style={styles.startPostAvatar}>
+              <View style={[styles.startPostAvatar, { backgroundColor: colors.accentSoft }]}>
                 <Text style={styles.startPostAvatarText}>{user?.name?.charAt(0)?.toUpperCase() || "O"}</Text>
               </View>
-              <View style={styles.startPostInput}>
-                <Text style={styles.startPostPlaceholder}>Start a post...</Text>
+              <View style={[styles.startPostInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                <Text style={[styles.startPostPlaceholder, { color: colors.textMuted }]}>Start a post...</Text>
               </View>
             </TouchableOpacity>
             {filteredPosts.filter((post) => !hiddenPostIds[post._id]).length === 0 ? (
-              <Text style={styles.meta}>No posts yet. Create the first one.</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>No posts yet. Create the first one.</Text>
             ) : (
               filteredPosts.filter((post) => !hiddenPostIds[post._id]).map((post) => {
                 const authorId = String(post.authorId?._id || "");
@@ -699,7 +706,7 @@ export default function NetworkScreen() {
                 const summaryCommentCount = Number(post.commentCount || 0);
 
                 return (
-                  <View key={post._id} style={styles.postCard}>
+                  <View key={post._id} style={[styles.postCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                     <View style={styles.postHeader}>
                       <TouchableOpacity
                         style={styles.authorWrap}
@@ -716,22 +723,22 @@ export default function NetworkScreen() {
                           </View>
                         )}
                           <View style={{ flex: 1 }}>
-                            <Text style={styles.rowTitle}>{post.authorId?.name || "ORIN User"}</Text>
-                            <Text style={styles.metaSmall}>
+                            <Text style={[styles.rowTitle, { color: colors.text }]}>{post.authorId?.name || "ORIN User"}</Text>
+                            <Text style={[styles.metaSmall, { color: colors.textMuted }]}>
                             {(post.authorId?.role || "member").toUpperCase()} {"\u2022"} {formatPostTime(post.createdAt)}
                           </Text>
                           </View>
                       </TouchableOpacity>
                       {!isOwnPost && authorId ? (
-                        <TouchableOpacity style={[styles.followBtn, isFollowing && styles.followingBtn]} onPress={() => follow(authorId)}>
-                          <Text style={[styles.followBtnText, isFollowing && styles.followingBtnText]}>
+                        <TouchableOpacity style={[styles.followBtn, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }, isFollowing ? [styles.followingBtn, { backgroundColor: colors.accentSoft, borderColor: colors.accent }] : null]} onPress={() => follow(authorId)}>
+                          <Text style={[styles.followBtnText, { color: colors.text }, isFollowing ? [styles.followingBtnText, { color: colors.accent }] : null]}>
                             {isFollowing ? "Following" : "+ Follow"}
                           </Text>
                         </TouchableOpacity>
                       ) : null}
                     {isOwnPost ? (
-                      <TouchableOpacity style={styles.postMenuBtn} onPress={() => openPostOptions(post)}>
-                        <Ionicons name="ellipsis-horizontal" size={18} color="#475467" />
+                      <TouchableOpacity style={[styles.postMenuBtn, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => openPostOptions(post)}>
+                        <Ionicons name="ellipsis-horizontal" size={18} color={colors.textMuted} />
                       </TouchableOpacity>
                     ) : null}
                     </View>
@@ -746,7 +753,7 @@ export default function NetworkScreen() {
                       return (
                         <>
                           <Text
-                            style={styles.postText}
+                            style={[styles.postText, { color: colors.text }]}
                             numberOfLines={expanded ? undefined : POST_COLLAPSED_LINES}
                             onTextLayout={(e) => {
                               // Some devices/versions are flaky with onTextLayout for nested <Text>;
@@ -760,7 +767,7 @@ export default function NetworkScreen() {
                         part.url ? (
                           <Text
                             key={`${post._id}-url-${idx}`}
-                            style={styles.postLink}
+                            style={[styles.postLink, { color: isDark ? "#8AB4FF" : "#1D4ED8" }]}
                             onPress={() => Linking.openURL(normalizeUrl(part.url || ""))}
                           >
                             {part.text}
@@ -775,7 +782,7 @@ export default function NetworkScreen() {
                               style={styles.viewMoreBtn}
                               onPress={() => setExpandedPosts((prev) => ({ ...prev, [post._id]: !expanded }))}
                             >
-                              <Text style={styles.viewMoreText}>{expanded ? "View less" : "View more"}</Text>
+                              <Text style={[styles.viewMoreText, { color: isDark ? "#8AB4FF" : "#1D4ED8" }]}>{expanded ? "View less" : "View more"}</Text>
                             </TouchableOpacity>
                           ) : null}
                         </>
@@ -792,21 +799,21 @@ export default function NetworkScreen() {
                         >
                           {media.map((uri, idx) => (
                             <TouchableOpacity key={`${post._id}-media-${idx}`} activeOpacity={0.9} onPress={() => setViewer({ visible: true, postId: post._id, images: media, index: idx })}>
-                              <Image source={{ uri }} style={styles.postImage} resizeMode="cover" />
+                              <Image source={{ uri }} style={[styles.postImage, { borderColor: colors.border }]} resizeMode="cover" />
                             </TouchableOpacity>
                           ))}
                         </ScrollView>
                         <View style={styles.dotRow}>
                           {media.map((_, idx) => (
-                            <View key={`${post._id}-dot-${idx}`} style={[styles.dot, idx === currentIndex && styles.dotActive]} />
+                            <View key={`${post._id}-dot-${idx}`} style={[styles.dot, { backgroundColor: colors.border }, idx === currentIndex ? [styles.dotActive, { backgroundColor: colors.accent }] : null]} />
                           ))}
                         </View>
                       </>
                     ) : null}
 
                     {(summaryReactionCount > 0 || summaryCommentCount > 0) ? (
-                      <View style={styles.feedStatsRow}>
-                        <Text style={styles.feedStatsText}>
+                      <View style={[styles.feedStatsRow, { borderColor: colors.border }]}>
+                        <Text style={[styles.feedStatsText, { color: colors.textMuted }]}>
                           {summaryReactionCount > 0 ? `${summaryReactionIcons} ${summaryReactionCount}` : ""}
                           {summaryReactionCount > 0 && summaryCommentCount > 0 ? "   •   " : ""}
                           {summaryCommentCount > 0 ? `${summaryCommentCount} comments` : ""}
@@ -828,7 +835,7 @@ export default function NetworkScreen() {
                     ) : null}
                     <View style={styles.postActionRow}>
                       <TouchableOpacity
-                        style={[styles.postActionBtn, userReaction ? styles.postActionBtnActive : null]}
+                        style={[styles.postActionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, userReaction ? [styles.postActionBtnActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }] : null]}
                         onPress={() => react(post._id, "react", "like")}
                         onLongPress={() => setReactionMenuFor((prev) => (prev === post._id ? null : post._id))}
                       >
@@ -839,9 +846,9 @@ export default function NetworkScreen() {
                               : "like") as keyof typeof REACTION_OPTIONS]?.emoji || REACTION_OPTIONS.like.emoji}
                           </Text>
                         ) : (
-                          <Ionicons name="thumbs-up-outline" size={16} color="#475467" />
+                          <Ionicons name="thumbs-up-outline" size={16} color={colors.textMuted} />
                         )}
-                        <Text style={[styles.postActionText, userReaction ? styles.postActionTextActive : null]}>
+                        <Text style={[styles.postActionText, { color: colors.textMuted }, userReaction ? [styles.postActionTextActive, { color: colors.accent }] : null]}>
                           {userReaction
                             ? REACTION_OPTIONS[(userReaction in REACTION_OPTIONS
                                 ? userReaction
@@ -850,39 +857,39 @@ export default function NetworkScreen() {
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={styles.postActionBtn}
+                        style={[styles.postActionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
                         onPress={() => {
                           setReactionMenuFor(null);
                           openComments(post._id);
                         }}
                       >
-                        <Ionicons name="chatbubble-outline" size={16} color="#475467" />
-                        <Text style={styles.postActionText} numberOfLines={1}>Comment</Text>
+                         <Ionicons name="chatbubble-outline" size={16} color={colors.textMuted} />
+                         <Text style={[styles.postActionText, { color: colors.textMuted }]} numberOfLines={1}>Comment</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={styles.postActionBtn}
+                        style={[styles.postActionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
                         onPress={() => {
                           setReactionMenuFor(null);
                           react(post._id, "share");
                         }}
                       >
-                        <Ionicons name="share-social-outline" size={16} color="#475467" />
-                        <Text style={styles.postActionText} numberOfLines={1}>Share</Text>
+                         <Ionicons name="share-social-outline" size={16} color={colors.textMuted} />
+                         <Text style={[styles.postActionText, { color: colors.textMuted }]} numberOfLines={1}>Share</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={styles.postActionBtn}
+                        style={[styles.postActionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
                         onPress={() => {
                           setReactionMenuFor(null);
                           openPostOptions(post);
                         }}
                       >
-                        <Ionicons name="ellipsis-horizontal" size={16} color="#475467" />
-                        <Text style={styles.postActionText} numberOfLines={1}>More</Text>
+                         <Ionicons name="ellipsis-horizontal" size={16} color={colors.textMuted} />
+                         <Text style={[styles.postActionText, { color: colors.textMuted }]} numberOfLines={1}>More</Text>
                       </TouchableOpacity>
                     </View>
                     {(post.commentCount || 0) > 0 ? (
                       <TouchableOpacity onPress={() => openComments(post._id)}>
-                        <Text style={styles.viewCommentsLink}>View all {post.commentCount || 0} comments</Text>
+                        <Text style={[styles.viewCommentsLink, { color: isDark ? "#8AB4FF" : "#1D4ED8" }]}>View all {post.commentCount || 0} comments</Text>
                       </TouchableOpacity>
                     ) : null}
                       </View>

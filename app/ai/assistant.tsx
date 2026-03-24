@@ -1,12 +1,24 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 import { useAppTheme } from "@/context/ThemeContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type AiHistoryItem = { _id?: string; prompt: string; response: string; createdAt?: string };
 type AssistantTab = "general" | "personalized";
@@ -33,6 +45,7 @@ const PERSONALIZED_SUGGESTED = [
 export default function AiAssistantEntryPage() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView | null>(null);
+  const insets = useSafeAreaInsets();
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState<AiHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -103,136 +116,59 @@ export default function AiAssistantEntryPage() {
   }, [latest?.response]);
 
   return (
-    <ScrollView
-      ref={(ref) => {
-        scrollRef.current = ref;
-      }}
-      contentContainerStyle={styles.page}
-      style={{ backgroundColor: colors.background }}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+    <KeyboardAvoidingView
+      style={[styles.root, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 8 : 0}
     >
-      <LinearGradient colors={["#3B5BFF", "#6C63FF", "#8F67FF"]} style={styles.hero}>
-        <Text style={styles.heroTitle}>{activeTab === "general" ? "AI Assistant" : "AI Mentor"}</Text>
-        <Text style={styles.heroSub}>
-          {activeTab === "general"
-            ? "Ask general questions and get fast, clear answers from ORIN."
-            : "Get guidance shaped around your goal, roadmap, and current progress."}
-        </Text>
-        <View style={styles.flowRow}>
-          {(activeTab === "general" ? ["Ask", "Understand", "Decide"] : ["AI Plan", "Skill Gap", "Roadmap", "Build"]).map((item, index, arr) => (
-            <View key={item} style={styles.flowItem}>
-              <Text style={styles.flowText}>{item}</Text>
-              {index < arr.length - 1 ? <Ionicons name="arrow-forward" size={12} color="#E8E7FF" /> : null}
-            </View>
-          ))}
-        </View>
-      </LinearGradient>
-
-      <View style={styles.tabRow}>
-        {ASSISTANT_TABS.map((tab) => {
-          const active = activeTab === tab.key;
-          return (
-            <TouchableOpacity
-              key={tab.key}
-              style={[
-                styles.tabChip,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-                active && { borderColor: "#5B4DFF", backgroundColor: isDark ? "#261E49" : "#EEF2FF" }
-              ]}
-              onPress={() => setActiveTab(tab.key)}
-            >
-              <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {activeTab === "personalized" ? (
-        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Personalized Actions</Text>
-          <View style={styles.actionRow}>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/skill-gap" as never)}>
-              <Text style={styles.secondaryBtnText}>Analyze Skills</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/career-roadmap" as never)}>
-              <Text style={styles.secondaryBtnText}>Generate Roadmap</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/project-ideas" as never)}>
-              <Text style={styles.secondaryBtnText}>Get Projects</Text>
-            </TouchableOpacity>
+      <ScrollView
+        ref={(ref) => {
+          scrollRef.current = ref;
+        }}
+        contentContainerStyle={[styles.page, { paddingBottom: 20 }]}
+        style={{ backgroundColor: colors.background }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+        keyboardShouldPersistTaps="handled"
+      >
+        <LinearGradient colors={["#3B5BFF", "#6C63FF", "#8F67FF"]} style={styles.hero}>
+          <Text style={styles.heroTitle}>{activeTab === "general" ? "AI Assistant" : "AI Mentor"}</Text>
+          <Text style={styles.heroSub}>
+            {activeTab === "general"
+              ? "Ask general questions and get fast, clear answers from ORIN."
+              : "Get guidance shaped around your goal, roadmap, and current progress."}
+          </Text>
+          <View style={styles.flowRow}>
+            {(activeTab === "general" ? ["Ask", "Understand", "Decide"] : ["AI Plan", "Skill Gap", "Roadmap", "Build"]).map((item, index, arr) => (
+              <View key={item} style={styles.flowItem}>
+                <Text style={styles.flowText}>{item}</Text>
+                {index < arr.length - 1 ? <Ionicons name="arrow-forward" size={12} color="#E8E7FF" /> : null}
+              </View>
+            ))}
           </View>
-          <Text style={[styles.helperText, { color: colors.textMuted }]}>Use Personalized mode when you want ORIN to respond based on your goal and journey state.</Text>
+        </LinearGradient>
+
+        <View style={styles.tabRow}>
+          {ASSISTANT_TABS.map((tab) => {
+            const active = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                style={[
+                  styles.tabChip,
+                  { backgroundColor: colors.surface, borderColor: colors.border },
+                  active && { borderColor: "#5B4DFF", backgroundColor: isDark ? "#261E49" : "#EEF2FF" }
+                ]}
+                onPress={() => setActiveTab(tab.key)}
+              >
+                <Text style={[styles.tabChipText, active && styles.tabChipTextActive]}>{tab.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-      ) : null}
 
-      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>{activeTab === "general" ? "General Questions" : "Suggested Personalized Prompts"}</Text>
-        <View style={styles.chips}>
-          {suggestedPrompts.map((item) => (
-            <TouchableOpacity key={item} style={styles.chip} onPress={() => sendQuestion(item)}>
-              <Text style={styles.chipText}>{item}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-      </View>
-
-      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Conversation</Text>
-        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color="#5B4DFF" /> : null}
-        {!loading && !conversations.length && !sending ? (
-          <View style={styles.emptyState}>
-            <Ionicons name="chatbubbles-outline" size={28} color="#98A2B3" />
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>{activeTab === "general" ? "Start your AI Q&A" : "Start your AI mentor chat"}</Text>
-            <Text style={[styles.meta, { color: colors.textMuted }]}>
-              {activeTab === "general"
-                ? "Ask anything and get a clean, direct answer."
-                : "Ask a goal-based question and ORIN will connect it to your next action."}
-            </Text>
-          </View>
-        ) : null}
-
-        {conversations.map((item, index) => (
-          <View key={`${item._id || index}-${item.createdAt || index}`} style={styles.chatGroup}>
-            <View style={[styles.bubble, styles.userBubble, { backgroundColor: isDark ? "#253142" : "#F2F4F7" }]}>
-              <Text style={styles.userBubbleText}>{item.prompt}</Text>
-            </View>
-            <LinearGradient
-              colors={activeTab === "general" ? ["#E8F0FF", "#F5F7FF"] : ["#EEF2FF", "#F5F3FF"]}
-              style={[styles.bubble, styles.aiBubble, activeTab === "general" && styles.aiBubbleWide]}
-            >
-              {item.response ? (
-                <>
-                  <Text style={styles.aiIntro}>{activeTab === "general" ? "Answer" : "Here is your guided plan"}</Text>
-                  {activeTab === "general" ? (
-                    <Text style={styles.aiGeneralText}>{item.response}</Text>
-                  ) : (
-                    item.response
-                      .split(/\n+/)
-                      .map((line) => line.trim())
-                      .filter(Boolean)
-                      .slice(0, 6)
-                      .map((line, lineIndex) => (
-                        <View key={`${line}-${lineIndex}`} style={styles.aiStepRow}>
-                          <Ionicons name="sparkles" size={14} color="#5B4DFF" />
-                          <Text style={styles.aiBubbleText}>{line.replace(/^[\-\*\d\.\s]+/, "").trim()}</Text>
-                        </View>
-                      ))
-                  )}
-                </>
-              ) : (
-                <View style={styles.typingRow}>
-                  <ActivityIndicator size="small" color="#5B4DFF" />
-                  <Text style={styles.meta}>AI is thinking...</Text>
-                </View>
-              )}
-            </LinearGradient>
-          </View>
-        ))}
-
-        {activeTab === "personalized" && latest?.response ? (
-          <View style={[styles.actionCard, { backgroundColor: isDark ? "#1B1E36" : "#F8F7FF", borderColor: isDark ? "#31395C" : "#DBD8FF" }]}>
-            <Text style={styles.actionTitle}>Turn this into action</Text>
+        {activeTab === "personalized" ? (
+          <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Personalized Actions</Text>
             <View style={styles.actionRow}>
               <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/skill-gap" as never)}>
                 <Text style={styles.secondaryBtnText}>Analyze Skills</Text>
@@ -244,59 +180,159 @@ export default function AiAssistantEntryPage() {
                 <Text style={styles.secondaryBtnText}>Get Projects</Text>
               </TouchableOpacity>
             </View>
-            {suggestionBlocks.length ? (
-              <View style={styles.blockList}>
-                {suggestionBlocks.map((item) => (
-                  <View key={item} style={styles.blockItem}>
-                    <Text style={styles.blockText}>{item}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
+            <Text style={[styles.helperText, { color: colors.textMuted }]}>Use Personalized mode when you want ORIN to respond based on your goal and journey state.</Text>
           </View>
         ) : null}
-      </View>
 
-      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>{activeTab === "general" ? "Ask anything" : "Ask ORIN about your journey"}</Text>
-        <TextInput
-          style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.text }]}
-          multiline
-          value={message}
-          onChangeText={setMessage}
-          placeholder={activeTab === "general" ? "Ask any general question..." : "What do you want to achieve today?"}
-          placeholderTextColor={colors.textMuted}
-        />
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => sendQuestion()} disabled={sending}>
-          <Text style={styles.primaryBtnText}>{sending ? "Sending..." : activeTab === "general" ? "Ask AI" : "Send to AI Mentor"}</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{activeTab === "general" ? "General Questions" : "Suggested Personalized Prompts"}</Text>
+          <View style={styles.chips}>
+            {suggestedPrompts.map((item) => (
+              <TouchableOpacity key={item} style={styles.chip} onPress={() => sendQuestion(item)}>
+                <Text style={styles.chipText}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
 
-      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Actions</Text>
-        <TouchableOpacity
-          style={styles.primaryBtn}
-          onPress={async () => {
-            if (!latest?.response) {
-              notify("No answer to save yet.");
-              return;
-            }
-            await saveAiItem({
-              type: "assistant",
-              title: `AI Assistant: ${latest.prompt.slice(0, 48)}${latest.prompt.length > 48 ? "..." : ""}`,
-              payload: { prompt: latest.prompt, answer: latest.response, mode: activeTab }
-            });
-            notify("Saved to Saved AI.");
-          }}
-        >
-          <Text style={styles.primaryBtnText}>Save Latest Answer</Text>
-        </TouchableOpacity>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Conversation</Text>
+          {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+          {loading ? <ActivityIndicator size="large" color="#5B4DFF" /> : null}
+          {!loading && !conversations.length && !sending ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="chatbubbles-outline" size={28} color="#98A2B3" />
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>{activeTab === "general" ? "Start your AI Q&A" : "Start your AI mentor chat"}</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>
+                {activeTab === "general"
+                  ? "Ask anything and get a clean, direct answer."
+                  : "Ask a goal-based question and ORIN will connect it to your next action."}
+              </Text>
+            </View>
+          ) : null}
+
+          {conversations.map((item, index) => (
+            <View key={`${item._id || index}-${item.createdAt || index}`} style={styles.chatGroup}>
+              <View style={[styles.bubble, styles.userBubble, { backgroundColor: isDark ? "#253142" : "#F2F4F7" }]}>
+                <Text style={styles.userBubbleText}>{item.prompt}</Text>
+              </View>
+              <LinearGradient
+                colors={activeTab === "general" ? ["#E8F0FF", "#F5F7FF"] : ["#EEF2FF", "#F5F3FF"]}
+                style={[styles.bubble, styles.aiBubble, activeTab === "general" && styles.aiBubbleWide]}
+              >
+                {item.response ? (
+                  <>
+                    <Text style={styles.aiIntro}>{activeTab === "general" ? "Answer" : "Here is your guided plan"}</Text>
+                    {activeTab === "general" ? (
+                      <Text style={styles.aiGeneralText}>{item.response}</Text>
+                    ) : (
+                      item.response
+                        .split(/\n+/)
+                        .map((line) => line.trim())
+                        .filter(Boolean)
+                        .slice(0, 6)
+                        .map((line, lineIndex) => (
+                          <View key={`${line}-${lineIndex}`} style={styles.aiStepRow}>
+                            <Ionicons name="sparkles" size={14} color="#5B4DFF" />
+                            <Text style={styles.aiBubbleText}>{line.replace(/^[\-\*\d\.\s]+/, "").trim()}</Text>
+                          </View>
+                        ))
+                    )}
+                  </>
+                ) : (
+                  <View style={styles.typingRow}>
+                    <ActivityIndicator size="small" color="#5B4DFF" />
+                    <Text style={styles.meta}>AI is thinking...</Text>
+                  </View>
+                )}
+              </LinearGradient>
+            </View>
+          ))}
+
+          {activeTab === "personalized" && latest?.response ? (
+            <View style={[styles.actionCard, { backgroundColor: isDark ? "#1B1E36" : "#F8F7FF", borderColor: isDark ? "#31395C" : "#DBD8FF" }]}>
+              <Text style={styles.actionTitle}>Turn this into action</Text>
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/skill-gap" as never)}>
+                  <Text style={styles.secondaryBtnText}>Analyze Skills</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/career-roadmap" as never)}>
+                  <Text style={styles.secondaryBtnText}>Generate Roadmap</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push("/ai/project-ideas" as never)}>
+                  <Text style={styles.secondaryBtnText}>Get Projects</Text>
+                </TouchableOpacity>
+              </View>
+              {suggestionBlocks.length ? (
+                <View style={styles.blockList}>
+                  {suggestionBlocks.map((item) => (
+                    <View key={item} style={styles.blockItem}>
+                      <Text style={styles.blockText}>{item}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+        </View>
+
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Actions</Text>
+          <TouchableOpacity
+            style={styles.primaryBtn}
+            onPress={async () => {
+              if (!latest?.response) {
+                notify("No answer to save yet.");
+                return;
+              }
+              await saveAiItem({
+                type: "assistant",
+                title: `AI Assistant: ${latest.prompt.slice(0, 48)}${latest.prompt.length > 48 ? "..." : ""}`,
+                payload: { prompt: latest.prompt, answer: latest.response, mode: activeTab }
+              });
+              notify("Saved to Saved AI.");
+            }}
+          >
+            <Text style={styles.primaryBtnText}>Save Latest Answer</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+
+      <View
+        style={[
+          styles.stickyComposerWrap,
+          {
+            backgroundColor: colors.background,
+            borderTopColor: colors.border,
+            paddingBottom: Math.max(insets.bottom, 12)
+          }
+        ]}
+      >
+        <View style={[styles.stickyComposerCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            {activeTab === "general" ? "Ask anything" : "Ask ORIN about your journey"}
+          </Text>
+          <TextInput
+            style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.text }]}
+            multiline
+            value={message}
+            onChangeText={setMessage}
+            placeholder={activeTab === "general" ? "Ask any general question..." : "What do you want to achieve today?"}
+            placeholderTextColor={colors.textMuted}
+          />
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => sendQuestion()} disabled={sending}>
+            <Text style={styles.primaryBtnText}>
+              {sending ? "Sending..." : activeTab === "general" ? "Ask AI" : "Send to AI Mentor"}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
-    </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   page: { padding: 16, backgroundColor: "#F3F6FB", gap: 12 },
   hero: { borderRadius: 24, padding: 18, gap: 12 },
   heroTitle: { color: "#FFFFFF", fontSize: 28, fontWeight: "900" },
@@ -352,5 +388,16 @@ const styles = StyleSheet.create({
   primaryBtn: { alignSelf: "flex-start", backgroundColor: "#5B4DFF", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11 },
   primaryBtnText: { color: "#fff", fontWeight: "800" },
   secondaryBtn: { alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: "#EAF6EF" },
-  secondaryBtnText: { color: "#1F7A4C", fontWeight: "800" }
+  secondaryBtnText: { color: "#1F7A4C", fontWeight: "800" },
+  stickyComposerWrap: {
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingTop: 12
+  },
+  stickyComposerCard: {
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    gap: 10
+  }
 });
