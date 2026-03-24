@@ -3,6 +3,7 @@ import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
 
 type NetworkOverview = {
@@ -80,6 +81,7 @@ type MentorSessionLite = {
 export default function MyProfileScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { colors } = useAppTheme();
   const [overview, setOverview] = useState<NetworkOverview | null>(null);
   const [connections, setConnections] = useState<ConnectionRow[]>([]);
   const [myPosts, setMyPosts] = useState<FeedPost[]>([]);
@@ -110,16 +112,16 @@ export default function MyProfileScreen() {
 
   const heroMeta = useMemo(() => {
     if (user?.role === "mentor") {
-      return [mentorProfile?.company, mentorProfile?.state].filter(Boolean).join(" • ");
+      return [mentorProfile?.company, mentorProfile?.state].filter(Boolean).join(" â€¢ ");
     }
-    return [publicProfile?.collegeName, publicProfile?.state].filter(Boolean).join(" • ");
+    return [publicProfile?.collegeName, publicProfile?.state].filter(Boolean).join(" â€¢ ");
   }, [mentorProfile?.company, mentorProfile?.state, publicProfile?.collegeName, publicProfile?.state, user?.role]);
 
   const educationLine = useMemo(() => {
     const source = user?.role === "mentor" ? mentorProfile?.education || [] : publicProfile?.education || [];
     if (!source.length) return "";
     const top = source[0];
-    return [top?.degree, top?.school, top?.year].filter(Boolean).join(" • ");
+    return [top?.degree, top?.school, top?.year].filter(Boolean).join(" â€¢ ");
   }, [mentorProfile?.education, publicProfile?.education, user?.role]);
 
   const avatarUrl = publicProfile?.profilePhotoUrl || "";
@@ -192,23 +194,23 @@ export default function MyProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#1F7A4C" />
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   return (
     <ScrollView
-      contentContainerStyle={styles.container}
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadProfileData(true)} />}
     >
-      <View style={styles.heroCard}>
+      <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.heroTop}>
           {avatarUrl ? (
             <Image source={{ uri: avatarUrl }} style={styles.avatarImage} />
           ) : (
-            <View style={styles.avatarWrap}>
+            <View style={[styles.avatarWrap, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
               <Text style={styles.avatarText}>{(user?.name || "O").charAt(0).toUpperCase()}</Text>
             </View>
           )}
@@ -232,35 +234,35 @@ export default function MyProfileScreen() {
           </View>
         </View>
 
-        <Text style={styles.name}>{user?.name || "ORIN User"}</Text>
+        <Text style={[styles.name, { color: colors.text }]}>{user?.name || "ORIN User"}</Text>
         <Text style={styles.role}>{user?.role === "mentor" ? "Mentor" : "Student"}</Text>
-        {heroTitle ? <Text style={styles.headline}>{heroTitle}</Text> : null}
-        {heroMeta ? <Text style={styles.subMeta}>{heroMeta}</Text> : null}
+        {heroTitle ? <Text style={[styles.headline, { color: colors.text }]}>{heroTitle}</Text> : null}
+        {heroMeta ? <Text style={[styles.subMeta, { color: colors.textMuted }]}>{heroMeta}</Text> : null}
         {publicProfile?.about || publicProfile?.bio ? (
-          <Text style={styles.bio} numberOfLines={3}>
+          <Text style={[styles.bio, { color: colors.textMuted }]} numberOfLines={3}>
             {publicProfile?.about || publicProfile?.bio}
           </Text>
         ) : null}
 
         <View style={styles.metaChips}>
-          <View style={styles.metaChip}>
+          <View style={[styles.metaChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
             <Ionicons name="flash-outline" size={14} color="#1F7A4C" />
-            <Text style={styles.metaChipText}>{overview?.reputation?.score ?? 0} XP</Text>
+            <Text style={[styles.metaChipText, { color: colors.text }]}>{overview?.reputation?.score ?? 0} XP</Text>
           </View>
-          <View style={styles.metaChip}>
+          <View style={[styles.metaChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
             <Ionicons name="flame-outline" size={14} color="#B54708" />
-            <Text style={styles.metaChipText}>{overview?.reputation?.levelTag || "Starter"}</Text>
+            <Text style={[styles.metaChipText, { color: colors.text }]}>{overview?.reputation?.levelTag || "Starter"}</Text>
           </View>
           {publicProfile?.state || mentorProfile?.state ? (
-            <View style={styles.metaChip}>
+            <View style={[styles.metaChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
               <Ionicons name="location-outline" size={14} color="#475467" />
-              <Text style={styles.metaChipText}>{publicProfile?.state || mentorProfile?.state}</Text>
+              <Text style={[styles.metaChipText, { color: colors.text }]}>{publicProfile?.state || mentorProfile?.state}</Text>
             </View>
           ) : null}
           {educationLine ? (
-            <View style={styles.metaChip}>
+            <View style={[styles.metaChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
               <Ionicons name="school-outline" size={14} color="#475467" />
-              <Text style={styles.metaChipText}>{educationLine}</Text>
+              <Text style={[styles.metaChipText, { color: colors.text }]}>{educationLine}</Text>
             </View>
           ) : null}
         </View>
@@ -269,8 +271,8 @@ export default function MyProfileScreen() {
           <TouchableOpacity style={styles.primaryButton} onPress={() => router.push(editRoute as never)}>
             <Text style={styles.primaryButtonText}>Edit Profile</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.secondaryButton} onPress={() => router.push("/settings" as never)}>
-            <Text style={styles.secondaryButtonText}>Settings</Text>
+          <TouchableOpacity style={[styles.secondaryButton, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/settings" as never)}>
+            <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Settings</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -278,12 +280,12 @@ export default function MyProfileScreen() {
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       {skillPreview.length ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Focus Areas</Text>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Focus Areas</Text>
           <View style={styles.skillRow}>
             {skillPreview.map((item) => (
-              <View key={item} style={styles.skillChip}>
-                <Text style={styles.skillChipText}>{item}</Text>
+              <View key={item} style={[styles.skillChip, { backgroundColor: colors.accentSoft }]}>
+                <Text style={[styles.skillChipText, { color: colors.accent }]}>{item}</Text>
               </View>
             ))}
           </View>
@@ -291,41 +293,41 @@ export default function MyProfileScreen() {
       ) : null}
 
       {user?.role === "mentor" ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Mentor Snapshot</Text>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Mentor Snapshot</Text>
           <View style={styles.detailGrid}>
-            <View style={styles.detailPill}>
-              <Text style={styles.detailLabel}>Students</Text>
-              <Text style={styles.detailValue}>{mentorStudentsMentored}</Text>
+            <View style={[styles.detailPill, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+              <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Students</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>{mentorStudentsMentored}</Text>
             </View>
-            <View style={styles.detailPill}>
-              <Text style={styles.detailLabel}>Sessions</Text>
-              <Text style={styles.detailValue}>
+            <View style={[styles.detailPill, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+              <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Sessions</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>
                 {Math.max(Number(mentorProfile?.totalSessionsConducted || 0), mentorSessions.filter((item) => item.sessionStatus === "completed").length)}
               </Text>
             </View>
-            <View style={styles.detailPill}>
-              <Text style={styles.detailLabel}>Rating</Text>
-              <Text style={styles.detailValue}>{Number(mentorProfile?.rating || 0).toFixed(1)}</Text>
+            <View style={[styles.detailPill, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+              <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Rating</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>{Number(mentorProfile?.rating || 0).toFixed(1)}</Text>
             </View>
-            <View style={styles.detailPill}>
-              <Text style={styles.detailLabel}>Pricing</Text>
-              <Text style={styles.detailValue}>INR {mentorProfile?.sessionPrice || 0}</Text>
+            <View style={[styles.detailPill, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+              <Text style={[styles.detailLabel, { color: colors.textMuted }]}>Pricing</Text>
+              <Text style={[styles.detailValue, { color: colors.text }]}>INR {mentorProfile?.sessionPrice || 0}</Text>
             </View>
           </View>
-          <Text style={styles.inlineMeta}>Domain: {mentorProfile?.primaryCategory || "Not selected"}</Text>
-          <Text style={styles.inlineMeta}>Subject: {mentorProfile?.subCategory || "Not selected"}</Text>
+          <Text style={[styles.inlineMeta, { color: colors.textMuted }]}>Domain: {mentorProfile?.primaryCategory || "Not selected"}</Text>
+          <Text style={[styles.inlineMeta, { color: colors.textMuted }]}>Subject: {mentorProfile?.subCategory || "Not selected"}</Text>
           {(mentorProfile?.specializations || []).length ? (
-            <Text style={styles.inlineMeta}>Specializations: {(mentorProfile?.specializations || []).join(", ")}</Text>
+            <Text style={[styles.inlineMeta, { color: colors.textMuted }]}>Specializations: {(mentorProfile?.specializations || []).join(", ")}</Text>
           ) : null}
         </View>
       ) : null}
 
       {activeList === "circle" ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>My Circle</Text>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>My Circle</Text>
           {connections.length === 0 ? (
-            <Text style={styles.emptyText}>No accepted connections yet.</Text>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No accepted connections yet.</Text>
           ) : (
             connections.slice(0, 20).map((item) => {
               const isRequester = String(item.requesterId?._id || "") === String(user?.id || "");
@@ -337,8 +339,8 @@ export default function MyProfileScreen() {
                   onPress={() => (other?._id ? router.push(`/public-profile/${other._id}` as never) : undefined)}
                   disabled={!other?._id}
                 >
-                  <Text style={styles.rowName}>{other?.name || "Connection"}</Text>
-                  <Text style={styles.rowRole}>{other?.role || "member"}</Text>
+                  <Text style={[styles.rowName, { color: colors.text }]}>{other?.name || "Connection"}</Text>
+                  <Text style={[styles.rowRole, { color: colors.textMuted }]}>{other?.role || "member"}</Text>
                 </TouchableOpacity>
               );
             })
@@ -347,15 +349,15 @@ export default function MyProfileScreen() {
       ) : null}
 
       {activeList === "audience" ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Audience</Text>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Audience</Text>
           {(socialPreview?.followers || []).length === 0 ? (
-            <Text style={styles.emptyText}>No followers yet.</Text>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No followers yet.</Text>
           ) : (
             (socialPreview?.followers || []).slice(0, 20).map((item, idx) => (
               <TouchableOpacity key={`${item._id || idx}-f`} style={styles.rowItem} onPress={() => item._id ? router.push(`/public-profile/${item._id}` as never) : undefined}>
-                <Text style={styles.rowName}>{item.name || "User"}</Text>
-                <Text style={styles.rowRole}>{item.role || "member"}</Text>
+                <Text style={[styles.rowName, { color: colors.text }]}>{item.name || "User"}</Text>
+                <Text style={[styles.rowRole, { color: colors.textMuted }]}>{item.role || "member"}</Text>
               </TouchableOpacity>
             ))
           )}
@@ -363,15 +365,15 @@ export default function MyProfileScreen() {
       ) : null}
 
       {activeList === "following" ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Following</Text>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Following</Text>
           {(socialPreview?.following || []).length === 0 ? (
-            <Text style={styles.emptyText}>Not following anyone yet.</Text>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>Not following anyone yet.</Text>
           ) : (
             (socialPreview?.following || []).slice(0, 20).map((item, idx) => (
               <TouchableOpacity key={`${item._id || idx}-g`} style={styles.rowItem} onPress={() => item._id ? router.push(`/public-profile/${item._id}` as never) : undefined}>
-                <Text style={styles.rowName}>{item.name || "User"}</Text>
-                <Text style={styles.rowRole}>{item.role || "member"}</Text>
+                <Text style={[styles.rowName, { color: colors.text }]}>{item.name || "User"}</Text>
+                <Text style={[styles.rowRole, { color: colors.textMuted }]}>{item.role || "member"}</Text>
               </TouchableOpacity>
             ))
           )}
@@ -379,17 +381,17 @@ export default function MyProfileScreen() {
       ) : null}
 
       {activeList === "insights" ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Insights</Text>
+        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.cardTitle, { color: colors.text }]}>Insights</Text>
           {myPosts.length === 0 ? (
-            <Text style={styles.emptyText}>No posts yet.</Text>
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No posts yet.</Text>
           ) : (
             myPosts.map((post) => (
-              <View key={post._id} style={styles.postCard}>
+              <View key={post._id} style={[styles.postCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
                 <View style={styles.postTop}>
-                  <View style={styles.postTypePill}>
+                  <View style={[styles.postTypePill, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                     <Ionicons name="grid-outline" size={14} color="#475467" />
-                    <Text style={styles.postTypeText}>{post.postType}</Text>
+                    <Text style={[styles.postTypeText, { color: colors.textMuted }]}>{post.postType}</Text>
                   </View>
                   <TouchableOpacity
                     style={styles.deleteBtn}
@@ -399,9 +401,9 @@ export default function MyProfileScreen() {
                     <Text style={styles.deleteBtnText}>{deletingPostId === post._id ? "Deleting..." : "Delete"}</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={styles.postText} numberOfLines={5}>{post.content}</Text>
-                <Text style={styles.postMeta}>
-                  {post.likeCount || 0} likes • {post.commentCount || 0} comments • {post.shareCount || 0} shares
+                <Text style={[styles.postText, { color: colors.text }]} numberOfLines={5}>{post.content}</Text>
+                <Text style={[styles.postMeta, { color: colors.textMuted }]}>
+                  {post.likeCount || 0} likes â€¢ {post.commentCount || 0} comments â€¢ {post.shareCount || 0} shares
                 </Text>
               </View>
             ))

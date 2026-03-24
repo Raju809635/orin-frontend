@@ -18,6 +18,7 @@ import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import {
   ActionButton,
   CommunityHero,
@@ -88,6 +89,7 @@ type SelectedCertificate = {
 export default function CommunityCertificationsPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { colors } = useAppTheme();
   const [tracks, setTracks] = useState<TrackItem[]>([]);
   const [earned, setEarned] = useState<EarnedCert[]>([]);
   const [requests, setRequests] = useState<MyRequest[]>([]);
@@ -202,7 +204,7 @@ export default function CommunityCertificationsPage() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.page}
+      contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
       <CommunityHero
@@ -238,9 +240,9 @@ export default function CommunityCertificationsPage() {
         subtitle="Your completed certificates now feel like achievements instead of plain records."
         icon="sparkles"
       >
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
         {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
-        {!loading && !earned.length ? <Text style={styles.emptyText}>No certificates earned yet. Join a challenge or complete a verified track to unlock your first one.</Text> : null}
+        {!loading && !earned.length ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No certificates earned yet. Join a challenge or complete a verified track to unlock your first one.</Text> : null}
         {earned.map((item) => {
           const mapped = mapEarned(item);
           const isSelected = selected?.id === mapped.id;
@@ -261,8 +263,8 @@ export default function CommunityCertificationsPage() {
                     <Text style={styles.cardTitle}>{mapped.title}</Text>
                     <StatusBadge label={item.level?.toLowerCase().includes("advanced") ? "Top Performer" : (item.status || "Completed")} tone={badgeTone} />
                   </View>
-                  <Text style={styles.cardMeta}>{mapped.domain || "ORIN Track"} - {formatDate(mapped.issuedAt)}</Text>
-                  <Text style={styles.cardMetaSmall}>Certificate ID: {mapped.certificateId || mapped.id}</Text>
+                  <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{mapped.domain || "ORIN Track"} - {formatDate(mapped.issuedAt)}</Text>
+                  <Text style={[styles.cardMetaSmall, { color: colors.textMuted }]}>Certificate ID: {mapped.certificateId || mapped.id}</Text>
                 </View>
               </View>
               <View style={styles.actionRow}>
@@ -281,14 +283,14 @@ export default function CommunityCertificationsPage() {
           subtitle="A premium preview with verification details, QR code, and share actions."
           icon="document-text"
         >
-          <View style={styles.previewCard}>
+          <View style={[styles.previewCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.previewHeader}>
               <View style={styles.previewBadgeWrap}>
                 <Ionicons name="shield-checkmark" size={22} color="#FFFFFF" />
               </View>
               <View style={styles.previewHeaderBody}>
-                <Text style={styles.previewTitle}>{selected.title}</Text>
-                <Text style={styles.previewMeta}>{selected.domain || "ORIN"} - {selected.level || "Verified"}</Text>
+                <Text style={[styles.previewTitle, { color: colors.text }]}>{selected.title}</Text>
+                <Text style={[styles.previewMeta, { color: colors.textMuted }]}>{selected.domain || "ORIN"} - {selected.level || "Verified"}</Text>
               </View>
             </View>
             <View style={styles.qrRow}>
@@ -303,10 +305,10 @@ export default function CommunityCertificationsPage() {
               )}
               <View style={styles.qrInfo}>
                 <StatusBadge label={selected.status === "approved" ? "Verified" : (selected.status || "Ready")} tone={selected.status === "approved" ? "success" : "primary"} />
-                <Text style={styles.previewMeta}>Completion date: {formatDate(selected.issuedAt)}</Text>
-                <Text style={styles.previewMeta}>Certificate ID: {selected.certificateId || selected.id}</Text>
-                <Text style={styles.previewMeta}>Issued by: {selected.issuedBy || "ORIN"}</Text>
-                {selected.verificationUrl ? <Text style={styles.previewMetaSmall}>{selected.verificationUrl}</Text> : null}
+                <Text style={[styles.previewMeta, { color: colors.textMuted }]}>Completion date: {formatDate(selected.issuedAt)}</Text>
+                <Text style={[styles.previewMeta, { color: colors.textMuted }]}>Certificate ID: {selected.certificateId || selected.id}</Text>
+                <Text style={[styles.previewMeta, { color: colors.textMuted }]}>Issued by: {selected.issuedBy || "ORIN"}</Text>
+                {selected.verificationUrl ? <Text style={[styles.previewMetaSmall, { color: colors.textMuted }]}>{selected.verificationUrl}</Text> : null}
               </View>
             </View>
             <View style={styles.actionRow}>
@@ -323,15 +325,15 @@ export default function CommunityCertificationsPage() {
         subtitle="Clear next steps keep this section useful even before a user earns a certificate."
         icon="list"
       >
-        {!loading && !tracks.length ? <Text style={styles.emptyText}>No certification tracks published yet.</Text> : null}
+        {!loading && !tracks.length ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No certification tracks published yet.</Text> : null}
         {tracks.map((item) => (
-          <View key={item.id} style={styles.trackCard}>
+          <View key={item.id} style={[styles.trackCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.cardHeaderRow}>
-              <Text style={styles.cardTitle}>{item.title}</Text>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
               <StatusBadge label={item.level || "Beginner"} tone="primary" />
             </View>
-            <Text style={styles.cardMeta}>{item.domain || "General"} - {(item.requirements || []).length} requirements</Text>
-            {item.description ? <Text style={styles.cardDescription}>{item.description}</Text> : null}
+            <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{item.domain || "General"} - {(item.requirements || []).length} requirements</Text>
+            {item.description ? <Text style={[styles.cardDescription, { color: colors.textMuted }]}>{item.description}</Text> : null}
             <View style={styles.pillRow}>
               {(item.requirements || []).slice(0, 3).map((req) => (
                 <StatPill key={`${item.id}-${req}`} icon="checkmark-circle" label={req} tone="#ECFDF3" />
@@ -340,8 +342,8 @@ export default function CommunityCertificationsPage() {
             {user?.role === "student" ? (
               <>
                 <TextInput
-                  style={styles.input}
-                  placeholder="Add a note for verification (optional)"
+                  style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+                  placeholder="Add a note for verification (optional)" placeholderTextColor={colors.textMuted}
                   value={requestNoteById[item.id] || ""}
                   onChangeText={(text) => setRequestNoteById((prev) => ({ ...prev, [item.id]: text }))}
                 />
@@ -375,15 +377,15 @@ export default function CommunityCertificationsPage() {
         subtitle="Simple status tags keep the workflow easy to understand."
         icon="time"
       >
-        {!loading && !requests.length ? <Text style={styles.emptyText}>No certificate requests yet.</Text> : null}
+        {!loading && !requests.length ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No certificate requests yet.</Text> : null}
         {requests.map((request) => (
-          <View key={request.id} style={styles.requestCard}>
+          <View key={request.id} style={[styles.requestCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.cardHeaderRow}>
               <Text style={styles.cardTitle}>{request.track?.title || "Certification request"}</Text>
               <StatusBadge label={request.status} tone={requestStatusTone(request.status)} />
             </View>
-            <Text style={styles.cardMeta}>{request.track?.domain || "ORIN"} - {request.track?.level || "Track review"}</Text>
-            {request.note ? <Text style={styles.cardDescription}>{request.note}</Text> : null}
+            <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{request.track?.domain || "ORIN"} - {request.track?.level || "Track review"}</Text>
+            {request.note ? <Text style={[styles.cardDescription, { color: colors.textMuted }]}>{request.note}</Text> : null}
           </View>
         ))}
       </CommunitySection>
@@ -594,7 +596,4 @@ const styles = StyleSheet.create({
     paddingVertical: 11
   }
 });
-
-
-
 

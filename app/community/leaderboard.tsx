@@ -13,6 +13,7 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 
 type LeaderboardEntry = {
   rank: number;
@@ -54,6 +55,7 @@ function getInitial(name?: string) {
 
 export default function CommunityLeaderboardPage() {
   const { user } = useAuth();
+  const { colors, isDark } = useAppTheme();
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -134,12 +136,12 @@ export default function CommunityLeaderboardPage() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.page}
+      contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.pageTitle}>{activeTitle}</Text>
-      <Text style={styles.pageSub}>{activeSubtitle}</Text>
+      <Text style={[styles.pageTitle, { color: colors.text }]}>{activeTitle}</Text>
+      <Text style={[styles.pageSub, { color: colors.textMuted }]}>{activeSubtitle}</Text>
 
       <View style={styles.tabsRow}>
         {TAB_CONFIG.map((tab) => {
@@ -147,11 +149,11 @@ export default function CommunityLeaderboardPage() {
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.tabChip, active && styles.tabChipActive]}
+              style={[styles.tabChip, { borderColor: colors.border, backgroundColor: colors.surface }, active && [styles.tabChipActive, { backgroundColor: colors.accent, borderColor: colors.accent }]]}
               onPress={() => setActiveTab(tab.key)}
             >
-              <Ionicons name={tab.icon} size={15} color={active ? "#FFFFFF" : "#1F7A4C"} />
-              <Text style={[styles.tabText, active && styles.tabTextActive]}>{tab.label}</Text>
+              <Ionicons name={tab.icon} size={15} color={active ? colors.accentText : colors.accent} />
+              <Text style={[styles.tabText, { color: active ? colors.accentText : colors.accent }, active && styles.tabTextActive]}>{tab.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -162,10 +164,10 @@ export default function CommunityLeaderboardPage() {
 
       {!loading && activeEntries.length > 0 ? (
         <>
-          <View style={styles.section}>
+          <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="podium" size={16} color="#1F7A4C" />
-              <Text style={styles.sectionTitle}>Top 3 Podium</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>Top 3 Podium</Text>
             </View>
 
             <View style={styles.podiumRow}>
@@ -195,31 +197,31 @@ export default function CommunityLeaderboardPage() {
             </View>
           </View>
 
-          <View style={styles.section}>
+          <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="flash" size={16} color="#1F7A4C" />
               <Text style={styles.sectionTitle}>Your Competitive Position</Text>
             </View>
             {myEntry ? (
               <>
-                <Text style={styles.myRankText}>You are #{myEntry.rank} with {myEntry.score} XP</Text>
-                <Text style={styles.gapText}>
+                <Text style={[styles.myRankText, { color: colors.text }]}>You are #{myEntry.rank} with {myEntry.score} XP</Text>
+                <Text style={[styles.gapText, { color: colors.accent }]}>
                   {xpGap && nextTargetEntry
                     ? `You need ${xpGap} XP to reach #${nextTargetEntry.rank} (${nextTargetEntry.name})`
                     : "Keep building XP to push toward the top ranks"}
                 </Text>
-                <Text style={styles.percentText}>
+                <Text style={[styles.percentText, { color: colors.textMuted }]}>
                   {activeEntries.length > 0
                     ? `Top ${Math.max(1, Math.round((myEntry.rank / activeEntries.length) * 100))}% in this leaderboard`
                     : "Leaderboard ranking will appear here"}
                 </Text>
               </>
             ) : (
-              <Text style={styles.meta}>Your rank will appear after your leaderboard entry is generated.</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Your rank will appear after your leaderboard entry is generated.</Text>
             )}
           </View>
 
-          <View style={styles.section}>
+          <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="list" size={16} color="#1F7A4C" />
               <Text style={styles.sectionTitle}>Full Rank List</Text>
@@ -228,7 +230,7 @@ export default function CommunityLeaderboardPage() {
               const mine = String(entry.userId || "") === String(user?.id || "");
               const width = `${Math.max(12, Math.round((Number(entry.score || 0) / maxScore) * 100))}%`;
               return (
-                <View key={`${activeTab}-${entry.rank}-${entry.userId || entry.name}`} style={[styles.rankRow, mine && styles.rankRowMine]}>
+                <View key={`${activeTab}-${entry.rank}-${entry.userId || entry.name}`} style={[styles.rankRow, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, mine && [styles.rankRowMine, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}>
                   <View style={styles.rankLeft}>
                     <Text style={[styles.rankIndex, mine && styles.rankIndexMine]}>{entry.rank}.</Text>
                     {entry.profilePhotoUrl ? (
@@ -239,7 +241,7 @@ export default function CommunityLeaderboardPage() {
                       </View>
                     )}
                     <View style={styles.rankTextWrap}>
-                      <Text style={[styles.rankName, mine && styles.rankNameMine]} numberOfLines={1}>
+                      <Text style={[styles.rankName, { color: colors.text }, mine && [styles.rankNameMine, { color: colors.accent }]]} numberOfLines={1}>
                         {entry.name} {mine ? "🔥" : ""}
                       </Text>
                       <View style={styles.miniBarTrack}>
@@ -247,7 +249,7 @@ export default function CommunityLeaderboardPage() {
                       </View>
                     </View>
                   </View>
-                  <Text style={[styles.rankScore, mine && styles.rankScoreMine]}>{entry.score} XP</Text>
+                  <Text style={[styles.rankScore, { color: colors.textMuted }, mine && [styles.rankScoreMine, { color: colors.accent }]]}>{entry.score} XP</Text>
                 </View>
               );
             })}
@@ -256,8 +258,8 @@ export default function CommunityLeaderboardPage() {
       ) : null}
 
       {!loading && activeEntries.length === 0 ? (
-        <View style={styles.section}>
-          <Text style={styles.meta}>Leaderboard unavailable right now.</Text>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Leaderboard unavailable right now.</Text>
         </View>
       ) : null}
     </ScrollView>
@@ -463,6 +465,4 @@ const styles = StyleSheet.create({
     color: "#B42318"
   }
 });
-
-
 

@@ -3,6 +3,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, View }
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { useAppTheme } from "@/context/ThemeContext";
 
 type ReputationSummary = {
   score: number;
@@ -53,6 +54,7 @@ function prettyLabel(key: string) {
 }
 
 export default function CommunityReputationPage() {
+  const { colors } = useAppTheme();
   const [data, setData] = useState<ReputationSummary | null>(null);
   const [daily, setDaily] = useState<DailyDashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -103,28 +105,28 @@ export default function CommunityReputationPage() {
 
   const badgeList = useMemo(() => {
     const badges: string[] = [];
-    if (xp >= 10) badges.push("🏅 First Step");
-    if (streakDays >= 3) badges.push("🔥 3 Day Streak");
-    if (streakDays >= 7) badges.push("⚡ 7 Day Streak");
-    if (xp >= 250) badges.push("🚀 Builder");
-    if (xp >= 500) badges.push("💎 Pro Circle");
-    if (xp >= 900) badges.push("👑 Elite Performer");
-    return badges.length ? badges : ["🌱 Starter Badge"];
+    if (xp >= 10) badges.push("ðŸ… First Step");
+    if (streakDays >= 3) badges.push("ðŸ”¥ 3 Day Streak");
+    if (streakDays >= 7) badges.push("âš¡ 7 Day Streak");
+    if (xp >= 250) badges.push("ðŸš€ Builder");
+    if (xp >= 500) badges.push("ðŸ’Ž Pro Circle");
+    if (xp >= 900) badges.push("ðŸ‘‘ Elite Performer");
+    return badges.length ? badges : ["ðŸŒ± Starter Badge"];
   }, [streakDays, xp]);
 
   return (
     <ScrollView
-      contentContainerStyle={styles.page}
+      contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
       showsVerticalScrollIndicator={false}
     >
-      <Text style={styles.pageTitle}>Reputation & Ranking</Text>
-      <Text style={styles.pageSub}>Turn your daily ORIN activity into XP, levels, streaks, and visible progress.</Text>
+      <Text style={[styles.pageTitle, { color: colors.text }]}>Reputation & Ranking</Text>
+      <Text style={[styles.pageSub, { color: colors.textMuted }]}>Turn your daily ORIN activity into XP, levels, streaks, and visible progress.</Text>
 
       <View style={styles.heroCard}>
         <View style={styles.heroTop}>
           <View>
-            <Text style={styles.heroEyebrow}>⚡ XP</Text>
+            <Text style={styles.heroEyebrow}>âš¡ XP</Text>
             <Text style={styles.heroValue}>{xp}</Text>
             <Text style={styles.heroMeta}>Top {data?.topPercent ?? "-"}% on ORIN</Text>
           </View>
@@ -135,58 +137,58 @@ export default function CommunityReputationPage() {
         </View>
 
         <Text style={styles.levelText}>
-          🔥 {level.label}
-          {nextXp ? ` • Next level at ${nextXp} XP` : " • Max tier reached"}
+          ðŸ”¥ {level.label}
+          {nextXp ? ` â€¢ Next level at ${nextXp} XP` : " â€¢ Max tier reached"}
         </Text>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
         </View>
         <Text style={styles.progressMeta}>
-          {nextXp ? `🎯 ${xpToNext} XP needed for the next rank` : "🏆 You have reached the current top rank"}
+          {nextXp ? `ðŸŽ¯ ${xpToNext} XP needed for the next rank` : "ðŸ† You have reached the current top rank"}
         </Text>
       </View>
 
       <View style={styles.row}>
-        <View style={[styles.statCard, styles.rowCard]}>
-          <Text style={styles.statLabel}>🔥 Streak</Text>
+        <View style={[styles.statCard, styles.rowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={styles.statLabel}>ðŸ”¥ Streak</Text>
           <Text style={styles.statValue}>{streakDays} days</Text>
           <Text style={styles.statHint}>Come back daily to keep momentum.</Text>
         </View>
-        <View style={[styles.statCard, styles.rowCard]}>
-          <Text style={styles.statLabel}>📊 Today</Text>
+        <View style={[styles.statCard, styles.rowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={styles.statLabel}>ðŸ“Š Today</Text>
           <Text style={styles.statValue}>{todayProgress}%</Text>
           <Text style={styles.statHint}>Complete one more action to push your XP.</Text>
         </View>
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="flash" size={16} color="#1F7A4C" />
-          <Text style={styles.sectionTitle}>How to Earn XP</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>How to Earn XP</Text>
         </View>
         <View style={styles.earnList}>
-          <Text style={styles.earnItem}>⚡ Post updates → +10 XP</Text>
-          <Text style={styles.earnItem}>🚀 Add a project → +30 XP</Text>
-          <Text style={styles.earnItem}>💬 Help in your circle → +20 XP</Text>
-          <Text style={styles.earnItem}>🔥 Daily login / quiz streak → +5 XP and bonus streak rewards</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>âš¡ Post updates â†’ +10 XP</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>ðŸš€ Add a project â†’ +30 XP</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>ðŸ’¬ Help in your circle â†’ +20 XP</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>ðŸ”¥ Daily login / quiz streak â†’ +5 XP and bonus streak rewards</Text>
         </View>
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="stats-chart" size={16} color="#1F7A4C" />
-          <Text style={styles.sectionTitle}>XP Impact</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>XP Impact</Text>
         </View>
         {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {!loading && breakdownEntries.length === 0 ? (
-          <Text style={styles.meta}>Start posting, learning, and contributing to build your XP breakdown.</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Start posting, learning, and contributing to build your XP breakdown.</Text>
         ) : null}
         {breakdownEntries.map(([key, value]) => {
           const xpValue = Number(value) * 10;
           return (
             <View key={key} style={styles.impactRow}>
-              <Text style={styles.impactLabel}>{prettyLabel(key)}</Text>
+              <Text style={[styles.impactLabel, { color: colors.text }]}>{prettyLabel(key)}</Text>
               <Text style={styles.impactValue}>
                 {value} actions (+{xpValue} XP)
               </Text>
@@ -195,15 +197,15 @@ export default function CommunityReputationPage() {
         })}
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="ribbon" size={16} color="#1F7A4C" />
-          <Text style={styles.sectionTitle}>Badges</Text>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Badges</Text>
         </View>
         <View style={styles.badgeWrap}>
           {badgeList.map((badge) => (
-            <View key={badge} style={styles.badgeChip}>
-              <Text style={styles.badgeText}>{badge}</Text>
+            <View key={badge} style={[styles.badgeChip, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
+              <Text style={[styles.badgeText, { color: colors.accent }]}>{badge}</Text>
             </View>
           ))}
         </View>

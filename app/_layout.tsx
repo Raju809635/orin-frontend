@@ -54,7 +54,6 @@ function RootDrawer() {
 
     const isAuthScreen = pathname === "/login" || pathname === "/register" || pathname === "/verify-email";
     const isProtected =
-      pathname.startsWith("/app-guide") ||
       pathname.startsWith("/ai-assistant") ||
       pathname.startsWith("/complaints") ||
       pathname.startsWith("/chat") ||
@@ -145,7 +144,6 @@ function RootDrawer() {
         pathname.startsWith("/network") ||
         pathname.startsWith("/community-growth") ||
         pathname.startsWith("/news-updates") ||
-        pathname.startsWith("/app-guide") ||
         pathname.startsWith("/chat") ||
         pathname.startsWith("/notifications") ||
         pathname.startsWith("/my-profile") ||
@@ -332,7 +330,7 @@ function RootDrawer() {
         ) : null}
         <View style={styles.drawerFlatList}>
           <DrawerItem label="Profile" icon={({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />} onPress={() => openDrawerRoute(profilePath)} />
-          <DrawerItem label="App Guide" icon={({ color, size }) => <Ionicons name="book-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/app-guide")} />
+          <DrawerItem label="News & Updates" icon={({ color, size }) => <Ionicons name="newspaper-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/news-updates")} />
           <DrawerItem label="Certificates" icon={({ color, size }) => <Ionicons name="ribbon-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/community/certifications")} />
           <DrawerItem label="Saved" icon={({ color, size }) => <Ionicons name="bookmark-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/saved-posts")} />
           <DrawerItem label="Settings" icon={({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/settings")} />
@@ -400,6 +398,8 @@ function RootDrawer() {
             drawerInactiveTintColor: colors.textMuted,
             drawerStyle: { backgroundColor: colors.surface },
             drawerActiveBackgroundColor: colors.accentSoft,
+            drawerLabelStyle: { color: colors.text, fontWeight: "700" },
+            drawerItemStyle: { borderRadius: 14, marginHorizontal: 6 },
             sceneStyle: { backgroundColor: colors.background }
           }}
         >
@@ -410,7 +410,6 @@ function RootDrawer() {
           <Drawer.Screen name="verify/[certificateId]" options={{ title: "Verify Certificate", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="chat" options={{ title: "Messages", drawerItemStyle: { display: "none" } }} />
-          <Drawer.Screen name="app-guide" options={{ title: "App Guide", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai-assistant" options={{ title: "AI Assistant", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="complaints" options={{ title: "Complaints", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="domains" options={{ title: "Domains", drawerItemStyle: { display: "none" } }} />
