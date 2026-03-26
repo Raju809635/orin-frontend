@@ -1313,9 +1313,9 @@ export default function StudentDashboard() {
       </ScrollView>
 
       <View style={styles.sectionHeaderRow}>
-        <Text style={styles.sectionHeader}>Mentor Live Sessions</Text>
+        <Text style={[styles.sectionHeader, { color: colors.text }]}>Mentor Live Sessions</Text>
         <TouchableOpacity onPress={() => router.push("/mentorship?section=interaction" as never)}>
-          <Text style={styles.sectionHeaderLink}>View all</Text>
+          <Text style={[styles.sectionHeaderLink, { color: colors.accent }]}>View all</Text>
         </TouchableOpacity>
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.liveBannerRow}>
@@ -1360,7 +1360,7 @@ export default function StudentDashboard() {
 
       {FEATURE_FLAGS.dailyEngagement ? (
         <>
-          <Text style={styles.sectionHeader}>Daily Career Quiz</Text>
+        <Text style={[styles.sectionHeader, { color: colors.text }]}>Daily Career Quiz</Text>
           <View style={styles.dailyCard}>
             {!dailyDashboard ? (
               <Text style={styles.empty}>Daily quiz unavailable right now.</Text>
@@ -1412,11 +1412,11 @@ export default function StudentDashboard() {
         </>
       ) : null}
 
-      <Text style={styles.sectionHeader}>ORIN Collaborate</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>ORIN Collaborate</Text>
       <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo]} onPress={() => router.push("/collaborate" as never)}>
-        <Text style={styles.featurePill}>Community</Text>
-        <Text style={styles.featureTitle}>Collaborate with ORIN</Text>
-        <Text style={styles.featureCopy}>Share ideas, partnerships, and initiatives with the ORIN team.</Text>
+        <Text style={[styles.featurePill, { backgroundColor: colors.surface, color: colors.text }]}>Community</Text>
+        <Text style={[styles.featureTitle, { color: colors.text }]}>Collaborate with ORIN</Text>
+        <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Share ideas, partnerships, and initiatives with the ORIN team.</Text>
       </TouchableOpacity>
       </>
       ) : null}
