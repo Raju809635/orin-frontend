@@ -40,6 +40,7 @@ type LibraryItem = {
 
 const TABS = ["All", "Recommended", "Trending", "Saved"] as const;
 const STORAGE_KEY = "community-library-saved-v1";
+const CACHE_KEY = "community-library-cache-v2";
 
 export default function CommunityLibraryPage() {
   const { user } = useAuth();
@@ -69,8 +70,17 @@ export default function CommunityLibraryPage() {
       const nextItems = res.data || [];
       setItems(nextItems);
       setSelectedId((prev) => prev || nextItems[0]?.id || "");
+      AsyncStorage.setItem(CACHE_KEY, JSON.stringify(nextItems)).catch(() => undefined);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load library.");
+      const cached = await AsyncStorage.getItem(CACHE_KEY).catch(() => null);
+      if (cached) {
+        const parsed = JSON.parse(cached) as LibraryItem[];
+        setItems(parsed);
+        setSelectedId((prev) => prev || parsed[0]?.id || "");
+        setError("Showing last loaded library data.");
+      } else {
+        setError(e?.response?.data?.message || "Failed to load library.");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

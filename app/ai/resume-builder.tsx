@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -99,6 +100,7 @@ const TEMPLATE_META = {
 };
 
 type TemplateKey = keyof typeof TEMPLATE_META;
+const CACHE_KEY_PREFIX = "ai-resume-builder-cache-v1";
 
 function previewNameFallback(name = "") {
   return String(name || "O").trim().slice(0, 1).toUpperCase() || "O";
@@ -124,9 +126,17 @@ export default function AiResumeBuilderPage() {
       const res = await api.get<ResumeResponse>("/api/network/resume/generate", {
         params: { template }
       });
-      setData(res.data || null);
+      const nextData = res.data || null;
+      setData(nextData);
+      AsyncStorage.setItem(`${CACHE_KEY_PREFIX}-${template}`, JSON.stringify(nextData)).catch(() => undefined);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load resume builder.");
+      const cached = await AsyncStorage.getItem(`${CACHE_KEY_PREFIX}-${template}`).catch(() => null);
+      if (cached) {
+        setData(JSON.parse(cached) as ResumeResponse);
+        setError("Showing last generated resume.");
+      } else {
+        setError(e?.response?.data?.message || "Failed to load resume builder.");
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);

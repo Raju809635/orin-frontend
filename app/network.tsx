@@ -871,11 +871,11 @@ export default function NetworkScreen() {
                       </View>
                     ) : null}
                     {reactionMenuFor === post._id ? (
-                      <View style={styles.reactionDropdown}>
+                      <View style={[styles.reactionDropdown, { backgroundColor: isDark ? "#16212B" : "#FFFFFF", borderColor: colors.border }]}>
                         {REACTION_ORDER.map((type) => (
                           <TouchableOpacity
                             key={`${post._id}-drop-${type}`}
-                            style={styles.reactionDropdownItem}
+                            style={[styles.reactionDropdownItem, { backgroundColor: isDark ? colors.surfaceAlt : "#F9FAFB" }]}
                             onPress={() => react(post._id, "react", type)}
                           >
                             <Text style={styles.reactionDropdownEmoji}>{REACTION_OPTIONS[type].emoji}</Text>
@@ -885,7 +885,7 @@ export default function NetworkScreen() {
                     ) : null}
                     <View style={styles.postActionRow}>
                       <TouchableOpacity
-                        style={[styles.postActionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, userReaction ? [styles.postActionBtnActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }] : null]}
+                        style={[styles.postActionBtn, userReaction ? styles.postActionBtnActive : null]}
                         onPress={() => react(post._id, "react", "like")}
                         onLongPress={() => setReactionMenuFor((prev) => (prev === post._id ? null : post._id))}
                       >
@@ -907,7 +907,7 @@ export default function NetworkScreen() {
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.postActionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                        style={styles.postActionBtn}
                         onPress={() => {
                           setReactionMenuFor(null);
                           openComments(post._id);
@@ -917,7 +917,7 @@ export default function NetworkScreen() {
                          <Text style={[styles.postActionText, { color: colors.textMuted }]} numberOfLines={1}>Comment</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.postActionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                        style={styles.postActionBtn}
                         onPress={() => {
                           setReactionMenuFor(null);
                           react(post._id, "share");
@@ -927,7 +927,7 @@ export default function NetworkScreen() {
                          <Text style={[styles.postActionText, { color: colors.textMuted }]} numberOfLines={1}>Share</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
-                        style={[styles.postActionBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                        style={styles.postActionBtn}
                         onPress={() => {
                           setReactionMenuFor(null);
                           openPostOptions(post);
@@ -1344,7 +1344,7 @@ const styles = StyleSheet.create({
   dotRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#D0D5DD" },
   dotActive: { width: 14, backgroundColor: "#1F7A4C", borderRadius: 7 },
-  postActionRow: { marginTop: 10, flexDirection: "row", gap: 6 },
+  postActionRow: { marginTop: 10, flexDirection: "row", gap: 6, zIndex: 2 },
   postActionBtn: {
     flex: 1,
     minWidth: 0,
@@ -1353,22 +1353,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 4,
     paddingHorizontal: 6,
-    paddingVertical: 9,
+    paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: "#F9FAFB",
-    borderWidth: 1,
-    borderColor: "#EAECF0"
+    backgroundColor: "transparent",
+    borderWidth: 0
   },
   postActionText: { color: "#475467", fontWeight: "700", fontSize: 11, textAlign: "center" },
   postActionTextActive: { color: "#175CD3" },
-  postActionBtnActive: { backgroundColor: "#EEF4FF", borderColor: "#B2DDFF" },
+  postActionBtnActive: { backgroundColor: "transparent", borderWidth: 0 },
   selectedReactionEmoji: { fontSize: 18 },
   feedStatsRow: { marginTop: 10, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: "#EAECF0" },
   feedStatsText: { color: "#475467", fontWeight: "700", fontSize: 12 },
   reactionDropdown: {
     position: "absolute",
     left: 12,
-    bottom: 56,
+    bottom: 46,
     borderWidth: 1,
     borderColor: "#E4E7EC",
     borderRadius: 999,
@@ -1381,7 +1380,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 10,
     shadowOffset: { width: 0, height: 6 },
-    elevation: 8
+    elevation: 12,
+    zIndex: 40
   },
   reactionDropdownItem: {
     alignItems: "center",
