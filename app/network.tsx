@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Alert,
   ActivityIndicator,
@@ -112,6 +112,7 @@ const networkSections: { id: NetworkSectionId; label: string }[] = [
 const FEED_BOTTOM_NAV_SPACE = 108;
 const POST_COLLAPSED_LINES = 4;
 const EXPAND_FALLBACK_THRESHOLD = 140;
+const NETWORK_SECTION_STALE_MS = 2 * 60 * 1000;
 const { width } = Dimensions.get("window");
 const carouselWidth = Math.max(width - 56, 280);
 const REACTION_ORDER = ["like", "love", "wow", "care", "sad", "angry"] as const;
@@ -137,6 +138,7 @@ export default function NetworkScreen() {
   const { user } = useAuth();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const sectionFetchAtRef = useRef<Record<string, number>>({});
   const [activeSection, setActiveSection] = useState<NetworkSectionId>("feed");
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({});
@@ -183,53 +185,96 @@ export default function NetworkScreen() {
     }
   }, [params.section]);
 
+  const shouldSkipSectionFetch = useCallback((key: string, refresh = false, force = false) => {
+    const now = Date.now();
+    return !refresh && !force && now - (sectionFetchAtRef.current[key] || 0) < NETWORK_SECTION_STALE_MS;
+  }, []);
+
+  const markSectionFetched = useCallback((key: string) => {
+    sectionFetchAtRef.current[key] = Date.now();
+  }, []);
+
+  const applyConnectionState = useCallback((pendingRows: ConnectionRow[], acceptedRows: ConnectionRow[]) => {
+    setPendingIncoming(
+      pendingRows.filter((item) => String(item?.recipientId?._id || "") === String(user?.id || ""))
+    );
+    const requested: Record<string, boolean> = {};
+    pendingRows.forEach((item) => {
+      if (String(item?.requesterId?._id || "") === String(user?.id || "")) {
+        const targetId = String(item?.recipientId?._id || "");
+        if (targetId) requested[targetId] = true;
+      }
+    });
+    setRequestedCircleIds(requested);
+
+    const inCircle: Record<string, boolean> = {};
+    acceptedRows.forEach((item) => {
+      const requesterId = String(item?.requesterId?._id || "");
+      const recipientId = String(item?.recipientId?._id || "");
+      const me = String(user?.id || "");
+      const other = requesterId === me ? recipientId : recipientId === me ? requesterId : "";
+      if (other) inCircle[other] = true;
+    });
+    setCircleMemberIds(inCircle);
+  }, [user?.id]);
+
+  const loadFeedSection = useCallback(async (refresh = false, force = false) => {
+    const cacheKey = "feed";
+    if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
+    markSectionFetched(cacheKey);
+    const feedRes = await api.get<FeedPost[]>("/api/network/feed");
+    const nextPosts = feedRes.data || [];
+    setPosts(nextPosts);
+    const followMap: Record<string, boolean> = {};
+    nextPosts.forEach((post) => {
+      const authorId = String(post.authorId?._id || "");
+      if (authorId) followMap[authorId] = Boolean(post.authorId?.isFollowing);
+    });
+    setFollowingState((prev) => ({ ...followMap, ...prev }));
+  }, [markSectionFetched, shouldSkipSectionFetch]);
+
+  const loadComposeSection = useCallback(async (refresh = false, force = false) => {
+    const cacheKey = "compose";
+    if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
+    markSectionFetched(cacheKey);
+    const [suggestionsRes, pendingRes, acceptedRes] = await Promise.allSettled([
+      api.get<Suggestion[]>("/api/network/suggestions"),
+      api.get<ConnectionRow[]>("/api/network/connections?status=pending"),
+      api.get<ConnectionRow[]>("/api/network/connections?status=accepted")
+    ]);
+    const pendingRows = pendingRes.status === "fulfilled" ? pendingRes.value.data || [] : [];
+    const acceptedRows = acceptedRes.status === "fulfilled" ? acceptedRes.value.data || [] : [];
+    setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
+    applyConnectionState(pendingRows, acceptedRows);
+  }, [applyConnectionState, markSectionFetched, shouldSkipSectionFetch]);
+
+  const loadConnectionsSection = useCallback(async (refresh = false, force = false) => {
+    const cacheKey = "connections";
+    if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
+    markSectionFetched(cacheKey);
+    const [pendingRes, acceptedRes] = await Promise.allSettled([
+      api.get<ConnectionRow[]>("/api/network/connections?status=pending"),
+      api.get<ConnectionRow[]>("/api/network/connections?status=accepted")
+    ]);
+    const pendingRows = pendingRes.status === "fulfilled" ? pendingRes.value.data || [] : [];
+    const acceptedRows = acceptedRes.status === "fulfilled" ? acceptedRes.value.data || [] : [];
+    applyConnectionState(pendingRows, acceptedRows);
+  }, [applyConnectionState, markSectionFetched, shouldSkipSectionFetch]);
+
   const loadData = useCallback(
-    async (refresh = false) => {
+    async (refresh = false, force = false) => {
       try {
         if (refresh) setRefreshing(true);
         else setLoading(true);
         setError(null);
 
-        const [feedRes, suggestionsRes, pendingRes, acceptedRes] = await Promise.allSettled([
-          api.get<FeedPost[]>("/api/network/feed"),
-          api.get<Suggestion[]>("/api/network/suggestions"),
-          api.get<ConnectionRow[]>("/api/network/connections?status=pending"),
-          api.get<ConnectionRow[]>("/api/network/connections?status=accepted")
-        ]);
-
-        const nextPosts = feedRes.status === "fulfilled" ? feedRes.value.data || [] : [];
-        setPosts(nextPosts);
-        setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
-        const pendingRows = pendingRes.status === "fulfilled" ? pendingRes.value.data || [] : [];
-        setPendingIncoming(
-          pendingRows.filter((item) => String(item?.recipientId?._id || "") === String(user?.id || ""))
-        );
-        const requested: Record<string, boolean> = {};
-        pendingRows.forEach((item) => {
-          if (String(item?.requesterId?._id || "") === String(user?.id || "")) {
-            const targetId = String(item?.recipientId?._id || "");
-            if (targetId) requested[targetId] = true;
-          }
-        });
-        setRequestedCircleIds(requested);
-
-        const acceptedRows = acceptedRes.status === "fulfilled" ? acceptedRes.value.data || [] : [];
-        const inCircle: Record<string, boolean> = {};
-        acceptedRows.forEach((item) => {
-          const requesterId = String(item?.requesterId?._id || "");
-          const recipientId = String(item?.recipientId?._id || "");
-          const me = String(user?.id || "");
-          const other = requesterId === me ? recipientId : recipientId === me ? requesterId : "";
-          if (other) inCircle[other] = true;
-        });
-        setCircleMemberIds(inCircle);
-
-        const followMap: Record<string, boolean> = {};
-        nextPosts.forEach((post) => {
-          const authorId = String(post.authorId?._id || "");
-          if (authorId) followMap[authorId] = Boolean(post.authorId?.isFollowing);
-        });
-        setFollowingState((prev) => ({ ...followMap, ...prev }));
+        if (activeSection === "feed") {
+          await loadFeedSection(refresh, force);
+        } else if (activeSection === "compose") {
+          await loadComposeSection(refresh, force);
+        } else if (activeSection === "connections") {
+          await loadConnectionsSection(refresh, force);
+        }
       } catch (e: any) {
         setError(e?.response?.data?.message || "Failed to load network.");
       } finally {
@@ -237,7 +282,7 @@ export default function NetworkScreen() {
         setRefreshing(false);
       }
     },
-    [user?.id]
+    [activeSection, loadComposeSection, loadConnectionsSection, loadFeedSection]
   );
 
   useFocusEffect(
@@ -245,6 +290,10 @@ export default function NetworkScreen() {
       loadData();
     }, [loadData])
   );
+
+  useEffect(() => {
+    void loadData(false);
+  }, [activeSection, loadData]);
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
@@ -295,7 +344,7 @@ export default function NetworkScreen() {
       setPostText("");
       setPostImageUrls([]);
       notify("Post published.");
-      await loadData(true);
+      await loadFeedSection(true, true);
       setActiveSection("feed");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to publish post.");
@@ -339,7 +388,7 @@ export default function NetworkScreen() {
       setError(null);
       await api.delete(`/api/network/feed/${postId}`);
       notify("Post deleted.");
-      await loadData(true);
+      await loadFeedSection(true, true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to delete post.");
     }
@@ -358,7 +407,7 @@ export default function NetworkScreen() {
       await api.patch(`/api/network/feed/${editingPost.postId}`, { content: nextContent });
       setEditingPost(null);
       notify("Post updated.");
-      await loadData(true);
+      await loadFeedSection(true, true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to update post.");
     } finally {
@@ -376,7 +425,7 @@ export default function NetworkScreen() {
       }
       await api.post(`/api/network/feed/${postId}/react`, reactionType ? { action, reactionType } : { action });
       setReactionMenuFor(null);
-      await loadData(true);
+      await loadFeedSection(true, true);
     } catch (e: any) {
       setError(e?.response?.data?.message || `Failed to ${action} post.`);
     }
@@ -415,7 +464,7 @@ export default function NetworkScreen() {
     try {
       await api.post(`/api/network/feed/${postId}/comment`, { content });
       setCommentDrafts((prev) => ({ ...prev, [postId]: "" }));
-      await loadData(true);
+      await loadFeedSection(true, true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to comment.");
     }
@@ -456,7 +505,7 @@ export default function NetworkScreen() {
       }));
       setEditingCommentId("");
       setEditingCommentText("");
-      await loadData(true);
+      await loadFeedSection(true, true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to update comment.");
     }
@@ -471,7 +520,7 @@ export default function NetworkScreen() {
         ...prev,
         comments: prev.comments.filter((item) => item._id !== commentId)
       }));
-      await loadData(true);
+      await loadFeedSection(true, true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to delete comment.");
     }
@@ -535,7 +584,7 @@ export default function NetworkScreen() {
       <ScrollView
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={[styles.container, { backgroundColor: colors.background, paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} tintColor={colors.accent} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true, true)} tintColor={colors.accent} />}
       >
         <Text style={[styles.heading, { color: colors.text }]}>Home</Text>
         <Text style={[styles.subheading, { color: colors.textMuted }]}>

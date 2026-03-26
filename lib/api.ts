@@ -36,6 +36,40 @@ export const api = axios.create({
   timeout: 15000
 });
 
+const RETRYABLE_STATUS = new Set([502, 503, 504]);
+
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error?.config as
+      | (Record<string, any> & { method?: string; _networkRetryCount?: number; url?: string })
+      | undefined;
+
+    if (!originalRequest) {
+      return Promise.reject(error);
+    }
+
+    const method = String(originalRequest.method || "get").toLowerCase();
+    const status = Number(error?.response?.status || 0);
+    const isSafeGet = method === "get";
+    const isRetryableFailure =
+      !error?.response || RETRYABLE_STATUS.has(status);
+
+    if (!isSafeGet || !isRetryableFailure) {
+      return Promise.reject(error);
+    }
+
+    const retryCount = Number(originalRequest._networkRetryCount || 0);
+    if (retryCount >= 1) {
+      return Promise.reject(error);
+    }
+
+    originalRequest._networkRetryCount = retryCount + 1;
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    return api.request(originalRequest);
+  }
+);
+
 export function setApiAuthToken(token: string | null) {
   if (!token) {
     delete api.defaults.headers.common.Authorization;
@@ -43,4 +77,11 @@ export function setApiAuthToken(token: string | null) {
   }
 
   api.defaults.headers.common.Authorization = `Bearer ${token}`;
+}
+
+export async function pingBackendReady() {
+  const { data } = await api.get<{ ready?: boolean; ok?: boolean }>("/ready", {
+    timeout: 6000
+  });
+  return Boolean(data?.ready ?? data?.ok);
 }

@@ -20,7 +20,7 @@ import { DrawerContentScrollView, DrawerItem, DrawerContentComponentProps } from
 import { Ionicons } from "@expo/vector-icons";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { ThemeProvider, useAppTheme } from "@/context/ThemeContext";
-import { api } from "@/lib/api";
+import { api, pingBackendReady } from "@/lib/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function defaultRouteByRole(role: "student" | "mentor") {
@@ -41,6 +41,8 @@ function RootDrawer() {
   const pathname = usePathname();
   const { colors } = useAppTheme();
   const { user, isAuthenticated, isBootstrapping, logout } = useAuth();
+  const [isBackendReady, setIsBackendReady] = useState(false);
+  const [isCheckingBackend, setIsCheckingBackend] = useState(true);
   const [drawerPhotoUrl, setDrawerPhotoUrl] = useState("");
   const [drawerReputation, setDrawerReputation] = useState<{ levelTag?: string; xp?: number; score?: number } | null>(null);
   const [drawerMentorStats, setDrawerMentorStats] = useState<{ rating?: number; studentsMentored?: number } | null>(null);
@@ -280,11 +282,83 @@ function RootDrawer() {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+
+    async function ensureBackendReady() {
+      if (isBootstrapping) return;
+      if (!isAuthenticated) {
+        if (active) {
+          setIsBackendReady(true);
+          setIsCheckingBackend(false);
+        }
+        return;
+      }
+
+      if (active) setIsCheckingBackend(true);
+
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        try {
+          const ready = await pingBackendReady();
+          if (!active) return;
+          if (ready) {
+            setIsBackendReady(true);
+            setIsCheckingBackend(false);
+            return;
+          }
+        } catch {}
+
+        if (attempt < 2) {
+          await new Promise((resolve) => setTimeout(resolve, 1500 * (attempt + 1)));
+        }
+      }
+
+      if (active) {
+        setIsBackendReady(false);
+        setIsCheckingBackend(false);
+      }
+    }
+
+    ensureBackendReady();
+    return () => {
+      active = false;
+    };
+  }, [isAuthenticated, isBootstrapping]);
+
   if (isBootstrapping) {
     return (
       <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.accent} />
         <Text style={[styles.loadingText, { color: colors.text }]}>Loading ORIN...</Text>
+      </View>
+    );
+  }
+
+  if (isAuthenticated && (isCheckingBackend || !isBackendReady)) {
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: colors.background, paddingHorizontal: 24 }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={[styles.loadingText, { color: colors.text }]}>
+          {isCheckingBackend ? "Connecting to ORIN..." : "ORIN is waking up. Tap retry in a moment."}
+        </Text>
+        {!isCheckingBackend ? (
+          <TouchableOpacity
+            style={[styles.retryButton, { backgroundColor: colors.accent }]}
+            onPress={async () => {
+              setIsCheckingBackend(true);
+              try {
+                const ready = await pingBackendReady();
+                setIsBackendReady(Boolean(ready));
+              } catch {
+                setIsBackendReady(false);
+              } finally {
+                setIsCheckingBackend(false);
+              }
+            }}
+          >
+            <Text style={[styles.retryButtonText, { color: colors.accentText }]}>Retry Connection</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     );
   }
@@ -626,5 +700,15 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontSize: 16,
     color: "#1E2B24"
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14
+  },
+  retryButtonText: {
+    fontWeight: "800",
+    fontSize: 14
   }
 });

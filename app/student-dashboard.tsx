@@ -31,6 +31,7 @@ import GlobalHeader from "@/components/global-header";
 
 const DASHBOARD_STALE_MS = 2 * 60 * 1000;
 const NEWS_STALE_MS = 5 * 60 * 1000;
+const SECTION_STALE_MS = 2 * 60 * 1000;
 
 type Booking = {
   _id: string;
@@ -329,6 +330,7 @@ export default function StudentDashboard() {
   const { colors } = useAppTheme();
   const lastDashboardFetchAtRef = useRef(0);
   const lastNewsFetchAtRef = useRef(0);
+  const sectionFetchAtRef = useRef<Record<string, number>>({});
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [transactionRefBySession, setTransactionRefBySession] = useState<Record<string, string>>({});
@@ -417,6 +419,107 @@ export default function StudentDashboard() {
       border: "#CBECD9"
     }
   ] as const;
+
+  const shouldSkipSectionFetch = useCallback((key: string, refresh = false, force = false) => {
+    const now = Date.now();
+    return !refresh && !force && now - (sectionFetchAtRef.current[key] || 0) < SECTION_STALE_MS;
+  }, []);
+
+  const markSectionFetched = useCallback((key: string) => {
+    sectionFetchAtRef.current[key] = Date.now();
+  }, []);
+
+  const loadOverviewExtras = useCallback(async (refresh = false, force = false) => {
+    const cacheKey = "overview";
+    if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
+    markSectionFetched(cacheKey);
+    const [liveSessionsRes] = await Promise.allSettled([
+      api.get<LiveSessionItem[]>("/api/network/live-sessions")
+    ]);
+    setLiveSessions(liveSessionsRes.status === "fulfilled" ? liveSessionsRes.value.data || [] : []);
+  }, [markSectionFetched, shouldSkipSectionFetch]);
+
+  const loadSessionsSection = useCallback(async (refresh = false, force = false) => {
+    const cacheKey = "sessions";
+    if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
+    markSectionFetched(cacheKey);
+    const [sessionHistoryRes] = await Promise.allSettled([
+      api.get<SessionHistoryItem[]>("/api/network/session-history")
+    ]);
+    setSessionHistory(sessionHistoryRes.status === "fulfilled" ? sessionHistoryRes.value.data || [] : []);
+  }, [markSectionFetched, shouldSkipSectionFetch]);
+
+  const loadNetworkSection = useCallback(async (refresh = false, force = false) => {
+    const cacheKey = "network";
+    if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
+    markSectionFetched(cacheKey);
+    const [feedRes, suggestionsRes] = await Promise.allSettled([
+      FEATURE_FLAGS.networking ? api.get<NetworkPost[]>("/api/network/feed") : Promise.resolve({ data: [] as NetworkPost[] }),
+      FEATURE_FLAGS.smartSuggestions
+        ? api.get<SmartSuggestion[]>("/api/network/suggestions")
+        : Promise.resolve({ data: [] as SmartSuggestion[] })
+    ]);
+    setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
+    setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
+  }, [markSectionFetched, shouldSkipSectionFetch]);
+
+  const loadGrowthAiSection = useCallback(async (refresh = false, force = false) => {
+    const cacheKey = "growth-ai";
+    if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
+    markSectionFetched(cacheKey);
+    const [
+      mentorMatchesRes,
+      roadmapRes,
+      opportunitiesRes,
+      leaderboardRes,
+      skillGapRes,
+      verifiedMentorsRes
+    ] = await Promise.allSettled([
+      api.get<{ recommendations: MentorMatch[] }>("/api/network/mentor-matches"),
+      api.get<CareerRoadmapResponse>("/api/network/career-roadmap"),
+      api.get<OpportunityItem[]>("/api/network/opportunities"),
+      api.get<LeaderboardResponse>("/api/network/leaderboard"),
+      api.get<SkillGapResponse>("/api/network/skill-gap"),
+      api.get<VerifiedMentor[]>("/api/network/verified-mentors")
+    ]);
+    setMentorMatches(mentorMatchesRes.status === "fulfilled" ? mentorMatchesRes.value.data?.recommendations || [] : []);
+    setRoadmap(roadmapRes.status === "fulfilled" ? roadmapRes.value.data || null : null);
+    setOpportunities(opportunitiesRes.status === "fulfilled" ? opportunitiesRes.value.data || [] : []);
+    setLeaderboard(leaderboardRes.status === "fulfilled" ? leaderboardRes.value.data || null : null);
+    setSkillGap(skillGapRes.status === "fulfilled" ? skillGapRes.value.data || null : null);
+    setVerifiedMentors(verifiedMentorsRes.status === "fulfilled" ? verifiedMentorsRes.value.data || [] : []);
+  }, [markSectionFetched, shouldSkipSectionFetch]);
+
+  const loadGrowthCommunitySection = useCallback(async (refresh = false, force = false) => {
+    const cacheKey = "growth-community";
+    if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
+    markSectionFetched(cacheKey);
+    const [challengesRes, certificationsRes, mentorGroupsRes] = await Promise.allSettled([
+      api.get<ChallengeItem[]>("/api/network/challenges"),
+      api.get<CertificationItem[]>("/api/network/certifications"),
+      api.get<MentorGroupItem[]>("/api/network/mentor-groups")
+    ]);
+    setChallenges(challengesRes.status === "fulfilled" ? challengesRes.value.data || [] : []);
+    setCertifications(certificationsRes.status === "fulfilled" ? certificationsRes.value.data || [] : []);
+    setMentorGroups(mentorGroupsRes.status === "fulfilled" ? mentorGroupsRes.value.data || [] : []);
+  }, [markSectionFetched, shouldSkipSectionFetch]);
+
+  const loadGrowthResourcesSection = useCallback(async (refresh = false, force = false) => {
+    const cacheKey = "growth-resources";
+    if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
+    markSectionFetched(cacheKey);
+    const [resumeRes, projectIdeasRes, knowledgeLibraryRes, reputationSummaryRes] = await Promise.allSettled([
+      api.get<ResumeResponse>("/api/network/resume/generate"),
+      api.get<ProjectIdeasResponse>("/api/network/project-ideas"),
+      api.get<LibraryItem[]>("/api/network/knowledge-library"),
+      api.get<ReputationSummary>("/api/network/reputation-summary")
+    ]);
+    setResumePreview(resumeRes.status === "fulfilled" ? resumeRes.value.data || null : null);
+    setProjectIdeas(projectIdeasRes.status === "fulfilled" ? projectIdeasRes.value.data || null : null);
+    setKnowledgeLibrary(knowledgeLibraryRes.status === "fulfilled" ? knowledgeLibraryRes.value.data || [] : []);
+    setReputationSummary(reputationSummaryRes.status === "fulfilled" ? reputationSummaryRes.value.data || null : null);
+  }, [markSectionFetched, shouldSkipSectionFetch]);
+
   const fetchDashboard = useCallback(async (refresh = false, force = false) => {
     const now = Date.now();
     if (!refresh && !force && now - lastDashboardFetchAtRef.current < DASHBOARD_STALE_MS) {
@@ -432,96 +535,53 @@ export default function StudentDashboard() {
         bookingsRes,
         sessionsRes,
         profileRes,
-        dailyRes,
-        feedRes
+        dailyRes
       ] = await Promise.allSettled([
         api.get<Booking[]>("/api/bookings/student"),
         api.get<Session[]>("/api/sessions/student/me"),
         api.get<{ profile?: { profilePhotoUrl?: string } }>("/api/profiles/student/me"),
         FEATURE_FLAGS.dailyEngagement
           ? api.get<DailyDashboard>("/api/network/daily-dashboard")
-          : Promise.resolve({ data: null as DailyDashboard | null }),
-        FEATURE_FLAGS.networking ? api.get<NetworkPost[]>("/api/network/feed") : Promise.resolve({ data: [] as NetworkPost[] })
+          : Promise.resolve({ data: null as DailyDashboard | null })
       ]);
 
       setBookings(bookingsRes.status === "fulfilled" ? bookingsRes.value.data || [] : []);
       setSessions(sessionsRes.status === "fulfilled" ? sessionsRes.value.data || [] : []);
       setProfilePhotoUrl(profileRes.status === "fulfilled" ? profileRes.value.data?.profile?.profilePhotoUrl || "" : "");
       setDailyDashboard(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
-      setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
       const hardFailures = [bookingsRes, sessionsRes].filter((item) => item.status !== "fulfilled").length;
       if (hardFailures > 0) {
         setError("Some dashboard sections could not load. Pull to refresh.");
       }
       lastDashboardFetchAtRef.current = now;
 
-      Promise.allSettled([
-        FEATURE_FLAGS.smartSuggestions
-          ? api.get<SmartSuggestion[]>("/api/network/suggestions")
-          : Promise.resolve({ data: [] as SmartSuggestion[] }),
-        api.get<{ recommendations: MentorMatch[] }>("/api/network/mentor-matches"),
-        api.get<SessionHistoryItem[]>("/api/network/session-history"),
-        api.get<CareerRoadmapResponse>("/api/network/career-roadmap"),
-        api.get<OpportunityItem[]>("/api/network/opportunities"),
-        api.get<LeaderboardResponse>("/api/network/leaderboard"),
-        api.get<LiveSessionItem[]>("/api/network/live-sessions"),
-        api.get<ResumeResponse>("/api/network/resume/generate"),
-        api.get<SkillGapResponse>("/api/network/skill-gap"),
-        api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
-        api.get<ChallengeItem[]>("/api/network/challenges"),
-        api.get<CertificationItem[]>("/api/network/certifications"),
-        api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
-        api.get<ProjectIdeasResponse>("/api/network/project-ideas"),
-        api.get<LibraryItem[]>("/api/network/knowledge-library"),
-        api.get<ReputationSummary>("/api/network/reputation-summary")
-      ]).then(
-        ([
-          suggestionsRes,
-          mentorMatchesRes,
-          sessionHistoryRes,
-          roadmapRes,
-          opportunitiesRes,
-          leaderboardRes,
-          liveSessionsRes,
-          resumeRes,
-          skillGapRes,
-          verifiedMentorsRes,
-          challengesRes,
-          certificationsRes,
-          mentorGroupsRes,
-          projectIdeasRes,
-          knowledgeLibraryRes,
-          reputationSummaryRes
-        ]) => {
-          setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
-          setMentorMatches(
-            mentorMatchesRes.status === "fulfilled" ? mentorMatchesRes.value.data?.recommendations || [] : []
-          );
-          setSessionHistory(sessionHistoryRes.status === "fulfilled" ? sessionHistoryRes.value.data || [] : []);
-          setRoadmap(roadmapRes.status === "fulfilled" ? roadmapRes.value.data || null : null);
-          setOpportunities(opportunitiesRes.status === "fulfilled" ? opportunitiesRes.value.data || [] : []);
-          setLeaderboard(leaderboardRes.status === "fulfilled" ? leaderboardRes.value.data || null : null);
-          setLiveSessions(liveSessionsRes.status === "fulfilled" ? liveSessionsRes.value.data || [] : []);
-          setResumePreview(resumeRes.status === "fulfilled" ? resumeRes.value.data || null : null);
-          setSkillGap(skillGapRes.status === "fulfilled" ? skillGapRes.value.data || null : null);
-          setVerifiedMentors(verifiedMentorsRes.status === "fulfilled" ? verifiedMentorsRes.value.data || [] : []);
-          setChallenges(challengesRes.status === "fulfilled" ? challengesRes.value.data || [] : []);
-          setCertifications(certificationsRes.status === "fulfilled" ? certificationsRes.value.data || [] : []);
-          setMentorGroups(mentorGroupsRes.status === "fulfilled" ? mentorGroupsRes.value.data || [] : []);
-          setProjectIdeas(projectIdeasRes.status === "fulfilled" ? projectIdeasRes.value.data || null : null);
-          setKnowledgeLibrary(knowledgeLibraryRes.status === "fulfilled" ? knowledgeLibraryRes.value.data || [] : []);
-          setReputationSummary(
-            reputationSummaryRes.status === "fulfilled" ? reputationSummaryRes.value.data || null : null
-          );
-        }
-      );
+      if (activeSection === "overview") {
+        void loadOverviewExtras(refresh, force);
+      } else if (activeSection === "sessions") {
+        void loadSessionsSection(refresh, force);
+      } else if (activeSection === "network") {
+        void loadNetworkSection(refresh, force);
+      } else if (activeSection === "growth") {
+        if (growthSubSection === "ai") void loadGrowthAiSection(refresh, force);
+        if (growthSubSection === "community") void loadGrowthCommunitySection(refresh, force);
+        if (growthSubSection === "resources") void loadGrowthResourcesSection(refresh, force);
+      }
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load dashboard data.");
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
     }
-  }, []);
+  }, [
+    activeSection,
+    growthSubSection,
+    loadGrowthAiSection,
+    loadGrowthCommunitySection,
+    loadGrowthResourcesSection,
+    loadNetworkSection,
+    loadOverviewExtras,
+    loadSessionsSection
+  ]);
 
   useEffect(() => {
     let mounted = true;
@@ -570,6 +630,42 @@ export default function StudentDashboard() {
       fetchNews(false);
     }, [fetchDashboard, fetchNews])
   );
+
+  const handleRefresh = useCallback(async () => {
+    await fetchDashboard(true, true);
+    if (activeSection === "overview") {
+      await fetchNews(true, true);
+    }
+  }, [activeSection, fetchDashboard, fetchNews]);
+
+  useEffect(() => {
+    if (activeSection === "overview") {
+      void loadOverviewExtras(false);
+      return;
+    }
+    if (activeSection === "sessions") {
+      void loadSessionsSection(false);
+      return;
+    }
+    if (activeSection === "network") {
+      void loadNetworkSection(false);
+      return;
+    }
+    if (activeSection === "growth") {
+      if (growthSubSection === "ai") void loadGrowthAiSection(false);
+      if (growthSubSection === "community") void loadGrowthCommunitySection(false);
+      if (growthSubSection === "resources") void loadGrowthResourcesSection(false);
+    }
+  }, [
+    activeSection,
+    growthSubSection,
+    loadGrowthAiSection,
+    loadGrowthCommunitySection,
+    loadGrowthResourcesSection,
+    loadNetworkSection,
+    loadOverviewExtras,
+    loadSessionsSection
+  ]);
 
   useEffect(() => {
     const section = String(params.section || "");
@@ -1089,7 +1185,7 @@ export default function StudentDashboard() {
     <ScrollView
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
-      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchDashboard(true)} />}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
     >
       {normalizedQuery ? (
         <>
@@ -1116,10 +1212,10 @@ export default function StudentDashboard() {
         </>
       ) : null}
 
-      <View style={styles.heroBanner}>
-        <Text style={styles.heroEyebrow}>Student Space</Text>
-        <Text style={styles.heroTitle}>Unlock Your Mentorship Journey</Text>
-        <Text style={styles.heroSubTitle}>Explore mentors, track sessions, and grow faster with ORIN.</Text>
+      <View style={[styles.heroBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.heroEyebrow, { color: colors.accent }]}>Student Space</Text>
+        <Text style={[styles.heroTitle, { color: colors.text }]}>Unlock Your Mentorship Journey</Text>
+        <Text style={[styles.heroSubTitle, { color: colors.textMuted }]}>Explore mentors, track sessions, and grow faster with ORIN.</Text>
       </View>
 
       {activeSection !== "overview" ? (
@@ -1130,17 +1226,31 @@ export default function StudentDashboard() {
 
       {activeSection === "overview" ? (
       <>
-      <Text style={styles.sectionHeader}>Career & Tech Updates</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Career & Tech Updates</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.newsTabRow}>
         {newsTabs.map((tab) => {
           const active = activeNewsTab === tab.key;
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.newsTabChip, active && styles.newsTabChipActive]}
+              style={[
+                styles.newsTabChip,
+                { borderColor: colors.border, backgroundColor: colors.surface },
+                active && styles.newsTabChipActive,
+                active && { borderColor: colors.accent, backgroundColor: colors.accentSoft }
+              ]}
               onPress={() => setActiveNewsTab(tab.key)}
             >
-              <Text style={[styles.newsTabText, active && styles.newsTabTextActive]}>{tab.label}</Text>
+              <Text
+                style={[
+                  styles.newsTabText,
+                  { color: colors.textMuted },
+                  active && styles.newsTabTextActive,
+                  active && { color: colors.accent }
+                ]}
+              >
+                {tab.label}
+              </Text>
             </TouchableOpacity>
           );
         })}
@@ -1152,17 +1262,17 @@ export default function StudentDashboard() {
             <Text style={styles.meta}>Loading updates...</Text>
           </View>
         ) : activeNewsArticles.length === 0 ? (
-          <View style={styles.newsLoaderWrap}>
-            <Text style={styles.meta}>No updates available right now.</Text>
+          <View style={[styles.newsLoaderWrap, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>No updates available right now.</Text>
           </View>
         ) : (
           activeNewsArticles.slice(0, 8).map((item, index) => (
-            <View key={`${item.url}-${index}`} style={styles.newsCard}>
+            <View key={`${item.url}-${index}`} style={[styles.newsCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
               {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.newsImage} resizeMode="cover" /> : null}
-              <Text style={styles.newsTitle} numberOfLines={3}>{item.title}</Text>
-              <Text style={styles.newsDesc} numberOfLines={3}>{item.description || "Tap Read More for full details."}</Text>
+              <Text style={[styles.newsTitle, { color: colors.text }]} numberOfLines={3}>{item.title}</Text>
+              <Text style={[styles.newsDesc, { color: colors.textMuted }]} numberOfLines={3}>{item.description || "Tap Read More for full details."}</Text>
               <View style={styles.newsMetaRow}>
-                <Text style={styles.newsSource} numberOfLines={1}>{item.source || "News Source"}</Text>
+                <Text style={[styles.newsSource, { color: colors.textMuted }]} numberOfLines={1}>{item.source || "News Source"}</Text>
                 <TouchableOpacity onPress={() => item.url && Linking.openURL(item.url)}>
                   <Text style={styles.newsReadMore}>Read More</Text>
                 </TouchableOpacity>
@@ -1172,32 +1282,32 @@ export default function StudentDashboard() {
         )}
       </ScrollView>
 
-      <Text style={styles.sectionHeader}>Featured</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Featured</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
         <TouchableOpacity style={[styles.featureCard, styles.featureCardOne]} onPress={() => router.push("/domains")}>
-          <Text style={styles.featurePill}>Discover</Text>
-          <Text style={styles.featureTitle}>Top Mentor Domains</Text>
-          <Text style={styles.featureCopy}>Browse all approved mentors by category and specialization.</Text>
+          <Text style={[styles.featurePill, { backgroundColor: colors.surface, color: colors.text }]}>Discover</Text>
+          <Text style={[styles.featureTitle, { color: colors.text }]}>Top Mentor Domains</Text>
+          <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Browse all approved mentors by category and specialization.</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo]} onPress={() => router.push("/chat" as never)}>
-          <Text style={styles.featurePill}>Connect</Text>
-          <Text style={styles.featureTitle}>Session Conversations</Text>
-          <Text style={styles.featureCopy}>Message confirmed mentors and prepare before live sessions.</Text>
+          <Text style={[styles.featurePill, { backgroundColor: colors.surface, color: colors.text }]}>Connect</Text>
+          <Text style={[styles.featureTitle, { color: colors.text }]}>Session Conversations</Text>
+          <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Message confirmed mentors and prepare before live sessions.</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.featureCard, styles.featureCardThree]} onPress={() => router.push("/ai-assistant" as never)}>
-          <Text style={styles.featurePill}>Boost</Text>
-          <Text style={styles.featureTitle}>AI Career Coach</Text>
-          <Text style={styles.featureCopy}>Get study plans, interview prep ideas, and guidance instantly.</Text>
+          <Text style={[styles.featurePill, { backgroundColor: colors.surface, color: colors.text }]}>Boost</Text>
+          <Text style={[styles.featureTitle, { color: colors.text }]}>AI Career Coach</Text>
+          <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Get study plans, interview prep ideas, and guidance instantly.</Text>
         </TouchableOpacity>
       </ScrollView>
 
-      <Text style={styles.sectionHeader}>Live Banners</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Live Banners</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bannerRow}>
         {studentBanners.map((banner) => (
-          <View key={banner.key} style={[styles.bannerCard, { backgroundColor: banner.bg, borderColor: banner.border }]}>
-            <Text style={styles.bannerTag}>{banner.tag}</Text>
-            <Text style={styles.bannerTitle}>{banner.title}</Text>
-            <Text style={styles.bannerCopy}>{banner.copy}</Text>
+          <View key={banner.key} style={[styles.bannerCard, { backgroundColor: colors.surface, borderColor: banner.border || colors.border }]}>
+            <Text style={[styles.bannerTag, { backgroundColor: colors.surfaceAlt, color: colors.text }]}>{banner.tag}</Text>
+            <Text style={[styles.bannerTitle, { color: colors.text }]}>{banner.title}</Text>
+            <Text style={[styles.bannerCopy, { color: colors.textMuted }]}>{banner.copy}</Text>
           </View>
         ))}
       </ScrollView>
