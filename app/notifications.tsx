@@ -3,6 +3,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, Toucha
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { useAppTheme } from "@/context/ThemeContext";
 
 type NotificationRecord = {
   _id: string;
@@ -16,6 +17,7 @@ type NotificationRecord = {
 };
 
 export default function NotificationsScreen() {
+  const { colors, isDark } = useAppTheme();
   const [items, setItems] = useState<NotificationRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -58,47 +60,54 @@ export default function NotificationsScreen() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.container}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
-      <View style={styles.headerCard}>
-        <Text style={styles.heading}>Notifications</Text>
-        <Text style={styles.subheading}>
+      <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.heading, { color: colors.text }]}>Notifications</Text>
+        <Text style={[styles.subheading, { color: colors.textMuted }]}>
           Important updates from sessions, payments, approvals, and platform announcements.
         </Text>
-        <View style={styles.countPill}>
-          <Ionicons name="notifications" size={14} color="#7A271A" />
-          <Text style={styles.countText}>Unread: {unreadCount}</Text>
+        <View style={[styles.countPill, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+          <Ionicons name="notifications" size={14} color={colors.accent} />
+          <Text style={[styles.countText, { color: colors.text }]}>Unread: {unreadCount}</Text>
         </View>
       </View>
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#1F7A4C" />
+          <ActivityIndicator size="large" color={colors.accent} />
         </View>
       ) : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
-      {!loading && items.length === 0 ? <Text style={styles.empty}>No notifications yet.</Text> : null}
+      {!loading && items.length === 0 ? <Text style={[styles.empty, { color: colors.textMuted }]}>No notifications yet.</Text> : null}
 
       {!loading &&
         items.map((item) => (
           <TouchableOpacity
             key={item._id}
-            style={[styles.card, item.readByRecipient === false ? styles.cardUnread : styles.cardRead]}
+            style={[
+              styles.card,
+              {
+                backgroundColor: item.readByRecipient === false ? colors.accentSoft : colors.surface,
+                borderColor: item.readByRecipient === false ? colors.accent : colors.border
+              }
+            ]}
             activeOpacity={0.9}
             onPress={() => markRead(item)}
           >
             <View style={styles.row}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.type}>{item.type}</Text>
+              <Text style={[styles.title, { color: colors.text }]}>{item.title}</Text>
+              <Text style={[styles.type, { color: colors.accent, backgroundColor: colors.surfaceAlt }]}>{item.type}</Text>
             </View>
-            <Text style={styles.message}>{item.message}</Text>
-            <Text style={styles.meta}>
+            <Text style={[styles.message, { color: colors.textMuted }]}>{item.message}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
               {new Date(item.createdAt).toLocaleString()} | Target: {item.targetRole}
             </Text>
-            {item.readByRecipient === false ? <Text style={styles.tapHint}>Tap to mark as read</Text> : null}
+            {item.readByRecipient === false ? <Text style={[styles.tapHint, { color: colors.accent }]}>Tap to mark as read</Text> : null}
           </TouchableOpacity>
         ))}
     </ScrollView>

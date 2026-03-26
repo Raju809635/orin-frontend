@@ -15,6 +15,7 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import {
   ActionButton,
   CommunityHero,
@@ -47,6 +48,7 @@ const DEFAULT_TASKS = [
 
 export default function CommunityChallengesPage() {
   const { user } = useAuth();
+  const { colors } = useAppTheme();
   const [items, setItems] = useState<ChallengeItem[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [selectedId, setSelectedId] = useState("");
@@ -172,7 +174,8 @@ export default function CommunityChallengesPage() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.page}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
       <CommunityHero

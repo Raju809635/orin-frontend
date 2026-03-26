@@ -16,6 +16,7 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import {
   ActionButton,
   CommunityHero,
@@ -51,6 +52,7 @@ const STORAGE_KEY = "community-opportunity-saved-v1";
 
 export default function CommunityOpportunitiesPage() {
   const { user } = useAuth();
+  const { colors, isDark } = useAppTheme();
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
   const [items, setItems] = useState<OpportunityItem[]>([]);
   const [saved, setSaved] = useState<Record<string, boolean>>({});
@@ -121,7 +123,8 @@ export default function CommunityOpportunitiesPage() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.page}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
       <CommunityHero
@@ -180,9 +183,9 @@ export default function CommunityOpportunitiesPage() {
         subtitle="Each card highlights role, company, fit, and the next action to take."
         icon="rocket"
       >
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
-        {!loading && !filtered.length ? <Text style={styles.emptyText}>No opportunities match this filter right now.</Text> : null}
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+        {loading ? <ActivityIndicator size="large" color={colors.accent} /> : null}
+        {!loading && !filtered.length ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No opportunities match this filter right now.</Text> : null}
         {filtered.map((item, index) => {
           const recommended = !!item.recommended;
           const canApply = item.readinessUnlocked !== false;
@@ -190,7 +193,11 @@ export default function CommunityOpportunitiesPage() {
             <TouchableOpacity
               key={item._id}
               activeOpacity={0.95}
-              style={[styles.jobCard, selectedId === item._id && styles.jobCardActive]}
+              style={[
+                styles.jobCard,
+                { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border },
+                selectedId === item._id && [styles.jobCardActive, { borderColor: colors.accent, backgroundColor: isDark ? colors.surface : "#F8FBFF" }]
+              ]}
               onPress={() => setSelectedId(item._id)}
             >
               <View style={styles.cardTopRow}>
@@ -199,7 +206,7 @@ export default function CommunityOpportunitiesPage() {
                 </View>
                 <View style={styles.jobBody}>
                   <View style={styles.inlineRow}>
-                    <Text style={styles.jobTitle}>{item.role || item.title}</Text>
+                    <Text style={[styles.jobTitle, { color: colors.text }]}>{item.role || item.title}</Text>
                     {recommended ? <StatusBadge label="Recommended" tone="primary" /> : null}
                     {!canApply ? <StatusBadge label="Prepare First" tone="warning" /> : null}
                   </View>

@@ -15,6 +15,7 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import {
   ActionButton,
   CommunityHero,
@@ -42,6 +43,7 @@ const STORAGE_KEY = "community-library-saved-v1";
 
 export default function CommunityLibraryPage() {
   const { user } = useAuth();
+  const { colors, isDark } = useAppTheme();
   const [tab, setTab] = useState<(typeof TABS)[number]>("All");
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [items, setItems] = useState<LibraryItem[]>([]);
@@ -116,7 +118,8 @@ export default function CommunityLibraryPage() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.page}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
       <CommunityHero
@@ -144,9 +147,9 @@ export default function CommunityLibraryPage() {
         subtitle="Each card points the learner toward the next action instead of behaving like a static list."
         icon="book"
       >
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
-        {!loading && !filtered.length ? <Text style={styles.emptyText}>Nothing in this tab yet. Save a resource or switch to another tab.</Text> : null}
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+        {loading ? <ActivityIndicator size="large" color={colors.accent} /> : null}
+        {!loading && !filtered.length ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>Nothing in this tab yet. Save a resource or switch to another tab.</Text> : null}
         {filtered.map((item, index) => {
           const categoryColor = getCategoryTone(item);
           const isSelected = selectedId === item.id;
@@ -154,7 +157,11 @@ export default function CommunityLibraryPage() {
             <TouchableOpacity
               key={item.id}
               activeOpacity={0.95}
-              style={[styles.resourceCard, isSelected && styles.resourceCardActive]}
+              style={[
+                styles.resourceCard,
+                { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border },
+                isSelected && [styles.resourceCardActive, { borderColor: colors.accent, backgroundColor: isDark ? colors.surface : "#F8FBFF" }]
+              ]}
               onPress={() => setSelectedId(item.id)}
             >
               <View style={styles.cardTopRow}>
@@ -163,13 +170,13 @@ export default function CommunityLibraryPage() {
                 </View>
                 <View style={styles.cardTopBody}>
                   <View style={styles.inlineRow}>
-                    <Text style={styles.cardTitle}>{item.title}</Text>
+                    <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
                     {tab === "Trending" || index < 2 ? <StatusBadge label="Trending" tone="warning" /> : null}
                   </View>
-                  <Text numberOfLines={2} style={styles.cardDescription}>
+                  <Text numberOfLines={2} style={[styles.cardDescription, { color: colors.textMuted }]}>
                     {item.description || "A guided ORIN resource you can use in roadmap planning and practice."}
                   </Text>
-                  {item.recommendationReason ? <Text style={styles.reasonText}>{item.recommendationReason}</Text> : null}
+                  {item.recommendationReason ? <Text style={[styles.reasonText, { color: colors.accent }]}>{item.recommendationReason}</Text> : null}
                 </View>
               </View>
 
@@ -209,20 +216,20 @@ export default function CommunityLibraryPage() {
           subtitle="Make every library item lead into the next step instead of ending at a content card."
           icon="document-text"
         >
-          <View style={styles.detailCard}>
+          <View style={[styles.detailCard, { backgroundColor: isDark ? colors.surfaceAlt : "#FBFBFF", borderColor: colors.border }]}>
             <View style={styles.inlineRow}>
               <View style={[styles.resourceIconWrap, { backgroundColor: getCategoryTone(selectedItem).soft }]}>
                 <Ionicons name={iconForType(selectedItem.type)} size={22} color={getCategoryTone(selectedItem).main} />
               </View>
               <View style={styles.detailHead}>
-                <Text style={styles.detailTitle}>{selectedItem.title}</Text>
-                <Text style={styles.detailMeta}>{selectedItem.domain || "ORIN Resource"} | {selectedItem.type || "Guide"}</Text>
+                <Text style={[styles.detailTitle, { color: colors.text }]}>{selectedItem.title}</Text>
+                <Text style={[styles.detailMeta, { color: colors.textMuted }]}>{selectedItem.domain || "ORIN Resource"} | {selectedItem.type || "Guide"}</Text>
               </View>
             </View>
-            <Text style={styles.detailText}>
+            <Text style={[styles.detailText, { color: colors.text }]}>
               {selectedItem.description || "Use this item to strengthen your roadmap, practice a topic, or support an active challenge."}
             </Text>
-            {selectedItem.recommendationReason ? <Text style={styles.reasonText}>{selectedItem.recommendationReason}</Text> : null}
+            {selectedItem.recommendationReason ? <Text style={[styles.reasonText, { color: colors.accent }]}>{selectedItem.recommendationReason}</Text> : null}
             <View style={styles.pillRow}>
               <StatPill icon="git-network" label="Use in Roadmap" tone="#EEF2FF" />
               <StatPill icon="trophy" label="Practice Challenge" tone="#FFF7ED" />
@@ -258,11 +265,11 @@ export default function CommunityLibraryPage() {
           subtitle="Mentors can submit stronger resources for admin approval without changing the existing review flow."
           icon="add-circle"
         >
-          <TextInput style={styles.input} placeholder="Domain (optional)" value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
-          <TextInput style={styles.input} placeholder="Type (roadmap, interview_questions, coding_resource, career_guide, other)" value={submitForm.type} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, type: text }))} />
-          <TextInput style={styles.input} placeholder="Title" value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />
-          <TextInput style={[styles.input, styles.textArea]} placeholder="Short description" value={submitForm.description} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, description: text }))} multiline />
-          <TextInput style={styles.input} placeholder="URL (optional)" value={submitForm.url} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, url: text }))} />
+          <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
+          <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Type (roadmap, interview_questions, coding_resource, career_guide, other)" placeholderTextColor={colors.textMuted} value={submitForm.type} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, type: text }))} />
+          <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Title" placeholderTextColor={colors.textMuted} value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />
+          <TextInput style={[styles.input, styles.textArea, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Short description" placeholderTextColor={colors.textMuted} value={submitForm.description} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, description: text }))} multiline />
+          <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="URL (optional)" placeholderTextColor={colors.textMuted} value={submitForm.url} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, url: text }))} />
           <ActionButton
             label={submitting ? "Submitting..." : "Submit for Review"}
             icon="send"

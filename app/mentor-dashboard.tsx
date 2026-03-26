@@ -14,6 +14,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
 import GlobalHeader from "@/components/global-header";
@@ -187,6 +188,7 @@ export default function MentorDashboard() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: string; growth?: string }>();
   const { user, logout } = useAuth();
+  const { colors } = useAppTheme();
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [mentorGrowthSection, setMentorGrowthSection] = useState<MentorGrowthSectionId>("reputation");
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -757,7 +759,7 @@ export default function MentorDashboard() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F3F5F7" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <GlobalHeader
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}
@@ -765,7 +767,8 @@ export default function MentorDashboard() {
         searchPlaceholder="Search students, sessions or chat"
       />
     <ScrollView
-      contentContainerStyle={styles.container}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchDashboard(true)} />}
     >
       {normalizedQuery ? (

@@ -13,6 +13,7 @@ import {
 import { api } from "@/lib/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { getStoredNewsLanguage, NEWS_LANGUAGES, NewsLanguageCode, setStoredNewsLanguage } from "@/utils/newsLanguage";
+import { useAppTheme } from "@/context/ThemeContext";
 
 const NEWS_SCREEN_CACHE_MS = 5 * 60 * 1000;
 
@@ -37,6 +38,7 @@ const tabs: { key: NewsCategoryKey; label: string }[] = [
 
 export default function NewsUpdatesScreen() {
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useAppTheme();
   const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [language, setLanguage] = useState<NewsLanguageCode>("en");
   const [activeTab, setActiveTab] = useState<NewsCategoryKey>("tech");
@@ -110,33 +112,34 @@ export default function NewsUpdatesScreen() {
 
   return (
     <ScrollView
-      contentContainerStyle={[styles.container, { paddingBottom: 88 + insets.bottom }]}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background, paddingBottom: 88 + insets.bottom }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadCategory(activeTab, true)} />}
     >
-      <Text style={styles.heading}>News & Updates</Text>
-      <Text style={styles.subheading}>Career, tech, exams, scholarships, and opportunities curated daily.</Text>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <Text style={[styles.heading, { color: colors.text }]}>News & Updates</Text>
+      <Text style={[styles.subheading, { color: colors.textMuted }]}>Career, tech, exams, scholarships, and opportunities curated daily.</Text>
+      {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
       <View style={styles.languageWrap}>
-        <Text style={styles.languageTitle}>Select Language</Text>
-        <TouchableOpacity style={styles.languagePicker} onPress={() => setLanguageMenuOpen((prev) => !prev)}>
-          <Text style={styles.languagePickerText}>
+        <Text style={[styles.languageTitle, { color: colors.text }]}>Select Language</Text>
+        <TouchableOpacity style={[styles.languagePicker, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => setLanguageMenuOpen((prev) => !prev)}>
+          <Text style={[styles.languagePickerText, { color: colors.text }]}>
             {NEWS_LANGUAGES.find((item) => item.code === language)?.label || "English"}
           </Text>
-          <Text style={styles.languagePickerArrow}>{languageMenuOpen ? "▲" : "▼"}</Text>
+          <Text style={[styles.languagePickerArrow, { color: colors.textMuted }]}>{languageMenuOpen ? "^" : "v"}</Text>
         </TouchableOpacity>
         {languageMenuOpen ? (
-          <View style={styles.languageMenu}>
+          <View style={[styles.languageMenu, { borderColor: colors.border, backgroundColor: colors.surface }]}>
             {NEWS_LANGUAGES.map((item) => (
               <TouchableOpacity
                 key={item.code}
-                style={[styles.languageOption, language === item.code && styles.languageOptionActive]}
+                style={[styles.languageOption, language === item.code && [styles.languageOptionActive, { backgroundColor: colors.accentSoft }]]}
                 onPress={async () => {
                   setLanguage(item.code);
                   setLanguageMenuOpen(false);
                   await setStoredNewsLanguage(item.code);
                 }}
               >
-                <Text style={[styles.languageOptionText, language === item.code && styles.languageOptionTextActive]}>
+                <Text style={[styles.languageOptionText, { color: colors.text }, language === item.code && [styles.languageOptionTextActive, { color: colors.accent }]]}>
                   {item.label}
                 </Text>
               </TouchableOpacity>
@@ -151,10 +154,10 @@ export default function NewsUpdatesScreen() {
           return (
             <TouchableOpacity
               key={tab.key}
-              style={[styles.tabChip, active && styles.tabChipActive]}
+              style={[styles.tabChip, { borderColor: colors.border, backgroundColor: colors.surface }, active && [styles.tabChipActive, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]]}
               onPress={() => setActiveTab(tab.key)}
             >
-              <Text style={[styles.tabText, active && styles.tabTextActive]}>{tab.label}</Text>
+              <Text style={[styles.tabText, { color: colors.textMuted }, active && [styles.tabTextActive, { color: colors.accent }]]}>{tab.label}</Text>
             </TouchableOpacity>
           );
         })}
@@ -162,23 +165,23 @@ export default function NewsUpdatesScreen() {
 
       {loading && !activeArticles.length ? (
         <View style={styles.loaderWrap}>
-          <ActivityIndicator size="large" color="#1F7A4C" />
+          <ActivityIndicator size="large" color={colors.accent} />
         </View>
       ) : null}
 
       {activeArticles.length === 0 && !loading ? (
-        <Text style={styles.empty}>No updates found for this category.</Text>
+        <Text style={[styles.empty, { color: colors.textMuted }]}>No updates found for this category.</Text>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.newsRow}>
           {activeArticles.map((item, idx) => (
-            <View key={`${item.url}-${idx}`} style={styles.newsCard}>
+            <View key={`${item.url}-${idx}`} style={[styles.newsCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {item.imageUrl ? <Image source={{ uri: item.imageUrl }} style={styles.newsImage} resizeMode="cover" /> : null}
-              <Text style={styles.newsTitle} numberOfLines={3}>{item.title}</Text>
-              <Text style={styles.newsDesc} numberOfLines={3}>{item.description || "Tap Read More for full details."}</Text>
+              <Text style={[styles.newsTitle, { color: colors.text }]} numberOfLines={3}>{item.title}</Text>
+              <Text style={[styles.newsDesc, { color: colors.textMuted }]} numberOfLines={3}>{item.description || "Tap Read More for full details."}</Text>
               <View style={styles.newsMetaRow}>
-                <Text style={styles.newsSource} numberOfLines={1}>{item.source || "News Source"}</Text>
+                <Text style={[styles.newsSource, { color: colors.textMuted }]} numberOfLines={1}>{item.source || "News Source"}</Text>
                 <TouchableOpacity onPress={() => item.url && Linking.openURL(item.url)}>
-                  <Text style={styles.readMore}>Read More</Text>
+                  <Text style={[styles.readMore, { color: isDark ? "#8AB4FF" : "#175CD3" }]}>Read More</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -251,3 +254,5 @@ const styles = StyleSheet.create({
   newsSource: { flex: 1, color: "#475467", fontWeight: "700", fontSize: 12 },
   readMore: { color: "#175CD3", fontWeight: "800", fontSize: 12 }
 });
+
+

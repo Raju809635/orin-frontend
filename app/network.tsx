@@ -533,6 +533,7 @@ export default function NetworkScreen() {
         searchPlaceholder="Search circle, posts, people"
       />
       <ScrollView
+        style={{ backgroundColor: colors.background }}
         contentContainerStyle={[styles.container, { backgroundColor: colors.background, paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} tintColor={colors.accent} />}
       >

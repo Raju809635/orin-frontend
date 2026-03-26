@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
+import { useAppTheme } from "@/context/ThemeContext";
 
 type HeroProps = {
   eyebrow?: string;
@@ -79,14 +80,15 @@ export function CommunitySection({
   children: React.ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
+  const { colors, isDark } = useAppTheme();
   return (
-    <View style={[styles.section, style]}>
+    <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border, shadowColor: isDark ? "#000000" : "#101828" }, style]}>
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
-          {icon ? <Ionicons name={icon} size={18} color="#1F7A4C" /> : null}
-          <Text style={styles.sectionTitle}>{title}</Text>
+          {icon ? <Ionicons name={icon} size={18} color={colors.accent} /> : null}
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
         </View>
-        {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
+        {subtitle ? <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>{subtitle}</Text> : null}
       </View>
       {children}
     </View>
@@ -94,16 +96,21 @@ export function CommunitySection({
 }
 
 export function FilterTabs({ tabs }: { tabs: TabProps[] }) {
+  const { colors } = useAppTheme();
   return (
     <View style={styles.tabsRow}>
       {tabs.map((tab) => (
         <TouchableOpacity
           key={tab.label}
-          style={[styles.tabChip, tab.active && styles.tabChipActive]}
+          style={[
+            styles.tabChip,
+            { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+            tab.active && [styles.tabChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]
+          ]}
           activeOpacity={0.9}
           onPress={tab.onPress}
         >
-          <Text style={[styles.tabChipText, tab.active && styles.tabChipTextActive]}>{tab.label}</Text>
+          <Text style={[styles.tabChipText, { color: colors.textMuted }, tab.active && [styles.tabChipTextActive, { color: colors.accent }]]}>{tab.label}</Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -111,9 +118,18 @@ export function FilterTabs({ tabs }: { tabs: TabProps[] }) {
 }
 
 export function StatusBadge({ label, tone = "neutral" }: StatusBadgeProps) {
+  const { isDark } = useAppTheme();
   const badgeTone = badgeTones[tone];
   return (
-    <View style={[styles.badge, { backgroundColor: badgeTone.bg, borderColor: badgeTone.border }]}>
+    <View
+      style={[
+        styles.badge,
+        {
+          backgroundColor: isDark ? badgeTone.darkBg || badgeTone.bg : badgeTone.bg,
+          borderColor: isDark ? badgeTone.darkBorder || badgeTone.border : badgeTone.border
+        }
+      ]}
+    >
       <Text style={[styles.badgeText, { color: badgeTone.text }]}>{label}</Text>
     </View>
   );
@@ -130,10 +146,11 @@ export function StatPill({
   tone?: string;
   textStyle?: StyleProp<TextStyle>;
 }) {
+  const { colors, isDark } = useAppTheme();
   return (
-    <View style={[styles.pill, { backgroundColor: tone }]}>
-      <Ionicons name={icon} size={14} color="#1D2939" />
-      <Text style={[styles.pillText, textStyle]}>{label}</Text>
+    <View style={[styles.pill, { backgroundColor: isDark ? colors.surfaceAlt : tone, borderColor: colors.border, borderWidth: isDark ? 1 : 0 }]}>
+      <Ionicons name={icon} size={14} color={colors.text} />
+      <Text style={[styles.pillText, { color: colors.text }, textStyle]}>{label}</Text>
     </View>
   );
 }
@@ -145,9 +162,10 @@ export function ProgressBar({
   progress: number;
   tone?: string;
 }) {
+  const { colors, isDark } = useAppTheme();
   const width = `${Math.max(0, Math.min(100, progress))}%`;
   return (
-    <View style={styles.progressTrack}>
+    <View style={[styles.progressTrack, { backgroundColor: isDark ? colors.surfaceAlt : "#E4E7EC" }]}>
       <View style={[styles.progressFill, { width, backgroundColor: tone }]} />
     </View>
   );
@@ -161,30 +179,42 @@ export function ActionButton({
   disabled,
   style
 }: ActionButtonProps) {
+  const { colors, isDark } = useAppTheme();
   const buttonStyle =
     variant === "primary" ? styles.primaryButton : variant === "secondary" ? styles.secondaryButton : styles.ghostButton;
-  const textStyle =
-    variant === "primary" ? styles.primaryButtonText : variant === "secondary" ? styles.secondaryButtonText : styles.ghostButtonText;
+  const iconColor = variant === "primary" ? colors.accentText : variant === "secondary" ? colors.text : colors.accent;
+  const dynamicButtonStyle =
+    variant === "primary"
+      ? { backgroundColor: colors.accent }
+      : variant === "secondary"
+        ? { backgroundColor: isDark ? colors.surfaceAlt : "#F8FAFC", borderColor: colors.border }
+        : { backgroundColor: colors.accentSoft };
+  const dynamicTextStyle =
+    variant === "primary"
+      ? { color: colors.accentText }
+      : variant === "secondary"
+        ? { color: colors.text }
+        : { color: colors.accent };
 
   return (
     <TouchableOpacity
       activeOpacity={0.92}
-      style={[buttonStyle, disabled && styles.buttonDisabled, style]}
+      style={[buttonStyle, dynamicButtonStyle, disabled && styles.buttonDisabled, style]}
       onPress={onPress}
       disabled={disabled}
     >
-      {icon ? <Ionicons name={icon} size={16} color={variant === "primary" ? "#fff" : "#344054"} /> : null}
-      <Text style={textStyle}>{label}</Text>
+      {icon ? <Ionicons name={icon} size={16} color={iconColor} /> : null}
+      <Text style={[variant === "primary" ? styles.primaryButtonText : variant === "secondary" ? styles.secondaryButtonText : styles.ghostButtonText, dynamicTextStyle]}>{label}</Text>
     </TouchableOpacity>
   );
 }
 
 const badgeTones = {
-  primary: { bg: "#EEF2FF", border: "#C7D2FE", text: "#4457FF" },
-  success: { bg: "#ECFDF3", border: "#ABEFC6", text: "#027A48" },
-  warning: { bg: "#FFF7ED", border: "#F9DBAF", text: "#B54708" },
-  danger: { bg: "#FEF3F2", border: "#FECDCA", text: "#B42318" },
-  neutral: { bg: "#F2F4F7", border: "#D0D5DD", text: "#475467" }
+  primary: { bg: "#EEF2FF", border: "#C7D2FE", darkBg: "#1C2748", darkBorder: "#324A8A", text: "#7EA5FF" },
+  success: { bg: "#ECFDF3", border: "#ABEFC6", darkBg: "#123323", darkBorder: "#2A7751", text: "#63D297" },
+  warning: { bg: "#FFF7ED", border: "#F9DBAF", darkBg: "#3A2A10", darkBorder: "#6D5223", text: "#FDBA74" },
+  danger: { bg: "#FEF3F2", border: "#FECDCA", darkBg: "#3A1717", darkBorder: "#7C2D2D", text: "#FCA5A5" },
+  neutral: { bg: "#F2F4F7", border: "#D0D5DD", darkBg: "#1D2731", darkBorder: "#344054", text: "#D0D5DD" }
 };
 
 const styles = StyleSheet.create({

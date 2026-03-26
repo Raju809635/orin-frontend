@@ -4,12 +4,14 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 
 type MentorGroupItem = { id: string; name: string; schedule?: string; membersCount?: number; mentor?: { name?: string } };
 
 export default function CommunityCollaborationPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { colors, isDark } = useAppTheme();
   const isMentor = user?.role === "mentor";
   const [groups, setGroups] = useState<MentorGroupItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,34 +34,34 @@ export default function CommunityCollaborationPage() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
-    <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
-      <Text style={styles.pageTitle}>Community & Collaboration</Text>
-      <Text style={styles.pageSub}>
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.page, { backgroundColor: colors.background }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
+      <Text style={[styles.pageTitle, { color: colors.text }]}>Community & Collaboration</Text>
+      <Text style={[styles.pageSub, { color: colors.textMuted }]}>
         {isMentor
           ? "Work with other mentors, join mentoring circles, and contribute to shared discussions."
           : "Join learning communities and participate in shared discussions."}
       </Text>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="people" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Overview</Text></View><Text style={styles.meta}>{isMentor ? "Collaborate with mentors, manage shared groups, and strengthen your credibility through community contribution." : "Collaborate with peers and mentors in topic-focused groups."}</Text></View>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.sectionHeader}><Ionicons name="people" size={16} color={colors.accent} /><Text style={[styles.sectionTitle, { color: colors.text }]}>Overview</Text></View><Text style={[styles.meta, { color: colors.textMuted }]}>{isMentor ? "Collaborate with mentors, manage shared groups, and strengthen your credibility through community contribution." : "Collaborate with peers and mentors in topic-focused groups."}</Text></View>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="settings" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Main Feature</Text></View><TouchableOpacity style={styles.primaryBtn} onPress={() => router.push("/collaborate" as never)}><Text style={styles.primaryBtnText}>{isMentor ? "Open Mentor Collaboration" : "Join Community"}</Text></TouchableOpacity></View>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.sectionHeader}><Ionicons name="settings" size={16} color={colors.accent} /><Text style={[styles.sectionTitle, { color: colors.text }]}>Main Feature</Text></View><TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => router.push("/collaborate" as never)}><Text style={[styles.primaryBtnText, { color: colors.accentText }]}>{isMentor ? "Open Mentor Collaboration" : "Join Community"}</Text></TouchableOpacity></View>
 
-      <View style={styles.section}>
-        <View style={styles.sectionHeader}><Ionicons name="chatbubbles" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Community Discussions</Text></View>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
-        {!loading && groups.length === 0 ? <Text style={styles.meta}>No active communities right now.</Text> : null}
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.sectionHeader}><Ionicons name="chatbubbles" size={16} color={colors.accent} /><Text style={[styles.sectionTitle, { color: colors.text }]}>Community Discussions</Text></View>
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+        {loading ? <ActivityIndicator size="large" color={colors.accent} /> : null}
+        {!loading && groups.length === 0 ? <Text style={[styles.meta, { color: colors.textMuted }]}>No active communities right now.</Text> : null}
         {groups.map((g) => (
-          <View key={g.id} style={styles.card}>
-            <Text style={styles.cardTitle}>{g.name}</Text>
-            <Text style={styles.meta}>Mentor: {g.mentor?.name || "Mentor"}</Text>
-            <Text style={styles.meta}>Members: {g.membersCount || 0}</Text>
-            <Text style={styles.meta}>Schedule: {g.schedule || "Weekly"}</Text>
+          <View key={g.id} style={[styles.card, { backgroundColor: isDark ? colors.surfaceAlt : "#F9F5FF", borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>{g.name}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Mentor: {g.mentor?.name || "Mentor"}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Members: {g.membersCount || 0}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Schedule: {g.schedule || "Weekly"}</Text>
           </View>
         ))}
       </View>
 
-      <View style={styles.section}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color="#1F7A4C" /><Text style={styles.sectionTitle}>Tips</Text></View><Text style={styles.meta}>{isMentor ? "Use community groups to collaborate with mentors, run small learning circles, and stay visible to students in your domain." : "Join communities aligned with your domain for better networking value."}</Text></View>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}><View style={styles.sectionHeader}><Ionicons name="help-circle" size={16} color={colors.accent} /><Text style={[styles.sectionTitle, { color: colors.text }]}>Tips</Text></View><Text style={[styles.meta, { color: colors.textMuted }]}>{isMentor ? "Use community groups to collaborate with mentors, run small learning circles, and stay visible to students in your domain." : "Join communities aligned with your domain for better networking value."}</Text></View>
     </ScrollView>
   );
 }

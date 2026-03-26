@@ -5,6 +5,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, Toucha
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
@@ -25,6 +26,7 @@ const LEVEL_OPTIONS = ["Beginner", "Intermediate", "Advanced"];
 
 export default function AiMentorMatchingPage() {
   const { user } = useAuth();
+  const { colors, isDark } = useAppTheme();
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
   const [selectedDomain, setSelectedDomain] = useState("");
   const [selectedLevel, setSelectedLevel] = useState("Beginner");
@@ -109,7 +111,7 @@ export default function AiMentorMatchingPage() {
   const avgScore = filtered.length ? Math.round(filtered.reduce((sum, item) => sum + Number(item.matchScore || 0), 0) / filtered.length) : 0;
 
   return (
-    <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.page, { backgroundColor: colors.background }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
       <LinearGradient colors={["#0E6A42", "#1F7A4C", "#6FCF97"]} style={styles.hero}>
         <Text style={styles.heroTitle}>AI Mentor Matching</Text>
         <Text style={styles.heroSub}>
@@ -133,46 +135,46 @@ export default function AiMentorMatchingPage() {
         </View>
       </LinearGradient>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Find Your Best Match</Text>
-        <Text style={styles.label}>Domain</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Find Your Best Match</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Domain</Text>
         <View style={styles.chips}>
           {(domainTree?.primaryCategories || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, selectedDomain === item && styles.chipActive]} onPress={() => setSelectedDomain(item)}>
-              <Text style={[styles.chipText, selectedDomain === item && styles.chipTextActive]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }, selectedDomain === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setSelectedDomain(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, selectedDomain === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
-        <Text style={styles.label}>Experience Level</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Experience Level</Text>
         <View style={styles.chips}>
           {LEVEL_OPTIONS.map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, selectedLevel === item && styles.chipActive]} onPress={() => setSelectedLevel(item)}>
-              <Text style={[styles.chipText, selectedLevel === item && styles.chipTextActive]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }, selectedLevel === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setSelectedLevel(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, selectedLevel === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => { setFinding(true); load(true); }}>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => { setFinding(true); load(true); }}>
           <Text style={styles.primaryBtnText}>{finding ? "Finding..." : "Find Best Match"}</Text>
         </TouchableOpacity>
       </View>
 
       {topMatch ? (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Top Recommendation</Text>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Top Recommendation</Text>
           <LinearGradient colors={["#EEF4FF", "#F7F8FF"]} style={styles.topCard}>
             <View style={styles.topCardHeader}>
               <View>
-                <Text style={styles.topCardName}>{topMatch.name}</Text>
-                <Text style={styles.meta}>{topMatch.title || "Mentor"}</Text>
+                <Text style={[styles.topCardName, { color: colors.text }]}>{topMatch.name}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{topMatch.title || "Mentor"}</Text>
               </View>
               <View style={styles.matchBadge}>
                 <Text style={styles.matchBadgeText}>{topMatch.matchScore}%</Text>
               </View>
             </View>
-            <Text style={styles.meta}>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
               {(topMatch.primaryCategory || selectedDomain) ? `${topMatch.primaryCategory || selectedDomain}${topMatch.subCategory ? ` > ${topMatch.subCategory}` : ""}` : ""}
             </Text>
-            <Text style={styles.meta}>Experience: {topMatch.experienceYears || 0} yrs | Rating: {Number(topMatch.rating || 0).toFixed(1)}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Experience: {topMatch.experienceYears || 0} yrs | Rating: {Number(topMatch.rating || 0).toFixed(1)}</Text>
             <View style={styles.reasonRow}>
               {(topMatch.reasons || []).slice(0, 3).map((reason) => (
                 <View key={reason} style={styles.reasonPill}>
@@ -192,13 +194,13 @@ export default function AiMentorMatchingPage() {
         </View>
       ) : null}
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recommended Mentors</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
-        {!loading && filtered.length === 0 ? <Text style={styles.meta}>No mentors found for the current filters.</Text> : null}
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Recommended Mentors</Text>
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+        {loading ? <ActivityIndicator size="large" color={colors.accent} /> : null}
+        {!loading && filtered.length === 0 ? <Text style={[styles.meta, { color: colors.textMuted }]}>No mentors found for the current filters.</Text> : null}
         {filtered.map((item) => (
-          <View key={item.mentorId} style={styles.resultCard}>
+          <View key={item.mentorId} style={[styles.resultCard, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }]}>
             <View style={styles.resultTop}>
               <View style={styles.avatarPlaceholder}>
                 <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
@@ -206,15 +208,15 @@ export default function AiMentorMatchingPage() {
               <View style={styles.resultBody}>
                 <View style={styles.resultHeader}>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.resultTitle}>{item.name}</Text>
-                    <Text style={styles.meta}>{item.title || "Mentor"}</Text>
+                    <Text style={[styles.resultTitle, { color: colors.text }]}>{item.name}</Text>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>{item.title || "Mentor"}</Text>
                   </View>
                   <Text style={styles.score}>{item.matchScore}% Match</Text>
                 </View>
-                <Text style={styles.meta}>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
                   {(item.primaryCategory || selectedDomain) ? `${item.primaryCategory || selectedDomain}${item.subCategory ? ` > ${item.subCategory}` : ""}` : ""}
                 </Text>
-                <Text style={styles.meta}>Experience: {item.experienceYears || 0} yrs | Rating: {Number(item.rating || 0).toFixed(1)}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Experience: {item.experienceYears || 0} yrs | Rating: {Number(item.rating || 0).toFixed(1)}</Text>
                 {(item.reasons || []).length ? (
                   <View style={styles.reasonRow}>
                     {(item.reasons || []).slice(0, 3).map((reason) => (

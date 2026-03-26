@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -6,6 +6,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextIn
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
+import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 
@@ -33,6 +34,7 @@ const LEVEL_OPTIONS = ["Beginner", "Intermediate", "Advanced"];
 const STORAGE_PREFIX = "orin:project-build:";
 
 export default function AiProjectIdeasPage() {
+  const { colors } = useAppTheme();
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
   const [primaryCategory, setPrimaryCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
@@ -179,63 +181,63 @@ export default function AiProjectIdeasPage() {
   }, [missions]);
 
   return (
-    <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.page, { backgroundColor: colors.background }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
       <LinearGradient colors={["#0E6A42", "#1F7A4C", "#7AD39D"]} style={styles.hero}>
         <Text style={styles.heroTitle}>Build Mode</Text>
         <Text style={styles.heroSub}>Choose a project and turn it into a real execution system.</Text>
       </LinearGradient>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Generate Ideas</Text>
-        <Text style={styles.label}>Domain</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Generate Ideas</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Domain</Text>
         <View style={styles.chips}>
           {(domainTree?.primaryCategories || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, primaryCategory === item && styles.chipActive]} onPress={() => setPrimaryCategory(item)}>
-              <Text style={[styles.chipText, primaryCategory === item && styles.chipTextActive]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setPrimaryCategory(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Sub-domain</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Sub-domain</Text>
         <View style={styles.chips}>
           {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, subCategory === item && styles.chipActive]} onPress={() => setSubCategory(item)}>
-              <Text style={[styles.chipText, subCategory === item && styles.chipTextActive]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setSubCategory(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Focus</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Focus</Text>
         <View style={styles.chips}>
           {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, focus === item && styles.chipActive]} onPress={() => setFocus(item)}>
-              <Text style={[styles.chipText, focus === item && styles.chipTextActive]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setFocus(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Custom Goal</Text>
-        <TextInput style={styles.input} value={customGoal} onChangeText={setCustomGoal} placeholder="Example: AI Chatbot, UPSC Revision App, Legal Draft Helper" />
+        <Text style={[styles.label, { color: colors.text }]}>Custom Goal</Text>
+        <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={customGoal} onChangeText={setCustomGoal} placeholder="Example: AI Chatbot, UPSC Revision App, Legal Draft Helper" placeholderTextColor={colors.textMuted} />
 
-        <Text style={styles.label}>Skill Level</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Skill Level</Text>
         <View style={styles.chips}>
           {LEVEL_OPTIONS.map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, level === item && styles.chipActive]} onPress={() => setLevel(item)}>
-              <Text style={[styles.chipText, level === item && styles.chipTextActive]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, level === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setLevel(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, level === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => load(true)}>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => load(true)}>
           <Text style={styles.primaryBtnText}>Generate Ideas</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Project Ideas</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color="#1F7A4C" /> : null}
-        {!loading && !data ? <Text style={styles.meta}>No ideas available yet.</Text> : null}
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Project Ideas</Text>
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+        {loading ? <ActivityIndicator size="large" color={colors.accent} /> : null}
+        {!loading && !data ? <Text style={[styles.meta, { color: colors.textMuted }]}>No ideas available yet.</Text> : null}
         {data?.journey ? (
           <View style={styles.journeyCard}>
             <Text style={styles.journeyLabel}>Personalized Build Track</Text>
@@ -390,3 +392,4 @@ const styles = StyleSheet.create({
   secondaryBtn: { alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: "#FFF3D9" },
   secondaryBtnText: { color: "#B54708", fontWeight: "800" }
 });
+

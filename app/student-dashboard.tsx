@@ -21,6 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { submitManualPaymentWithPicker } from "@/utils/manualPaymentUpload";
 import { FEATURE_FLAGS } from "@/constants/featureFlags";
@@ -325,6 +326,7 @@ export default function StudentDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
+  const { colors } = useAppTheme();
   const lastDashboardFetchAtRef = useRef(0);
   const lastNewsFetchAtRef = useRef(0);
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -1077,7 +1079,7 @@ export default function StudentDashboard() {
   const canFinalizeQuiz = selectedAnswersCount === 5 && !quizResult;
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F3F5F7" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
     <GlobalHeader
       searchValue={searchQuery}
       onSearchChange={setSearchQuery}
@@ -1085,7 +1087,8 @@ export default function StudentDashboard() {
       searchPlaceholder="Search mentors, dates or sessions"
     />
     <ScrollView
-      contentContainerStyle={styles.container}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchDashboard(true)} />}
     >
       {normalizedQuery ? (

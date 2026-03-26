@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, BackHandler, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -40,6 +41,7 @@ export default function MentorshipHubScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: MentorshipSectionId }>();
   const { user } = useAuth();
+  const { colors } = useAppTheme();
   const isMentor = user?.role === "mentor";
   const [activeSection, setActiveSection] = useState<MentorshipSectionId>("discovery");
   const [verifiedMentors, setVerifiedMentors] = useState<VerifiedMentor[]>([]);
@@ -216,7 +218,7 @@ export default function MentorshipHubScreen() {
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F3F6FB" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <GlobalHeader
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}
@@ -224,11 +226,12 @@ export default function MentorshipHubScreen() {
         searchPlaceholder={isMentor ? "Search sessions, groups, live sessions" : "Search mentors, groups, sessions"}
       />
     <ScrollView
-      contentContainerStyle={styles.container}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
     >
-      <Text style={styles.title}>Mentorship</Text>
-      <Text style={styles.sub}>
+      <Text style={[styles.title, { color: colors.text }]}>Mentorship</Text>
+      <Text style={[styles.sub, { color: colors.textMuted }]}>
         {isMentor
           ? "Use the same mentorship workspace in mentor mode to manage requests, sessions, pricing, and availability."
           : "Select a module below to open focused mentorship tools."}

@@ -15,6 +15,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
+import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 
@@ -26,6 +27,7 @@ const MISSION_XP = 20;
 const STORAGE_PREFIX = "orin:career-roadmap-progress:";
 
 export default function AiCareerRoadmapPage() {
+  const { colors, isDark } = useAppTheme();
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
   const [primaryCategory, setPrimaryCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
@@ -273,7 +275,8 @@ export default function AiCareerRoadmapPage() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.page}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
       <LinearGradient colors={["#0E6A42", "#1F7A4C", "#5CBF88"]} style={styles.hero}>
@@ -302,70 +305,71 @@ export default function AiCareerRoadmapPage() {
         </View>
       </LinearGradient>
 
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="map" size={16} color="#1F7A4C" />
-          <Text style={styles.sectionTitle}>Roadmap Setup</Text>
+          <Ionicons name="map" size={16} color={colors.accent} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Roadmap Setup</Text>
         </View>
-        <Text style={styles.meta}>
+        <Text style={[styles.meta, { color: colors.textMuted }]}>
           Choose your Domain Guide path and ORIN will build a guided mission plan around it.
         </Text>
 
-        <Text style={styles.label}>Domain (Domain Guide)</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Domain (Domain Guide)</Text>
         <View style={styles.chips}>
           {(domainTree?.primaryCategories || []).map((item) => (
             <TouchableOpacity
               key={item}
-              style={[styles.chip, primaryCategory === item && styles.chipActive]}
+              style={[styles.chip, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
               onPress={() => setPrimaryCategory(item)}
             >
-              <Text style={[styles.chipText, primaryCategory === item && styles.chipTextActive]}>{item}</Text>
+              <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Sub-domain</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Sub-domain</Text>
         <View style={styles.chips}>
           {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
             <TouchableOpacity
               key={item}
-              style={[styles.chip, subCategory === item && styles.chipActive]}
+              style={[styles.chip, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
               onPress={() => setSubCategory(item)}
             >
-              <Text style={[styles.chipText, subCategory === item && styles.chipTextActive]}>{item}</Text>
+              <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Focus</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Focus</Text>
         <View style={styles.chips}>
           {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
             <TouchableOpacity
               key={item}
-              style={[styles.chip, focus === item && styles.chipActive]}
+              style={[styles.chip, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
               onPress={() => setFocus(item)}
             >
-              <Text style={[styles.chipText, focus === item && styles.chipTextActive]}>{item}</Text>
+              <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Custom Goal (optional)</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Custom Goal (optional)</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
           value={customGoal}
           onChangeText={setCustomGoal}
           placeholder="Example: UPSC Mains, Backend Developer, Corporate Law"
+          placeholderTextColor={colors.textMuted}
         />
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => load(true)}>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => load(true)}>
           <Text style={styles.primaryBtnText}>Generate Journey</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="flash" size={16} color="#1F7A4C" />
-          <Text style={styles.sectionTitle}>Today&apos;s Mission</Text>
+          <Ionicons name="flash" size={16} color={colors.accent} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Today&apos;s Mission</Text>
         </View>
         {currentMission ? (
           <LinearGradient colors={["#FFF9E8", "#FFF2CC"]} style={styles.todayCard}>
@@ -374,16 +378,16 @@ export default function AiCareerRoadmapPage() {
               <Text style={styles.todayXp}>+{MISSION_XP} XP</Text>
             </View>
             <Text style={styles.todayTitle}>{currentMission.title}</Text>
-            <Text style={styles.meta}>Complete 1 more task to move your journey ahead today.</Text>
-            <TouchableOpacity style={styles.primaryBtn} onPress={() => startMission(currentMission.stepNumber)} disabled={activeStepNumber === currentMission.stepNumber}>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Complete 1 more task to move your journey ahead today.</Text>
+            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => startMission(currentMission.stepNumber)} disabled={activeStepNumber === currentMission.stepNumber}>
               <Text style={styles.primaryBtnText}>{activeStepNumber === currentMission.stepNumber ? "Mission In Progress" : "Start Mission"}</Text>
             </TouchableOpacity>
           </LinearGradient>
         ) : (
-          <View style={styles.doneCard}>
-            <Text style={styles.doneTitle}>Journey completed</Text>
-            <Text style={styles.meta}>You completed every mission in this roadmap. Refresh or choose a new goal to keep going.</Text>
-            <TouchableOpacity style={styles.primaryBtn} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
+          <View style={[styles.doneCard, { backgroundColor: isDark ? colors.surfaceAlt : "#F7FFF9", borderColor: colors.border }]}>
+            <Text style={[styles.doneTitle, { color: colors.text }]}>Journey completed</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>You completed every mission in this roadmap. Refresh or choose a new goal to keep going.</Text>
+            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
               <Text style={styles.primaryBtnText}>{claimingCertificate ? "Claiming..." : "Claim Certificate"}</Text>
             </TouchableOpacity>
           </View>

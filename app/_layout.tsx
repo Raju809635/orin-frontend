@@ -300,7 +300,7 @@ function RootDrawer() {
       inactiveTintColor: colors.text,
       activeBackgroundColor: colors.accentSoft,
       pressColor: colors.accentSoft,
-      labelStyle: { color: colors.text, fontWeight: "700" as const },
+      labelStyle: { fontWeight: "700" as const, opacity: 1 },
       style: { borderRadius: 14, marginHorizontal: 6 }
     };
 
@@ -408,10 +408,10 @@ function RootDrawer() {
           screenOptions={{
             headerShown: false,
             drawerActiveTintColor: colors.accent,
-            drawerInactiveTintColor: colors.textMuted,
+            drawerInactiveTintColor: colors.text,
             drawerStyle: { backgroundColor: colors.surface },
             drawerActiveBackgroundColor: colors.accentSoft,
-            drawerLabelStyle: { color: colors.text, fontWeight: "700" },
+            drawerLabelStyle: { fontWeight: "700" },
             drawerItemStyle: { borderRadius: 14, marginHorizontal: 6 },
             sceneStyle: { backgroundColor: colors.background }
           }}

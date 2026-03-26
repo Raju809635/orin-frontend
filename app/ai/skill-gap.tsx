@@ -1,10 +1,11 @@
-import { Ionicons } from "@expo/vector-icons";
+ï»¿import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
+import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 
@@ -17,6 +18,7 @@ type SkillGapResponse = {
 
 export default function AiSkillGapPage() {
   const router = useRouter();
+  const { colors, isDark } = useAppTheme();
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
   const [primaryCategory, setPrimaryCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
@@ -121,7 +123,7 @@ export default function AiSkillGapPage() {
   }, [data?.suggestions?.courses, selectedSkill]);
 
   return (
-    <ScrollView contentContainerStyle={styles.page} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.page, { backgroundColor: colors.background }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
       <LinearGradient colors={["#304FFE", "#6C63FF", "#8E7CFF"]} style={styles.hero}>
         <Text style={styles.heroTitle}>Skill Dashboard</Text>
         <Text style={styles.heroSub}>Your personal readiness report for the next career jump.</Text>
@@ -135,51 +137,51 @@ export default function AiSkillGapPage() {
         </View>
       </LinearGradient>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Analyze Your Path</Text>
-        <Text style={styles.label}>Domain</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Analyze Your Path</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Domain</Text>
         <View style={styles.chips}>
           {(domainTree?.primaryCategories || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, primaryCategory === item && styles.chipActive]} onPress={() => setPrimaryCategory(item)}>
-              <Text style={[styles.chipText, primaryCategory === item && styles.chipTextActive]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setPrimaryCategory(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Sub-domain</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Sub-domain</Text>
         <View style={styles.chips}>
           {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, subCategory === item && styles.chipActive]} onPress={() => setSubCategory(item)}>
-              <Text style={[styles.chipText, subCategory === item && styles.chipTextActive]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setSubCategory(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Focus</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Focus</Text>
         <View style={styles.chips}>
           {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, focus === item && styles.chipActive]} onPress={() => setFocus(item)}>
-              <Text style={[styles.chipText, focus === item && styles.chipTextActive]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setFocus(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <Text style={styles.label}>Custom Goal</Text>
-        <TextInput style={styles.input} value={customGoal} onChangeText={setCustomGoal} placeholder="Example: AI Engineer, UPSC Mains, Corporate Lawyer" />
+        <Text style={[styles.label, { color: colors.text }]}>Custom Goal</Text>
+        <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={customGoal} onChangeText={setCustomGoal} placeholder="Example: AI Engineer, UPSC Mains, Corporate Lawyer" placeholderTextColor={colors.textMuted} />
 
-        <Text style={styles.label}>Current Skills</Text>
-        <TextInput style={styles.input} value={skillsInput} onChangeText={setSkillsInput} placeholder="Python, SQL, Research Basics" />
+        <Text style={[styles.label, { color: colors.text }]}>Current Skills</Text>
+        <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={skillsInput} onChangeText={setSkillsInput} placeholder="Python, SQL, Research Basics" placeholderTextColor={colors.textMuted} />
 
-        <TouchableOpacity style={styles.primaryBtn} onPress={() => { setAnalyzing(true); load(true); }}>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => { setAnalyzing(true); load(true); }}>
           <Text style={styles.primaryBtnText}>{analyzing ? "Analyzing..." : "Analyze Skills"}</Text>
         </TouchableOpacity>
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Visual Skill Report</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color="#5B4DFF" /> : null}
-        {!loading && !data ? <Text style={styles.meta}>No analysis available yet.</Text> : null}
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Visual Skill Report</Text>
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+        {loading ? <ActivityIndicator size="large" color={colors.accent} /> : null}
+        {!loading && !data ? <Text style={[styles.meta, { color: colors.textMuted }]}>No analysis available yet.</Text> : null}
         {data ? (
           <>
             <View style={styles.grid}>
@@ -188,7 +190,7 @@ export default function AiSkillGapPage() {
                 {currentSkills.length ? (
                   currentSkills.map((item) => (
                     <TouchableOpacity key={item} style={styles.skillPillKnown} onPress={() => setSelectedSkill(item)}>
-                      <Text style={styles.skillPillKnownText}>Known · {item}</Text>
+                      <Text style={styles.skillPillKnownText}>Known Â· {item}</Text>
                     </TouchableOpacity>
                   ))
                 ) : (
@@ -201,7 +203,7 @@ export default function AiSkillGapPage() {
                 {missingSkills.length ? (
                   missingSkills.map((item, index) => (
                     <TouchableOpacity key={item} style={styles.skillPillMissing} onPress={() => setSelectedSkill(item)}>
-                      <Text style={styles.skillPillMissingText}>{index < 2 ? "High Priority" : "Missing"} · {item}</Text>
+                      <Text style={styles.skillPillMissingText}>{index < 2 ? "High Priority" : "Missing"} Â· {item}</Text>
                     </TouchableOpacity>
                   ))
                 ) : (
@@ -312,4 +314,5 @@ const styles = StyleSheet.create({
   secondaryBtn: { alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: "#EAF6EF" },
   secondaryBtnText: { color: "#1F7A4C", fontWeight: "800" }
 });
+
 

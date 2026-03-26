@@ -14,6 +14,7 @@ import {
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 import { markdownToPlainText } from "@/utils/textFormat";
@@ -108,6 +109,7 @@ function chipList(items: string[] = []) {
 }
 
 export default function AiResumeBuilderPage() {
+  const { colors, isDark } = useAppTheme();
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateKey>("modern");
   const [data, setData] = useState<ResumeResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -280,7 +282,8 @@ export default function AiResumeBuilderPage() {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.page}
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true, selectedTemplate)} />}
     >
       <View style={styles.hero}>

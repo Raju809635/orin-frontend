@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import GlobalHeader from "@/components/global-header";
 
 type CommunityModule = {
@@ -19,6 +20,7 @@ type CommunityModule = {
 export default function CommunityGrowthScreen() {
   const router = useRouter();
   const { user } = useAuth();
+  const { colors, isDark } = useAppTheme();
   const isMentor = user?.role === "mentor";
   const [searchQuery, setSearchQuery] = React.useState("");
 
@@ -107,16 +109,16 @@ export default function CommunityGrowthScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F3F6FB" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <GlobalHeader
         searchValue={searchQuery}
         onSearchChange={setSearchQuery}
         onSubmitSearch={() => null}
         searchPlaceholder="Search community tools"
       />
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Community & Growth</Text>
-      <Text style={styles.sub}>
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>Community & Growth</Text>
+      <Text style={[styles.sub, { color: colors.textMuted }]}>
         {isMentor
           ? "Use community tools to collaborate with mentors, contribute knowledge, and track your mentor standing."
           : "Open a module to go to its dedicated full page."}
@@ -125,15 +127,20 @@ export default function CommunityGrowthScreen() {
       <View style={styles.moduleStack}>
         {filteredModules.map((item) => (
           <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={() => router.push(item.path as never)}>
-            <LinearGradient colors={item.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.moduleCard, { borderColor: item.border }]}>
-              <View style={styles.moduleIconWrap}>
-                <Ionicons name={item.icon} size={20} color="#1F7A4C" />
+            <LinearGradient
+              colors={isDark ? [colors.surface, colors.surfaceAlt] : item.gradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.moduleCard, { borderColor: isDark ? colors.border : item.border }]}
+            >
+              <View style={[styles.moduleIconWrap, { backgroundColor: colors.accentSoft }]}>
+                <Ionicons name={item.icon} size={20} color={colors.accent} />
               </View>
               <View style={styles.moduleTextWrap}>
-                <Text style={styles.moduleTitle}>{item.label}</Text>
-                <Text style={styles.moduleDesc}>{item.description}</Text>
+                <Text style={[styles.moduleTitle, { color: colors.text }]}>{item.label}</Text>
+                <Text style={[styles.moduleDesc, { color: colors.textMuted }]}>{item.description}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#98A2B3" />
+              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </LinearGradient>
           </TouchableOpacity>
         ))}
