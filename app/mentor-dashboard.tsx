@@ -1,4 +1,4 @@
-﻿import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -207,8 +207,10 @@ export default function MentorDashboard() {
   const params = useLocalSearchParams<{ section?: string; growth?: string }>();
   const { user, logout } = useAuth();
   const { colors } = useAppTheme();
+  const scrollViewRef = useRef<ScrollView | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [mentorGrowthSection, setMentorGrowthSection] = useState<MentorGrowthSectionId>("reputation");
+  const [panelAnchorY, setPanelAnchorY] = useState(0);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [messages, setMessages] = useState<AdminChatMessage[]>([]);
@@ -628,6 +630,20 @@ export default function MentorDashboard() {
     activeSection
   ]);
 
+  const revealPanel = useCallback(() => {
+    requestAnimationFrame(() => {
+      scrollViewRef.current?.scrollTo({ y: Math.max(panelAnchorY - 8, 0), animated: true });
+    });
+  }, [panelAnchorY]);
+
+  const openSection = useCallback(
+    (section: SectionId, growthSection?: MentorGrowthSectionId) => {
+      setActiveSection(section);
+      if (growthSection) setMentorGrowthSection(growthSection);
+      setTimeout(() => revealPanel(), 80);
+    },
+    [revealPanel]
+  );
   const handleRefresh = useCallback(async () => {
     await Promise.all([fetchDashboard(true), fetchMentorNews(true)]);
   }, [fetchDashboard, fetchMentorNews]);
@@ -820,6 +836,7 @@ export default function MentorDashboard() {
         searchPlaceholder="Search students, sessions or chat"
       />
     <ScrollView
+      ref={scrollViewRef}
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
@@ -865,7 +882,7 @@ export default function MentorDashboard() {
       <Text style={styles.sectionHeader}>Quick Actions</Text>
       <View style={styles.quickGrid}>
         {mentorServices.map((item) => (
-          <TouchableOpacity key={item.key} style={[styles.quickTile, { borderColor: item.border }]} onPress={item.onPress}>
+          <TouchableOpacity key={item.key} style={[styles.quickTile, { borderColor: item.border }]} onPress={() => { item.onPress(); if (item.key !== "chat" && item.key !== "news") { setTimeout(() => revealPanel(), 80); } }}>
             <View style={[styles.iconBadge, { backgroundColor: item.bg }]}>
               <Ionicons name={item.icon} size={18} color={item.tint} />
             </View>
@@ -876,7 +893,7 @@ export default function MentorDashboard() {
 
       <Text style={styles.sectionHeader}>Mentor Operations</Text>
       <View style={styles.focusStack}>
-        <TouchableOpacity style={styles.focusCard} onPress={() => setActiveSection("requests")}>
+        <TouchableOpacity style={styles.focusCard} onPress={() => openSection("requests")}>
           <Text style={styles.focusCardTitle}>Booking Requests</Text>
           <Text style={styles.meta}>
             {pendingRequests.length > 0
@@ -886,7 +903,7 @@ export default function MentorDashboard() {
           <Text style={styles.focusCardAccent}>Open request approvals</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.focusCard} onPress={() => setActiveSection("sessions")}>
+        <TouchableOpacity style={styles.focusCard} onPress={() => openSection("sessions")}>
           <Text style={styles.focusCardTitle}>Upcoming Sessions</Text>
           <Text style={styles.meta}>
             {upcomingSessions.length > 0
@@ -896,7 +913,7 @@ export default function MentorDashboard() {
           <Text style={styles.focusCardAccent}>Review sessions and meeting links</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.focusCard} onPress={() => setActiveSection("availability")}>
+        <TouchableOpacity style={styles.focusCard} onPress={() => openSection("availability")}>
           <Text style={styles.focusCardTitle}>Availability & Timing</Text>
           <Text style={styles.meta}>
             Weekly slots: {availabilitySlots.length} | Date slots: {dateSpecificSlots.length} | Blocked dates: {blockedDateList.length}
@@ -904,7 +921,7 @@ export default function MentorDashboard() {
           <Text style={styles.focusCardAccent}>Open availability controls</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.focusCard} onPress={() => setActiveSection("pricing")}>
+        <TouchableOpacity style={styles.focusCard} onPress={() => openSection("pricing")}>
           <Text style={styles.focusCardTitle}>Pricing & Profile</Text>
           <Text style={styles.meta}>
             Title: {mentorTitle || mentorProfileSummary?.title || "Not set"} | Fee: INR {sessionPrice}
@@ -933,10 +950,7 @@ export default function MentorDashboard() {
       <View style={styles.focusStack}>
         <TouchableOpacity
           style={styles.focusCard}
-          onPress={() => {
-            setActiveSection("growth");
-            setMentorGrowthSection("live");
-          }}
+          onPress={() => openSection("growth", "live")}
         >
           <Text style={styles.focusCardTitle}>Manage Live Session Pipeline</Text>
           <Text style={styles.meta}>
@@ -948,10 +962,7 @@ export default function MentorDashboard() {
           <TouchableOpacity
             key={item.id}
             style={styles.focusCard}
-            onPress={() => {
-              setActiveSection("growth");
-              setMentorGrowthSection("live");
-            }}
+            onPress={() => openSection("growth", "live")}
           >
             <Text style={styles.focusCardTitle}>{item.title}</Text>
             <Text style={styles.meta}>
@@ -995,24 +1006,24 @@ export default function MentorDashboard() {
 
       <Text style={styles.sectionHeader}>Mentor Guidance</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
-        <TouchableOpacity style={[styles.featureCard, styles.featureCardOne]} onPress={() => setActiveSection("availability")}>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardOne]} onPress={() => openSection("availability")}>
           <Text style={styles.featurePill}>Plan</Text>
           <Text style={styles.featureTitle}>Weekly Slot Planning</Text>
           <Text style={styles.featureCopy}>Publish only the timings you want students to book.</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo]} onPress={() => setActiveSection("pricing")}>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo]} onPress={() => openSection("pricing")}>
           <Text style={styles.featurePill}>Earn</Text>
           <Text style={styles.featureTitle}>Smart Pricing Control</Text>
           <Text style={styles.featureCopy}>Set your profile title and session fee with full flexibility.</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.featureCard, styles.featureCardThree]} onPress={() => setActiveSection("sessions")}>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardThree]} onPress={() => openSection("sessions")}>
           <Text style={styles.featurePill}>Deliver</Text>
           <Text style={styles.featureTitle}>Meet Link Workflow</Text>
           <Text style={styles.featureCopy}>Attach session links at the right time and keep delivery clean.</Text>
         </TouchableOpacity>
       </ScrollView>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectionNav}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectionNav} onLayout={(event) => setPanelAnchorY(event.nativeEvent.layout.y)}>
         <View style={styles.sectionNavRow}>
           {sectionOrder.map((section) => {
             const active = activeSection === section.id;
@@ -1020,7 +1031,7 @@ export default function MentorDashboard() {
               <TouchableOpacity
                 key={section.id}
                 style={[styles.sectionChip, active && styles.sectionChipActive]}
-                onPress={() => setActiveSection(section.id)}
+                onPress={() => openSection(section.id)}
               >
                 <Text style={[styles.sectionChipText, active && styles.sectionChipTextActive]}>{section.label}</Text>
               </TouchableOpacity>
@@ -1230,7 +1241,7 @@ export default function MentorDashboard() {
                   {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
                   <Text style={styles.meta}>Date: {new Date(item.startsAt).toLocaleString()}</Text>
                   <Text style={styles.meta}>
-                    Type: {item.sessionMode === "paid" ? `Paid • INR ${item.price || 0}` : "Free"} | Seats: {item.participantCount || 0}/{item.maxParticipants || 50}
+                    Type: {item.sessionMode === "paid" ? `Paid ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ INR ${item.price || 0}` : "Free"} | Seats: {item.participantCount || 0}/{item.maxParticipants || 50}
                   </Text>
                   <Text style={styles.meta}>Interested learners: {item.interestedCount || 0}</Text>
                   <Text style={styles.meta}>Approval: {item.approvalStatus || "pending"}</Text>
