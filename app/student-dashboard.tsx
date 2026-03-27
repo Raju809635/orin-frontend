@@ -2993,7 +2993,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8
   },
-            <Text style={styles.quizResultEmoji}>Great</Text>
+  quizResultEmoji: { color: "#175CD3", fontWeight: "900", fontSize: 24 },
   quizResultTitle: { color: "#0F172A", fontWeight: "900", fontSize: 22 },
   quizResultMeta: { color: "#475467", fontWeight: "700" }
 });
