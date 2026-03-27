@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, BackHandler, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, BackHandler, Image, Linking, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -7,6 +7,16 @@ import { api } from "@/lib/api";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GlobalHeader from "@/components/global-header";
+
+let RazorpayCheckout: any = null;
+if (Platform.OS !== "web") {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    RazorpayCheckout = require("react-native-razorpay").default;
+  } catch {
+    RazorpayCheckout = null;
+  }
+}
 
 type MentorshipSectionId = "discovery" | "interaction" | "session_management";
 
@@ -21,7 +31,28 @@ type LiveSessionItem = {
   posterImageUrl?: string;
   interestedCount?: number;
   isInterested?: boolean;
+  sessionMode?: "free" | "paid";
+  price?: number;
+  currency?: string;
+  maxParticipants?: number;
+  participantCount?: number;
+  seatsLeft?: number;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  meetingLink?: string;
+  myBooking?: {
+    id: string;
+    paymentMode?: "free" | "razorpay";
+    paymentStatus?: "pending" | "paid" | "failed" | "cancelled";
+    bookingStatus?: "pending_payment" | "booked" | "cancelled";
+  } | null;
   mentor?: { id?: string | null; name?: string };
+};
+type LiveSessionOrderResponse = {
+  mode: "free" | "razorpay";
+  message: string;
+  booking?: { _id: string };
+  order?: { id: string; amount: number; currency: string } | null;
+  razorpayKeyId?: string;
 };
 type SessionHistoryItem = { sessionId: string; mentorName: string; date: string; time: string; notes?: string };
 type SessionItem = {
@@ -177,6 +208,82 @@ export default function MentorshipHubScreen() {
       }
     },
     []
+  );
+
+  const openLiveSessionBooking = useCallback(
+    async (item: LiveSessionItem) => {
+      if (isMentor) return;
+      try {
+        setError(null);
+        if (item.myBooking?.bookingStatus === "booked") {
+          if (item.meetingLink) {
+            await Linking.openURL(item.meetingLink);
+          } else {
+            Alert.alert("Booked", "Your live session booking is already confirmed.");
+          }
+          return;
+        }
+
+        if (item.myBooking?.bookingStatus === "pending_payment" && item.myBooking?.paymentMode === "razorpay") {
+          if (!RazorpayCheckout) {
+            Alert.alert("Unavailable", "Razorpay SDK is unavailable in this build.");
+            return;
+          }
+          const retry = await api.post<LiveSessionOrderResponse>(`/api/network/live-sessions/bookings/${item.myBooking.id}/retry-order`);
+          const paymentResult = await RazorpayCheckout.open({
+            description: item.title || "ORIN Live Session",
+            image: "",
+            currency: retry.data.order?.currency || "INR",
+            key: retry.data.razorpayKeyId,
+            amount: retry.data.order?.amount || 0,
+            name: "ORIN",
+            order_id: retry.data.order?.id,
+            theme: { color: "#1F7A4C" }
+          });
+          await api.post("/api/network/live-sessions/verify-payment", {
+            bookingId: item.myBooking.id,
+            razorpay_order_id: paymentResult.razorpay_order_id,
+            razorpay_payment_id: paymentResult.razorpay_payment_id,
+            razorpay_signature: paymentResult.razorpay_signature
+          });
+          await loadData(true);
+          return;
+        }
+
+        const { data } = await api.post<LiveSessionOrderResponse>(`/api/network/live-sessions/${item.id}/book`);
+        if (data.mode === "free") {
+          await loadData(true);
+          return;
+        }
+
+        if (!RazorpayCheckout) {
+          Alert.alert("Unavailable", "Razorpay SDK is unavailable in this build.");
+          return;
+        }
+
+        const paymentResult = await RazorpayCheckout.open({
+          description: item.title || "ORIN Live Session",
+          image: "",
+          currency: data.order?.currency || "INR",
+          key: data.razorpayKeyId,
+          amount: data.order?.amount || 0,
+          name: "ORIN",
+          order_id: data.order?.id,
+          theme: { color: "#1F7A4C" }
+        });
+        await api.post("/api/network/live-sessions/verify-payment", {
+          bookingId: data.booking?._id,
+          razorpay_order_id: paymentResult.razorpay_order_id,
+          razorpay_payment_id: paymentResult.razorpay_payment_id,
+          razorpay_signature: paymentResult.razorpay_signature
+        });
+        await loadData(true);
+      } catch (e: any) {
+        Alert.alert("Live session", e?.response?.data?.message || e?.description || "Payment not completed.");
+        await loadData(true);
+      }
+    },
+    [isMentor, loadData]
   );
 
   const sections: {
@@ -369,6 +476,9 @@ export default function MentorshipHubScreen() {
                       <Text style={styles.meta}>
                         {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
                       </Text>
+                      <Text style={styles.meta}>
+                        {item.sessionMode === "paid" ? `Paid • INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
+                      </Text>
                       <Text style={styles.meta}>Interested: {item.interestedCount || 0}</Text>
                     </View>
                   ))
@@ -403,6 +513,9 @@ export default function MentorshipHubScreen() {
                       <Text style={styles.meta}>
                         {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
                       </Text>
+                      <Text style={styles.meta}>
+                        {item.sessionMode === "paid" ? `Paid • INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
+                      </Text>
                       <Text style={styles.meta}>Interested: {item.interestedCount || 0}</Text>
                       <TouchableOpacity
                         style={styles.openBtn}
@@ -411,6 +524,19 @@ export default function MentorshipHubScreen() {
                       >
                         <Text style={styles.openBtnText}>
                           {togglingInterestId === item.id ? "Updating..." : item.isInterested ? "Interested" : "I'm Interested"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.openBtn} onPress={() => openLiveSessionBooking(item)}>
+                        <Text style={styles.openBtnText}>
+                          {item.myBooking?.bookingStatus === "booked"
+                            ? item.meetingLink
+                              ? "Join Live"
+                              : "Booked"
+                            : item.myBooking?.bookingStatus === "pending_payment"
+                              ? "Pay Now"
+                              : item.sessionMode === "paid"
+                                ? "Book & Pay"
+                                : "Book Free"}
                         </Text>
                       </TouchableOpacity>
                     </View>

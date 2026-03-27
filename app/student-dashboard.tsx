@@ -254,11 +254,44 @@ type LiveSessionItem = {
   topic?: string;
   description?: string;
   startsAt: string;
+  endsAt?: string | null;
+  durationMinutes?: number;
   posterImageUrl?: string;
   interestedCount?: number;
   isInterested?: boolean;
   meetingLink?: string;
+  sessionMode?: "free" | "paid";
+  price?: number;
+  currency?: string;
+  maxParticipants?: number;
+  participantCount?: number;
+  seatsLeft?: number;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  myBooking?: {
+    id: string;
+    paymentMode?: "free" | "razorpay";
+    paymentStatus?: "pending" | "paid" | "failed" | "cancelled";
+    bookingStatus?: "pending_payment" | "booked" | "cancelled";
+    paymentDueAt?: string | null;
+  } | null;
   mentor?: { id?: string; name?: string };
+};
+
+type LiveSessionOrderResponse = {
+  mode: "free" | "razorpay";
+  message: string;
+  booking?: {
+    _id: string;
+    paymentMode?: "free" | "razorpay";
+    paymentStatus?: "pending" | "paid";
+    bookingStatus?: "pending_payment" | "booked";
+  };
+  order?: {
+    id: string;
+    amount: number;
+    currency: string;
+  } | null;
+  razorpayKeyId?: string;
 };
 
 type ResumeResponse = {
@@ -1239,6 +1272,95 @@ export default function StudentDashboard() {
     }
   }
 
+  async function openLiveSessionBooking(item: LiveSessionItem) {
+    try {
+      setError(null);
+      if (item.myBooking?.bookingStatus === "booked") {
+        if (item.meetingLink) {
+          await Linking.openURL(item.meetingLink);
+        } else {
+          Alert.alert("Booked", "Your live session booking is already confirmed.");
+        }
+        return;
+      }
+
+      if (item.myBooking?.bookingStatus === "pending_payment" && item.myBooking?.paymentMode === "razorpay") {
+        await retryLiveSessionBooking(item);
+        return;
+      }
+
+      const { data } = await api.post<LiveSessionOrderResponse>(`/api/network/live-sessions/${item.id}/book`);
+      if (data.mode === "free") {
+        notify("Live session booked.");
+        await fetchDashboard(true);
+        return;
+      }
+
+      if (!RazorpayCheckout) {
+        Alert.alert("Unavailable", "Razorpay SDK is unavailable in this build.");
+        return;
+      }
+
+      const bookingId = data.booking?._id;
+      const paymentResult = await RazorpayCheckout.open({
+        description: item.title || "ORIN Live Session",
+        image: "",
+        currency: data.order?.currency || "INR",
+        key: data.razorpayKeyId,
+        amount: data.order?.amount || 0,
+        name: "ORIN",
+        order_id: data.order?.id,
+        theme: { color: "#1F7A4C" }
+      });
+
+      await api.post("/api/network/live-sessions/verify-payment", {
+        bookingId,
+        razorpay_order_id: paymentResult.razorpay_order_id,
+        razorpay_payment_id: paymentResult.razorpay_payment_id,
+        razorpay_signature: paymentResult.razorpay_signature
+      });
+      notify("Live session booked successfully.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      Alert.alert("Live session", e?.response?.data?.message || e?.description || "Payment not completed.");
+      await fetchDashboard(true);
+    }
+  }
+
+  async function retryLiveSessionBooking(item: LiveSessionItem) {
+    if (!item.myBooking?.id) return;
+    if (!RazorpayCheckout) {
+      Alert.alert("Unavailable", "Razorpay SDK is unavailable in this build.");
+      return;
+    }
+
+    try {
+      const { data } = await api.post<LiveSessionOrderResponse>(`/api/network/live-sessions/bookings/${item.myBooking.id}/retry-order`);
+      const paymentResult = await RazorpayCheckout.open({
+        description: item.title || "ORIN Live Session",
+        image: "",
+        currency: data.order?.currency || "INR",
+        key: data.razorpayKeyId,
+        amount: data.order?.amount || 0,
+        name: "ORIN",
+        order_id: data.order?.id,
+        theme: { color: "#1F7A4C" }
+      });
+
+      await api.post("/api/network/live-sessions/verify-payment", {
+        bookingId: item.myBooking.id,
+        razorpay_order_id: paymentResult.razorpay_order_id,
+        razorpay_payment_id: paymentResult.razorpay_payment_id,
+        razorpay_signature: paymentResult.razorpay_signature
+      });
+      notify("Live session booked successfully.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      Alert.alert("Live session", e?.response?.data?.message || e?.description || "Payment not completed.");
+      await fetchDashboard(true);
+    }
+  }
+
   if (user?.role !== "student") {
     return (
       <View style={styles.centered}>
@@ -1354,6 +1476,7 @@ export default function StudentDashboard() {
                 <TouchableOpacity onPress={() => item.url && Linking.openURL(item.url)}>
                   <Text style={styles.newsReadMore}>Read More</Text>
                 </TouchableOpacity>
+
               </View>
             </View>
           ))
@@ -1413,7 +1536,10 @@ export default function StudentDashboard() {
               )}
               <Text style={styles.liveBannerTitle} numberOfLines={2}>{item.title}</Text>
               <Text style={styles.liveBannerMeta} numberOfLines={1}>
-                {item.mentor?.name || "Mentor"} • {new Date(item.startsAt).toLocaleString()}
+                {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
+              </Text>
+              <Text style={styles.liveBannerMeta} numberOfLines={1}>
+                {item.sessionMode === "paid" ? `INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
               </Text>
               <View style={styles.liveBannerFooter}>
                 <Text style={styles.liveBannerMeta}>Interested: {item.interestedCount || 0}</Text>
@@ -1430,7 +1556,21 @@ export default function StudentDashboard() {
                         : "I'm in"}
                   </Text>
                 </TouchableOpacity>
+
               </View>
+              <TouchableOpacity style={styles.liveBannerBtn} onPress={() => openLiveSessionBooking(item)}>
+                <Text style={styles.liveBannerBtnText}>
+                  {item.myBooking?.bookingStatus === "booked"
+                    ? item.meetingLink
+                      ? "Join Live"
+                      : "Booked"
+                    : item.myBooking?.bookingStatus === "pending_payment"
+                      ? "Pay Now"
+                      : item.sessionMode === "paid"
+                        ? "Book & Pay"
+                        : "Book Free"}
+                </Text>
+              </TouchableOpacity>
             </View>
           ))
         )}
@@ -1699,6 +1839,9 @@ export default function StudentDashboard() {
               <Text style={styles.liveMeta}>
                 Mentor: {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
               </Text>
+              <Text style={styles.liveBannerMeta} numberOfLines={1}>
+                {item.sessionMode === "paid" ? `INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
+              </Text>
               <Text style={styles.liveMeta}>Interested: {item.interestedCount || 0}</Text>
               <TouchableOpacity
                 style={[styles.matchBtn, togglingLiveInterestId === item.id && styles.disabledButton]}
@@ -1711,6 +1854,20 @@ export default function StudentDashboard() {
                     : item.isInterested
                       ? "Interested"
                       : "I'm Interested"}
+                </Text>
+
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.matchBtn} onPress={() => openLiveSessionBooking(item)}>
+                <Text style={styles.matchBtnText}>
+                  {item.myBooking?.bookingStatus === "booked"
+                    ? item.meetingLink
+                      ? "Join Live"
+                      : "Booked"
+                    : item.myBooking?.bookingStatus === "pending_payment"
+                      ? "Pay Now"
+                      : item.sessionMode === "paid"
+                        ? "Book & Pay"
+                        : "Book Free"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1773,6 +1930,7 @@ export default function StudentDashboard() {
               <Text style={styles.opportunityMeta}>{item.schedule || "Weekly sessions"}</Text>
               <TouchableOpacity style={styles.matchBtn} onPress={() => joinGroup(item.id)}>
                 <Text style={styles.matchBtnText}>Join Group</Text>
+
               </TouchableOpacity>
             </View>
           ))
@@ -2096,20 +2254,20 @@ export default function StudentDashboard() {
             <Ionicons name="close" size={18} color="#1E2B24" />
           </TouchableOpacity>
         </View>
-        <Text style={styles.quizMeta}>🔥 Quiz Streak: {dailyDashboard?.streakDays || dailyQuiz?.streak || 0} days</Text>
+        <Text style={styles.quizMeta}>Streak: {dailyDashboard?.streakDays || dailyQuiz?.streak || 0} days</Text>
         <Text style={styles.quizMeta}>XP: {quizXp}</Text>
         <View style={styles.quizProgressTrack}>
           <View style={[styles.quizProgressFill, { width: `${Math.max(6, progressRatio * 100)}%` }]} />
         </View>
         {quizResult ? (
           <View style={styles.quizResultScreen}>
-            <Text style={styles.quizResultEmoji}>🎉</Text>
+            <Text style={styles.quizResultEmoji}>Great</Text>
             <Text style={styles.quizResultTitle}>Quiz Completed</Text>
             <Text style={styles.quizResultMeta}>
               Score: {quizResult.score}/{quizResult.totalQuestions}
             </Text>
             <Text style={styles.quizResultMeta}>XP Earned: +{quizResult.xpEarned}</Text>
-            <Text style={styles.quizResultMeta}>🔥 Streak: {quizResult.streak} days</Text>
+            <Text style={styles.quizResultMeta}>Streak: {quizResult.streak} days</Text>
             <TouchableOpacity style={styles.dailyTaskButton} onPress={() => setQuizVisible(false)}>
               <Text style={styles.dailyTaskButtonText}>Close</Text>
             </TouchableOpacity>
@@ -2122,7 +2280,7 @@ export default function StudentDashboard() {
             ]}
           >
             <Text style={styles.quizQuestionMeta}>
-              Question {quizIndex + 1}/5 • {currentQuizQuestion.difficulty.toUpperCase()}
+              Question {quizIndex + 1}/5 | {currentQuizQuestion.difficulty.toUpperCase()}
             </Text>
             <Text style={styles.quizQuestionText}>{currentQuizQuestion.question}</Text>
             <View style={styles.quizOptionsWrap}>
@@ -2151,7 +2309,7 @@ export default function StudentDashboard() {
             {quizFeedback ? (
               <View style={styles.quizExplainWrap}>
                 <Text style={quizFeedback === "correct" ? styles.quizFeedbackCorrect : styles.quizFeedbackWrong}>
-                  {quizFeedback === "correct" ? "✅ Correct +10 XP" : `❌ Incorrect. Correct: ${currentQuizQuestion.correct}`}
+                  {quizFeedback === "correct" ? "Correct +10 XP" : `Incorrect. Correct: ${currentQuizQuestion.correct}`}
                 </Text>
                 <Text style={styles.quizExplainText}>{currentQuizQuestion.explanation}</Text>
               </View>
@@ -2835,10 +2993,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 8
   },
-  quizResultEmoji: { fontSize: 38 },
+            <Text style={styles.quizResultEmoji}>Great</Text>
   quizResultTitle: { color: "#0F172A", fontWeight: "900", fontSize: 22 },
   quizResultMeta: { color: "#475467", fontWeight: "700" }
 });
+
+
+
 
 
 

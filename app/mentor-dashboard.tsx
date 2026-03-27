@@ -111,9 +111,19 @@ type LiveSessionItem = {
   topic?: string;
   description?: string;
   startsAt: string;
+  endsAt?: string | null;
+  durationMinutes?: number;
   posterImageUrl?: string;
   interestedCount?: number;
   isInterested?: boolean;
+  sessionMode?: "free" | "paid";
+  price?: number;
+  currency?: string;
+  maxParticipants?: number;
+  participantCount?: number;
+  seatsLeft?: number;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  adminReviewNote?: string;
   mentor?: { id?: string | null; name?: string };
 };
 
@@ -121,6 +131,14 @@ type CertificationItem = {
   id: string;
   title: string;
   level?: string;
+};
+
+type NewsArticle = {
+  title: string;
+  description?: string;
+  source?: string;
+  imageUrl?: string;
+  url?: string;
 };
 
 type SectionId = "overview" | "growth" | "pricing" | "availability" | "sessions" | "requests" | "adminChat";
@@ -222,12 +240,18 @@ export default function MentorDashboard() {
   const [reputationSummary, setReputationSummary] = useState<ReputationSummary | null>(null);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
   const [certifications, setCertifications] = useState<CertificationItem[]>([]);
+  const [mentorNews, setMentorNews] = useState<NewsArticle[]>([]);
+  const [mentorNewsLoading, setMentorNewsLoading] = useState(false);
   const [liveTitle, setLiveTitle] = useState("");
   const [liveTopic, setLiveTopic] = useState("");
   const [liveDescription, setLiveDescription] = useState("");
   const [liveSessionDate, setLiveSessionDate] = useState(nextDates(14)[0]);
   const [liveSessionTime, setLiveSessionTime] = useState("18:00");
   const [livePosterImageUrl, setLivePosterImageUrl] = useState("");
+  const [liveSessionMode, setLiveSessionMode] = useState<"free" | "paid">("free");
+  const [liveSessionPrice, setLiveSessionPrice] = useState("499");
+  const [liveSessionCapacity, setLiveSessionCapacity] = useState("50");
+  const [liveSessionDuration, setLiveSessionDuration] = useState("60");
   const [uploadingLivePoster, setUploadingLivePoster] = useState(false);
   const [creatingLiveSession, setCreatingLiveSession] = useState(false);
   const [mentorProfileSummary, setMentorProfileSummary] = useState<MentorProfilePayload | null>(null);
@@ -251,33 +275,6 @@ export default function MentorDashboard() {
   );
   const mentorServices = [
     {
-      key: "requests",
-      label: "Booking Requests",
-      icon: "mail-open",
-      tint: "#165DFF",
-      bg: "#EAF2FF",
-      border: "#D7E6FF",
-      onPress: () => setActiveSection("requests")
-    },
-    {
-      key: "sessions",
-      label: "Sessions",
-      icon: "videocam",
-      tint: "#0F766E",
-      bg: "#E7F9F6",
-      border: "#CDEEE8",
-      onPress: () => setActiveSection("sessions")
-    },
-    {
-      key: "chat",
-      label: "Student Chats",
-      icon: "chatbubble-ellipses",
-      tint: "#0369A1",
-      bg: "#E8F5FF",
-      border: "#D3EAFA",
-      onPress: () => router.push("/chat" as never)
-    },
-    {
       key: "live",
       label: "Live Sessions",
       icon: "radio",
@@ -290,6 +287,60 @@ export default function MentorDashboard() {
       }
     },
     {
+      key: "requests",
+      label: "Booking Requests",
+      icon: "mail-open",
+      tint: "#165DFF",
+      bg: "#EAF2FF",
+      border: "#D7E6FF",
+      onPress: () => setActiveSection("requests")
+    },
+    {
+      key: "availability",
+      label: "Availability",
+      icon: "calendar",
+      tint: "#067647",
+      bg: "#EAFBF2",
+      border: "#CCF1DA",
+      onPress: () => setActiveSection("availability")
+    },
+    {
+      key: "sessions",
+      label: "Sessions",
+      icon: "videocam",
+      tint: "#0F766E",
+      bg: "#E7F9F6",
+      border: "#CDEEE8",
+      onPress: () => setActiveSection("sessions")
+    },
+    {
+      key: "pricing",
+      label: "Pricing",
+      icon: "cash",
+      tint: "#B54708",
+      bg: "#FFF4E8",
+      border: "#F8DFC2",
+      onPress: () => setActiveSection("pricing")
+    },
+    {
+      key: "chat",
+      label: "Student Chats",
+      icon: "chatbubble-ellipses",
+      tint: "#0369A1",
+      bg: "#E8F5FF",
+      border: "#D3EAFA",
+      onPress: () => router.push("/chat" as never)
+    },
+    {
+      key: "news",
+      label: "News & Updates",
+      icon: "newspaper",
+      tint: "#344054",
+      bg: "#F3F4F6",
+      border: "#E5E7EB",
+      onPress: () => router.push("/news-updates" as never)
+    },
+    {
       key: "admin",
       label: "Admin Chat",
       icon: "shield-checkmark",
@@ -297,15 +348,6 @@ export default function MentorDashboard() {
       bg: "#EEF2F6",
       border: "#DCE3EA",
       onPress: () => setActiveSection("adminChat")
-    },
-    {
-      key: "reviews",
-      label: "Mentor Stats",
-      icon: "bar-chart",
-      tint: "#B45309",
-      bg: "#FFF4E5",
-      border: "#F8E2C2",
-      onPress: () => setActiveSection("overview")
     }
   ] as const;
 
@@ -319,45 +361,6 @@ export default function MentorDashboard() {
       setMentorGrowthSection(growth as MentorGrowthSectionId);
     }
   }, [params.section, params.growth]);
-  const mentorDeepMaps = [
-    {
-      title: "Academic Mentoring Depth",
-      icon: "school",
-      tint: "#1D4ED8",
-      bg: "#EEF4FF",
-      sections: [
-        {
-          name: "Intermediate",
-          tracks: [
-            { name: "MPC", topics: ["Maths", "Physics", "Chemistry"] },
-            { name: "BiPC", topics: ["Botany", "Zoology", "Physics", "Chemistry"] }
-          ]
-        },
-        {
-          name: "Engineering",
-          tracks: [
-            { name: "CSE", topics: ["DSA", "Web", "System Design"] },
-            { name: "ECE", topics: ["Signals", "Embedded", "Communication"] }
-          ]
-        }
-      ]
-    },
-    {
-      title: "Exam Mentoring Depth",
-      icon: "trophy",
-      tint: "#B45309",
-      bg: "#FFF7ED",
-      sections: [
-        {
-          name: "UPSC",
-          tracks: [
-            { name: "Prelims", topics: ["Polity", "History", "Economy"] },
-            { name: "Mains", topics: ["Geography", "Law", "Ethics", "Society"] }
-          ]
-        }
-      ]
-    }
-  ] as const;
   const mentorBanners = [
     {
       key: "mentor-banner-ops",
@@ -462,10 +465,33 @@ export default function MentorDashboard() {
     }
   }, [user?.id]);
 
+  const fetchMentorNews = useCallback(async (refresh = false) => {
+    try {
+      setMentorNewsLoading(true);
+      const response = await api.get<{
+        categories?: Record<string, { articles?: NewsArticle[] }>;
+      }>("/api/news?limit=6&language=en");
+      const categories = response.data?.categories || {};
+      const orderedArticles = [
+        ...(categories.tech?.articles || []),
+        ...(categories.edtech?.articles || []),
+        ...(categories.opportunities?.articles || [])
+      ]
+        .filter((item) => item?.title)
+        .slice(0, 6);
+      setMentorNews(orderedArticles);
+    } catch {
+      setMentorNews([]);
+    } finally {
+      setMentorNewsLoading(false);
+    }
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       fetchDashboard();
-    }, [fetchDashboard])
+      fetchMentorNews();
+    }, [fetchDashboard, fetchMentorNews])
   );
 
   const pendingRequests = useMemo(
@@ -553,6 +579,21 @@ export default function MentorDashboard() {
     return messages.filter((msg) => msg.text.toLowerCase().includes(query));
   }, [messages, searchQuery]);
 
+  const pendingLiveApprovals = useMemo(
+    () => liveSessions.filter((item) => item.approvalStatus === "pending").length,
+    [liveSessions]
+  );
+
+  const approvedLiveSessionsCount = useMemo(
+    () => liveSessions.filter((item) => item.approvalStatus === "approved").length,
+    [liveSessions]
+  );
+
+  const availableSlotCount = useMemo(
+    () => availabilitySlots.length + dateSpecificSlots.length,
+    [availabilitySlots.length, dateSpecificSlots.length]
+  );
+
   const normalizedQuery = searchQuery.trim();
   const totalSearchMatches = useMemo(
     () => filteredConfirmedPaidSessions.length + filteredBookings.length + filteredMessages.length,
@@ -586,6 +627,10 @@ export default function MentorDashboard() {
     filteredMessages.length,
     activeSection
   ]);
+
+  const handleRefresh = useCallback(async () => {
+    await Promise.all([fetchDashboard(true), fetchMentorNews(true)]);
+  }, [fetchDashboard, fetchMentorNews]);
 
   function canSetMeetingLink(session: Session) {
     const start = session.scheduledStart ? new Date(session.scheduledStart).getTime() : NaN;
@@ -718,7 +763,11 @@ export default function MentorDashboard() {
         topic,
         description,
         posterImageUrl: livePosterImageUrl.trim(),
-        startsAt: parsed.toISOString()
+        startsAt: parsed.toISOString(),
+        durationMinutes: Number(liveSessionDuration || 60),
+        sessionMode: liveSessionMode,
+        price: liveSessionMode === "paid" ? Number(liveSessionPrice || 0) : 0,
+        maxParticipants: Number(liveSessionCapacity || 50)
       });
       setLiveTitle("");
       setLiveTopic("");
@@ -726,7 +775,11 @@ export default function MentorDashboard() {
       setLiveSessionDate(nextDates(14)[0]);
       setLiveSessionTime("18:00");
       setLivePosterImageUrl("");
-      notify("Live session created.");
+      setLiveSessionMode("free");
+      setLiveSessionPrice("499");
+      setLiveSessionCapacity("50");
+      setLiveSessionDuration("60");
+      notify("Live session submitted for admin approval.");
       await fetchDashboard(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to create live session.");
@@ -769,7 +822,7 @@ export default function MentorDashboard() {
     <ScrollView
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
-      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={() => fetchDashboard(true)} />}
+      refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />}
     >
       {normalizedQuery ? (
         <>
@@ -784,56 +837,81 @@ export default function MentorDashboard() {
 
       <View style={styles.heroBanner}>
         <Text style={styles.heroEyebrow}>Mentor Workspace</Text>
-        <Text style={styles.heroTitle}>Build Sessions That Students Trust</Text>
-        <Text style={styles.heroSubTitle}>Manage pricing, availability, chat, and live links in one place.</Text>
-      </View>
-
-      <Text style={styles.sectionHeader}>Booking Requests</Text>
-      <View style={styles.focusStack}>
-        {pendingRequests.length === 0 ? (
-          <View style={styles.focusCard}>
-            <Text style={styles.focusCardTitle}>No pending booking requests</Text>
-            <Text style={styles.meta}>New student requests will appear here first.</Text>
-          </View>
-        ) : (
-          pendingRequests.slice(0, 3).map((booking) => (
-            <TouchableOpacity key={booking._id} style={styles.focusCard} onPress={() => setActiveSection("requests")}>
-              <Text style={styles.focusCardTitle}>{booking.student?.name || "Student"}</Text>
-              <Text style={styles.meta}>{new Date(booking.scheduledAt).toLocaleString()}</Text>
-              <Text style={styles.focusCardAccent}>Pending approval</Text>
-            </TouchableOpacity>
-          ))
-        )}
-      </View>
-
-      <Text style={styles.sectionHeader}>Upcoming Sessions</Text>
-      <View style={styles.focusStack}>
-        {upcomingSessions.length === 0 ? (
-          <View style={styles.focusCard}>
-            <Text style={styles.focusCardTitle}>No upcoming sessions</Text>
-            <Text style={styles.meta}>Confirmed sessions will appear here as soon as students complete payment and approval flow.</Text>
-          </View>
-        ) : (
-          upcomingSessions.slice(0, 3).map((session) => (
-            <TouchableOpacity key={session._id} style={styles.focusCard} onPress={() => setActiveSection("sessions")}>
-              <Text style={styles.focusCardTitle}>{session.studentId?.name || "Student"}</Text>
-              <Text style={styles.meta}>
-                {session.date} {session.time} | INR {session.amount}
-              </Text>
-              <Text style={styles.focusCardAccent}>Upcoming session</Text>
-            </TouchableOpacity>
-          ))
-        )}
-      </View>
-
-      <Text style={styles.sectionHeader}>Availability / Slot Management</Text>
-      <TouchableOpacity style={styles.focusCard} onPress={() => setActiveSection("availability")}>
-        <Text style={styles.focusCardTitle}>Manage Mentor Availability</Text>
-        <Text style={styles.meta}>
-          Weekly slots: {availabilitySlots.length} | Date slots: {dateSpecificSlots.length} | Blocked dates: {blockedDateList.length}
+        <Text style={styles.heroTitle}>Run Your Mentor Journey From One Place</Text>
+        <Text style={styles.heroSubTitle}>
+          Create sessions, review bookings, manage pricing, publish live events, and stay updated without hunting through the app.
         </Text>
-        <Text style={styles.focusCardAccent}>Open availability controls</Text>
-      </TouchableOpacity>
+      </View>
+
+      <View style={styles.journeySummaryRow}>
+        <View style={styles.journeySummaryChip}>
+          <Text style={styles.journeySummaryValue}>{pendingRequests.length}</Text>
+          <Text style={styles.journeySummaryLabel}>Requests</Text>
+        </View>
+        <View style={styles.journeySummaryChip}>
+          <Text style={styles.journeySummaryValue}>{upcomingSessions.length}</Text>
+          <Text style={styles.journeySummaryLabel}>Upcoming</Text>
+        </View>
+        <View style={styles.journeySummaryChip}>
+          <Text style={styles.journeySummaryValue}>{pendingLiveApprovals}</Text>
+          <Text style={styles.journeySummaryLabel}>Live Pending</Text>
+        </View>
+        <View style={styles.journeySummaryChip}>
+          <Text style={styles.journeySummaryValue}>{availableSlotCount}</Text>
+          <Text style={styles.journeySummaryLabel}>Open Slots</Text>
+        </View>
+      </View>
+
+      <Text style={styles.sectionHeader}>Quick Actions</Text>
+      <View style={styles.quickGrid}>
+        {mentorServices.map((item) => (
+          <TouchableOpacity key={item.key} style={[styles.quickTile, { borderColor: item.border }]} onPress={item.onPress}>
+            <View style={[styles.iconBadge, { backgroundColor: item.bg }]}>
+              <Ionicons name={item.icon} size={18} color={item.tint} />
+            </View>
+            <Text style={styles.quickTileTitle}>{item.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <Text style={styles.sectionHeader}>Mentor Operations</Text>
+      <View style={styles.focusStack}>
+        <TouchableOpacity style={styles.focusCard} onPress={() => setActiveSection("requests")}>
+          <Text style={styles.focusCardTitle}>Booking Requests</Text>
+          <Text style={styles.meta}>
+            {pendingRequests.length > 0
+              ? `${pendingRequests.length} student request${pendingRequests.length > 1 ? "s" : ""} waiting for your approval`
+              : "No pending booking requests right now."}
+          </Text>
+          <Text style={styles.focusCardAccent}>Open request approvals</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.focusCard} onPress={() => setActiveSection("sessions")}>
+          <Text style={styles.focusCardTitle}>Upcoming Sessions</Text>
+          <Text style={styles.meta}>
+            {upcomingSessions.length > 0
+              ? `${upcomingSessions.length} upcoming paid/confirmed session${upcomingSessions.length > 1 ? "s" : ""}`
+              : "No upcoming sessions yet."}
+          </Text>
+          <Text style={styles.focusCardAccent}>Review sessions and meeting links</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.focusCard} onPress={() => setActiveSection("availability")}>
+          <Text style={styles.focusCardTitle}>Availability & Timing</Text>
+          <Text style={styles.meta}>
+            Weekly slots: {availabilitySlots.length} | Date slots: {dateSpecificSlots.length} | Blocked dates: {blockedDateList.length}
+          </Text>
+          <Text style={styles.focusCardAccent}>Open availability controls</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.focusCard} onPress={() => setActiveSection("pricing")}>
+          <Text style={styles.focusCardTitle}>Pricing & Profile</Text>
+          <Text style={styles.meta}>
+            Title: {mentorTitle || mentorProfileSummary?.title || "Not set"} | Fee: INR {sessionPrice}
+          </Text>
+          <Text style={styles.focusCardAccent}>Update mentor title and pricing</Text>
+        </TouchableOpacity>
+      </View>
 
       <Text style={styles.sectionHeader}>Mentor Stats</Text>
       <View style={styles.metricsRow}>
@@ -851,19 +929,71 @@ export default function MentorDashboard() {
         </View>
       </View>
 
-      <Text style={styles.sectionHeader}>Services</Text>
-      <View style={styles.quickGrid}>
-        {mentorServices.map((item) => (
-          <TouchableOpacity key={item.key} style={[styles.quickTile, { borderColor: item.border }]} onPress={item.onPress}>
-            <View style={[styles.iconBadge, { backgroundColor: item.bg }]}>
-              <Ionicons name={item.icon} size={18} color={item.tint} />
-            </View>
-            <Text style={styles.quickTileTitle}>{item.label}</Text>
+      <Text style={styles.sectionHeader}>Live Sessions</Text>
+      <View style={styles.focusStack}>
+        <TouchableOpacity
+          style={styles.focusCard}
+          onPress={() => {
+            setActiveSection("growth");
+            setMentorGrowthSection("live");
+          }}
+        >
+          <Text style={styles.focusCardTitle}>Manage Live Session Pipeline</Text>
+          <Text style={styles.meta}>
+            Approved: {approvedLiveSessionsCount} | Pending approval: {pendingLiveApprovals} | Total: {liveSessions.length}
+          </Text>
+          <Text style={styles.focusCardAccent}>Create, price, schedule, and monitor live sessions</Text>
+        </TouchableOpacity>
+        {liveSessions.slice(0, 2).map((item) => (
+          <TouchableOpacity
+            key={item.id}
+            style={styles.focusCard}
+            onPress={() => {
+              setActiveSection("growth");
+              setMentorGrowthSection("live");
+            }}
+          >
+            <Text style={styles.focusCardTitle}>{item.title}</Text>
+            <Text style={styles.meta}>
+              {new Date(item.startsAt).toLocaleString()} | {item.sessionMode === "paid" ? `INR ${item.price || 0}` : "Free"}
+            </Text>
+            <Text style={styles.meta}>
+              Seats: {item.participantCount || 0}/{item.maxParticipants || 50} | Status: {item.approvalStatus || "pending"}
+            </Text>
+            <Text style={styles.focusCardAccent}>Open live session controls</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.sectionHeader}>Featured</Text>
+      <Text style={styles.sectionHeader}>Mentor News & Updates</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.newsRow}>
+        {mentorNewsLoading && mentorNews.length === 0 ? (
+          <View style={styles.newsStateCard}>
+            <Text style={styles.meta}>Loading mentor updates...</Text>
+          </View>
+        ) : mentorNews.length === 0 ? (
+          <View style={styles.newsStateCard}>
+            <Text style={styles.meta}>No mentor news available right now.</Text>
+          </View>
+        ) : (
+          mentorNews.map((item, index) => (
+            <TouchableOpacity
+              key={`${item.url || item.title}-${index}`}
+              style={styles.newsCard}
+              onPress={() => router.push("/news-updates" as never)}
+            >
+              <Text style={styles.newsTag}>Mentor Update</Text>
+              <Text style={styles.newsTitle} numberOfLines={3}>{item.title}</Text>
+              <Text style={styles.newsDesc} numberOfLines={3}>
+                {item.description || "Tap to open the full News & Updates section."}
+              </Text>
+              <Text style={styles.newsSource}>{item.source || "ORIN News"}</Text>
+            </TouchableOpacity>
+          ))
+        )}
+      </ScrollView>
+
+      <Text style={styles.sectionHeader}>Mentor Guidance</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
         <TouchableOpacity style={[styles.featureCard, styles.featureCardOne]} onPress={() => setActiveSection("availability")}>
           <Text style={styles.featurePill}>Plan</Text>
@@ -881,48 +1011,6 @@ export default function MentorDashboard() {
           <Text style={styles.featureCopy}>Attach session links at the right time and keep delivery clean.</Text>
         </TouchableOpacity>
       </ScrollView>
-
-      <Text style={styles.sectionHeader}>Live Banners</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bannerRow}>
-        {mentorBanners.map((banner) => (
-          <View key={banner.key} style={[styles.bannerCard, { backgroundColor: banner.bg, borderColor: banner.border }]}>
-            <Text style={styles.bannerTag}>{banner.tag}</Text>
-            <Text style={styles.bannerTitle}>{banner.title}</Text>
-            <Text style={styles.bannerCopy}>{banner.copy}</Text>
-          </View>
-        ))}
-      </ScrollView>
-
-      <Text style={styles.sectionHeader}>Deep Subsections</Text>
-      <View style={styles.mentorMapWrap}>
-        {mentorDeepMaps.map((map) => (
-          <View key={map.title} style={[styles.mentorMapCard, { backgroundColor: map.bg, borderColor: `${map.tint}44` }]}>
-            <View style={styles.mentorMapHead}>
-              <View style={[styles.mentorMapIcon, { backgroundColor: `${map.tint}22` }]}>
-                <Ionicons name={map.icon} size={16} color={map.tint} />
-              </View>
-              <Text style={[styles.mentorMapTitle, { color: map.tint }]}>{map.title}</Text>
-            </View>
-            {map.sections.map((section) => (
-              <View key={`${map.title}-${section.name}`} style={styles.mentorMapSectionCard}>
-                <Text style={styles.mentorMapSectionName}>{section.name}</Text>
-                {section.tracks.map((track) => (
-                  <View key={`${section.name}-${track.name}`} style={styles.mentorMapTrackRow}>
-                    <Text style={styles.mentorMapTrackName}>{track.name}</Text>
-                    <View style={styles.mentorMapTopicWrap}>
-                      {track.topics.map((topic) => (
-                        <Text key={`${track.name}-${topic}`} style={[styles.mentorMapTopicChip, { borderColor: `${map.tint}55` }]}>
-                          {topic}
-                        </Text>
-                      ))}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            ))}
-          </View>
-        ))}
-      </View>
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectionNav}>
         <View style={styles.sectionNavRow}>
@@ -1070,6 +1158,54 @@ export default function MentorDashboard() {
             <Text style={styles.formFieldHint}>
               Live session starts on {toDateLabel(liveSessionDate)} at {toMeridiemTime(liveSessionTime)}.
             </Text>
+            <Text style={styles.formFieldLabel}>Session Type</Text>
+            <View style={styles.rowWrap}>
+              {(["free", "paid"] as const).map((mode) => {
+                const active = liveSessionMode === mode;
+                return (
+                  <TouchableOpacity
+                    key={`live-mode-${mode}`}
+                    style={[styles.dayChip, active && styles.dayChipActive]}
+                    onPress={() => setLiveSessionMode(mode)}
+                  >
+                    <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>
+                      {mode === "paid" ? "Paid Session" : "Free Session"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {liveSessionMode === "paid" ? (
+              <>
+                <Text style={styles.formFieldLabel}>Session Price (INR)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="499"
+                  placeholderTextColor="#98A2B3"
+                  value={liveSessionPrice}
+                  onChangeText={setLiveSessionPrice}
+                  keyboardType="numeric"
+                />
+              </>
+            ) : null}
+            <Text style={styles.formFieldLabel}>Maximum Participants</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="50"
+              placeholderTextColor="#98A2B3"
+              value={liveSessionCapacity}
+              onChangeText={setLiveSessionCapacity}
+              keyboardType="numeric"
+            />
+            <Text style={styles.formFieldLabel}>Duration (minutes)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="60"
+              placeholderTextColor="#98A2B3"
+              value={liveSessionDuration}
+              onChangeText={setLiveSessionDuration}
+              keyboardType="numeric"
+            />
             <TouchableOpacity style={styles.secondaryButton} onPress={uploadLiveSessionPoster} disabled={uploadingLivePoster}>
               <Text style={styles.secondaryButtonText}>
                 {uploadingLivePoster ? "Uploading Poster..." : livePosterImageUrl ? "Change Poster" : "Upload Session Poster"}
@@ -1093,10 +1229,26 @@ export default function MentorDashboard() {
                   <Text style={styles.meta}>{item.topic || "Live mentor session"}</Text>
                   {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
                   <Text style={styles.meta}>Date: {new Date(item.startsAt).toLocaleString()}</Text>
+                  <Text style={styles.meta}>
+                    Type: {item.sessionMode === "paid" ? `Paid • INR ${item.price || 0}` : "Free"} | Seats: {item.participantCount || 0}/{item.maxParticipants || 50}
+                  </Text>
                   <Text style={styles.meta}>Interested learners: {item.interestedCount || 0}</Text>
+                  <Text style={styles.meta}>Approval: {item.approvalStatus || "pending"}</Text>
+                  {item.adminReviewNote ? <Text style={styles.meta}>Admin note: {item.adminReviewNote}</Text> : null}
                 </View>
               ))
             )}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.title}>Live Session Guidance</Text>
+            {mentorBanners.map((banner) => (
+              <View key={banner.key} style={[styles.inlineBanner, { backgroundColor: banner.bg, borderColor: banner.border }]}>
+                <Text style={styles.bannerTag}>{banner.tag}</Text>
+                <Text style={styles.bannerTitle}>{banner.title}</Text>
+                <Text style={styles.bannerCopy}>{banner.copy}</Text>
+              </View>
+            ))}
           </View>
             </>
           ) : null}
@@ -1463,6 +1615,19 @@ const styles = StyleSheet.create({
   heroEyebrow: { color: "#165DFF", fontWeight: "700", marginBottom: 6 },
   heroTitle: { color: "#11261E", fontSize: 28, fontWeight: "900", lineHeight: 34 },
   heroSubTitle: { marginTop: 8, color: "#4A5B53", fontWeight: "500", lineHeight: 20 },
+  journeySummaryRow: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 14 },
+  journeySummaryChip: {
+    minWidth: "22%",
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8E4DE",
+    borderRadius: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 12
+  },
+  journeySummaryValue: { color: "#1F7A4C", fontWeight: "800", fontSize: 20 },
+  journeySummaryLabel: { marginTop: 3, color: "#667085", fontWeight: "700", fontSize: 12 },
   sectionHeader: { fontSize: 16, fontWeight: "800", color: "#1E2B24", marginBottom: 10 },
   quickGrid: { marginBottom: 14, flexDirection: "row", flexWrap: "wrap", gap: 10 },
   quickTile: {
@@ -1514,6 +1679,12 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12
   },
+  inlineBanner: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12
+  },
   bannerTag: {
     alignSelf: "flex-start",
     borderRadius: 999,
@@ -1528,6 +1699,38 @@ const styles = StyleSheet.create({
   },
   bannerTitle: { fontSize: 16, color: "#13251E", fontWeight: "800", lineHeight: 20 },
   bannerCopy: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
+  newsRow: { gap: 10, marginBottom: 10, paddingBottom: 4 },
+  newsStateCard: {
+    width: 240,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8E4DE",
+    borderRadius: 16,
+    padding: 14
+  },
+  newsCard: {
+    width: 260,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8E4DE",
+    borderRadius: 16,
+    padding: 14
+  },
+  newsTag: {
+    alignSelf: "flex-start",
+    backgroundColor: "#F5F3FF",
+    color: "#5925DC",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    overflow: "hidden",
+    fontSize: 11,
+    fontWeight: "800",
+    marginBottom: 8
+  },
+  newsTitle: { color: "#13251E", fontWeight: "800", fontSize: 16, lineHeight: 21 },
+  newsDesc: { marginTop: 6, color: "#53635C", lineHeight: 18, fontWeight: "500" },
+  newsSource: { marginTop: 10, color: "#667085", fontWeight: "700", fontSize: 12 },
   focusStack: { gap: 10, marginBottom: 10 },
   focusCard: {
     backgroundColor: "#FFFFFF",
