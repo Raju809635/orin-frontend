@@ -217,6 +217,12 @@ export default function MentorProfileScreen() {
         "Payment or booking failed.";
       setError(apiMessage);
       notify(apiMessage);
+      if (String(apiMessage).toLowerCase().includes("payment") || String(e?.code || "").toLowerCase().includes("razorpay")) {
+        Alert.alert(
+          "Payment Pending",
+          "If payment was not completed, you can finish it later from Pending Payments in your session panel."
+        );
+      }
     } finally {
       setIsSubmitting(false);
     }

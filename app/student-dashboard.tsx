@@ -7,6 +7,7 @@ import {
   BackHandler,
   Image,
   Linking,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -28,6 +29,16 @@ import { FEATURE_FLAGS } from "@/constants/featureFlags";
 import { getStoredNewsLanguage, NewsLanguageCode } from "@/utils/newsLanguage";
 import { markdownToPlainText } from "@/utils/textFormat";
 import GlobalHeader from "@/components/global-header";
+
+let RazorpayCheckout: any = null;
+if (Platform.OS !== "web") {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    RazorpayCheckout = require("react-native-razorpay").default;
+  } catch {
+    RazorpayCheckout = null;
+  }
+}
 
 const DASHBOARD_STALE_MS = 2 * 60 * 1000;
 const NEWS_STALE_MS = 5 * 60 * 1000;
@@ -68,6 +79,25 @@ type Session = {
     currency: string;
     dueAt?: string | null;
   } | null;
+};
+
+type RazorpayRetryOrderResponse = {
+  mode: "razorpay";
+  message: string;
+  session: {
+    _id: string;
+  };
+  order: {
+    id: string;
+    amount: number;
+    currency: string;
+  };
+  razorpayKeyId?: string;
+  paymentInstructions?: {
+    amount: number;
+    currency: string;
+    dueAt?: string | null;
+  };
 };
 
 type NetworkPost = {
@@ -714,8 +744,8 @@ export default function StudentDashboard() {
     () =>
       sessions.filter(
         (session) =>
-          session.paymentMode === "manual" &&
           session.status !== "cancelled" &&
+          session.sessionStatus === "booked" &&
           (session.paymentStatus === "pending" || session.paymentStatus === "rejected")
       ),
     [sessions]
@@ -910,6 +940,54 @@ export default function StudentDashboard() {
       await fetchDashboard(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to submit payment proof.");
+    } finally {
+      setSubmittingBySession((prev) => ({ ...prev, [session._id]: false }));
+    }
+  }
+
+  async function retryRazorpayPayment(session: Session) {
+    if (!RazorpayCheckout) {
+      setError("Razorpay SDK unavailable. Build a dev/prod APK to use Razorpay.");
+      return;
+    }
+
+    try {
+      setSubmittingBySession((prev) => ({ ...prev, [session._id]: true }));
+      setError(null);
+      const { data } = await api.post<RazorpayRetryOrderResponse>(`/api/sessions/${session._id}/retry-order`);
+      const paymentResult = await RazorpayCheckout.open({
+        description: "ORIN Mentorship Session",
+        image: "",
+        currency: data.order?.currency || "INR",
+        key: data.razorpayKeyId,
+        amount: data.order?.amount || 0,
+        name: "ORIN",
+        order_id: data.order?.id,
+        prefill: {
+          email: user?.email || "",
+          contact: "",
+          name: user?.name || ""
+        },
+        theme: { color: "#1F7A4C" }
+      });
+
+      await api.post("/api/sessions/verify-payment", {
+        sessionId: session._id,
+        razorpay_order_id: paymentResult.razorpay_order_id,
+        razorpay_payment_id: paymentResult.razorpay_payment_id,
+        razorpay_signature: paymentResult.razorpay_signature
+      });
+
+      notify("Payment successful. Session confirmed.");
+      await fetchDashboard(true, true);
+    } catch (e: any) {
+      const message =
+        e?.response?.data?.message ||
+        e?.description ||
+        "Payment not completed. You can try again from Pending Payments.";
+      setError(message);
+      notify(message);
+      await fetchDashboard(true, true);
     } finally {
       setSubmittingBySession((prev) => ({ ...prev, [session._id]: false }));
     }
@@ -1871,11 +1949,12 @@ export default function StudentDashboard() {
           <View style={styles.panel}>
             <Text style={[styles.panelTitle, styles.panelTitlePending]}>Pending Payments</Text>
             {filteredPendingPaymentSessions.length === 0 ? (
-              <Text style={styles.empty}>No pending manual payments.</Text>
+              <Text style={styles.empty}>No pending payments.</Text>
             ) : (
               filteredPendingPaymentSessions.map((session) => {
                 const instructions = session.paymentInstructions;
                 const isSubmitting = Boolean(submittingBySession[session._id]);
+                const isManualPayment = session.paymentMode === "manual";
                 return (
                   <View key={session._id} style={[styles.card, styles.cardPending]}>
                     <Text style={styles.title}>{session.mentorId?.name || "Mentor"}</Text>
@@ -1886,32 +1965,50 @@ export default function StudentDashboard() {
                     {session.paymentRejectReason ? (
                       <Text style={styles.error}>Reason: {session.paymentRejectReason}</Text>
                     ) : null}
-                    <Text style={styles.meta}>UPI ID: {instructions?.upiId || "Not configured"}</Text>
-                    {instructions?.qrImageUrl ? (
-                      <Image source={{ uri: instructions.qrImageUrl }} style={styles.qrImage} resizeMode="contain" />
+                    {isManualPayment ? (
+                      <>
+                        <Text style={styles.meta}>UPI ID: {instructions?.upiId || "Not configured"}</Text>
+                        {instructions?.qrImageUrl ? (
+                          <Image source={{ uri: instructions.qrImageUrl }} style={styles.qrImage} resizeMode="contain" />
+                        ) : (
+                          <Text style={styles.meta}>QR image not configured by admin.</Text>
+                        )}
+                        <Text style={styles.meta}>
+                          Pay before:{" "}
+                          {instructions?.dueAt ? new Date(instructions.dueAt).toLocaleString() : "No due time set"}
+                        </Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="Transaction reference (optional)"
+                          value={transactionRefBySession[session._id] || ""}
+                          onChangeText={(value) =>
+                            setTransactionRefBySession((prev) => ({ ...prev, [session._id]: value }))
+                          }
+                        />
+                      </>
                     ) : (
-                      <Text style={styles.meta}>QR image not configured by admin.</Text>
+                      <>
+                        <Text style={styles.meta}>Secure Razorpay payment is still pending for this slot.</Text>
+                        <Text style={styles.meta}>
+                          Complete payment before:{" "}
+                          {session.paymentDueAt ? new Date(session.paymentDueAt).toLocaleString() : "the payment window expires"}
+                        </Text>
+                      </>
                     )}
-                    <Text style={styles.meta}>
-                      Pay before:{" "}
-                      {instructions?.dueAt ? new Date(instructions.dueAt).toLocaleString() : "No due time set"}
-                    </Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="Transaction reference (optional)"
-                      value={transactionRefBySession[session._id] || ""}
-                      onChangeText={(value) =>
-                        setTransactionRefBySession((prev) => ({ ...prev, [session._id]: value }))
-                      }
-                    />
                     <View style={styles.paymentActionsRow}>
                       <TouchableOpacity
                         style={[styles.joinButton, styles.paymentPrimaryAction]}
-                        onPress={() => submitManualProof(session)}
+                        onPress={() => (isManualPayment ? submitManualProof(session) : retryRazorpayPayment(session))}
                         disabled={isSubmitting}
                       >
                         <Text style={styles.joinButtonText}>
-                          {isSubmitting ? "Submitting..." : "Upload Screenshot & Submit"}
+                          {isSubmitting
+                            ? isManualPayment
+                              ? "Submitting..."
+                              : "Opening..."
+                            : isManualPayment
+                              ? "Upload Screenshot & Submit"
+                              : "Pay Now"}
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity

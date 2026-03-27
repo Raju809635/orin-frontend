@@ -4,6 +4,7 @@ import {
   Alert,
   Linking,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,16 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { api } from "@/lib/api";
+
+let RazorpayCheckout: any = null;
+if (Platform.OS !== "web") {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    RazorpayCheckout = require("react-native-razorpay").default;
+  } catch {
+    RazorpayCheckout = null;
+  }
+}
 
 type SessionHistoryItem = {
   sessionId: string;
@@ -29,11 +40,27 @@ type SessionItem = {
   time: string;
   amount: number;
   currency?: string;
+  paymentMode?: "manual" | "razorpay";
   paymentStatus?: string;
+  paymentDueAt?: string | null;
   sessionStatus?: string;
   status?: string;
   meetingLink?: string;
+  paymentInstructions?: {
+    upiId: string;
+    qrImageUrl: string;
+    amount: number;
+    currency: string;
+    dueAt?: string | null;
+  } | null;
   mentorId?: { name?: string } | null;
+};
+
+type RetryOrderResponse = {
+  mode: "razorpay";
+  session: { _id: string };
+  order: { id: string; amount: number; currency: string };
+  razorpayKeyId?: string;
 };
 
 export default function StudentSessionsScreen() {
@@ -63,7 +90,7 @@ export default function StudentSessionsScreen() {
       setError(null);
       const [historyRes, sessionsRes] = await Promise.allSettled([
         api.get<SessionHistoryItem[]>("/api/network/session-history"),
-        api.get<SessionItem[]>("/api/sessions/my")
+        api.get<SessionItem[]>("/api/sessions/student/me")
       ]);
       setHistory(historyRes.status === "fulfilled" ? historyRes.value.data || [] : []);
       setSessions(sessionsRes.status === "fulfilled" ? sessionsRes.value.data || [] : []);
@@ -82,17 +109,54 @@ export default function StudentSessionsScreen() {
   );
 
   const pendingPayments = useMemo(
-    () => sessions.filter((s) => s.paymentStatus === "pending" || s.paymentStatus === "rejected"),
+    () =>
+      sessions.filter(
+        (s) =>
+          s.status !== "cancelled" &&
+          s.sessionStatus === "booked" &&
+          (s.paymentStatus === "pending" || s.paymentStatus === "rejected")
+      ),
     [sessions]
   );
   const waitingVerification = useMemo(
-    () => sessions.filter((s) => s.paymentStatus === "waiting_verification"),
+    () => sessions.filter((s) => s.paymentMode === "manual" && s.status !== "cancelled" && s.paymentStatus === "waiting_verification"),
     [sessions]
   );
   const confirmedSessions = useMemo(
-    () => sessions.filter((s) => s.paymentStatus === "verified" || s.sessionStatus === "confirmed"),
+    () => sessions.filter((s) => (s.paymentStatus === "paid" || s.paymentStatus === "verified") && s.sessionStatus === "confirmed"),
     [sessions]
   );
+
+  async function retryRazorpayPayment(session: SessionItem) {
+    if (!RazorpayCheckout) {
+      Alert.alert("Unavailable", "Razorpay SDK is unavailable in this build.");
+      return;
+    }
+    try {
+      const { data } = await api.post<RetryOrderResponse>(`/api/sessions/${session._id}/retry-order`);
+      const paymentResult = await RazorpayCheckout.open({
+        description: "ORIN Mentorship Session",
+        image: "",
+        currency: data.order?.currency || "INR",
+        key: data.razorpayKeyId,
+        amount: data.order?.amount || 0,
+        name: "ORIN",
+        order_id: data.order?.id,
+        theme: { color: "#1F7A4C" }
+      });
+      await api.post("/api/sessions/verify-payment", {
+        sessionId: session._id,
+        razorpay_order_id: paymentResult.razorpay_order_id,
+        razorpay_payment_id: paymentResult.razorpay_payment_id,
+        razorpay_signature: paymentResult.razorpay_signature
+      });
+      Alert.alert("Confirmed", "Payment successful. Session confirmed.");
+      loadData(true);
+    } catch (e: any) {
+      Alert.alert("Payment not completed", e?.response?.data?.message || e?.description || "You can try again from Pending Payments.");
+      loadData(true);
+    }
+  }
 
   async function saveNote() {
     const note = noteModal.note.trim();
@@ -160,12 +224,24 @@ export default function StudentSessionsScreen() {
         ))}
 
         <Text style={[styles.sectionTitle, styles.pending]}>Pending Payments</Text>
-        {pendingPayments.length === 0 ? <Text style={styles.meta}>No pending manual payments.</Text> : null}
+        {pendingPayments.length === 0 ? <Text style={styles.meta}>No pending payments.</Text> : null}
         {pendingPayments.map((item) => (
           <View key={item._id} style={styles.card}>
             <Text style={styles.cardTitle}>{item.mentorId?.name || "Mentor"}</Text>
             <Text style={styles.meta}>{item.date} {item.time} | Amount: {item.currency || "INR"} {item.amount}</Text>
             <Text style={styles.meta}>Payment: {item.paymentStatus || "pending"}</Text>
+            {item.paymentMode === "manual" ? (
+              <Text style={styles.meta}>Complete manual payment and upload proof from the mentor booking screen.</Text>
+            ) : (
+              <>
+                <Text style={styles.meta}>
+                  Complete Razorpay payment before: {item.paymentDueAt ? new Date(item.paymentDueAt).toLocaleString() : "the payment window expires"}
+                </Text>
+                <TouchableOpacity style={[styles.primaryBtn, styles.joinBtn]} onPress={() => retryRazorpayPayment(item)}>
+                  <Text style={styles.primaryBtnText}>Pay Now</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         ))}
 

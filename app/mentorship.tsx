@@ -66,7 +66,7 @@ export default function MentorshipHubScreen() {
         api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
         api.get<LiveSessionItem[]>("/api/network/live-sessions"),
         api.get<SessionHistoryItem[]>("/api/network/session-history"),
-        api.get<SessionItem[]>("/api/sessions/my"),
+        api.get<SessionItem[]>(isMentor ? "/api/sessions/mentor/me" : "/api/sessions/student/me"),
         api.get<BookingItem[]>("/api/bookings/my")
       ]);
       setVerifiedMentors(verifiedRes.status === "fulfilled" ? verifiedRes.value.data || [] : []);
@@ -81,7 +81,7 @@ export default function MentorshipHubScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [isMentor]);
 
   useFocusEffect(
     useCallback(() => {
@@ -111,15 +111,21 @@ export default function MentorshipHubScreen() {
   );
 
   const pendingSessions = useMemo(
-    () => sessions.filter((s) => s.paymentStatus === "pending" || s.paymentStatus === "rejected"),
+    () =>
+      sessions.filter(
+        (s) =>
+          s.status !== "cancelled" &&
+          s.sessionStatus === "booked" &&
+          (s.paymentStatus === "pending" || s.paymentStatus === "rejected")
+      ),
     [sessions]
   );
   const waitingSessions = useMemo(
-    () => sessions.filter((s) => s.paymentStatus === "waiting_verification"),
+    () => sessions.filter((s) => s.paymentMode === "manual" && s.status !== "cancelled" && s.paymentStatus === "waiting_verification"),
     [sessions]
   );
   const confirmedSessions = useMemo(
-    () => sessions.filter((s) => s.paymentStatus === "verified" || s.sessionStatus === "confirmed"),
+    () => sessions.filter((s) => (s.paymentStatus === "paid" || s.paymentStatus === "verified") && s.sessionStatus === "confirmed"),
     [sessions]
   );
   const completedSessions = useMemo(
