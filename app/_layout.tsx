@@ -327,39 +327,43 @@ function RootDrawer() {
 
   if (isBootstrapping) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={[styles.loadingText, { color: colors.text }]}>Loading ORIN...</Text>
-      </View>
+      <OrinStartupScreen
+        colors={colors}
+        title="ORIN"
+        subtitle="Loading your workspace..."
+        showSpinner
+      />
     );
   }
 
   if (isAuthenticated && (isCheckingBackend || !isBackendReady)) {
     return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background, paddingHorizontal: 24 }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
-        <Text style={[styles.loadingText, { color: colors.text }]}>
-          {isCheckingBackend ? "Connecting to ORIN..." : "ORIN is waking up. Tap retry in a moment."}
-        </Text>
-        {!isCheckingBackend ? (
-          <TouchableOpacity
-            style={[styles.retryButton, { backgroundColor: colors.accent }]}
-            onPress={async () => {
-              setIsCheckingBackend(true);
-              try {
-                const ready = await pingBackendReady();
-                setIsBackendReady(Boolean(ready));
-              } catch {
-                setIsBackendReady(false);
-              } finally {
-                setIsCheckingBackend(false);
-              }
-            }}
-          >
-            <Text style={[styles.retryButtonText, { color: colors.accentText }]}>Retry Connection</Text>
-          </TouchableOpacity>
-        ) : null}
-      </View>
+      <OrinStartupScreen
+        colors={colors}
+        title="ORIN"
+        subtitle={isCheckingBackend ? "Preparing your journey..." : "ORIN is waking up. Tap retry in a moment."}
+        showSpinner={isCheckingBackend}
+        action={
+          !isCheckingBackend ? (
+            <TouchableOpacity
+              style={[styles.retryButton, { backgroundColor: colors.accent }]}
+              onPress={async () => {
+                setIsCheckingBackend(true);
+                try {
+                  const ready = await pingBackendReady();
+                  setIsBackendReady(Boolean(ready));
+                } catch {
+                  setIsBackendReady(false);
+                } finally {
+                  setIsCheckingBackend(false);
+                }
+              }}
+            >
+              <Text style={[styles.retryButtonText, { color: colors.accentText }]}>Retry Connection</Text>
+            </TouchableOpacity>
+          ) : null
+        }
+      />
     );
   }
 
@@ -615,6 +619,110 @@ function AnimatedTabButton({
   );
 }
 
+function OrinStartupScreen({
+  colors,
+  title,
+  subtitle,
+  showSpinner = false,
+  action
+}: {
+  colors: {
+    background: string;
+    surface: string;
+    accent: string;
+    accentText: string;
+    text: string;
+    textMuted: string;
+    border: string;
+  };
+  title: string;
+  subtitle: string;
+  showSpinner?: boolean;
+  action?: React.ReactNode;
+}) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  const glow = useRef(new Animated.Value(0.3)).current;
+  const copyFade = useRef(new Animated.Value(0.65)).current;
+
+  useEffect(() => {
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.parallel([
+          Animated.timing(pulse, {
+            toValue: 1.08,
+            duration: 850,
+            useNativeDriver: true
+          }),
+          Animated.timing(glow, {
+            toValue: 1,
+            duration: 850,
+            useNativeDriver: false
+          }),
+          Animated.timing(copyFade, {
+            toValue: 1,
+            duration: 850,
+            useNativeDriver: true
+          })
+        ]),
+        Animated.parallel([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 850,
+            useNativeDriver: true
+          }),
+          Animated.timing(glow, {
+            toValue: 0.3,
+            duration: 850,
+            useNativeDriver: false
+          }),
+          Animated.timing(copyFade, {
+            toValue: 0.7,
+            duration: 850,
+            useNativeDriver: true
+          })
+        ])
+      ])
+    );
+
+    pulseLoop.start();
+    return () => pulseLoop.stop();
+  }, [copyFade, glow, pulse]);
+
+  const haloScale = glow.interpolate({
+    inputRange: [0.3, 1],
+    outputRange: [1, 1.18]
+  });
+
+  return (
+    <View style={[styles.loadingContainer, { backgroundColor: colors.background, paddingHorizontal: 24 }]}>
+      <View style={styles.brandWrap}>
+        <Animated.View
+          style={[
+            styles.brandHalo,
+            {
+              backgroundColor: colors.accent,
+              opacity: glow.interpolate({
+                inputRange: [0.3, 1],
+                outputRange: [0.08, 0.18]
+              }),
+              transform: [{ scale: haloScale }]
+            }
+          ]}
+        />
+        <Animated.View style={{ transform: [{ scale: pulse }] }}>
+          <Image source={require("../assets/images/splash-icon.png")} style={styles.brandLogo} resizeMode="contain" />
+        </Animated.View>
+      </View>
+      <Text style={[styles.startupTitle, { color: colors.text }]}>{title}</Text>
+      <Animated.Text style={[styles.startupSubtitle, { color: colors.textMuted, opacity: copyFade }]}>
+        {subtitle}
+      </Animated.Text>
+      {showSpinner ? <ActivityIndicator size="small" color={colors.accent} style={styles.startupSpinner} /> : null}
+      {action}
+    </View>
+  );
+}
+
 export default function Layout() {
   return (
     <ThemeProvider>
@@ -695,6 +803,40 @@ const styles = StyleSheet.create({
     backgroundColor: "#F4F9F6",
     alignItems: "center",
     justifyContent: "center"
+  },
+  brandWrap: {
+    width: 152,
+    height: 152,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 18
+  },
+  brandHalo: {
+    position: "absolute",
+    width: 132,
+    height: 132,
+    borderRadius: 66
+  },
+  brandLogo: {
+    width: 108,
+    height: 108,
+    borderRadius: 24
+  },
+  startupTitle: {
+    fontSize: 30,
+    fontWeight: "900",
+    letterSpacing: 0.4
+  },
+  startupSubtitle: {
+    marginTop: 10,
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
+    maxWidth: 280,
+    lineHeight: 22
+  },
+  startupSpinner: {
+    marginTop: 18
   },
   loadingText: {
     marginTop: 12,
