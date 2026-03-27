@@ -1136,6 +1136,16 @@ export default function MentorDashboard() {
               onChangeText={setLiveDescription}
               multiline
             />
+            <Text style={styles.formFieldLabel}>Session Poster</Text>
+            <Text style={styles.formFieldHint}>
+              Add a banner or poster so students understand the session topic before they book.
+            </Text>
+            <TouchableOpacity style={styles.secondaryButton} onPress={uploadLiveSessionPoster} disabled={uploadingLivePoster}>
+              <Text style={styles.secondaryButtonText}>
+                {uploadingLivePoster ? "Uploading Poster..." : livePosterImageUrl ? "Change Poster" : "Upload Session Poster"}
+              </Text>
+            </TouchableOpacity>
+            {livePosterImageUrl ? <Image source={{ uri: livePosterImageUrl }} style={styles.livePosterPreview} /> : null}
             <Text style={styles.formFieldLabel}>Select Date</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
               {calendarDateOptions.map((date) => {
@@ -1217,12 +1227,6 @@ export default function MentorDashboard() {
               onChangeText={setLiveSessionDuration}
               keyboardType="numeric"
             />
-            <TouchableOpacity style={styles.secondaryButton} onPress={uploadLiveSessionPoster} disabled={uploadingLivePoster}>
-              <Text style={styles.secondaryButtonText}>
-                {uploadingLivePoster ? "Uploading Poster..." : livePosterImageUrl ? "Change Poster" : "Upload Session Poster"}
-              </Text>
-            </TouchableOpacity>
-            {livePosterImageUrl ? <Image source={{ uri: livePosterImageUrl }} style={styles.livePosterPreview} /> : null}
             <TouchableOpacity style={styles.primaryButton} onPress={createMentorLiveSession} disabled={creatingLiveSession}>
               <Text style={styles.primaryButtonText}>{creatingLiveSession ? "Creating..." : "Create Live Session"}</Text>
             </TouchableOpacity>
@@ -1241,7 +1245,7 @@ export default function MentorDashboard() {
                   {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
                   <Text style={styles.meta}>Date: {new Date(item.startsAt).toLocaleString()}</Text>
                   <Text style={styles.meta}>
-                    Type: {item.sessionMode === "paid" ? `Paid ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ INR ${item.price || 0}` : "Free"} | Seats: {item.participantCount || 0}/{item.maxParticipants || 50}
+                    Type: {item.sessionMode === "paid" ? `Paid | INR ${item.price || 0}` : "Free"} | Seats: {item.participantCount || 0}/{item.maxParticipants || 50}
                   </Text>
                   <Text style={styles.meta}>Interested learners: {item.interestedCount || 0}</Text>
                   <Text style={styles.meta}>Approval: {item.approvalStatus || "pending"}</Text>
