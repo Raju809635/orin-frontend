@@ -995,22 +995,22 @@ export default function StudentDashboard() {
 
   function cancelPendingSession(session: Session) {
     Alert.alert(
-      "Cancel session?",
-      "You can cancel this pending payment session now. This action cannot be undone.",
+      "Delete pending session?",
+      "This will remove the unpaid pending session and release the slot so someone else can book it.",
       [
         { text: "Keep", style: "cancel" },
         {
-          text: "Cancel Session",
+          text: "Delete Session",
           style: "destructive",
           onPress: async () => {
             try {
               setSubmittingBySession((prev) => ({ ...prev, [session._id]: true }));
               setError(null);
               await api.patch(`/api/sessions/${session._id}/cancel`);
-              notify("Session cancelled.");
+              notify("Pending session deleted. Slot released.");
               await fetchDashboard(true);
             } catch (e: any) {
-              setError(e?.response?.data?.message || "Failed to cancel session.");
+              setError(e?.response?.data?.message || "Failed to delete pending session.");
             } finally {
               setSubmittingBySession((prev) => ({ ...prev, [session._id]: false }));
             }
@@ -2016,7 +2016,7 @@ export default function StudentDashboard() {
                         onPress={() => cancelPendingSession(session)}
                         disabled={isSubmitting}
                       >
-                        <Text style={styles.cancelButtonText}>Cancel</Text>
+                        <Text style={styles.cancelButtonText}>Delete</Text>
                       </TouchableOpacity>
                     </View>
                   </View>

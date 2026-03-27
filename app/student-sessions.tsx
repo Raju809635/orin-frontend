@@ -158,6 +158,29 @@ export default function StudentSessionsScreen() {
     }
   }
 
+  function deletePendingSession(session: SessionItem) {
+    Alert.alert(
+      "Delete pending session?",
+      "This will remove the unpaid pending session and release the slot so someone else can book it.",
+      [
+        { text: "Keep", style: "cancel" },
+        {
+          text: "Delete Session",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await api.patch(`/api/sessions/${session._id}/cancel`);
+              Alert.alert("Deleted", "Pending session deleted. Slot released.");
+              loadData(true);
+            } catch (e: any) {
+              Alert.alert("Failed", e?.response?.data?.message || "Failed to delete pending session.");
+            }
+          }
+        }
+      ]
+    );
+  }
+
   async function saveNote() {
     const note = noteModal.note.trim();
     if (!note) {
@@ -231,15 +254,27 @@ export default function StudentSessionsScreen() {
             <Text style={styles.meta}>{item.date} {item.time} | Amount: {item.currency || "INR"} {item.amount}</Text>
             <Text style={styles.meta}>Payment: {item.paymentStatus || "pending"}</Text>
             {item.paymentMode === "manual" ? (
-              <Text style={styles.meta}>Complete manual payment and upload proof from the mentor booking screen.</Text>
+              <>
+                <Text style={styles.meta}>Complete manual payment and upload proof from the mentor booking screen.</Text>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity style={[styles.secondaryBtn, styles.deleteBtn]} onPress={() => deletePendingSession(item)}>
+                    <Text style={[styles.secondaryBtnText, styles.deleteBtnText]}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
             ) : (
               <>
                 <Text style={styles.meta}>
                   Complete Razorpay payment before: {item.paymentDueAt ? new Date(item.paymentDueAt).toLocaleString() : "the payment window expires"}
                 </Text>
-                <TouchableOpacity style={[styles.primaryBtn, styles.joinBtn]} onPress={() => retryRazorpayPayment(item)}>
-                  <Text style={styles.primaryBtnText}>Pay Now</Text>
-                </TouchableOpacity>
+                <View style={styles.actionRow}>
+                  <TouchableOpacity style={[styles.primaryBtn, styles.joinBtn, styles.flexBtn]} onPress={() => retryRazorpayPayment(item)}>
+                    <Text style={styles.primaryBtnText}>Pay Now</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.secondaryBtn, styles.deleteBtn, styles.flexBtn]} onPress={() => deletePendingSession(item)}>
+                    <Text style={[styles.secondaryBtnText, styles.deleteBtnText]}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
               </>
             )}
           </View>
@@ -353,6 +388,9 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: "#fff", fontWeight: "800" },
   secondaryBtn: { borderWidth: 1, borderColor: "#1F7A4C", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#fff" },
   secondaryBtnText: { color: "#1F7A4C", fontWeight: "800" },
+  deleteBtn: { borderColor: "#B42318" },
+  deleteBtnText: { color: "#B42318" },
+  flexBtn: { flex: 1, alignItems: "center" },
   joinBtn: { alignSelf: "stretch", alignItems: "center", marginTop: 4 },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "flex-end" },
   modalCard: { backgroundColor: "#fff", borderTopLeftRadius: 18, borderTopRightRadius: 18, padding: 16, gap: 10 },
