@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -97,64 +97,54 @@ export default function MentorProfileScreen() {
   const [transactionReference, setTransactionReference] = useState("");
   const [submittingProof, setSubmittingProof] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function loadMentor() {
-      if (!mentorId) {
-        setError("Missing mentor id.");
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        setIsLoading(true);
-        setError(null);
-        const [profileRes, availabilityRes] = await Promise.all([
-          api.get<MentorProfileResponse>(`/api/profiles/mentor/${mentorId}`),
-          api.get<{ upcomingSlots: TimeSlot[] }>(`/api/availability/mentor/${mentorId}`)
-        ]);
-
-        const nextSlots = (availabilityRes.data?.upcomingSlots || []).map((slot) => ({
-          label: slot.label,
-          iso: slot.iso,
-          date: slot.date,
-          time: slot.time,
-          isBooked: Boolean(slot.isBooked)
-        }));
-
-        if (mounted) {
-          setMentor(profileRes.data);
-          setSlots(nextSlots);
-          setSelectedSlot((prev) => {
-            if (prev) return prev;
-            const firstOpen = nextSlots.find((slot) => !slot.isBooked);
-            return firstOpen?.iso || "";
-          });
-        }
-      } catch (e: any) {
-        if (mounted) {
-          setError(e?.response?.data?.message || "Unable to load mentor profile.");
-        }
-      } finally {
-        if (mounted) {
-          setIsLoading(false);
-        }
-      }
+  const loadMentor = useCallback(async () => {
+    if (!mentorId) {
+      setError("Missing mentor id.");
+      setIsLoading(false);
+      return;
     }
 
-    loadMentor();
+    try {
+      setIsLoading(true);
+      setError(null);
+      const [profileRes, availabilityRes] = await Promise.all([
+        api.get<MentorProfileResponse>(`/api/profiles/mentor/${mentorId}`),
+        api.get<{ upcomingSlots: TimeSlot[] }>(`/api/availability/mentor/${mentorId}`)
+      ]);
 
-    return () => {
-      mounted = false;
-    };
+      const nextSlots = (availabilityRes.data?.upcomingSlots || []).map((slot) => ({
+        label: slot.label,
+        iso: slot.iso,
+        date: slot.date,
+        time: slot.time,
+        isBooked: Boolean(slot.isBooked)
+      }));
+
+      setMentor(profileRes.data);
+      setSlots(nextSlots);
+      setSelectedSlot((prev) => {
+        if (prev && nextSlots.some((slot) => slot.iso === prev && !slot.isBooked)) return prev;
+        const firstOpen = nextSlots.find((slot) => !slot.isBooked);
+        return firstOpen?.iso || "";
+      });
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Unable to load mentor profile.");
+    } finally {
+      setIsLoading(false);
+    }
   }, [mentorId]);
+
+  useEffect(() => {
+    loadMentor();
+  }, [loadMentor]);
 
   async function handleBookSession() {
     if (!mentorId || !selectedSlot) {
       setError("Please select a valid time slot.");
       return;
     }
+
+    let createdSessionId = "";
 
     try {
       setIsSubmitting(true);
@@ -170,6 +160,7 @@ export default function MentorProfileScreen() {
         durationMinutes: 60,
         notes
       });
+      createdSessionId = data.session?._id || "";
 
       if (data.mode === "manual") {
         setManualSessionId(data.session._id);
@@ -210,6 +201,7 @@ export default function MentorProfileScreen() {
       setNotes("");
       notify("Payment successful. Session confirmed.");
       Alert.alert("Session Confirmed", "Your payment is verified and session is confirmed.");
+      loadMentor();
     } catch (e: any) {
       const apiMessage =
         e?.response?.data?.message ||
@@ -217,10 +209,40 @@ export default function MentorProfileScreen() {
         "Payment or booking failed.";
       setError(apiMessage);
       notify(apiMessage);
-      if (String(apiMessage).toLowerCase().includes("payment") || String(e?.code || "").toLowerCase().includes("razorpay")) {
+      const lowerMessage = String(apiMessage).toLowerCase();
+      const lowerCode = String(e?.code || "").toLowerCase();
+      const wasPaymentInterrupted =
+        Boolean(createdSessionId) &&
+        (lowerMessage.includes("payment") ||
+          lowerMessage.includes("cancel") ||
+          lowerCode.includes("razorpay") ||
+          lowerCode.includes("cancel"));
+
+      if (wasPaymentInterrupted) {
         Alert.alert(
-          "Payment Pending",
-          "If payment was not completed, you can finish it later from Pending Payments in your session panel."
+          "Payment not completed",
+          "Do you want to keep this slot in Pending Payments so you can pay later, or delete it and release the slot right now?",
+          [
+            {
+              text: "Delete Slot",
+              style: "destructive",
+              onPress: async () => {
+                try {
+                  await api.patch(`/api/sessions/${createdSessionId}/cancel`);
+                  notify("Pending session deleted. Slot released.");
+                  loadMentor();
+                } catch (cancelError: any) {
+                  setError(cancelError?.response?.data?.message || "Failed to delete pending session.");
+                }
+              }
+            },
+            {
+              text: "Keep in Pending",
+              onPress: () => {
+                notify("Session kept in Pending Payments. You can complete payment later.");
+              }
+            }
+          ]
         );
       }
     } finally {
@@ -319,7 +341,7 @@ export default function MentorProfileScreen() {
             </TouchableOpacity>
           );
         })}
-        {slots.length === 0 ? <Text style={styles.meta}>Mentor has not set availability for next 7 days yet.</Text> : null}
+        {slots.length === 0 ? <Text style={styles.meta}>Mentor has not set availability for next 14 days yet.</Text> : null}
       </View>
 
       <Text style={styles.sectionTitle}>Session Note (Optional)</Text>
