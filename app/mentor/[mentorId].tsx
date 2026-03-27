@@ -325,10 +325,20 @@ export default function MentorProfileScreen() {
         multiline
       />
 
+      <View style={styles.paymentInfoCard}>
+        <Text style={styles.paymentInfoTitle}>Secure Session Payment</Text>
+        <Text style={styles.paymentInfoText}>
+          ORIN uses Razorpay for secure online session payments when available. Your session will be confirmed after payment verification.
+        </Text>
+        <Text style={styles.paymentInfoSubtext}>
+          If Razorpay is temporarily unavailable, ORIN can still support manual verification flow as a fallback.
+        </Text>
+      </View>
+
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
       <TouchableOpacity style={styles.button} onPress={handleBookSession} disabled={isSubmitting}>
-        {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Book Session</Text>}
+        {isSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Book & Pay Securely</Text>}
       </TouchableOpacity>
 
       {manualInstructions ? (
@@ -468,6 +478,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#D0D5DD",
     textAlignVertical: "top"
+  },
+  paymentInfoCard: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: "#B2DDFF",
+    borderRadius: 12,
+    backgroundColor: "#EFF8FF",
+    padding: 12
+  },
+  paymentInfoTitle: {
+    color: "#175CD3",
+    fontWeight: "800",
+    fontSize: 15
+  },
+  paymentInfoText: {
+    marginTop: 6,
+    color: "#344054",
+    lineHeight: 20
+  },
+  paymentInfoSubtext: {
+    marginTop: 8,
+    color: "#667085",
+    lineHeight: 18,
+    fontSize: 12
   },
   button: {
     marginTop: 16,
