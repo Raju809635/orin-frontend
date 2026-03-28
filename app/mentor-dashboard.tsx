@@ -17,6 +17,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
+import { pickAndUploadProgramDocument } from "@/utils/programDocumentUpload";
 import GlobalHeader from "@/components/global-header";
 
 type Booking = {
@@ -36,9 +37,18 @@ type Session = {
   time: string;
   scheduledStart?: string;
   amount: number;
+  platformFeeAmount?: number;
+  mentorPayoutAmount?: number;
   status?: string;
   paymentStatus: "pending" | "waiting_verification" | "verified" | "rejected" | "paid";
   sessionStatus: "booked" | "confirmed" | "completed";
+  payoutStatus?: "not_ready" | "pending" | "paid" | "issue_reported";
+  mentorPayoutConfirmationStatus?: "not_ready" | "pending" | "confirmed" | "issue_reported";
+  payoutPaidAt?: string | null;
+  payoutReference?: string;
+  payoutNote?: string;
+  mentorPayoutIssueNote?: string;
+  canMentorConfirmPayout?: boolean;
   meetingLink?: string;
   studentId?: {
     name?: string;
@@ -67,11 +77,35 @@ type MentorProfilePayload = {
   title?: string;
   sessionPrice?: number;
   profilePhotoUrl?: string;
+  phoneNumber?: string;
+  payoutUpiId?: string;
+  payoutQrCodeUrl?: string;
+  payoutPhoneNumber?: string;
   rating?: number;
   experienceYears?: number;
   specializations?: string[];
   totalSessionsConducted?: number;
   verifiedBadge?: boolean;
+};
+
+type MentorPayoutResponse = {
+  summary: {
+    totalSessions: number;
+    lifetimeGross: number;
+    platformFees: number;
+    mentorEarnings: number;
+    pendingPayoutAmount: number;
+    paidOutAmount: number;
+    confirmedReceivedAmount: number;
+    issueAmount: number;
+    payoutSetupComplete: boolean;
+  };
+  payoutSetup?: {
+    upiId?: string;
+    qrCodeUrl?: string;
+    phoneNumber?: string;
+  };
+  sessions: Session[];
 };
 
 type VerifiedMentor = {
@@ -127,6 +161,39 @@ type LiveSessionItem = {
   mentor?: { id?: string | null; name?: string };
 };
 
+type SprintScheduleItem = {
+  label?: string;
+  startsAt?: string | null;
+  durationMinutes?: number;
+};
+
+type SprintItem = {
+  id: string;
+  title: string;
+  domain?: string;
+  description?: string;
+  posterImageUrl?: string;
+  curriculumDocumentUrl?: string;
+  curriculumFileType?: string;
+  startDate: string;
+  endDate: string;
+  durationWeeks?: number;
+  totalLiveSessions?: number;
+  sessionSchedule?: SprintScheduleItem[];
+  weeklyPlan?: string[];
+  outcomes?: string[];
+  tools?: string[];
+  sessionMode?: "free" | "paid";
+  price?: number;
+  currency?: string;
+  minParticipants?: number;
+  maxParticipants?: number;
+  participantCount?: number;
+  seatsLeft?: number;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  adminReviewNote?: string;
+};
+
 type CertificationItem = {
   id: string;
   title: string;
@@ -156,7 +223,7 @@ const sectionOrder: { id: SectionId; label: string }[] = [
 
 const mentorGrowthSections: { id: MentorGrowthSectionId; label: string }[] = [
   { id: "reputation", label: "Reputation" },
-  { id: "live", label: "Live Sessions" },
+  { id: "live", label: "Programs" },
   { id: "community", label: "Community" }
 ];
 
@@ -227,6 +294,9 @@ export default function MentorDashboard() {
   const [creatingSlot, setCreatingSlot] = useState(false);
   const [sessionPrice, setSessionPrice] = useState("499");
   const [mentorTitle, setMentorTitle] = useState("");
+  const [payoutUpiId, setPayoutUpiId] = useState("");
+  const [payoutQrCodeUrl, setPayoutQrCodeUrl] = useState("");
+  const [payoutPhoneNumber, setPayoutPhoneNumber] = useState("");
   const [savingProfile, setSavingProfile] = useState(false);
   const [chatMessage, setChatMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -241,6 +311,7 @@ export default function MentorDashboard() {
   const [mentorGroups, setMentorGroups] = useState<MentorGroupItem[]>([]);
   const [reputationSummary, setReputationSummary] = useState<ReputationSummary | null>(null);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
+  const [sprints, setSprints] = useState<SprintItem[]>([]);
   const [certifications, setCertifications] = useState<CertificationItem[]>([]);
   const [mentorNews, setMentorNews] = useState<NewsArticle[]>([]);
   const [mentorNewsLoading, setMentorNewsLoading] = useState(false);
@@ -255,8 +326,31 @@ export default function MentorDashboard() {
   const [liveSessionCapacity, setLiveSessionCapacity] = useState("50");
   const [liveSessionDuration, setLiveSessionDuration] = useState("60");
   const [uploadingLivePoster, setUploadingLivePoster] = useState(false);
+  const [uploadingPayoutQr, setUploadingPayoutQr] = useState(false);
   const [creatingLiveSession, setCreatingLiveSession] = useState(false);
+  const [sprintTitle, setSprintTitle] = useState("");
+  const [sprintDomain, setSprintDomain] = useState("");
+  const [sprintDescription, setSprintDescription] = useState("");
+  const [sprintStartDate, setSprintStartDate] = useState(nextDates(14)[0]);
+  const [sprintEndDate, setSprintEndDate] = useState(nextDates(14)[Math.min(13, nextDates(14).length - 1)]);
+  const [sprintPosterImageUrl, setSprintPosterImageUrl] = useState("");
+  const [sprintDocumentUrl, setSprintDocumentUrl] = useState("");
+  const [sprintDocumentType, setSprintDocumentType] = useState("pdf");
+  const [sprintMode, setSprintMode] = useState<"free" | "paid">("paid");
+  const [sprintPrice, setSprintPrice] = useState("1999");
+  const [sprintMinParticipants, setSprintMinParticipants] = useState("5");
+  const [sprintMaxParticipants, setSprintMaxParticipants] = useState("20");
+  const [sprintWeeks, setSprintWeeks] = useState("4");
+  const [sprintLiveSessionsCount, setSprintLiveSessionsCount] = useState("4");
+  const [sprintWeeklyPlan, setSprintWeeklyPlan] = useState("Week 1: Foundations\nWeek 2: Build\nWeek 3: Feedback\nWeek 4: Demo");
+  const [sprintOutcomes, setSprintOutcomes] = useState("Portfolio project, Interview-ready sprint experience, Mentor feedback");
+  const [sprintTools, setSprintTools] = useState("Zoom, GitHub, Figma, Python");
+  const [uploadingSprintPoster, setUploadingSprintPoster] = useState(false);
+  const [uploadingSprintDocument, setUploadingSprintDocument] = useState(false);
+  const [creatingSprint, setCreatingSprint] = useState(false);
   const [mentorProfileSummary, setMentorProfileSummary] = useState<MentorProfilePayload | null>(null);
+  const [mentorPayoutSummary, setMentorPayoutSummary] = useState<MentorPayoutResponse["summary"] | null>(null);
+  const [mentorPayoutSessions, setMentorPayoutSessions] = useState<Session[]>([]);
   const calendarDateOptions = useMemo(() => nextDates(14), []);
   const liveSessionTimeOptions = useMemo(
     () => [
@@ -278,7 +372,7 @@ export default function MentorDashboard() {
   const mentorServices = [
     {
       key: "live",
-      label: "Live Sessions",
+      label: "Programs",
       icon: "radio",
       tint: "#7C3AED",
       bg: "#F0E9FF",
@@ -399,21 +493,25 @@ export default function MentorDashboard() {
         bookingRes,
         sessionRes,
         profileRes,
+        payoutRes,
         verifiedRes,
         challengeRes,
         groupRes,
         reputationRes,
         liveSessionRes,
+        sprintRes,
         certificationsRes
       ] = await Promise.allSettled([
         api.get<Booking[]>("/api/bookings/mentor"),
         api.get<Session[]>("/api/sessions/mentor/me"),
         api.get<{ profile?: MentorProfilePayload }>("/api/profiles/mentor/me"),
+        api.get<MentorPayoutResponse>("/api/sessions/mentor/payouts"),
         api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
         api.get<ChallengeItem[]>("/api/network/challenges"),
         api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
         api.get<ReputationSummary>("/api/network/reputation-summary"),
         api.get<LiveSessionItem[]>("/api/network/live-sessions"),
+        api.get<SprintItem[]>("/api/network/sprints"),
         api.get<CertificationItem[]>("/api/network/certifications")
       ]);
 
@@ -452,12 +550,18 @@ export default function MentorDashboard() {
       setSessionPrice(String(Number(profileRes.value.data?.profile?.sessionPrice || 0) || 499));
       setMentorTitle(profileRes.value.data?.profile?.title || "");
       setProfilePhotoUrl(profileRes.value.data?.profile?.profilePhotoUrl || "");
+      setPayoutUpiId(profileRes.value.data?.profile?.payoutUpiId || "");
+      setPayoutQrCodeUrl(profileRes.value.data?.profile?.payoutQrCodeUrl || "");
+      setPayoutPhoneNumber(profileRes.value.data?.profile?.payoutPhoneNumber || profileRes.value.data?.profile?.phoneNumber || "");
       setMentorProfileSummary(profileRes.value.data?.profile || null);
+      setMentorPayoutSummary(payoutRes.status === "fulfilled" ? payoutRes.value.data?.summary || null : null);
+      setMentorPayoutSessions(payoutRes.status === "fulfilled" ? payoutRes.value.data?.sessions || [] : []);
       setVerifiedMentors(verifiedRes.status === "fulfilled" ? verifiedRes.value.data || [] : []);
       setChallenges(challengeRes.status === "fulfilled" ? challengeRes.value.data || [] : []);
       setMentorGroups(groupRes.status === "fulfilled" ? groupRes.value.data || [] : []);
       setReputationSummary(reputationRes.status === "fulfilled" ? reputationRes.value.data || null : null);
       setLiveSessions(liveSessionRes.status === "fulfilled" ? liveSessionRes.value.data || [] : []);
+      setSprints(sprintRes.status === "fulfilled" ? sprintRes.value.data || [] : []);
       setCertifications(certificationsRes.status === "fulfilled" ? certificationsRes.value.data || [] : []);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load mentor dashboard.");
@@ -591,6 +695,16 @@ export default function MentorDashboard() {
     [liveSessions]
   );
 
+  const pendingSprintApprovals = useMemo(
+    () => sprints.filter((item) => item.approvalStatus === "pending").length,
+    [sprints]
+  );
+
+  const approvedSprintsCount = useMemo(
+    () => sprints.filter((item) => item.approvalStatus === "approved").length,
+    [sprints]
+  );
+
   const availableSlotCount = useMemo(
     () => availabilitySlots.length + dateSpecificSlots.length,
     [availabilitySlots.length, dateSpecificSlots.length]
@@ -654,6 +768,13 @@ export default function MentorDashboard() {
     return Date.now() >= start - 5 * 60 * 1000;
   }
 
+  function canMarkSessionCompleted(session: Session) {
+    const start = session.scheduledStart ? new Date(session.scheduledStart).getTime() : NaN;
+    const hasStarted = !Number.isFinite(start) || Date.now() >= start;
+    const isPaid = session.paymentStatus === "paid" || session.paymentStatus === "verified";
+    return hasStarted && isPaid && session.sessionStatus === "confirmed" && session.status === "confirmed";
+  }
+
   async function createAvailabilitySlot() {
     try {
       setCreatingSlot(true);
@@ -700,7 +821,10 @@ export default function MentorDashboard() {
       setError(null);
       await api.patch("/api/profiles/mentor/me", {
         title: mentorTitle,
-        sessionPrice: parsedPrice
+        sessionPrice: parsedPrice,
+        payoutUpiId: payoutUpiId.trim(),
+        payoutQrCodeUrl: payoutQrCodeUrl.trim(),
+        payoutPhoneNumber: payoutPhoneNumber.trim()
       });
       notify("Profile & pricing updated.");
       await fetchDashboard(true);
@@ -708,6 +832,21 @@ export default function MentorDashboard() {
       setError(e?.response?.data?.message || "Failed to save mentor profile.");
     } finally {
       setSavingProfile(false);
+    }
+  }
+
+  async function uploadPayoutQrCode() {
+    try {
+      setUploadingPayoutQr(true);
+      setError(null);
+      const uploadedUrl = await pickAndUploadPostImage();
+      if (!uploadedUrl) return;
+      setPayoutQrCodeUrl(uploadedUrl);
+      notify("Payout QR uploaded.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Failed to upload payout QR.");
+    } finally {
+      setUploadingPayoutQr(false);
     }
   }
 
@@ -734,6 +873,40 @@ export default function MentorDashboard() {
       await fetchDashboard(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to update meeting link.");
+    }
+  }
+
+  async function markSessionCompleted(sessionId: string) {
+    try {
+      setError(null);
+      await api.patch(`/api/sessions/${sessionId}/complete`);
+      notify("Session marked as completed.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to mark session completed.");
+    }
+  }
+
+  async function confirmPayoutReceived(sessionId: string) {
+    try {
+      setError(null);
+      await api.patch(`/api/sessions/${sessionId}/payout/confirm`);
+      notify("Payout confirmed.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to confirm payout.");
+    }
+  }
+
+  async function reportPayoutIssue(sessionId: string) {
+    try {
+      setError(null);
+      const note = "Payout not received or needs admin review";
+      await api.patch(`/api/sessions/${sessionId}/payout/report-issue`, { issueNote: note });
+      notify("Payout issue reported to admin.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to report payout issue.");
     }
   }
 
@@ -816,6 +989,105 @@ export default function MentorDashboard() {
       setError(e?.response?.data?.message || e?.message || "Failed to upload poster.");
     } finally {
       setUploadingLivePoster(false);
+    }
+  }
+
+  async function uploadSprintPoster() {
+    try {
+      setUploadingSprintPoster(true);
+      setError(null);
+      const uploadedUrl = await pickAndUploadPostImage();
+      if (!uploadedUrl) return;
+      setSprintPosterImageUrl(uploadedUrl);
+      notify("Sprint poster uploaded.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Failed to upload sprint poster.");
+    } finally {
+      setUploadingSprintPoster(false);
+    }
+  }
+
+  async function uploadSprintDocument() {
+    try {
+      setUploadingSprintDocument(true);
+      setError(null);
+      const uploaded = await pickAndUploadProgramDocument();
+      if (!uploaded) return;
+      setSprintDocumentUrl(uploaded.url);
+      setSprintDocumentType(
+        uploaded.mimeType?.includes("pdf")
+          ? "pdf"
+          : uploaded.mimeType?.includes("wordprocessingml")
+            ? "docx"
+            : "doc"
+      );
+      notify("Sprint curriculum uploaded.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Failed to upload curriculum.");
+    } finally {
+      setUploadingSprintDocument(false);
+    }
+  }
+
+  async function createMentorSprint() {
+    const title = sprintTitle.trim();
+    const domain = sprintDomain.trim();
+    const description = sprintDescription.trim();
+    const weeklyPlan = sprintWeeklyPlan
+      .split(/\r?\n/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+
+    if (!title || !domain || !description || !sprintPosterImageUrl.trim()) {
+      setError("Sprint title, domain, description, and poster are required.");
+      return;
+    }
+
+    try {
+      setCreatingSprint(true);
+      setError(null);
+      await api.post("/api/network/sprints", {
+        title,
+        domain,
+        description,
+        posterImageUrl: sprintPosterImageUrl.trim(),
+        curriculumDocumentUrl: sprintDocumentUrl.trim(),
+        curriculumFileType: sprintDocumentType,
+        startDate: new Date(`${sprintStartDate}T00:00:00`).toISOString(),
+        endDate: new Date(`${sprintEndDate}T23:59:59`).toISOString(),
+        durationWeeks: Number(sprintWeeks || 1),
+        totalLiveSessions: Number(sprintLiveSessionsCount || 1),
+        weeklyPlan,
+        outcomes: sprintOutcomes.split(",").map((item) => item.trim()).filter(Boolean),
+        tools: sprintTools.split(",").map((item) => item.trim()).filter(Boolean),
+        sessionMode: sprintMode,
+        price: sprintMode === "paid" ? Number(sprintPrice || 0) : 0,
+        minParticipants: Number(sprintMinParticipants || 1),
+        maxParticipants: Number(sprintMaxParticipants || 20)
+      });
+      setSprintTitle("");
+      setSprintDomain("");
+      setSprintDescription("");
+      setSprintStartDate(nextDates(14)[0]);
+      setSprintEndDate(nextDates(14)[Math.min(13, nextDates(14).length - 1)]);
+      setSprintPosterImageUrl("");
+      setSprintDocumentUrl("");
+      setSprintDocumentType("pdf");
+      setSprintMode("paid");
+      setSprintPrice("1999");
+      setSprintMinParticipants("5");
+      setSprintMaxParticipants("20");
+      setSprintWeeks("4");
+      setSprintLiveSessionsCount("4");
+      setSprintWeeklyPlan("Week 1: Foundations\nWeek 2: Build\nWeek 3: Feedback\nWeek 4: Demo");
+      setSprintOutcomes("Portfolio project, Interview-ready sprint experience, Mentor feedback");
+      setSprintTools("Zoom, GitHub, Figma, Python");
+      notify("Sprint submitted for admin approval.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to create sprint.");
+    } finally {
+      setCreatingSprint(false);
     }
   }
 
@@ -946,17 +1218,37 @@ export default function MentorDashboard() {
         </View>
       </View>
 
-      <Text style={styles.sectionHeader}>Live Sessions</Text>
+      {mentorPayoutSummary ? (
+        <>
+          <Text style={styles.sectionHeader}>Earnings & Payouts</Text>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricValue}>INR {Math.round(mentorPayoutSummary.mentorEarnings || 0)}</Text>
+              <Text style={styles.metricLabel}>Your Share</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricValue}>INR {Math.round(mentorPayoutSummary.pendingPayoutAmount || 0)}</Text>
+              <Text style={styles.metricLabel}>Pending Payouts</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={styles.metricValue}>INR {Math.round(mentorPayoutSummary.confirmedReceivedAmount || 0)}</Text>
+              <Text style={styles.metricLabel}>Confirmed Received</Text>
+            </View>
+          </View>
+        </>
+      ) : null}
+
+      <Text style={styles.sectionHeader}>My Programs</Text>
       <View style={styles.focusStack}>
         <TouchableOpacity
           style={styles.focusCard}
           onPress={() => openSection("growth", "live")}
         >
-          <Text style={styles.focusCardTitle}>Manage Live Session Pipeline</Text>
+          <Text style={styles.focusCardTitle}>Manage Programs Pipeline</Text>
           <Text style={styles.meta}>
-            Approved: {approvedLiveSessionsCount} | Pending approval: {pendingLiveApprovals} | Total: {liveSessions.length}
+            Lives approved: {approvedLiveSessionsCount} | Sprint approvals: {pendingSprintApprovals} | Total programs: {liveSessions.length + sprints.length}
           </Text>
-          <Text style={styles.focusCardAccent}>Create, price, schedule, and monitor live sessions</Text>
+          <Text style={styles.focusCardAccent}>Create, price, schedule, and monitor live sessions plus cohort sprints</Text>
         </TouchableOpacity>
         {liveSessions.slice(0, 2).map((item) => (
           <TouchableOpacity
@@ -972,6 +1264,22 @@ export default function MentorDashboard() {
               Seats: {item.participantCount || 0}/{item.maxParticipants || 50} | Status: {item.approvalStatus || "pending"}
             </Text>
             <Text style={styles.focusCardAccent}>Open live session controls</Text>
+          </TouchableOpacity>
+        ))}
+        {sprints.slice(0, 2).map((item) => (
+          <TouchableOpacity
+            key={item.id}
+            style={styles.focusCard}
+            onPress={() => openSection("growth", "live")}
+          >
+            <Text style={styles.focusCardTitle}>{item.title}</Text>
+            <Text style={styles.meta}>
+              {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()} | {item.sessionMode === "paid" ? `INR ${item.price || 0}` : "Free"}
+            </Text>
+            <Text style={styles.meta}>
+              Seats: {item.participantCount || 0}/{item.maxParticipants || 20} | Status: {item.approvalStatus || "pending"}
+            </Text>
+            <Text style={styles.focusCardAccent}>Open sprint controls</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -1256,7 +1564,205 @@ export default function MentorDashboard() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.title}>Live Session Guidance</Text>
+            <Text style={styles.title}>Create Sprint Program</Text>
+            <Text style={styles.formFieldLabel}>Sprint Title</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. AI Engineer Career Sprint"
+              placeholderTextColor="#98A2B3"
+              value={sprintTitle}
+              onChangeText={setSprintTitle}
+            />
+            <Text style={styles.formFieldLabel}>Domain</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. AI, Web Development, Data Science"
+              placeholderTextColor="#98A2B3"
+              value={sprintDomain}
+              onChangeText={setSprintDomain}
+            />
+            <Text style={styles.formFieldLabel}>Description</Text>
+            <TextInput
+              style={[styles.input, styles.textAreaInput]}
+              placeholder="Explain what students will achieve, who this sprint is for, and how the cohort will run."
+              placeholderTextColor="#98A2B3"
+              value={sprintDescription}
+              onChangeText={setSprintDescription}
+              multiline
+            />
+            <Text style={styles.formFieldLabel}>Sprint Poster</Text>
+            <Text style={styles.formFieldHint}>Poster is mandatory. This is the main visual students will trust first.</Text>
+            <TouchableOpacity style={styles.secondaryButton} onPress={uploadSprintPoster} disabled={uploadingSprintPoster}>
+              <Text style={styles.secondaryButtonText}>
+                {uploadingSprintPoster ? "Uploading Poster..." : sprintPosterImageUrl ? "Change Sprint Poster" : "Upload Sprint Poster"}
+              </Text>
+            </TouchableOpacity>
+            {sprintPosterImageUrl ? <Image source={{ uri: sprintPosterImageUrl }} style={styles.livePosterPreview} /> : null}
+
+            <Text style={styles.formFieldLabel}>Curriculum Document (Optional PDF/DOC)</Text>
+            <Text style={styles.formFieldHint}>Upload full syllabus or brochure so students can review the sprint before joining.</Text>
+            <TouchableOpacity style={styles.secondaryButton} onPress={uploadSprintDocument} disabled={uploadingSprintDocument}>
+              <Text style={styles.secondaryButtonText}>
+                {uploadingSprintDocument ? "Uploading Curriculum..." : sprintDocumentUrl ? "Replace Curriculum Document" : "Upload Curriculum Document"}
+              </Text>
+            </TouchableOpacity>
+            {sprintDocumentUrl ? <Text style={styles.formFieldHint}>Curriculum uploaded and ready for review.</Text> : null}
+
+            <Text style={styles.formFieldLabel}>Sprint Start Date</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
+              {calendarDateOptions.map((date) => {
+                const active = sprintStartDate === date;
+                return (
+                  <TouchableOpacity
+                    key={`sprint-start-${date}`}
+                    style={[styles.dateChip, active && styles.dateChipActive]}
+                    onPress={() => setSprintStartDate(date)}
+                  >
+                    <Text style={[styles.dateChipText, active && styles.dateChipTextActive]}>{toDateLabel(date)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={styles.formFieldLabel}>Sprint End Date</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
+              {calendarDateOptions.map((date) => {
+                const active = sprintEndDate === date;
+                return (
+                  <TouchableOpacity
+                    key={`sprint-end-${date}`}
+                    style={[styles.dateChip, active && styles.dateChipActive]}
+                    onPress={() => setSprintEndDate(date)}
+                  >
+                    <Text style={[styles.dateChipText, active && styles.dateChipTextActive]}>{toDateLabel(date)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <Text style={styles.formFieldLabel}>Program Type</Text>
+            <View style={styles.rowWrap}>
+              {(["free", "paid"] as const).map((mode) => {
+                const active = sprintMode === mode;
+                return (
+                  <TouchableOpacity
+                    key={`sprint-mode-${mode}`}
+                    style={[styles.dayChip, active && styles.dayChipActive]}
+                    onPress={() => setSprintMode(mode)}
+                  >
+                    <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>
+                      {mode === "paid" ? "Paid Sprint" : "Free Sprint"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {sprintMode === "paid" ? (
+              <>
+                <Text style={styles.formFieldLabel}>Sprint Price (INR)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="1999"
+                  placeholderTextColor="#98A2B3"
+                  value={sprintPrice}
+                  onChangeText={setSprintPrice}
+                  keyboardType="numeric"
+                />
+              </>
+            ) : null}
+            <Text style={styles.formFieldLabel}>Minimum Participants</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="5"
+              placeholderTextColor="#98A2B3"
+              value={sprintMinParticipants}
+              onChangeText={setSprintMinParticipants}
+              keyboardType="numeric"
+            />
+            <Text style={styles.formFieldLabel}>Maximum Participants</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="20"
+              placeholderTextColor="#98A2B3"
+              value={sprintMaxParticipants}
+              onChangeText={setSprintMaxParticipants}
+              keyboardType="numeric"
+            />
+            <Text style={styles.formFieldLabel}>Duration (Weeks)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="4"
+              placeholderTextColor="#98A2B3"
+              value={sprintWeeks}
+              onChangeText={setSprintWeeks}
+              keyboardType="numeric"
+            />
+            <Text style={styles.formFieldLabel}>Number of Live Sessions</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="4"
+              placeholderTextColor="#98A2B3"
+              value={sprintLiveSessionsCount}
+              onChangeText={setSprintLiveSessionsCount}
+              keyboardType="numeric"
+            />
+            <Text style={styles.formFieldLabel}>Weekly Plan</Text>
+            <TextInput
+              style={[styles.input, styles.textAreaInput]}
+              placeholder={"Week 1: Foundations\nWeek 2: Project setup\nWeek 3: Feedback\nWeek 4: Demo"}
+              placeholderTextColor="#98A2B3"
+              value={sprintWeeklyPlan}
+              onChangeText={setSprintWeeklyPlan}
+              multiline
+            />
+            <Text style={styles.formFieldLabel}>Outcomes</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Portfolio project, Mentor feedback, Sprint certificate"
+              placeholderTextColor="#98A2B3"
+              value={sprintOutcomes}
+              onChangeText={setSprintOutcomes}
+            />
+            <Text style={styles.formFieldLabel}>Tools Used</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Zoom, GitHub, Figma, Python"
+              placeholderTextColor="#98A2B3"
+              value={sprintTools}
+              onChangeText={setSprintTools}
+            />
+            <TouchableOpacity style={styles.primaryButton} onPress={createMentorSprint} disabled={creatingSprint}>
+              <Text style={styles.primaryButtonText}>{creatingSprint ? "Creating..." : "Create Sprint Program"}</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.title}>My Sprint Programs</Text>
+            {sprints.length === 0 ? (
+              <Text style={styles.empty}>No sprint programs submitted yet.</Text>
+            ) : (
+              sprints.slice(0, 5).map((item) => (
+                <View key={item.id} style={styles.liveSessionCard}>
+                  {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
+                  <Text style={styles.liveSessionTitle}>{item.title}</Text>
+                  <Text style={styles.meta}>{item.domain || "Sprint Program"}</Text>
+                  {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
+                  <Text style={styles.meta}>
+                    {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()} | {item.durationWeeks || 1} weeks
+                  </Text>
+                  <Text style={styles.meta}>
+                    Type: {item.sessionMode === "paid" ? `Paid | INR ${item.price || 0}` : "Free"} | Seats: {item.participantCount || 0}/{item.maxParticipants || 20}
+                  </Text>
+                  <Text style={styles.meta}>Approval: {item.approvalStatus || "pending"}</Text>
+                  {item.curriculumDocumentUrl ? <Text style={styles.meta}>Curriculum uploaded</Text> : <Text style={styles.meta}>Curriculum optional</Text>}
+                  {item.adminReviewNote ? <Text style={styles.meta}>Admin note: {item.adminReviewNote}</Text> : null}
+                </View>
+              ))
+            )}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.title}>Program Guidance</Text>
             {mentorBanners.map((banner) => (
               <View key={banner.key} style={[styles.inlineBanner, { backgroundColor: banner.bg, borderColor: banner.border }]}>
                 <Text style={styles.bannerTag}>{banner.tag}</Text>
@@ -1318,8 +1824,8 @@ export default function MentorDashboard() {
 
       {!isLoading && activeSection === "pricing" ? (
         <View style={[styles.panel, styles.panelPricing]}>
-          <Text style={[styles.panelTitle, styles.panelTitlePricing]}>Profile & Pricing</Text>
-          <Text style={styles.meta}>Set your title and per-session amount students pay.</Text>
+          <Text style={[styles.panelTitle, styles.panelTitlePricing]}>Profile, Pricing & Payouts</Text>
+          <Text style={styles.meta}>Set your mentor title, session fee, and payout details so ORIN can pay you smoothly.</Text>
           <TextInput
             style={styles.input}
             placeholder="Mentor title (e.g. Senior SDE)"
@@ -1333,9 +1839,77 @@ export default function MentorDashboard() {
             value={sessionPrice}
             onChangeText={setSessionPrice}
           />
+          <TextInput
+            style={styles.input}
+            placeholder="UPI ID for payouts"
+            value={payoutUpiId}
+            onChangeText={setPayoutUpiId}
+          />
+          <TextInput
+            style={styles.input}
+            placeholder="Phone number for payout reference"
+            value={payoutPhoneNumber}
+            onChangeText={setPayoutPhoneNumber}
+            keyboardType="phone-pad"
+          />
+          <Text style={styles.formFieldLabel}>Payout QR Code</Text>
+          <Text style={styles.formFieldHint}>Upload a QR if you want ORIN admin to have a quick manual payout option.</Text>
+          {payoutQrCodeUrl ? <Image source={{ uri: payoutQrCodeUrl }} style={styles.livePosterPreview} /> : null}
+          <TouchableOpacity style={styles.primaryButton} onPress={uploadPayoutQrCode} disabled={uploadingPayoutQr}>
+            <Text style={styles.primaryButtonText}>{uploadingPayoutQr ? "Uploading..." : payoutQrCodeUrl ? "Change Payout QR" : "Upload Payout QR"}</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.primaryButton} onPress={saveMentorProfilePricing} disabled={savingProfile}>
             <Text style={styles.primaryButtonText}>{savingProfile ? "Saving..." : "Save Profile & Price"}</Text>
           </TouchableOpacity>
+
+          {mentorPayoutSummary ? (
+            <View style={styles.card}>
+              <Text style={styles.title}>Earnings Summary</Text>
+              <Text style={styles.meta}>Gross paid by students: INR {mentorPayoutSummary.lifetimeGross}</Text>
+              <Text style={styles.meta}>ORIN platform share: INR {mentorPayoutSummary.platformFees}</Text>
+              <Text style={styles.meta}>Your total share: INR {mentorPayoutSummary.mentorEarnings}</Text>
+              <Text style={styles.meta}>Pending payout amount: INR {mentorPayoutSummary.pendingPayoutAmount}</Text>
+              <Text style={styles.meta}>Paid out by ORIN: INR {mentorPayoutSummary.paidOutAmount}</Text>
+              <Text style={styles.meta}>
+                Payout setup: {mentorPayoutSummary.payoutSetupComplete ? "Complete" : "Incomplete"}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.card}>
+            <Text style={styles.title}>Recent Payout Activity</Text>
+            {mentorPayoutSessions.length === 0 ? (
+              <Text style={styles.empty}>No paid sessions tracked yet.</Text>
+            ) : (
+              mentorPayoutSessions.slice(0, 5).map((session) => (
+                <View key={`payout-${session._id}`} style={styles.liveSessionCard}>
+                  <Text style={styles.liveSessionTitle}>{session.studentId?.name || "Student"}</Text>
+                  <Text style={styles.meta}>
+                    {session.date} {session.time} | Student paid INR {session.amount}
+                  </Text>
+                  <Text style={styles.meta}>
+                    ORIN: INR {session.platformFeeAmount || 0} | You: INR {session.mentorPayoutAmount || 0}
+                  </Text>
+                  <Text style={styles.meta}>
+                    Payout: {session.payoutStatus || "not_ready"} | Mentor confirmation: {session.mentorPayoutConfirmationStatus || "not_ready"}
+                  </Text>
+                  {session.payoutReference ? <Text style={styles.meta}>Reference: {session.payoutReference}</Text> : null}
+                  {session.payoutNote ? <Text style={styles.meta}>Admin note: {session.payoutNote}</Text> : null}
+                  {session.mentorPayoutIssueNote ? <Text style={styles.meta}>Issue: {session.mentorPayoutIssueNote}</Text> : null}
+                  {session.canMentorConfirmPayout ? (
+                    <View style={styles.actions}>
+                      <TouchableOpacity style={[styles.actionButton, styles.approveButton]} onPress={() => confirmPayoutReceived(session._id)}>
+                        <Text style={styles.actionText}>Confirm Received</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={[styles.actionButton, styles.rejectButton]} onPress={() => reportPayoutIssue(session._id)}>
+                        <Text style={styles.actionText}>Report Issue</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </View>
+              ))
+            )}
+          </View>
         </View>
       ) : null}
 
@@ -1495,9 +2069,36 @@ export default function MentorDashboard() {
                 >
                   <Text style={styles.primaryButtonText}>Save Meet Link</Text>
                 </TouchableOpacity>
+                {canMarkSessionCompleted(session) ? (
+                  <TouchableOpacity style={styles.primaryButton} onPress={() => markSessionCompleted(session._id)}>
+                    <Text style={styles.primaryButtonText}>Mark Session Completed</Text>
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ))
           )}
+
+          <View style={styles.card}>
+            <Text style={styles.title}>Completed Sessions & Payout Readiness</Text>
+            {mentorPayoutSessions.filter((item) => item.sessionStatus === "completed" || item.status === "completed").length === 0 ? (
+              <Text style={styles.empty}>No completed paid sessions yet.</Text>
+            ) : (
+              mentorPayoutSessions
+                .filter((item) => item.sessionStatus === "completed" || item.status === "completed")
+                .slice(0, 5)
+                .map((session) => (
+                  <View key={`completed-${session._id}`} style={styles.liveSessionCard}>
+                    <Text style={styles.liveSessionTitle}>{session.studentId?.name || "Student"}</Text>
+                    <Text style={styles.meta}>
+                      {session.date} {session.time} | Your earning INR {session.mentorPayoutAmount || 0}
+                    </Text>
+                    <Text style={styles.meta}>
+                      Payout: {session.payoutStatus || "not_ready"} | Mentor confirmation: {session.mentorPayoutConfirmationStatus || "not_ready"}
+                    </Text>
+                  </View>
+                ))
+            )}
+          </View>
         </View>
       ) : null}
 

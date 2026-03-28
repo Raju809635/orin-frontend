@@ -47,10 +47,46 @@ type LiveSessionItem = {
   } | null;
   mentor?: { id?: string | null; name?: string };
 };
+type SprintItem = {
+  id: string;
+  title: string;
+  domain?: string;
+  description?: string;
+  posterImageUrl?: string;
+  curriculumDocumentUrl?: string;
+  curriculumFileType?: string;
+  startDate: string;
+  endDate: string;
+  durationWeeks?: number;
+  totalLiveSessions?: number;
+  sessionMode?: "free" | "paid";
+  price?: number;
+  currency?: string;
+  minParticipants?: number;
+  maxParticipants?: number;
+  participantCount?: number;
+  seatsLeft?: number;
+  isSoldOut?: boolean;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  mentor?: { id?: string | null; name?: string };
+  myEnrollment?: {
+    id: string;
+    paymentMode?: "free" | "razorpay";
+    paymentStatus?: "pending" | "paid" | "failed" | "cancelled";
+    enrollmentStatus?: "pending_payment" | "enrolled" | "cancelled";
+  } | null;
+};
 type LiveSessionOrderResponse = {
   mode: "free" | "razorpay";
   message: string;
   booking?: { _id: string };
+  order?: { id: string; amount: number; currency: string } | null;
+  razorpayKeyId?: string;
+};
+type SprintOrderResponse = {
+  mode: "free" | "razorpay";
+  message: string;
+  enrollment?: { _id: string };
   order?: { id: string; amount: number; currency: string } | null;
   razorpayKeyId?: string;
 };
@@ -78,6 +114,7 @@ export default function MentorshipHubScreen() {
   const [verifiedMentors, setVerifiedMentors] = useState<VerifiedMentor[]>([]);
   const [mentorGroups, setMentorGroups] = useState<MentorGroupItem[]>([]);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
+  const [sprints, setSprints] = useState<SprintItem[]>([]);
   const [sessionHistory, setSessionHistory] = useState<SessionHistoryItem[]>([]);
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [bookings, setBookings] = useState<BookingItem[]>([]);
@@ -92,10 +129,11 @@ export default function MentorshipHubScreen() {
       if (refresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const [verifiedRes, groupsRes, liveRes, historyRes, sessionsRes, bookingsRes] = await Promise.allSettled([
+      const [verifiedRes, groupsRes, liveRes, sprintRes, historyRes, sessionsRes, bookingsRes] = await Promise.allSettled([
         api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
         api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
         api.get<LiveSessionItem[]>("/api/network/live-sessions"),
+        api.get<SprintItem[]>("/api/network/sprints"),
         api.get<SessionHistoryItem[]>("/api/network/session-history"),
         api.get<SessionItem[]>(isMentor ? "/api/sessions/mentor/me" : "/api/sessions/student/me"),
         api.get<BookingItem[]>("/api/bookings/my")
@@ -103,6 +141,7 @@ export default function MentorshipHubScreen() {
       setVerifiedMentors(verifiedRes.status === "fulfilled" ? verifiedRes.value.data || [] : []);
       setMentorGroups(groupsRes.status === "fulfilled" ? groupsRes.value.data || [] : []);
       setLiveSessions(liveRes.status === "fulfilled" ? liveRes.value.data || [] : []);
+      setSprints(sprintRes.status === "fulfilled" ? sprintRes.value.data || [] : []);
       setSessionHistory(historyRes.status === "fulfilled" ? historyRes.value.data || [] : []);
       setSessions(sessionsRes.status === "fulfilled" ? sessionsRes.value.data || [] : []);
       setBookings(bookingsRes.status === "fulfilled" ? bookingsRes.value.data || [] : []);
@@ -183,6 +222,13 @@ export default function MentorshipHubScreen() {
       `${item.title || ""} ${item.topic || ""} ${item.description || ""} ${item.mentor?.name || ""}`.toLowerCase().includes(query)
     );
   }, [liveSessions, searchQuery]);
+  const filteredSprints = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return sprints;
+    return sprints.filter((item) =>
+      `${item.title || ""} ${item.domain || ""} ${item.description || ""} ${item.mentor?.name || ""}`.toLowerCase().includes(query)
+    );
+  }, [sprints, searchQuery]);
 
   const toggleLiveSessionInterest = useCallback(
     async (liveSessionId: string) => {
@@ -280,6 +326,78 @@ export default function MentorshipHubScreen() {
         await loadData(true);
       } catch (e: any) {
         Alert.alert("Live session", e?.response?.data?.message || e?.description || "Payment not completed.");
+        await loadData(true);
+      }
+    },
+    [isMentor, loadData]
+  );
+
+  const openSprintEnrollment = useCallback(
+    async (item: SprintItem) => {
+      if (isMentor) return;
+      try {
+        setError(null);
+        if (item.myEnrollment?.enrollmentStatus === "enrolled") {
+          Alert.alert("Joined", "You are already enrolled in this sprint.");
+          return;
+        }
+
+        if (item.myEnrollment?.enrollmentStatus === "pending_payment" && item.myEnrollment?.paymentMode === "razorpay") {
+          if (!RazorpayCheckout) {
+            Alert.alert("Unavailable", "Razorpay SDK is unavailable in this build.");
+            return;
+          }
+          const retry = await api.post<SprintOrderResponse>(`/api/network/sprints/enrollments/${item.myEnrollment.id}/retry-order`);
+          const paymentResult = await RazorpayCheckout.open({
+            description: item.title || "ORIN Sprint",
+            image: "",
+            currency: retry.data.order?.currency || "INR",
+            key: retry.data.razorpayKeyId,
+            amount: retry.data.order?.amount || 0,
+            name: "ORIN",
+            order_id: retry.data.order?.id,
+            theme: { color: "#1F7A4C" }
+          });
+          await api.post("/api/network/sprints/verify-payment", {
+            enrollmentId: item.myEnrollment.id,
+            razorpay_order_id: paymentResult.razorpay_order_id,
+            razorpay_payment_id: paymentResult.razorpay_payment_id,
+            razorpay_signature: paymentResult.razorpay_signature
+          });
+          await loadData(true);
+          return;
+        }
+
+        const { data } = await api.post<SprintOrderResponse>(`/api/network/sprints/${item.id}/book`);
+        if (data.mode === "free") {
+          await loadData(true);
+          return;
+        }
+
+        if (!RazorpayCheckout) {
+          Alert.alert("Unavailable", "Razorpay SDK is unavailable in this build.");
+          return;
+        }
+
+        const paymentResult = await RazorpayCheckout.open({
+          description: item.title || "ORIN Sprint",
+          image: "",
+          currency: data.order?.currency || "INR",
+          key: data.razorpayKeyId,
+          amount: data.order?.amount || 0,
+          name: "ORIN",
+          order_id: data.order?.id,
+          theme: { color: "#1F7A4C" }
+        });
+        await api.post("/api/network/sprints/verify-payment", {
+          enrollmentId: data.enrollment?._id,
+          razorpay_order_id: paymentResult.razorpay_order_id,
+          razorpay_payment_id: paymentResult.razorpay_payment_id,
+          razorpay_signature: paymentResult.razorpay_signature
+        });
+        await loadData(true);
+      } catch (e: any) {
+        Alert.alert("Sprint", e?.response?.data?.message || e?.description || "Enrollment not completed.");
         await loadData(true);
       }
     },
@@ -447,8 +565,8 @@ export default function MentorshipHubScreen() {
                 style={[styles.card, styles.cardGreen]}
                 onPress={() => router.push("/mentor-dashboard?section=growth&growth=live" as never)}
               >
-                <Text style={styles.cardTitle}>Create / Manage Live Sessions</Text>
-                <Text style={styles.meta}>Schedule sessions with posters, track interest counts, and publish to all students.</Text>
+                <Text style={styles.cardTitle}>Create / Manage Programs</Text>
+                <Text style={styles.meta}>Run live sessions and multi-week sprints from one mentor program workspace.</Text>
               </TouchableOpacity>
               <View style={[styles.card, styles.cardGreen]}>
                 <Text style={styles.cardTitle}>Mentor Groups</Text>
@@ -480,6 +598,27 @@ export default function MentorshipHubScreen() {
                         {item.sessionMode === "paid" ? `Paid • INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
                       </Text>
                       <Text style={styles.meta}>Interested: {item.interestedCount || 0}</Text>
+                    </View>
+                  ))
+                )}
+              </View>
+              <View style={[styles.card, styles.cardGreen]}>
+                <Text style={styles.cardTitle}>Sprint Programs</Text>
+                {filteredSprints.length === 0 ? (
+                  <Text style={styles.meta}>No sprint programs available.</Text>
+                ) : (
+                  filteredSprints.slice(0, 6).map((item) => (
+                    <View key={item.id} style={styles.liveSessionCard}>
+                      {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
+                      <Text style={styles.cardTitle}>{item.title}</Text>
+                      <Text style={styles.meta}>{item.domain || "Sprint Program"}</Text>
+                      <Text style={styles.meta}>
+                        {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()}
+                      </Text>
+                      <Text style={styles.meta}>
+                        {item.sessionMode === "paid" ? `Paid • INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
+                      </Text>
+                      <Text style={styles.meta}>Enrolled: {item.participantCount || 0}</Text>
                     </View>
                   ))
                 )}
@@ -537,6 +676,44 @@ export default function MentorshipHubScreen() {
                               : item.sessionMode === "paid"
                                 ? "Book & Pay"
                                 : "Book Free"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
+              </View>
+              <View style={[styles.card, styles.cardGreen]}>
+                <Text style={styles.cardTitle}>Sprint Programs</Text>
+                {filteredSprints.length === 0 ? (
+                  <Text style={styles.meta}>No sprint programs available.</Text>
+                ) : (
+                  filteredSprints.slice(0, 6).map((item) => (
+                    <View key={item.id} style={styles.liveSessionCard}>
+                      {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
+                      <Text style={styles.cardTitle}>{item.title}</Text>
+                      <Text style={styles.meta}>{item.domain || "Sprint Program"}</Text>
+                      {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
+                      <Text style={styles.meta}>
+                        {item.mentor?.name || "Mentor"} | {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()}
+                      </Text>
+                      <Text style={styles.meta}>
+                        {item.sessionMode === "paid" ? `Paid • INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
+                      </Text>
+                      <Text style={styles.meta}>Enrollment: {item.participantCount || 0}/{item.maxParticipants || 20}</Text>
+                      {item.curriculumDocumentUrl ? (
+                        <TouchableOpacity style={styles.openBtn} onPress={() => Linking.openURL(item.curriculumDocumentUrl || "")}>
+                          <Text style={styles.openBtnText}>View Curriculum</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      <TouchableOpacity style={styles.openBtn} onPress={() => openSprintEnrollment(item)}>
+                        <Text style={styles.openBtnText}>
+                          {item.myEnrollment?.enrollmentStatus === "enrolled"
+                            ? "Joined"
+                            : item.myEnrollment?.enrollmentStatus === "pending_payment"
+                              ? "Pay Now"
+                              : item.sessionMode === "paid"
+                                ? "Join & Pay"
+                                : "Join Free"}
                         </Text>
                       </TouchableOpacity>
                     </View>
