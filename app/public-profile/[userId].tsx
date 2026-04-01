@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { sanitizeDisplayText } from "@/utils/textSanitize";
 
@@ -45,14 +46,15 @@ type PublicProfileResponse = {
     connectionId?: string | null;
   };
   socialPreview?: {
-    followers?: Array<{ _id?: string; name?: string; role?: string }>;
-    following?: Array<{ _id?: string; name?: string; role?: string }>;
+    followers?: Array<{ _id?: string; name?: string; role?: string; profilePhotoUrl?: string }>;
+    following?: Array<{ _id?: string; name?: string; role?: string; profilePhotoUrl?: string }>;
   };
 };
 
 export default function PublicProfileScreen() {
   const router = useRouter();
   const { user: viewer } = useAuth();
+  const { colors, isDark } = useAppTheme();
   const params = useLocalSearchParams<{ userId?: string }>();
   const userId = String(params.userId || "").trim();
   const [data, setData] = useState<PublicProfileResponse | null>(null);
@@ -60,6 +62,7 @@ export default function PublicProfileScreen() {
   const [updatingFollow, setUpdatingFollow] = useState(false);
   const [updatingConnection, setUpdatingConnection] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewPhotoById, setPreviewPhotoById] = useState<Record<string, string>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -89,6 +92,51 @@ export default function PublicProfileScreen() {
       mounted = false;
     };
   }, [userId]);
+
+  const previewIds = useMemo(() => {
+    const ids = new Set<string>();
+    [...(data?.socialPreview?.followers || []), ...(data?.socialPreview?.following || [])].forEach((item) => {
+      const id = String(item?._id || "").trim();
+      if (id && !item?.profilePhotoUrl && !previewPhotoById[id]) ids.add(id);
+    });
+    return Array.from(ids).slice(0, 12);
+  }, [data?.socialPreview?.followers, data?.socialPreview?.following, previewPhotoById]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (previewIds.length === 0) return;
+
+    (async () => {
+      const rows = await Promise.all(
+        previewIds.map(async (id) => {
+          try {
+            const res = await api.get<PublicProfileResponse>(`/api/profiles/public/${id}`);
+            return [id, res.data?.profile?.profilePhotoUrl || ""] as const;
+          } catch {
+            return [id, ""] as const;
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      setPreviewPhotoById((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        rows.forEach(([id, photoUrl]) => {
+          if (photoUrl && next[id] !== photoUrl) {
+            next[id] = photoUrl;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewIds]);
 
   async function refreshProfile() {
     if (!userId) return;
@@ -139,16 +187,16 @@ export default function PublicProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#1F7A4C" />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   if (!data) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error || "Profile not found."}</Text>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={[styles.error, { color: colors.danger }]}>{error || "Profile not found."}</Text>
       </View>
     );
   }
@@ -160,221 +208,295 @@ export default function PublicProfileScreen() {
     : "";
   const isSelf = String(viewer?.id || "") === String(data.user._id || "");
   const connectionStatus = data.social?.connectionStatus || "none";
+  const profileSummary = sanitizeDisplayText(profile.about || profile.bio || "No profile summary yet.");
+  const identityMeta = [profile.collegeName, profile.state].filter(Boolean).join(" | ");
+  const audienceRows = [
+    { label: "Audience", value: data.social?.followers ?? 0 },
+    { label: "Following", value: data.social?.following ?? 0 },
+    { label: "Circle", value: data.social?.connections ?? 0 }
+  ];
+
+  function renderPreviewRow(items: Array<{ _id?: string; name?: string; role?: string; profilePhotoUrl?: string }>, emptyText: string) {
+    if (!items.length) {
+      return <Text style={[styles.meta, { color: colors.textMuted, textAlign: "left" }]}>{emptyText}</Text>;
+    }
+
+    return items.slice(0, 8).map((item, idx) => {
+      const id = String(item._id || "");
+      const photoUrl = item.profilePhotoUrl || previewPhotoById[id] || "";
+      return (
+        <TouchableOpacity
+          key={`${id || idx}`}
+          style={[styles.previewRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+          onPress={() => (id ? router.push(`/public-profile/${id}` as never) : undefined)}
+          disabled={!id}
+        >
+          {photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={styles.previewAvatarImage} />
+          ) : (
+            <View style={[styles.previewAvatarFallback, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
+              <Text style={[styles.previewAvatarText, { color: colors.accent }]}>
+                {String(item.name || "U").trim().charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.previewName, { color: colors.text }]} numberOfLines={1}>
+              {item.name || "User"}
+            </Text>
+            <Text style={[styles.previewRole, { color: colors.textMuted }]} numberOfLines={1}>
+              {item.role || "Member"}
+            </Text>
+          </View>
+          {id ? <Text style={[styles.previewLink, { color: colors.accent }]}>View</Text> : null}
+        </TouchableOpacity>
+      );
+    });
+  }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      {profile.profilePhotoUrl ? (
-        <Image source={{ uri: profile.profilePhotoUrl }} style={styles.avatar} />
-      ) : (
-        <View style={styles.avatarFallback}>
-          <Text style={styles.avatarText}>{data.user.name?.charAt(0)?.toUpperCase() || "U"}</Text>
-        </View>
-      )}
+    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {profile.profilePhotoUrl ? (
+          <Image source={{ uri: profile.profilePhotoUrl }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatarFallback, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
+            <Text style={[styles.avatarText, { color: colors.accent }]}>{data.user.name?.charAt(0)?.toUpperCase() || "U"}</Text>
+          </View>
+        )}
 
-      <View style={styles.headerTop}>
-        <View style={styles.identityBlock}>
-          <Text style={styles.name}>{data.user.name}</Text>
-          <Text style={styles.role}>{data.user.role}</Text>
-          {profile.title || profile.headline ? <Text style={styles.title}>{sanitizeDisplayText(profile.title || profile.headline)}</Text> : null}
-          {[profile.collegeName, profile.state].filter(Boolean).join(" | ") ? (
-            <Text style={styles.metaLine}>{[profile.collegeName, profile.state].filter(Boolean).join(" | ")}</Text>
+        <View style={styles.heroIdentity}>
+          <Text style={[styles.name, { color: colors.text }]}>{data.user.name}</Text>
+          <Text style={[styles.role, { color: colors.textMuted }]}>{data.user.role}</Text>
+          {profile.title || profile.headline ? (
+            <Text style={[styles.title, { color: colors.text }]}>{sanitizeDisplayText(profile.title || profile.headline)}</Text>
+          ) : null}
+          {identityMeta ? <Text style={[styles.metaLine, { color: colors.textMuted }]}>{identityMeta}</Text> : null}
+        </View>
+
+        <View style={styles.statsGrid}>
+          {audienceRows.map((item) => (
+            <View key={item.label} style={[styles.statCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+              <Text style={[styles.statValue, { color: colors.text }]}>{item.value}</Text>
+              <Text style={[styles.statLabel, { color: colors.textMuted }]}>{item.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.metaChips}>
+          {displayLine ? (
+            <View style={[styles.chip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.chipText, { color: colors.text }]}>{displayLine}</Text>
+            </View>
+          ) : null}
+          {educationLine ? (
+            <View style={[styles.chip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.chipText, { color: colors.text }]}>{educationLine}</Text>
+            </View>
+          ) : null}
+          {typeof profile.rating === "number" ? (
+            <View style={[styles.chip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.chipText, { color: colors.text }]}>Rating {profile.rating}</Text>
+            </View>
+          ) : null}
+          {typeof profile.experienceYears === "number" && profile.experienceYears > 0 ? (
+            <View style={[styles.chip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.chipText, { color: colors.text }]}>{profile.experienceYears} years exp</Text>
+            </View>
           ) : null}
         </View>
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{data.social?.followers ?? 0}</Text>
-            <Text style={styles.statLabel}>Audience</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{data.social?.following ?? 0}</Text>
-            <Text style={styles.statLabel}>Following</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{data.social?.connections ?? 0}</Text>
-            <Text style={styles.statLabel}>Circle</Text>
-          </View>
-        </View>
-      </View>
-      <View style={styles.metaChips}>
-        {displayLine ? (
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>{displayLine}</Text>
-          </View>
-        ) : null}
-        {educationLine ? (
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>{educationLine}</Text>
-          </View>
-        ) : null}
-        {typeof profile.rating === "number" ? (
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>Rating {profile.rating}</Text>
-          </View>
-        ) : null}
-        {typeof profile.experienceYears === "number" && profile.experienceYears > 0 ? (
-          <View style={styles.chip}>
-            <Text style={styles.chipText}>{profile.experienceYears} years exp</Text>
-          </View>
-        ) : null}
-      </View>
-      {!isSelf ? (
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={[styles.actionBtn, styles.followBtn]} onPress={toggleFollow} disabled={updatingFollow}>
-            <Text style={styles.followBtnText}>
-              {updatingFollow ? "Updating..." : data.social?.isFollowing ? "Unfollow" : "Follow"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.messageBtn]}
-            onPress={() => router.push(`/chat?userId=${userId}` as never)}
-          >
-            <Text style={styles.messageBtnText}>Message</Text>
-          </TouchableOpacity>
-          {connectionStatus === "none" || connectionStatus === "rejected" ? (
-            <TouchableOpacity style={[styles.actionBtn, styles.connectBtn]} onPress={sendConnectionRequest} disabled={updatingConnection}>
-              <Text style={styles.connectBtnText}>{updatingConnection ? "Sending..." : "Connect"}</Text>
+
+        {!isSelf ? (
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.followBtn, { backgroundColor: colors.accent }]}
+              onPress={toggleFollow}
+              disabled={updatingFollow}
+            >
+              <Text style={styles.followBtnText}>
+                {updatingFollow ? "Updating..." : data.social?.isFollowing ? "Unfollow" : "Follow"}
+              </Text>
             </TouchableOpacity>
-          ) : null}
-          {connectionStatus === "pending_outgoing" ? (
-            <View style={[styles.actionBtn, styles.pendingBtn]}>
-              <Text style={styles.pendingBtnText}>Request Sent</Text>
-            </View>
-          ) : null}
-          {connectionStatus === "accepted" ? (
-            <View style={[styles.actionBtn, styles.connectedBtn]}>
-              <Text style={styles.connectedBtnText}>Connected</Text>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-      {!isSelf && connectionStatus === "pending_incoming" ? (
-        <View style={styles.actionRow}>
-          <TouchableOpacity style={[styles.actionBtn, styles.connectBtn]} onPress={() => respondConnection("accept")} disabled={updatingConnection}>
-            <Text style={styles.connectBtnText}>{updatingConnection ? "Updating..." : "Accept Request"}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={() => respondConnection("reject")} disabled={updatingConnection}>
-            <Text style={styles.rejectBtnText}>{updatingConnection ? "Updating..." : "Reject"}</Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-      {!isSelf && data.social?.followsYou ? <Text style={styles.meta}>Follows you</Text> : null}
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.messageBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+              onPress={() => router.push(`/chat?userId=${userId}` as never)}
+            >
+              <Text style={[styles.messageBtnText, { color: colors.text }]}>Message</Text>
+            </TouchableOpacity>
+            {connectionStatus === "none" || connectionStatus === "rejected" ? (
+              <TouchableOpacity
+                style={[styles.actionBtn, styles.connectBtn, { backgroundColor: isDark ? colors.accentSoft : "#EAF6EF", borderColor: colors.accent }]}
+                onPress={sendConnectionRequest}
+                disabled={updatingConnection}
+              >
+                <Text style={[styles.connectBtnText, { color: colors.accent }]}>{updatingConnection ? "Sending..." : "Connect"}</Text>
+              </TouchableOpacity>
+            ) : null}
+            {connectionStatus === "pending_outgoing" ? (
+              <View style={[styles.actionBtn, styles.pendingBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                <Text style={[styles.pendingBtnText, { color: colors.text }]}>Request Sent</Text>
+              </View>
+            ) : null}
+            {connectionStatus === "accepted" ? (
+              <View style={[styles.actionBtn, styles.connectedBtn, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
+                <Text style={[styles.connectedBtnText, { color: colors.accent }]}>Connected</Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
-      <Text style={styles.sectionTitle}>About</Text>
-      <Text style={styles.about}>{sanitizeDisplayText(profile.about || profile.bio || "No profile summary yet.")}</Text>
+        {!isSelf && connectionStatus === "pending_incoming" ? (
+          <View style={styles.actionRow}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.followBtn, { backgroundColor: colors.accent }]}
+              onPress={() => respondConnection("accept")}
+              disabled={updatingConnection}
+            >
+              <Text style={styles.followBtnText}>{updatingConnection ? "Updating..." : "Accept Request"}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.rejectBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.danger }]}
+              onPress={() => respondConnection("reject")}
+              disabled={updatingConnection}
+            >
+              <Text style={[styles.rejectBtnText, { color: colors.danger }]}>{updatingConnection ? "Updating..." : "Reject"}</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {!isSelf && data.social?.followsYou ? <Text style={[styles.followBadge, { color: colors.textMuted }]}>Follows you</Text> : null}
+      </View>
+
+      <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>About</Text>
+        <Text style={[styles.about, { color: colors.text }]}>{profileSummary}</Text>
+      </View>
 
       {(profile.skills || []).length ? (
-        <>
-          <Text style={styles.sectionTitle}>Skills</Text>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Skills</Text>
           <View style={styles.chips}>
             {(profile.skills || []).map((item) => (
-              <View key={item} style={styles.chip}>
-                <Text style={styles.chipText}>{item}</Text>
+              <View key={item} style={[styles.chip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                <Text style={[styles.chipText, { color: colors.text }]}>{item}</Text>
               </View>
             ))}
           </View>
-        </>
+        </View>
       ) : null}
 
       {(data.user.specializations || []).length ? (
-        <>
-          <Text style={styles.sectionTitle}>Specializations</Text>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Specializations</Text>
           <View style={styles.chips}>
             {(data.user.specializations || []).map((item) => (
-              <View key={item} style={styles.chip}>
-                <Text style={styles.chipText}>{item}</Text>
+              <View key={item} style={[styles.chip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                <Text style={[styles.chipText, { color: colors.text }]}>{item}</Text>
               </View>
             ))}
           </View>
-        </>
+        </View>
       ) : null}
 
       {(data.socialPreview?.followers || []).length ? (
-        <>
-          <Text style={styles.sectionTitle}>Followers</Text>
-          {(data.socialPreview?.followers || []).slice(0, 8).map((item, idx) => (
-            <Text key={`${item._id || idx}`} style={styles.meta}>
-              {item.name || "User"} {item.role ? `(${item.role})` : ""}
-            </Text>
-          ))}
-        </>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Followers</Text>
+          {renderPreviewRow(data.socialPreview?.followers || [], "No followers yet.")}
+        </View>
       ) : null}
 
       {(data.socialPreview?.following || []).length ? (
-        <>
-          <Text style={styles.sectionTitle}>Following</Text>
-          {(data.socialPreview?.following || []).slice(0, 8).map((item, idx) => (
-            <Text key={`${item._id || idx}`} style={styles.meta}>
-              {item.name || "User"} {item.role ? `(${item.role})` : ""}
-            </Text>
-          ))}
-        </>
+        <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Following</Text>
+          {renderPreviewRow(data.socialPreview?.following || [], "Not following anyone yet.")}
+        </View>
       ) : null}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: "#F4F9F6", padding: 20, paddingBottom: 28 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F4F9F6" },
-  avatar: { width: 100, height: 100, borderRadius: 50, alignSelf: "center", borderWidth: 2, borderColor: "#CFE4D8" },
+  container: { padding: 16, paddingBottom: 32, gap: 14 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  heroCard: { borderWidth: 1, borderRadius: 28, padding: 18, gap: 14 },
+  avatar: { width: 112, height: 112, borderRadius: 56, alignSelf: "center", borderWidth: 2, borderColor: "#CFE4D8" },
   avatarFallback: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
+    width: 112,
+    height: 112,
+    borderRadius: 56,
     alignSelf: "center",
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 2,
-    borderColor: "#CFE4D8",
-    backgroundColor: "#E8F5EE"
+    borderWidth: 2
   },
-  avatarText: { color: "#0B3D2E", fontSize: 36, fontWeight: "800" },
-  headerTop: { marginTop: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 12 },
-  identityBlock: { flex: 1, paddingRight: 6 },
-  name: { fontSize: 24, fontWeight: "800", color: "#1E2B24" },
-  role: { marginTop: 4, color: "#667085", textTransform: "capitalize" },
-  title: { marginTop: 6, color: "#344054", fontWeight: "700" },
-  metaLine: { marginTop: 4, color: "#667085" },
-  meta: { marginTop: 4, color: "#667085", textAlign: "center" },
-  statsRow: { flexDirection: "row", gap: 8, flex: 1, justifyContent: "space-between" },
+  avatarText: { fontSize: 40, fontWeight: "800" },
+  heroIdentity: { alignItems: "center", gap: 4 },
+  name: { fontSize: 28, fontWeight: "900", textAlign: "center" },
+  role: { textTransform: "capitalize", fontWeight: "700", fontSize: 15 },
+  title: { textAlign: "center", fontWeight: "800", fontSize: 16 },
+  metaLine: { textAlign: "center", lineHeight: 20 },
+  meta: { marginTop: 4, textAlign: "center", lineHeight: 20 },
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   statCard: {
-    minWidth: 74,
-    backgroundColor: "#fff",
+    width: "31%",
     borderWidth: 1,
-    borderColor: "#E4E7EC",
-    borderRadius: 10,
-    paddingVertical: 8,
+    borderRadius: 16,
+    minHeight: 82,
+    paddingVertical: 12,
     paddingHorizontal: 10,
     alignItems: "center"
   },
-  statValue: { color: "#13251E", fontWeight: "800", fontSize: 16 },
-  statLabel: { marginTop: 2, color: "#667085", fontSize: 11, fontWeight: "600" },
+  statValue: { fontWeight: "900", fontSize: 22 },
+  statLabel: { marginTop: 4, fontSize: 12, fontWeight: "700", textAlign: "center" },
   metaChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
-  actionRow: { marginTop: 10, flexDirection: "row", gap: 8 },
-  actionBtn: { borderRadius: 999, paddingVertical: 8, paddingHorizontal: 12, alignItems: "center", justifyContent: "center" },
-  followBtn: { backgroundColor: "#1F7A4C", flex: 1 },
+  actionRow: { marginTop: 2, flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  actionBtn: { borderRadius: 999, paddingVertical: 12, paddingHorizontal: 16, alignItems: "center", justifyContent: "center", minWidth: "31%" },
+  followBtn: { flex: 1 },
   followBtnText: { color: "#fff", fontWeight: "700" },
-  messageBtn: { backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#98A2B3", flex: 1 },
-  messageBtnText: { color: "#344054", fontWeight: "700" },
-  connectBtn: { backgroundColor: "#165DFF", flex: 1 },
-  connectBtnText: { color: "#fff", fontWeight: "700" },
-  pendingBtn: { backgroundColor: "#F2F4F7", borderWidth: 1, borderColor: "#D0D5DD", flex: 1 },
-  pendingBtnText: { color: "#344054", fontWeight: "700" },
-  connectedBtn: { backgroundColor: "#E7F5EE", borderWidth: 1, borderColor: "#CDE7D8", flex: 1 },
-  connectedBtnText: { color: "#1F7A4C", fontWeight: "700" },
-  rejectBtn: { backgroundColor: "#FFF1F3", borderWidth: 1, borderColor: "#F04438", flex: 1 },
-  rejectBtnText: { color: "#B42318", fontWeight: "700" },
-  sectionTitle: { marginTop: 18, marginBottom: 8, color: "#1E2B24", fontWeight: "800", fontSize: 16 },
-  about: { color: "#344054", lineHeight: 20 },
+  messageBtn: { borderWidth: 1, flex: 1 },
+  messageBtnText: { fontWeight: "700" },
+  connectBtn: { borderWidth: 1, flex: 1 },
+  connectBtnText: { fontWeight: "700" },
+  pendingBtn: { borderWidth: 1, flex: 1 },
+  pendingBtnText: { fontWeight: "700" },
+  connectedBtn: { borderWidth: 1, flex: 1 },
+  connectedBtnText: { fontWeight: "700" },
+  rejectBtn: { borderWidth: 1, flex: 1 },
+  rejectBtnText: { fontWeight: "700" },
+  followBadge: { fontWeight: "700", textAlign: "center" },
+  sectionCard: { borderWidth: 1, borderRadius: 24, padding: 18 },
+  sectionTitle: { marginBottom: 10, fontWeight: "900", fontSize: 18 },
+  about: { lineHeight: 24, fontSize: 15, fontWeight: "600" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
     borderWidth: 1,
-    borderColor: "#D0D5DD",
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#FFFFFF"
+    paddingHorizontal: 12,
+    paddingVertical: 8
   },
-  chipText: { color: "#344054", fontWeight: "600", fontSize: 12 },
-  error: { color: "#B42318" }
+  chipText: { fontWeight: "700", fontSize: 12 },
+  previewRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10
+  },
+  previewAvatarImage: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, borderColor: "#CFE4D8" },
+  previewAvatarFallback: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  previewAvatarText: { fontWeight: "800", fontSize: 18 },
+  previewName: { fontWeight: "800", fontSize: 15 },
+  previewRole: { marginTop: 2, fontSize: 12, textTransform: "capitalize" },
+  previewLink: { fontWeight: "800" },
+  error: { fontWeight: "700" }
 });

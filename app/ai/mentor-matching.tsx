@@ -36,6 +36,7 @@ export default function AiMentorMatchingPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [finding, setFinding] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mentorPhotoById, setMentorPhotoById] = useState<Record<string, string>>({});
   const didAutofill = useRef(false);
 
   useEffect(() => {
@@ -111,6 +112,47 @@ export default function AiMentorMatchingPage() {
   const topMatch = filtered[0] || null;
   const avgScore = filtered.length ? Math.round(filtered.reduce((sum, item) => sum + Number(item.matchScore || 0), 0) / filtered.length) : 0;
 
+  useEffect(() => {
+    let cancelled = false;
+    const missingIds = filtered
+      .filter((item) => !item.profilePhotoUrl && !mentorPhotoById[item.mentorId])
+      .map((item) => item.mentorId)
+      .slice(0, 16);
+
+    if (missingIds.length === 0) return;
+
+    (async () => {
+      const rows = await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const { data } = await api.get(`/api/profiles/public/${id}`);
+            return [id, data?.profile?.profilePhotoUrl || ""] as const;
+          } catch {
+            return [id, ""] as const;
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      setMentorPhotoById((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        rows.forEach(([id, url]) => {
+          if (url && next[id] !== url) {
+            next[id] = url;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filtered, mentorPhotoById]);
+
   return (
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.page, { backgroundColor: colors.background }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
       <LinearGradient colors={["#0E6A42", "#1F7A4C", "#6FCF97"]} style={styles.hero}>
@@ -165,8 +207,8 @@ export default function AiMentorMatchingPage() {
           <LinearGradient colors={isDark ? ["#1C2737", "#172231"] : ["#EEF4FF", "#F7F8FF"]} style={[styles.topCard, { borderColor: isDark ? colors.border : "#D6E4FF" }]}>
             <View style={styles.topCardHeader}>
               <View style={styles.topIdentity}>
-                {topMatch.profilePhotoUrl ? (
-                  <Image source={{ uri: topMatch.profilePhotoUrl }} style={styles.topAvatarImage} />
+                {topMatch.profilePhotoUrl || mentorPhotoById[topMatch.mentorId] ? (
+                  <Image source={{ uri: topMatch.profilePhotoUrl || mentorPhotoById[topMatch.mentorId] }} style={styles.topAvatarImage} />
                 ) : (
                   <View style={styles.topAvatarFallback}>
                     <Text style={styles.avatarText}>{topMatch.name.charAt(0).toUpperCase()}</Text>
@@ -215,8 +257,8 @@ export default function AiMentorMatchingPage() {
         {filtered.map((item) => (
           <View key={item.mentorId} style={[styles.resultCard, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }]}>
             <View style={styles.resultTop}>
-              {item.profilePhotoUrl ? (
-                <Image source={{ uri: item.profilePhotoUrl }} style={styles.resultAvatarImage} />
+              {item.profilePhotoUrl || mentorPhotoById[item.mentorId] ? (
+                <Image source={{ uri: item.profilePhotoUrl || mentorPhotoById[item.mentorId] }} style={styles.resultAvatarImage} />
               ) : (
                 <View style={styles.avatarPlaceholder}>
                   <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
@@ -263,8 +305,8 @@ export default function AiMentorMatchingPage() {
         ))}
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Actions</Text>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>Actions</Text>
         <View style={styles.actionRow}>
           <TouchableOpacity
             style={styles.primaryBtn}

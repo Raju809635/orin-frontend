@@ -72,6 +72,10 @@ type FeedPost = {
     sad?: number;
     angry?: number;
   };
+  reactions?: Array<{
+    userId?: string | { _id?: string; name?: string; role?: string; profilePhotoUrl?: string } | null;
+    type?: "like" | "love" | "care" | "haha" | "wow" | "sad" | "angry" | null;
+  }>;
   authorId?: {
     _id?: string;
     name?: string;
@@ -108,6 +112,14 @@ type CircleMember = {
   name: string;
   role: string;
   profilePhotoUrl?: string;
+};
+
+type PostLikeUser = {
+  id: string;
+  name: string;
+  role: string;
+  profilePhotoUrl?: string;
+  reactionType?: "like" | "love" | "care" | "haha" | "wow" | "sad" | "angry" | null;
 };
 
 type NetworkSectionId = "compose" | "feed" | "connections";
@@ -154,6 +166,7 @@ export default function NetworkScreen() {
   const [expandablePosts, setExpandablePosts] = useState<Record<string, boolean>>({});
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestionPhotoById, setSuggestionPhotoById] = useState<Record<string, string>>({});
+  const [personPhotoById, setPersonPhotoById] = useState<Record<string, string>>({});
   const [pendingIncoming, setPendingIncoming] = useState<ConnectionRow[]>([]);
   const [circleMembers, setCircleMembers] = useState<CircleMember[]>([]);
   const [requestedCircleIds, setRequestedCircleIds] = useState<Record<string, boolean>>({});
@@ -178,6 +191,11 @@ export default function NetworkScreen() {
     visible: false,
     postId: "",
     comments: []
+  });
+  const [likesModal, setLikesModal] = useState<{ visible: boolean; postId: string; users: PostLikeUser[] }>({
+    visible: false,
+    postId: "",
+    users: []
   });
   const [editingCommentId, setEditingCommentId] = useState<string>("");
   const [editingCommentText, setEditingCommentText] = useState("");
@@ -359,6 +377,55 @@ export default function NetworkScreen() {
       cancelled = true;
     };
   }, [suggestions, suggestionPhotoById]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const missingIds = Array.from(
+      new Set(
+        [
+          ...circleMembers
+            .filter((item) => !item.profilePhotoUrl)
+            .map((item) => String(item.id || "").trim()),
+          ...commentsModal.comments
+            .filter((item) => !item.authorId?.profilePhotoUrl)
+            .map((item) => String(item.authorId?._id || "").trim())
+        ].filter((id) => id && !personPhotoById[id])
+      )
+    ).slice(0, 16);
+
+    if (missingIds.length === 0) return;
+
+    (async () => {
+      const rows = await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const { data } = await api.get(`/api/profiles/public/${id}`);
+            return [id, data?.profile?.profilePhotoUrl || ""] as const;
+          } catch {
+            return [id, ""] as const;
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      setPersonPhotoById((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        rows.forEach(([id, url]) => {
+          if (url && next[id] !== url) {
+            next[id] = url;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [circleMembers, commentsModal.comments, personPhotoById]);
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
@@ -545,6 +612,63 @@ export default function NetworkScreen() {
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load comments.");
     }
+  }
+
+  async function openLikes(post: FeedPost) {
+    const reactions = post.reactions || [];
+    if (!reactions.length) return;
+
+    const unique = new Map<string, PostLikeUser>();
+    reactions.forEach((entry) => {
+      const rawUser = entry.userId;
+      const id = typeof rawUser === "string" ? rawUser : String(rawUser?._id || "").trim();
+      if (!id) return;
+      unique.set(id, {
+        id,
+        name: typeof rawUser === "string" ? "ORIN User" : rawUser?.name || "ORIN User",
+        role: typeof rawUser === "string" ? "member" : rawUser?.role || "member",
+        profilePhotoUrl: typeof rawUser === "string" ? "" : rawUser?.profilePhotoUrl || personPhotoById[id] || "",
+        reactionType: entry.type || "like"
+      });
+    });
+
+    const users = Array.from(unique.values());
+    const missingIds = users.filter((item) => !item.profilePhotoUrl).map((item) => item.id).slice(0, 20);
+
+    if (missingIds.length > 0) {
+      const rows = await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const { data } = await api.get(`/api/profiles/public/${id}`);
+            return [id, data?.profile?.profilePhotoUrl || "", data?.user?.name || "", data?.user?.role || "member"] as const;
+          } catch {
+            return [id, "", "", "member"] as const;
+          }
+        })
+      );
+
+      setPersonPhotoById((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        rows.forEach(([id, photoUrl]) => {
+          if (photoUrl && next[id] !== photoUrl) {
+            next[id] = photoUrl;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+
+      rows.forEach(([id, photoUrl, name, role]) => {
+        const item = unique.get(id);
+        if (!item) return;
+        if (photoUrl) item.profilePhotoUrl = photoUrl;
+        if (name) item.name = name;
+        if (role) item.role = role;
+      });
+    }
+
+    setLikesModal({ visible: true, postId: post._id, users: Array.from(unique.values()) });
   }
 
   function replyToComment(item: FeedComment) {
@@ -811,8 +935,8 @@ export default function NetworkScreen() {
                   style={styles.rowItem}
                   onPress={() => router.push(`/public-profile/${member.id}` as never)}
                 >
-                  {member.profilePhotoUrl ? (
-                    <Image source={{ uri: member.profilePhotoUrl }} style={styles.commentAvatarImage} />
+                  {member.profilePhotoUrl || personPhotoById[member.id] ? (
+                    <Image source={{ uri: member.profilePhotoUrl || personPhotoById[member.id] }} style={styles.commentAvatarImage} />
                   ) : (
                     <View style={styles.commentAvatar}>
                       <Text style={styles.commentAvatarText}>{String(member.name || "U").trim().charAt(0).toUpperCase()}</Text>
@@ -977,13 +1101,17 @@ export default function NetworkScreen() {
                     ) : null}
 
                     {(summaryReactionCount > 0 || summaryCommentCount > 0) ? (
-                      <View style={[styles.feedStatsRow, { borderColor: colors.border }]}>
+                      <TouchableOpacity
+                        activeOpacity={summaryReactionCount > 0 ? 0.85 : 1}
+                        onPress={() => (summaryReactionCount > 0 ? openLikes(post) : undefined)}
+                        style={[styles.feedStatsRow, { borderColor: colors.border }]}
+                      >
                         <Text style={[styles.feedStatsText, { color: colors.textMuted }]}>
                           {summaryReactionCount > 0 ? `${summaryReactionIcons} ${summaryReactionCount}` : ""}
                           {summaryReactionCount > 0 && summaryCommentCount > 0 ? "   |   " : ""}
                           {summaryCommentCount > 0 ? `${summaryCommentCount} comments` : ""}
                         </Text>
-                      </View>
+                      </TouchableOpacity>
                     ) : null}
                     {reactionMenuFor === post._id ? (
                       <View style={[styles.reactionDropdown, { backgroundColor: isDark ? "#16212B" : "#FFFFFF", borderColor: colors.border }]}>
@@ -1135,46 +1263,49 @@ export default function NetworkScreen() {
         onRequestClose={() => setCommentsModal({ visible: false, postId: "", comments: [] })}
       >
         <View style={styles.commentsModalRoot}>
-          <View style={styles.commentsSheet}>
+          <View style={[styles.commentsSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.commentsHeader}>
-              <Text style={styles.cardTitle}>All Comments</Text>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>All Comments</Text>
               <TouchableOpacity onPress={() => setCommentsModal({ visible: false, postId: "", comments: [] })}>
-                <Ionicons name="close" size={20} color="#344054" />
+                <Ionicons name="close" size={20} color={colors.text} />
               </TouchableOpacity>
             </View>
             <ScrollView style={{ maxHeight: 360 }}>
               {commentsModal.comments.length === 0 ? (
                 <View style={styles.commentsEmptyState}>
                   <Text style={styles.commentsEmptyEmoji}>Comments</Text>
-                  <Text style={styles.commentsEmptyTitle}>No comments yet</Text>
-                  <Text style={styles.commentsEmptyText}>Be the first to comment!</Text>
+                  <Text style={[styles.commentsEmptyTitle, { color: colors.text }]}>No comments yet</Text>
+                  <Text style={[styles.commentsEmptyText, { color: colors.textMuted }]}>Be the first to comment!</Text>
                 </View>
               ) : (
                 commentsModal.comments.map((item) => {
                   const isMine = String(item.authorId?._id || "") === String(user?.id || "");
                   const editing = editingCommentId === item._id;
                   const commentInitial = String(item.authorId?.name || "U").trim().charAt(0).toUpperCase();
+                  const commentAuthorId = String(item.authorId?._id || "");
+                  const commentPhotoUrl = item.authorId?.profilePhotoUrl || personPhotoById[commentAuthorId] || "";
                   return (
-                    <View key={item._id} style={styles.commentItem}>
+                    <View key={item._id} style={[styles.commentItem, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
                       <View style={styles.commentTopRow}>
-                        {item.authorId?.profilePhotoUrl ? (
-                          <Image source={{ uri: item.authorId.profilePhotoUrl }} style={styles.commentAvatarImage} />
+                        {commentPhotoUrl ? (
+                          <Image source={{ uri: commentPhotoUrl }} style={styles.commentAvatarImage} />
                         ) : (
                           <View style={styles.commentAvatar}>
                             <Text style={styles.commentAvatarText}>{commentInitial}</Text>
                           </View>
                         )}
                         <View style={styles.commentMetaBlock}>
-                          <Text style={styles.commentAuthor}>{item.authorId?.name || "User"}</Text>
-                          <Text style={styles.metaSmall}>{item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}</Text>
+                          <Text style={[styles.commentAuthor, { color: colors.text }]}>{item.authorId?.name || "User"}</Text>
+                          <Text style={[styles.metaSmall, { color: colors.textMuted }]}>{item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}</Text>
                         </View>
                       </View>
                       {editing ? (
                         <>
                           <TextInput
-                            style={styles.commentEditInput}
+                            style={[styles.commentEditInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
                             value={editingCommentText}
                             onChangeText={setEditingCommentText}
+                            placeholderTextColor={colors.textMuted}
                           />
                           <View style={styles.commentActionsRow}>
                             <TouchableOpacity onPress={saveCommentEdit}>
@@ -1192,7 +1323,7 @@ export default function NetworkScreen() {
                         </>
                       ) : (
                         <>
-                          <Text style={styles.commentBody}>{sanitizeDisplayText(item.content)}</Text>
+                          <Text style={[styles.commentBody, { color: colors.text }]}>{sanitizeDisplayText(item.content)}</Text>
                           <View style={styles.commentActionsRow}>
                             <TouchableOpacity onPress={() => replyToComment(item)}>
                               <Text style={styles.action}>Reply</Text>
@@ -1220,13 +1351,14 @@ export default function NetworkScreen() {
                 })
               )}
             </ScrollView>
-            <View style={styles.commentComposerSheet}>
+            <View style={[styles.commentComposerSheet, { borderTopColor: colors.border }]}>
               <View style={styles.commentAvatar}>
                 <Text style={styles.commentAvatarText}>{String(user?.name || "U").trim().charAt(0).toUpperCase()}</Text>
               </View>
               <TextInput
-                style={styles.commentInput}
+                style={[styles.commentInput, { color: colors.text }]}
                 placeholder="Write a comment..."
+                placeholderTextColor={colors.textMuted}
                 value={commentDrafts[commentsModal.postId] || ""}
                 onChangeText={(text) => setCommentDrafts((prev) => ({ ...prev, [commentsModal.postId]: text }))}
               />
@@ -1234,6 +1366,60 @@ export default function NetworkScreen() {
                 <Text style={styles.action}>Send</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={likesModal.visible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLikesModal({ visible: false, postId: "", users: [] })}
+      >
+        <View style={styles.commentsModalRoot}>
+          <View style={[styles.commentsSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <View style={styles.commentsHeader}>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>Liked By</Text>
+              <TouchableOpacity onPress={() => setLikesModal({ visible: false, postId: "", users: [] })}>
+                <Ionicons name="close" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 360 }}>
+              {likesModal.users.length === 0 ? (
+                <View style={styles.commentsEmptyState}>
+                  <Text style={styles.commentsEmptyEmoji}>Likes</Text>
+                  <Text style={[styles.commentsEmptyTitle, { color: colors.text }]}>No likes yet</Text>
+                  <Text style={[styles.commentsEmptyText, { color: colors.textMuted }]}>Likes will appear here.</Text>
+                </View>
+              ) : (
+                likesModal.users.map((item) => (
+                  <TouchableOpacity
+                    key={`like-user-${item.id}`}
+                    style={[styles.commentItem, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                    onPress={() => {
+                      setLikesModal({ visible: false, postId: "", users: [] });
+                      router.push(`/public-profile/${item.id}` as never);
+                    }}
+                  >
+                    <View style={styles.commentTopRow}>
+                      {item.profilePhotoUrl || personPhotoById[item.id] ? (
+                        <Image source={{ uri: item.profilePhotoUrl || personPhotoById[item.id] }} style={styles.commentAvatarImage} />
+                      ) : (
+                        <View style={styles.commentAvatar}>
+                          <Text style={styles.commentAvatarText}>{String(item.name || "U").trim().charAt(0).toUpperCase()}</Text>
+                        </View>
+                      )}
+                      <View style={styles.commentMetaBlock}>
+                        <Text style={[styles.commentAuthor, { color: colors.text }]}>{item.name}</Text>
+                        <Text style={[styles.metaSmall, { color: colors.textMuted }]}>
+                          {(item.role || "member").toString()} | {REACTION_OPTIONS[(item.reactionType || "like") as keyof typeof REACTION_OPTIONS]?.label || "Like"}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </ScrollView>
           </View>
         </View>
       </Modal>

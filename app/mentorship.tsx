@@ -498,10 +498,10 @@ export default function MentorshipHubScreen() {
                   <Ionicons name={item.icon} size={20} color={active ? "#1F7A4C" : isDark ? colors.textMuted : "#475467"} />
                 </View>
                 <View style={styles.moduleTextWrap}>
-                  <Text style={[styles.moduleTitle, { color: colors.text }]}>{item.label}</Text>
-                  <Text style={[styles.moduleDesc, { color: colors.textMuted }]}>{item.description}</Text>
+                  <Text style={[styles.moduleTitle, { color: isDark ? "#F8FAFC" : colors.text }]}>{item.label}</Text>
+                  <Text style={[styles.moduleDesc, { color: isDark ? "#D0D5DD" : colors.textMuted }]}>{item.description}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={active ? "#1F7A4C" : "#98A2B3"} />
+                <Ionicons name="chevron-forward" size={18} color={active ? "#1F7A4C" : isDark ? "#D0D5DD" : "#98A2B3"} />
               </LinearGradient>
             </TouchableOpacity>
           );
@@ -601,7 +601,7 @@ export default function MentorshipHubScreen() {
                   <Text style={[styles.meta, { color: colors.textMuted }]}>No live sessions scheduled.</Text>
                 ) : (
                   filteredLiveSessions.slice(0, 6).map((item) => (
-                    <View key={item.id} style={styles.liveSessionCard}>
+                    <View key={item.id} style={[styles.liveSessionCard, isDark && { backgroundColor: colors.surface, borderColor: colors.border }]}>
                       {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
                       <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
                       <Text style={[styles.meta, { color: colors.textMuted }]}>{item.topic || "Live mentor session"}</Text>
@@ -623,7 +623,7 @@ export default function MentorshipHubScreen() {
                   <Text style={[styles.meta, { color: colors.textMuted }]}>No sprint programs available.</Text>
                 ) : (
                   filteredSprints.slice(0, 6).map((item) => (
-                    <View key={item.id} style={styles.liveSessionCard}>
+                    <View key={item.id} style={[styles.liveSessionCard, isDark && { backgroundColor: colors.surface, borderColor: colors.border }]}>
                       {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
                       <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
                       <Text style={[styles.meta, { color: colors.textMuted }]}>{item.domain || "Sprint Program"}</Text>
@@ -662,7 +662,7 @@ export default function MentorshipHubScreen() {
                   <Text style={[styles.meta, { color: colors.textMuted }]}>No live sessions scheduled.</Text>
                 ) : (
                   filteredLiveSessions.slice(0, 6).map((item) => (
-                    <View key={item.id} style={styles.liveSessionCard}>
+                    <View key={item.id} style={[styles.liveSessionCard, isDark && { backgroundColor: colors.surface, borderColor: colors.border }]}>
                       {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
                       <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
                       <Text style={[styles.meta, { color: colors.textMuted }]}>{item.topic || "Live mentor session"}</Text>
@@ -706,7 +706,7 @@ export default function MentorshipHubScreen() {
                   <Text style={[styles.meta, { color: colors.textMuted }]}>No sprint programs available.</Text>
                 ) : (
                   filteredSprints.slice(0, 6).map((item) => (
-                    <View key={item.id} style={styles.liveSessionCard}>
+                    <View key={item.id} style={[styles.liveSessionCard, isDark && { backgroundColor: colors.surface, borderColor: colors.border }]}>
                       {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
                       <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
                       <Text style={[styles.meta, { color: colors.textMuted }]}>{item.domain || "Sprint Program"}</Text>

@@ -64,11 +64,11 @@ type StudentSession = {
 
 type ConnectionRow = {
   _id: string;
-  requesterId?: { _id?: string; name?: string; role?: "student" | "mentor" | "admin" } | null;
-  recipientId?: { _id?: string; name?: string; role?: "student" | "mentor" | "admin" } | null;
+  requesterId?: { _id?: string; name?: string; role?: "student" | "mentor" | "admin"; profilePhotoUrl?: string } | null;
+  recipientId?: { _id?: string; name?: string; role?: "student" | "mentor" | "admin"; profilePhotoUrl?: string } | null;
 };
 
-const QUICK_EMOJIS = ["😊", "🔥", "👏", "💡", "🚀", "🙏"];
+const QUICK_EMOJIS = [":)", "<3", "gg", "idea", "go", "ty"];
 
 const MESSAGE_TABS = ["Mentors", "Circle"] as const;
 
@@ -132,6 +132,7 @@ export default function ChatScreen() {
   const [showEmojiBar, setShowEmojiBar] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<(typeof MESSAGE_TABS)[number]>("Mentors");
+  const [profilePhotoById, setProfilePhotoById] = useState<Record<string, string>>({});
 
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingActiveRef = useRef(false);
@@ -214,7 +215,8 @@ export default function ChatScreen() {
             name: other.name || "Connection",
             email: "",
             role: (other.role || "student") as CounterpartUser["role"],
-            status: "approved" as const
+            status: "approved" as const,
+            profilePhotoUrl: other.profilePhotoUrl || ""
           };
         })
         .filter((item): item is CounterpartUser => Boolean(item));
@@ -282,6 +284,52 @@ export default function ChatScreen() {
     }, 5000);
     return () => clearInterval(interval);
   }, [activeUserId, loadConversations, loadThread]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const missingIds = Array.from(
+      new Set(
+        [
+          ...circleContacts.filter((item) => !item.profilePhotoUrl).map((item) => String(item._id || "").trim()),
+          ...conversations.filter((item) => !item.counterpart.profilePhotoUrl).map((item) => String(item.counterpartId || "").trim()),
+          activeUser && !activeUser.profilePhotoUrl ? String(activeUser._id || "").trim() : ""
+        ].filter((id) => id && !profilePhotoById[id])
+      )
+    ).slice(0, 18);
+
+    if (missingIds.length === 0) return;
+
+    (async () => {
+      const rows = await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const { data } = await api.get(`/api/profiles/public/${id}`);
+            return [id, data?.profile?.profilePhotoUrl || ""] as const;
+          } catch {
+            return [id, ""] as const;
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      setProfilePhotoById((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        rows.forEach(([id, url]) => {
+          if (url && next[id] !== url) {
+            next[id] = url;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeUser, circleContacts, conversations, profilePhotoById]);
 
   useEffect(() => {
     return () => {
@@ -473,9 +521,13 @@ export default function ChatScreen() {
               >
                 {circleContacts.map((item) => (
                   <TouchableOpacity key={item._id} style={[styles.mentorProfileCard, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => setActiveUserId(item._id)}>
-                    <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.accentSoft }]}>
-                      <Text style={styles.avatarText}>{getInitial(item.name)}</Text>
-                    </View>
+                    {item.profilePhotoUrl || profilePhotoById[item._id] ? (
+                      <Image source={{ uri: item.profilePhotoUrl || profilePhotoById[item._id] }} style={styles.avatar} />
+                    ) : (
+                      <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.accentSoft }]}>
+                        <Text style={styles.avatarText}>{getInitial(item.name)}</Text>
+                      </View>
+                    )}
                     <Text style={[styles.mentorName, { color: colors.text }]} numberOfLines={1}>
                       {item.name}
                     </Text>
@@ -511,8 +563,8 @@ export default function ChatScreen() {
                   onPress={() => setActiveUserId(item.counterpartId)}
                 >
                   <View>
-                    {item.counterpart.profilePhotoUrl ? (
-                      <Image source={{ uri: item.counterpart.profilePhotoUrl }} style={styles.avatarLarge} />
+                    {item.counterpart.profilePhotoUrl || profilePhotoById[item.counterpartId] ? (
+                      <Image source={{ uri: item.counterpart.profilePhotoUrl || profilePhotoById[item.counterpartId] }} style={styles.avatarLarge} />
                     ) : (
                       <View style={[styles.avatarLarge, styles.avatarFallback, { backgroundColor: colors.accentSoft }]}>
                         <Text style={styles.avatarText}>{getInitial(item.counterpart.name)}</Text>
@@ -555,8 +607,8 @@ export default function ChatScreen() {
         <View style={[styles.threadCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={[styles.threadHeader, { borderBottomColor: colors.border }]}>
             <View style={styles.threadIdentity}>
-              {activeUser?.profilePhotoUrl ? (
-                <Image source={{ uri: activeUser.profilePhotoUrl }} style={styles.avatarLarge} />
+              {activeUser?.profilePhotoUrl || (activeUser?._id ? profilePhotoById[String(activeUser._id)] : "") ? (
+                <Image source={{ uri: activeUser?.profilePhotoUrl || profilePhotoById[String(activeUser?._id || "")] }} style={styles.avatarLarge} />
               ) : (
                 <View style={[styles.avatarLarge, styles.avatarFallback, { backgroundColor: colors.accentSoft }]}>
                   <Text style={styles.avatarText}>{getInitial(activeUser?.name)}</Text>
@@ -590,9 +642,9 @@ export default function ChatScreen() {
                           : [styles.bubbleOther, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]
                       ]}
                     >
-                      <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{item.text}</Text>
+                      <Text style={[styles.bubbleText, { color: mine ? "#FFFFFF" : colors.text }, mine && styles.bubbleTextMine]}>{item.text}</Text>
                       <View style={styles.bubbleFooter}>
-                        <Text style={[styles.bubbleMeta, mine && styles.bubbleMetaMine]}>
+                        <Text style={[styles.bubbleMeta, { color: mine ? "#D1FADF" : colors.textMuted }, mine && styles.bubbleMetaMine]}>
                           {formatMessageTime(item.createdAt)}
                         </Text>
                         {isLastMine ? (
@@ -1064,3 +1116,5 @@ const styles = StyleSheet.create({
     fontWeight: "600"
   }
 });
+
+
