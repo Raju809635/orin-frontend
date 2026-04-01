@@ -23,8 +23,8 @@ type NetworkOverview = {
 
 type ConnectionRow = {
   _id: string;
-  requesterId?: { _id?: string; name?: string; role?: string } | null;
-  recipientId?: { _id?: string; name?: string; role?: string } | null;
+  requesterId?: { _id?: string; name?: string; role?: string; profilePhotoUrl?: string } | null;
+  recipientId?: { _id?: string; name?: string; role?: string; profilePhotoUrl?: string } | null;
 };
 
 type FeedPost = {
@@ -90,7 +90,7 @@ export default function MyProfileScreen() {
   const [socialPreview, setSocialPreview] = useState<PublicProfileLite["socialPreview"] | null>(null);
   const [mentorProfile, setMentorProfile] = useState<MentorProfilePrivate | null>(null);
   const [mentorSessions, setMentorSessions] = useState<MentorSessionLite[]>([]);
-  const [activeList, setActiveList] = useState<"insights" | "audience" | "following" | "circle">("insights");
+  const [activeList, setActiveList] = useState<"insights" | "following" | "circle">("insights");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null);
@@ -135,6 +135,40 @@ export default function MyProfileScreen() {
         return String(other?.role || "").toLowerCase() !== "mentor";
       }),
     [connections, user?.id]
+  );
+  const circlePeople = useMemo(() => {
+    const map = new Map<string, { _id?: string; name?: string; role?: string; profilePhotoUrl?: string }>();
+
+    circleConnections.forEach((item) => {
+      const isRequester = String(item.requesterId?._id || "") === String(user?.id || "");
+      const other = isRequester ? item.recipientId : item.requesterId;
+      const id = String(other?._id || "").trim();
+      if (!id) return;
+      map.set(id, {
+        _id: id,
+        name: other?.name || "Connection",
+        role: other?.role || "member",
+        profilePhotoUrl: other?.profilePhotoUrl || ""
+      });
+    });
+
+    (socialPreview?.followers || []).forEach((item) => {
+      const id = String(item?._id || "").trim();
+      if (!id) return;
+      const existing = map.get(id);
+      map.set(id, {
+        _id: id,
+        name: item?.name || existing?.name || "Follower",
+        role: item?.role || existing?.role || "member",
+        profilePhotoUrl: existing?.profilePhotoUrl || ""
+      });
+    });
+
+    return Array.from(map.values());
+  }, [circleConnections, socialPreview?.followers, user?.id]);
+  const circleCount = useMemo(
+    () => (overview?.follow?.followers ?? 0) + (overview?.connections?.accepted ?? 0),
+    [overview?.connections?.accepted, overview?.follow?.followers]
   );
 
   const loadProfileData = useCallback(async (refresh = false) => {
@@ -230,16 +264,12 @@ export default function MyProfileScreen() {
               <Text style={[styles.statLabel, { color: activeList === "insights" ? colors.accent : colors.textMuted }, activeList === "insights" && styles.statLabelActive]}>Insights</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("circle")}>
-              <Text style={[styles.statValue, { color: colors.text }]}>{overview?.connections?.accepted ?? 0}</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{circleCount}</Text>
               <Text style={[styles.statLabel, { color: activeList === "circle" ? colors.accent : colors.textMuted }, activeList === "circle" && styles.statLabelActive]}>Circle</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("following")}>
               <Text style={[styles.statValue, { color: colors.text }]}>{overview?.follow?.following ?? 0}</Text>
               <Text style={[styles.statLabel, { color: activeList === "following" ? colors.accent : colors.textMuted }, activeList === "following" && styles.statLabelActive]}>Following</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("audience")}>
-              <Text style={[styles.statValue, { color: colors.text }]}>{overview?.follow?.followers ?? 0}</Text>
-              <Text style={[styles.statLabel, { color: activeList === "audience" ? colors.accent : colors.textMuted }, activeList === "audience" && styles.statLabelActive]}>Audience</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -336,40 +366,31 @@ export default function MyProfileScreen() {
       {activeList === "circle" ? (
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[styles.cardTitle, { color: colors.text }]}>My Circle</Text>
-          {circleConnections.length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No accepted connections yet.</Text>
+          {circlePeople.length === 0 ? (
+            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No circle members yet.</Text>
           ) : (
-            circleConnections.slice(0, 20).map((item) => {
-              const isRequester = String(item.requesterId?._id || "") === String(user?.id || "");
-              const other = isRequester ? item.recipientId : item.requesterId;
+            circlePeople.slice(0, 20).map((other, idx) => {
               return (
                 <TouchableOpacity
-                  key={item._id}
+                  key={`${other?._id || idx}-circle`}
                   style={styles.rowItem}
                   onPress={() => (other?._id ? router.push(`/public-profile/${other._id}` as never) : undefined)}
                   disabled={!other?._id}
                 >
-                  <Text style={[styles.rowName, { color: colors.text }]}>{other?.name || "Connection"}</Text>
-                  <Text style={[styles.rowRole, { color: colors.textMuted }]}>{other?.role || "member"}</Text>
+                  {other?.profilePhotoUrl ? (
+                    <Image source={{ uri: other.profilePhotoUrl }} style={styles.rowAvatar} />
+                  ) : (
+                    <View style={[styles.rowAvatar, styles.rowAvatarFallback, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
+                      <Text style={[styles.rowAvatarText, { color: colors.accent }]}>{String(other?.name || "U").trim().charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowName, { color: colors.text }]}>{other?.name || "Connection"}</Text>
+                    <Text style={[styles.rowRole, { color: colors.textMuted }]}>{other?.role || "member"}</Text>
+                  </View>
                 </TouchableOpacity>
               );
             })
-          )}
-        </View>
-      ) : null}
-
-      {activeList === "audience" ? (
-        <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={[styles.cardTitle, { color: colors.text }]}>Audience</Text>
-          {(socialPreview?.followers || []).length === 0 ? (
-            <Text style={[styles.emptyText, { color: colors.textMuted }]}>No followers yet.</Text>
-          ) : (
-            (socialPreview?.followers || []).slice(0, 20).map((item, idx) => (
-              <TouchableOpacity key={`${item._id || idx}-f`} style={styles.rowItem} onPress={() => item._id ? router.push(`/public-profile/${item._id}` as never) : undefined}>
-                <Text style={[styles.rowName, { color: colors.text }]}>{item.name || "User"}</Text>
-                <Text style={[styles.rowRole, { color: colors.textMuted }]}>{item.role || "member"}</Text>
-              </TouchableOpacity>
-            ))
           )}
         </View>
       ) : null}
@@ -382,8 +403,13 @@ export default function MyProfileScreen() {
           ) : (
             (socialPreview?.following || []).slice(0, 20).map((item, idx) => (
               <TouchableOpacity key={`${item._id || idx}-g`} style={styles.rowItem} onPress={() => item._id ? router.push(`/public-profile/${item._id}` as never) : undefined}>
-                <Text style={[styles.rowName, { color: colors.text }]}>{item.name || "User"}</Text>
-                <Text style={[styles.rowRole, { color: colors.textMuted }]}>{item.role || "member"}</Text>
+                <View style={[styles.rowAvatar, styles.rowAvatarFallback, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
+                  <Text style={[styles.rowAvatarText, { color: colors.accent }]}>{String(item.name || "U").trim().charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.rowName, { color: colors.text }]}>{item.name || "User"}</Text>
+                  <Text style={[styles.rowRole, { color: colors.textMuted }]}>{item.role || "member"}</Text>
+                </View>
               </TouchableOpacity>
             ))
           )}
@@ -525,7 +551,10 @@ const styles = StyleSheet.create({
   detailLabel: { color: "#667085", fontSize: 12, fontWeight: "700" },
   detailValue: { color: "#1E2B24", fontSize: 17, fontWeight: "800", marginTop: 4 },
   inlineMeta: { color: "#667085", marginTop: 4 },
-  rowItem: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F2F4F7" },
+  rowItem: { paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#F2F4F7", flexDirection: "row", alignItems: "center", gap: 12 },
+  rowAvatar: { width: 40, height: 40, borderRadius: 20, borderWidth: 1, borderColor: "#D0D5DD" },
+  rowAvatarFallback: { alignItems: "center", justifyContent: "center" },
+  rowAvatarText: { fontWeight: "800" },
   rowName: { color: "#1E2B24", fontWeight: "700" },
   rowRole: { color: "#667085", textTransform: "capitalize", marginTop: 2 },
   emptyText: { color: "#667085" },

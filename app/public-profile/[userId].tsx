@@ -210,10 +210,10 @@ export default function PublicProfileScreen() {
   const connectionStatus = data.social?.connectionStatus || "none";
   const profileSummary = sanitizeDisplayText(profile.about || profile.bio || "No profile summary yet.");
   const identityMeta = [profile.collegeName, profile.state].filter(Boolean).join(" | ");
-  const audienceRows = [
-    { label: "Audience", value: data.social?.followers ?? 0 },
-    { label: "Following", value: data.social?.following ?? 0 },
-    { label: "Circle", value: data.social?.connections ?? 0 }
+  const circleCount = (data.social?.followers ?? 0) + (data.social?.connections ?? 0);
+  const profileStats = [
+    { label: "Circle", value: circleCount },
+    { label: "Following", value: data.social?.following ?? 0 }
   ];
 
   function renderPreviewRow(items: Array<{ _id?: string; name?: string; role?: string; profilePhotoUrl?: string }>, emptyText: string) {
@@ -275,7 +275,7 @@ export default function PublicProfileScreen() {
         </View>
 
         <View style={styles.statsGrid}>
-          {audienceRows.map((item) => (
+          {profileStats.map((item) => (
             <View key={item.label} style={[styles.statCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
               <Text style={[styles.statValue, { color: colors.text }]}>{item.value}</Text>
               <Text style={[styles.statLabel, { color: colors.textMuted }]}>{item.label}</Text>
