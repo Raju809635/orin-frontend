@@ -105,13 +105,13 @@ export default function CommunityReputationPage() {
 
   const badgeList = useMemo(() => {
     const badges: string[] = [];
-    if (xp >= 10) badges.push("ðŸ… First Step");
-    if (streakDays >= 3) badges.push("ðŸ”¥ 3 Day Streak");
-    if (streakDays >= 7) badges.push("âš¡ 7 Day Streak");
-    if (xp >= 250) badges.push("ðŸš€ Builder");
-    if (xp >= 500) badges.push("ðŸ’Ž Pro Circle");
-    if (xp >= 900) badges.push("ðŸ‘‘ Elite Performer");
-    return badges.length ? badges : ["ðŸŒ± Starter Badge"];
+    if (xp >= 10) badges.push("First Step");
+    if (streakDays >= 3) badges.push("3 Day Streak");
+    if (streakDays >= 7) badges.push("7 Day Streak");
+    if (xp >= 250) badges.push("Builder");
+    if (xp >= 500) badges.push("Pro Circle");
+    if (xp >= 900) badges.push("Elite Performer");
+    return badges.length ? badges : ["Starter Badge"];
   }, [streakDays, xp]);
 
   return (
@@ -126,7 +126,7 @@ export default function CommunityReputationPage() {
       <View style={styles.heroCard}>
         <View style={styles.heroTop}>
           <View>
-            <Text style={styles.heroEyebrow}>âš¡ XP</Text>
+            <Text style={styles.heroEyebrow}>XP</Text>
             <Text style={styles.heroValue}>{xp}</Text>
             <Text style={styles.heroMeta}>Top {data?.topPercent ?? "-"}% on ORIN</Text>
           </View>
@@ -137,25 +137,25 @@ export default function CommunityReputationPage() {
         </View>
 
         <Text style={styles.levelText}>
-          ðŸ”¥ {level.label}
-          {nextXp ? ` â€¢ Next level at ${nextXp} XP` : " â€¢ Max tier reached"}
+          {level.label}
+          {nextXp ? ` | Next level at ${nextXp} XP` : " | Max tier reached"}
         </Text>
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progress * 100}%` }]} />
         </View>
         <Text style={styles.progressMeta}>
-          {nextXp ? `ðŸŽ¯ ${xpToNext} XP needed for the next rank` : "ðŸ† You have reached the current top rank"}
+          {nextXp ? `${xpToNext} XP needed for the next rank` : "You have reached the current top rank"}
         </Text>
       </View>
 
       <View style={styles.row}>
         <View style={[styles.statCard, styles.rowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={styles.statLabel}>ðŸ”¥ Streak</Text>
+          <Text style={styles.statLabel}>Streak</Text>
           <Text style={styles.statValue}>{streakDays} days</Text>
           <Text style={styles.statHint}>Come back daily to keep momentum.</Text>
         </View>
         <View style={[styles.statCard, styles.rowCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <Text style={styles.statLabel}>ðŸ“Š Today</Text>
+          <Text style={styles.statLabel}>Today</Text>
           <Text style={styles.statValue}>{todayProgress}%</Text>
           <Text style={styles.statHint}>Complete one more action to push your XP.</Text>
         </View>
@@ -167,10 +167,10 @@ export default function CommunityReputationPage() {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>How to Earn XP</Text>
         </View>
         <View style={styles.earnList}>
-          <Text style={[styles.earnItem, { color: colors.text }]}>âš¡ Post updates â†’ +10 XP</Text>
-          <Text style={[styles.earnItem, { color: colors.text }]}>ðŸš€ Add a project â†’ +30 XP</Text>
-          <Text style={[styles.earnItem, { color: colors.text }]}>ðŸ’¬ Help in your circle â†’ +20 XP</Text>
-          <Text style={[styles.earnItem, { color: colors.text }]}>ðŸ”¥ Daily login / quiz streak â†’ +5 XP and bonus streak rewards</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>Post updates -> +10 XP</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>Add a project -> +30 XP</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>Help in your circle -> +20 XP</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>Daily login / quiz streak -> +5 XP and bonus streak rewards</Text>
         </View>
       </View>
 

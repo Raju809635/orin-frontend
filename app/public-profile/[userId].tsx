@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { notify } from "@/utils/notify";
+import { sanitizeDisplayText } from "@/utils/textSanitize";
 
 type PublicUser = {
   _id: string;
@@ -155,7 +156,7 @@ export default function PublicProfileScreen() {
   const profile = data.profile || {};
   const displayLine = [data.user.primaryCategory, data.user.subCategory].filter(Boolean).join(" > ");
   const educationLine = (profile.education || []).length
-    ? [profile.education?.[0]?.degree, profile.education?.[0]?.school, profile.education?.[0]?.year].filter(Boolean).join(" • ")
+    ? [profile.education?.[0]?.degree, profile.education?.[0]?.school, profile.education?.[0]?.year].filter(Boolean).join(" | ")
     : "";
   const isSelf = String(viewer?.id || "") === String(data.user._id || "");
   const connectionStatus = data.social?.connectionStatus || "none";
@@ -174,9 +175,9 @@ export default function PublicProfileScreen() {
         <View style={styles.identityBlock}>
           <Text style={styles.name}>{data.user.name}</Text>
           <Text style={styles.role}>{data.user.role}</Text>
-          {profile.title || profile.headline ? <Text style={styles.title}>{profile.title || profile.headline}</Text> : null}
-          {[profile.collegeName, profile.state].filter(Boolean).join(" • ") ? (
-            <Text style={styles.metaLine}>{[profile.collegeName, profile.state].filter(Boolean).join(" • ")}</Text>
+          {profile.title || profile.headline ? <Text style={styles.title}>{sanitizeDisplayText(profile.title || profile.headline)}</Text> : null}
+          {[profile.collegeName, profile.state].filter(Boolean).join(" | ") ? (
+            <Text style={styles.metaLine}>{[profile.collegeName, profile.state].filter(Boolean).join(" | ")}</Text>
           ) : null}
         </View>
         <View style={styles.statsRow}>
@@ -259,7 +260,7 @@ export default function PublicProfileScreen() {
       {!isSelf && data.social?.followsYou ? <Text style={styles.meta}>Follows you</Text> : null}
 
       <Text style={styles.sectionTitle}>About</Text>
-      <Text style={styles.about}>{profile.about || profile.bio || "No profile summary yet."}</Text>
+      <Text style={styles.about}>{sanitizeDisplayText(profile.about || profile.bio || "No profile summary yet.")}</Text>
 
       {(profile.skills || []).length ? (
         <>
@@ -377,4 +378,3 @@ const styles = StyleSheet.create({
   chipText: { color: "#344054", fontWeight: "600", fontSize: 12 },
   error: { color: "#B42318" }
 });
-

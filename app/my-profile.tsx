@@ -5,6 +5,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { Ionicons } from "@expo/vector-icons";
+import { sanitizeDisplayText } from "@/utils/textSanitize";
 
 type NetworkOverview = {
   connections?: {
@@ -112,16 +113,16 @@ export default function MyProfileScreen() {
 
   const heroMeta = useMemo(() => {
     if (user?.role === "mentor") {
-      return [mentorProfile?.company, mentorProfile?.state].filter(Boolean).join(" â€¢ ");
+      return sanitizeDisplayText([mentorProfile?.company, mentorProfile?.state].filter(Boolean).join(" | "));
     }
-    return [publicProfile?.collegeName, publicProfile?.state].filter(Boolean).join(" â€¢ ");
+    return sanitizeDisplayText([publicProfile?.collegeName, publicProfile?.state].filter(Boolean).join(" | "));
   }, [mentorProfile?.company, mentorProfile?.state, publicProfile?.collegeName, publicProfile?.state, user?.role]);
 
   const educationLine = useMemo(() => {
     const source = user?.role === "mentor" ? mentorProfile?.education || [] : publicProfile?.education || [];
     if (!source.length) return "";
     const top = source[0];
-    return [top?.degree, top?.school, top?.year].filter(Boolean).join(" â€¢ ");
+    return sanitizeDisplayText([top?.degree, top?.school, top?.year].filter(Boolean).join(" | "));
   }, [mentorProfile?.education, publicProfile?.education, user?.role]);
 
   const avatarUrl = publicProfile?.profilePhotoUrl || "";
@@ -236,11 +237,11 @@ export default function MyProfileScreen() {
 
         <Text style={[styles.name, { color: colors.text }]}>{user?.name || "ORIN User"}</Text>
         <Text style={styles.role}>{user?.role === "mentor" ? "Mentor" : "Student"}</Text>
-        {heroTitle ? <Text style={[styles.headline, { color: colors.text }]}>{heroTitle}</Text> : null}
+        {heroTitle ? <Text style={[styles.headline, { color: colors.text }]}>{sanitizeDisplayText(heroTitle)}</Text> : null}
         {heroMeta ? <Text style={[styles.subMeta, { color: colors.textMuted }]}>{heroMeta}</Text> : null}
         {publicProfile?.about || publicProfile?.bio ? (
           <Text style={[styles.bio, { color: colors.textMuted }]} numberOfLines={3}>
-            {publicProfile?.about || publicProfile?.bio}
+            {sanitizeDisplayText(publicProfile?.about || publicProfile?.bio)}
           </Text>
         ) : null}
 
@@ -401,9 +402,9 @@ export default function MyProfileScreen() {
                     <Text style={styles.deleteBtnText}>{deletingPostId === post._id ? "Deleting..." : "Delete"}</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={[styles.postText, { color: colors.text }]} numberOfLines={5}>{post.content}</Text>
+                <Text style={[styles.postText, { color: colors.text }]} numberOfLines={5}>{sanitizeDisplayText(post.content)}</Text>
                 <Text style={[styles.postMeta, { color: colors.textMuted }]}>
-                  {post.likeCount || 0} likes â€¢ {post.commentCount || 0} comments â€¢ {post.shareCount || 0} shares
+                  {post.likeCount || 0} likes | {post.commentCount || 0} comments | {post.shareCount || 0} shares
                 </Text>
               </View>
             ))

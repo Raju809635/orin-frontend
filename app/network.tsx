@@ -24,6 +24,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadPostImages } from "@/utils/postMediaUpload";
+import { sanitizeDisplayText } from "@/utils/textSanitize";
 import GlobalHeader from "@/components/global-header";
 
 function normalizeUrl(rawUrl: string) {
@@ -314,7 +315,7 @@ export default function NetworkScreen() {
     ? posts.filter((post) => {
         const authorName = String(post.authorId?.name || "").toLowerCase();
         const authorRole = String(post.authorId?.role || "").toLowerCase();
-        const content = String(post.content || "").toLowerCase();
+        const content = sanitizeDisplayText(post.content || "").toLowerCase();
         const postType = String(post.postType || "").toLowerCase();
         return (
           authorName.includes(normalizedSearch) ||
@@ -420,7 +421,7 @@ export default function NetworkScreen() {
       const post = posts.find((p) => p._id === postId);
       if (action === "share" && post?.content) {
         await Share.share({
-          message: `${post.content}\n\nShared via ORIN`
+          message: `${sanitizeDisplayText(post.content)}\n\nShared via ORIN`
         });
       }
       await api.post(`/api/network/feed/${postId}/react`, reactionType ? { action, reactionType } : { action });
@@ -795,7 +796,7 @@ export default function NetworkScreen() {
 
                     {(() => {
                       const expanded = Boolean(expandedPosts[post._id]);
-                      const contentText = String(post.content || "");
+                      const contentText = sanitizeDisplayText(post.content || "");
                       const heuristicExpandable =
                         contentText.length > EXPAND_FALLBACK_THRESHOLD || contentText.includes("\n");
                       const canExpand = Boolean(expandablePosts[post._id]) || heuristicExpandable;
@@ -813,7 +814,7 @@ export default function NetworkScreen() {
                               setExpandablePosts((prev) => (prev[post._id] === next ? prev : { ...prev, [post._id]: next }));
                             }}
                           >
-                      {splitByUrls(post.content || "").map((part, idx) =>
+                      {splitByUrls(sanitizeDisplayText(post.content || "")).map((part, idx) =>
                         part.url ? (
                           <Text
                             key={`${post._id}-url-${idx}`}
@@ -865,7 +866,7 @@ export default function NetworkScreen() {
                       <View style={[styles.feedStatsRow, { borderColor: colors.border }]}>
                         <Text style={[styles.feedStatsText, { color: colors.textMuted }]}>
                           {summaryReactionCount > 0 ? `${summaryReactionIcons} ${summaryReactionCount}` : ""}
-                          {summaryReactionCount > 0 && summaryCommentCount > 0 ? "   •   " : ""}
+                          {summaryReactionCount > 0 && summaryCommentCount > 0 ? "   |   " : ""}
                           {summaryCommentCount > 0 ? `${summaryCommentCount} comments` : ""}
                         </Text>
                       </View>
@@ -1030,7 +1031,7 @@ export default function NetworkScreen() {
             <ScrollView style={{ maxHeight: 360 }}>
               {commentsModal.comments.length === 0 ? (
                 <View style={styles.commentsEmptyState}>
-                  <Text style={styles.commentsEmptyEmoji}>💬</Text>
+                  <Text style={styles.commentsEmptyEmoji}>Comments</Text>
                   <Text style={styles.commentsEmptyTitle}>No comments yet</Text>
                   <Text style={styles.commentsEmptyText}>Be the first to comment!</Text>
                 </View>
@@ -1073,7 +1074,7 @@ export default function NetworkScreen() {
                         </>
                       ) : (
                         <>
-                          <Text style={styles.commentBody}>{item.content}</Text>
+                          <Text style={styles.commentBody}>{sanitizeDisplayText(item.content)}</Text>
                           <View style={styles.commentActionsRow}>
                             <TouchableOpacity onPress={() => replyToComment(item)}>
                               <Text style={styles.action}>Reply</Text>
@@ -1564,10 +1565,3 @@ const styles = StyleSheet.create({
     fontSize: 14
   }
 });
-
-
-
-
-
-
-

@@ -19,6 +19,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { sanitizeDisplayText } from "@/utils/textSanitize";
 
 type Post = {
   _id: string;
@@ -171,7 +172,7 @@ export default function PostsScreen() {
     try {
       const post = posts.find((p) => p._id === postId);
       if (action === "share" && post?.content) {
-        await Share.share({ message: `${post.content}\n\nShared via ORIN` });
+        await Share.share({ message: `${sanitizeDisplayText(post.content)}\n\nShared via ORIN` });
       }
       await api.post(`/api/network/feed/${postId}/react`, reactionType ? { action, reactionType } : { action });
       setReactionMenuFor(null);
@@ -276,7 +277,7 @@ export default function PostsScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.author}>{post.authorId?.name || "ORIN User"}</Text>
                       <Text style={styles.role}>
-                        {(post.authorId?.role || "member").toUpperCase()} • {formatPostTime(post.createdAt)}
+                        {(post.authorId?.role || "member").toUpperCase()} | {formatPostTime(post.createdAt)}
                       </Text>
                     </View>
                   </TouchableOpacity>
@@ -290,7 +291,7 @@ export default function PostsScreen() {
                 </View>
 
                 <Text style={styles.content}>
-                  {splitByUrls(post.content || "").map((part, idx) =>
+                  {splitByUrls(sanitizeDisplayText(post.content || "")).map((part, idx) =>
                     part.url ? (
                       <Text
                         key={`${post._id}-url-${idx}`}
@@ -328,8 +329,8 @@ export default function PostsScreen() {
                 ) : null}
 
                 <Text style={styles.meta}>
-                  {post.postType} • Reactions {Math.max(totalReactions, Number(post.likeCount || 0))} • Comments{" "}
-                  {post.commentCount || 0} • Shares {post.shareCount || 0}
+                  {post.postType} | Reactions {Math.max(totalReactions, Number(post.likeCount || 0))} | Comments{" "}
+                  {post.commentCount || 0} | Shares {post.shareCount || 0}
                 </Text>
                 {Math.max(totalReactions, Number(post.likeCount || 0)) > 0 ? (
                   <View style={styles.reactionSummaryRow}>
@@ -474,7 +475,7 @@ export default function PostsScreen() {
                 {commentsModal.comments.map((item) => (
                   <View key={item._id} style={styles.commentRow}>
                     <Text style={styles.commentAuthor}>{item.authorId?.name || "User"}</Text>
-                    <Text style={styles.commentBody}>{item.content}</Text>
+                    <Text style={styles.commentBody}>{sanitizeDisplayText(item.content)}</Text>
                   </View>
                 ))}
               </ScrollView>
