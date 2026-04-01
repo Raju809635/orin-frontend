@@ -135,7 +135,6 @@ const POST_COLLAPSED_LINES = 4;
 const EXPAND_FALLBACK_THRESHOLD = 140;
 const NETWORK_SECTION_STALE_MS = 2 * 60 * 1000;
 const { width } = Dimensions.get("window");
-const carouselWidth = Math.max(width - 56, 280);
 const feedMediaWidth = width - 32;
 const REACTION_ORDER = ["like", "love", "wow", "care", "sad", "angry"] as const;
 const REACTION_OPTIONS: Record<(typeof REACTION_ORDER)[number], { emoji: string; label: string }> = {
@@ -178,7 +177,6 @@ export default function NetworkScreen() {
   const [postImageUrls, setPostImageUrls] = useState<string[]>([]);
   const [postType, setPostType] = useState<FeedPost["postType"]>("learning_progress");
   const [followingState, setFollowingState] = useState<Record<string, boolean>>({});
-  const [carouselIndexByPost, setCarouselIndexByPost] = useState<Record<string, number>>({});
   const [viewer, setViewer] = useState<{ visible: boolean; postId: string; images: string[]; index: number }>({
     visible: false,
     postId: "",
@@ -893,11 +891,6 @@ export default function NetworkScreen() {
     }
   }
 
-  function onCarouselScroll(postId: string, x: number) {
-    const index = Math.max(0, Math.round(x / carouselWidth));
-    setCarouselIndexByPost((prev) => ({ ...prev, [postId]: index }));
-  }
-
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -1328,7 +1321,6 @@ export default function NetworkScreen() {
             onMomentumScrollEnd={(e) => {
               const index = Math.round(e.nativeEvent.contentOffset.x / width);
               setViewer((prev) => ({ ...prev, index }));
-              if (viewer.postId) setCarouselIndexByPost((prev) => ({ ...prev, [viewer.postId]: index }));
             }}
           >
             {viewer.images.map((uri, idx) => (
@@ -1678,7 +1670,7 @@ const styles = StyleSheet.create({
   rowTitle: { color: "#1E2B24", fontWeight: "700" },
   action: { color: "#175CD3", fontWeight: "700" },
   actionDanger: { color: "#B42318", fontWeight: "700" },
-  feedSection: { gap: 10 },
+  feedSection: { gap: 8, marginHorizontal: -16 },
   startPostCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -1711,7 +1703,8 @@ const styles = StyleSheet.create({
   },
   startPostPlaceholder: { color: "#667085", fontWeight: "600" },
   postCard: {
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     marginVertical: 2,
     backgroundColor: "transparent"
   },
@@ -1782,9 +1775,6 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   mediaOverlayText: { color: "#FFFFFF", fontSize: 30, fontWeight: "900" },
-  dotRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#D0D5DD" },
-  dotActive: { width: 14, backgroundColor: "#1F7A4C", borderRadius: 7 },
   postActionRow: { marginTop: 10, flexDirection: "row", gap: 6, zIndex: 2 },
   postActionBtn: {
     flex: 1,
