@@ -166,10 +166,7 @@ export default function MyProfileScreen() {
 
     return Array.from(map.values());
   }, [circleConnections, socialPreview?.followers, user?.id]);
-  const circleCount = useMemo(
-    () => (overview?.follow?.followers ?? 0) + (overview?.connections?.accepted ?? 0),
-    [overview?.connections?.accepted, overview?.follow?.followers]
-  );
+  const circleCount = useMemo(() => circlePeople.length, [circlePeople]);
 
   const loadProfileData = useCallback(async (refresh = false) => {
     try {
