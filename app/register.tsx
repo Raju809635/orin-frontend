@@ -1,6 +1,6 @@
-import React, { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -18,6 +18,23 @@ export default function RegisterScreen() {
   const [role, setRole] = useState<Role>("student");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const resetForm = useCallback(() => {
+    setName("");
+    setEmail("");
+    setPhoneNumber("");
+    setPassword("");
+    setShowPassword(false);
+    setRole("student");
+    setError(null);
+    setIsSubmitting(false);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      resetForm();
+    }, [resetForm])
+  );
 
   async function handleRegister() {
     const normalizedPhone = phoneNumber.trim();
@@ -39,7 +56,15 @@ export default function RegisterScreen() {
       if (!response) {
         throw new Error("Registration failed");
       }
-      router.replace("/login" as never);
+      Alert.alert("Registration Successful", "Your account has been created. Please login to continue.", [
+        {
+          text: "Go to Login",
+          onPress: () => {
+            resetForm();
+            router.replace("/login" as never);
+          }
+        }
+      ]);
     } catch (e: any) {
       const rawMessage = e?.response?.data?.message || e?.message || "Registration failed.";
       const message =
@@ -80,6 +105,9 @@ export default function RegisterScreen() {
           placeholder="Password (min 8 characters)"
           placeholderTextColor="#6B7280"
           secureTextEntry={!showPassword}
+          autoCorrect={false}
+          autoCapitalize="none"
+          textContentType="newPassword"
           value={password}
           onChangeText={setPassword}
         />
@@ -212,6 +240,7 @@ const styles = StyleSheet.create({
   },
   passwordInput: {
     flex: 1,
+    color: "#1E2B24",
     paddingHorizontal: 14,
     paddingVertical: 13
   },

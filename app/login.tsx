@@ -1,8 +1,7 @@
-import React, { useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
-import { useRouter } from "expo-router";
+import React, { useCallback, useState } from "react";
+import { ActivityIndicator, Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
-import { notify } from "@/utils/notify";
 import { Ionicons } from "@expo/vector-icons";
 
 export default function LoginScreen() {
@@ -15,13 +14,34 @@ export default function LoginScreen() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const resetForm = useCallback(() => {
+    setEmail("");
+    setPassword("");
+    setShowPassword(false);
+    setError(null);
+    setIsSubmitting(false);
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      resetForm();
+    }, [resetForm])
+  );
+
   async function handleLogin() {
     try {
       setIsSubmitting(true);
       setError(null);
       await login({ email: email.trim().toLowerCase(), password });
-      notify("Login successful.");
-      router.replace("/" as never);
+      Alert.alert("Login Successful", "Welcome back to ORIN.", [
+        {
+          text: "Continue",
+          onPress: () => {
+            resetForm();
+            router.replace("/" as never);
+          }
+        }
+      ]);
     } catch (e: any) {
       const message = e?.response?.data?.message || "Login failed. Please check your credentials.";
       setError(message);
@@ -50,6 +70,9 @@ export default function LoginScreen() {
           placeholder="Password"
           placeholderTextColor="#6B7280"
           secureTextEntry={!showPassword}
+          autoCorrect={false}
+          autoCapitalize="none"
+          textContentType="password"
           value={password}
           onChangeText={setPassword}
         />
@@ -106,6 +129,7 @@ const styles = StyleSheet.create({
   },
   passwordInput: {
     flex: 1,
+    color: "#1E2B24",
     paddingHorizontal: 14,
     paddingVertical: 13
   },
