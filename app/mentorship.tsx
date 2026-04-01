@@ -108,7 +108,7 @@ export default function MentorshipHubScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: MentorshipSectionId }>();
   const { user } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const isMentor = user?.role === "mentor";
   const [activeSection, setActiveSection] = useState<MentorshipSectionId>("discovery");
   const [verifiedMentors, setVerifiedMentors] = useState<VerifiedMentor[]>([]);
