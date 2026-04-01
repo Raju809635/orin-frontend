@@ -46,6 +46,7 @@ export default function SettingsScreen() {
 
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -78,12 +79,28 @@ export default function SettingsScreen() {
   }
 
   async function changePassword() {
+    if (!currentPassword || !newPassword || !confirmNewPassword) {
+      setError("Please fill current password, new password, and confirm password.");
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setError("New password and confirm password do not match.");
+      return;
+    }
+
+    if (currentPassword === newPassword) {
+      setError("New password must be different from your current password.");
+      return;
+    }
+
     try {
       setChangingPassword(true);
       setError(null);
       await api.post("/api/auth/change-password", { currentPassword, newPassword });
       setCurrentPassword("");
       setNewPassword("");
+      setConfirmNewPassword("");
       notify("Password changed. Please login again.");
       await logout();
     } catch (e: any) {
@@ -96,7 +113,7 @@ export default function SettingsScreen() {
   function confirmDeleteAccount() {
     Alert.alert(
       "Delete Account",
-      "This will soft-delete your account and log you out. Continue?",
+      "This will delete your account, log you out, and release your email so you can register again later. Continue?",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -105,7 +122,7 @@ export default function SettingsScreen() {
           onPress: async () => {
             try {
               await api.delete("/api/account/me");
-              notify("Account deleted");
+              notify("Account deleted. You can sign up again later with the same email.");
               await logout();
             } catch (e: any) {
               setError(e?.response?.data?.message || "Failed to delete account");
@@ -288,6 +305,14 @@ export default function SettingsScreen() {
           secureTextEntry
           value={newPassword}
           onChangeText={setNewPassword}
+        />
+        <TextInput
+          style={[styles.input, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, color: colors.text }]}
+          placeholder="Confirm new password"
+          placeholderTextColor={colors.textMuted}
+          secureTextEntry
+          value={confirmNewPassword}
+          onChangeText={setConfirmNewPassword}
         />
         <TouchableOpacity style={[styles.darkButton, { backgroundColor: colors.text }]} onPress={changePassword} disabled={changingPassword}>
           <Text style={[styles.darkButtonText, { color: colors.surface }]}>{changingPassword ? "Updating..." : "Change Password"}</Text>

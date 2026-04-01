@@ -41,7 +41,11 @@ export default function RegisterScreen() {
       }
       router.replace("/login" as never);
     } catch (e: any) {
-      const message = e?.response?.data?.message || "Registration failed.";
+      const rawMessage = e?.response?.data?.message || e?.message || "Registration failed.";
+      const message =
+        rawMessage.includes("duplicate key") || rawMessage.includes("User already exists")
+          ? "An account with this email already exists. Try login or use a different email."
+          : rawMessage;
       setError(message);
     } finally {
       setIsSubmitting(false);
