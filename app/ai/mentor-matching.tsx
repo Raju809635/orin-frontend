@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -14,6 +14,7 @@ type MentorMatch = {
   mentorId: string;
   name: string;
   title?: string;
+  profilePhotoUrl?: string;
   matchScore: number;
   experienceYears?: number;
   rating?: number;
@@ -161,11 +162,20 @@ export default function AiMentorMatchingPage() {
       {topMatch ? (
         <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Top Recommendation</Text>
-          <LinearGradient colors={["#EEF4FF", "#F7F8FF"]} style={styles.topCard}>
+          <LinearGradient colors={isDark ? ["#1C2737", "#172231"] : ["#EEF4FF", "#F7F8FF"]} style={[styles.topCard, { borderColor: isDark ? colors.border : "#D6E4FF" }]}>
             <View style={styles.topCardHeader}>
-              <View>
-                <Text style={[styles.topCardName, { color: colors.text }]}>{topMatch.name}</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>{topMatch.title || "Mentor"}</Text>
+              <View style={styles.topIdentity}>
+                {topMatch.profilePhotoUrl ? (
+                  <Image source={{ uri: topMatch.profilePhotoUrl }} style={styles.topAvatarImage} />
+                ) : (
+                  <View style={styles.topAvatarFallback}>
+                    <Text style={styles.avatarText}>{topMatch.name.charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.topCardName, { color: colors.text }]}>{topMatch.name}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>{topMatch.title || "Mentor"}</Text>
+                </View>
               </View>
               <View style={styles.matchBadge}>
                 <Text style={styles.matchBadgeText}>{topMatch.matchScore}%</Text>
@@ -177,8 +187,8 @@ export default function AiMentorMatchingPage() {
             <Text style={[styles.meta, { color: colors.textMuted }]}>Experience: {topMatch.experienceYears || 0} yrs | Rating: {Number(topMatch.rating || 0).toFixed(1)}</Text>
             <View style={styles.reasonRow}>
               {(topMatch.reasons || []).slice(0, 3).map((reason) => (
-                <View key={reason} style={styles.reasonPill}>
-                  <Text style={styles.reasonText}>{reason}</Text>
+                <View key={reason} style={[styles.reasonPill, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }]}>
+                  <Text style={[styles.reasonText, { color: isDark ? colors.text : "#344054" }]}>{reason}</Text>
                 </View>
               ))}
             </View>
@@ -186,8 +196,11 @@ export default function AiMentorMatchingPage() {
               <TouchableOpacity style={styles.primaryBtn} onPress={() => router.push(`/mentor/${topMatch.mentorId}` as never)}>
                 <Text style={styles.primaryBtnText}>View Profile</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push(`/mentor/${topMatch.mentorId}` as never)}>
-                <Text style={styles.secondaryBtnText}>Book Session</Text>
+              <TouchableOpacity
+                style={[styles.secondaryBtn, { backgroundColor: isDark ? colors.surfaceAlt : "#EEF4FF", borderColor: colors.border, borderWidth: 1 }]}
+                onPress={() => router.push(`/mentor/${topMatch.mentorId}` as never)}
+              >
+                <Text style={[styles.secondaryBtnText, { color: isDark ? colors.text : "#175CD3" }]}>Book Session</Text>
               </TouchableOpacity>
             </View>
           </LinearGradient>
@@ -202,9 +215,13 @@ export default function AiMentorMatchingPage() {
         {filtered.map((item) => (
           <View key={item.mentorId} style={[styles.resultCard, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }]}>
             <View style={styles.resultTop}>
-              <View style={styles.avatarPlaceholder}>
-                <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
-              </View>
+              {item.profilePhotoUrl ? (
+                <Image source={{ uri: item.profilePhotoUrl }} style={styles.resultAvatarImage} />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Text style={styles.avatarText}>{item.name.charAt(0).toUpperCase()}</Text>
+                </View>
+              )}
               <View style={styles.resultBody}>
                 <View style={styles.resultHeader}>
                   <View style={{ flex: 1 }}>
@@ -220,18 +237,24 @@ export default function AiMentorMatchingPage() {
                 {(item.reasons || []).length ? (
                   <View style={styles.reasonRow}>
                     {(item.reasons || []).slice(0, 3).map((reason) => (
-                      <View key={reason} style={styles.reasonPillSoft}>
-                        <Text style={styles.reasonSoftText}>{reason}</Text>
+                      <View key={reason} style={[styles.reasonPillSoft, { backgroundColor: isDark ? colors.surface : "#F5F8FF" }]}>
+                        <Text style={[styles.reasonSoftText, { color: isDark ? colors.textMuted : "#175CD3" }]}>{reason}</Text>
                       </View>
                     ))}
                   </View>
                 ) : null}
                 <View style={styles.actionRow}>
-                  <TouchableOpacity style={styles.secondaryBtn} onPress={() => router.push(`/mentor/${item.mentorId}` as never)}>
-                    <Text style={styles.secondaryBtnText}>View Profile</Text>
+                  <TouchableOpacity
+                    style={[styles.secondaryBtn, { backgroundColor: isDark ? colors.surface : "#EEF4FF", borderWidth: 1, borderColor: colors.border }]}
+                    onPress={() => router.push(`/mentor/${item.mentorId}` as never)}
+                  >
+                    <Text style={[styles.secondaryBtnText, { color: isDark ? colors.text : "#175CD3" }]}>View Profile</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity style={styles.ghostBtn} onPress={() => router.push(`/mentor/${item.mentorId}` as never)}>
-                    <Text style={styles.ghostBtnText}>Connect</Text>
+                  <TouchableOpacity
+                    style={[styles.ghostBtn, { backgroundColor: isDark ? colors.surface : "#F4FBF7", borderColor: colors.border }]}
+                    onPress={() => router.push(`/mentor/${item.mentorId}` as never)}
+                  >
+                    <Text style={[styles.ghostBtnText, { color: isDark ? colors.text : "#1F7A4C" }]}>Connect</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -303,12 +326,16 @@ const styles = StyleSheet.create({
   chipTextActive: { color: "#1F7A4C" },
   topCard: { borderRadius: 18, padding: 16, gap: 10, borderWidth: 1, borderColor: "#D6E4FF" },
   topCardHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 },
+  topIdentity: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  topAvatarFallback: { width: 52, height: 52, borderRadius: 26, backgroundColor: "#EAF6EF", alignItems: "center", justifyContent: "center" },
+  topAvatarImage: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, borderColor: "#CFE8D6" },
   topCardName: { color: "#101828", fontSize: 20, fontWeight: "900" },
   matchBadge: { backgroundColor: "#175CD3", borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   matchBadgeText: { color: "#FFFFFF", fontWeight: "900" },
   resultCard: { backgroundColor: "#FCFDFF", borderColor: "#D9E3F0", borderWidth: 1, borderRadius: 16, padding: 12 },
   resultTop: { flexDirection: "row", gap: 12 },
   avatarPlaceholder: { width: 54, height: 54, borderRadius: 27, backgroundColor: "#EAF6EF", alignItems: "center", justifyContent: "center" },
+  resultAvatarImage: { width: 54, height: 54, borderRadius: 27, borderWidth: 1, borderColor: "#CFE8D6" },
   avatarText: { color: "#1F7A4C", fontWeight: "900", fontSize: 20 },
   resultBody: { flex: 1, gap: 6 },
   resultHeader: { flexDirection: "row", justifyContent: "space-between", gap: 8 },

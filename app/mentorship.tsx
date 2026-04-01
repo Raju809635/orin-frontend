@@ -448,6 +448,21 @@ export default function MentorshipHubScreen() {
     }
   ];
 
+  const darkModuleGradients: Record<MentorshipSectionId, { idle: [string, string]; active: [string, string] }> = {
+    discovery: { idle: ["#182233", "#15202E"], active: ["#1C2940", "#1A2436"] },
+    interaction: { idle: ["#14261E", "#183025"], active: ["#183126", "#1B382C"] },
+    session_management: { idle: ["#2B2117", "#33261A"], active: ["#3A2A1B", "#44311E"] }
+  };
+
+  const getPanelCardStyle = (tone: "blue" | "green" | "orange") => {
+    if (!isDark) {
+      return tone === "blue" ? styles.cardBlue : tone === "green" ? styles.cardGreen : styles.cardOrange;
+    }
+    if (tone === "blue") return { backgroundColor: "#182233", borderColor: "#31445F" };
+    if (tone === "green") return { backgroundColor: "#16271F", borderColor: "#284434" };
+    return { backgroundColor: "#2A2118", borderColor: "#4A3521" };
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <GlobalHeader
@@ -467,24 +482,24 @@ export default function MentorshipHubScreen() {
           ? "Use the same mentorship workspace in mentor mode to manage requests, sessions, pricing, and availability."
           : "Select a module below to open focused mentorship tools."}
       </Text>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
       <View style={styles.moduleStack}>
         {sections.map((item) => {
           const active = activeSection === item.id;
           return (
             <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={() => setActiveSection(item.id)}>
               <LinearGradient
-                colors={active ? item.gradientActive : item.gradient}
+                colors={isDark ? (active ? darkModuleGradients[item.id].active : darkModuleGradients[item.id].idle) : active ? item.gradientActive : item.gradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={[styles.moduleCard, { borderColor: item.border }, active && styles.moduleCardActive]}
               >
-                <View style={[styles.moduleIconWrap, active && styles.moduleIconWrapActive]}>
-                  <Ionicons name={item.icon} size={20} color={active ? "#1F7A4C" : "#475467"} />
+                <View style={[styles.moduleIconWrap, isDark && { backgroundColor: colors.surfaceAlt }, active && styles.moduleIconWrapActive, isDark && active && { backgroundColor: colors.surface }]}>
+                  <Ionicons name={item.icon} size={20} color={active ? "#1F7A4C" : isDark ? colors.textMuted : "#475467"} />
                 </View>
                 <View style={styles.moduleTextWrap}>
-                  <Text style={styles.moduleTitle}>{item.label}</Text>
-                  <Text style={styles.moduleDesc}>{item.description}</Text>
+                  <Text style={[styles.moduleTitle, { color: colors.text }]}>{item.label}</Text>
+                  <Text style={[styles.moduleDesc, { color: colors.textMuted }]}>{item.description}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={active ? "#1F7A4C" : "#98A2B3"} />
               </LinearGradient>
@@ -501,47 +516,47 @@ export default function MentorshipHubScreen() {
 
       {!loading && activeSection === "discovery" ? (
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>{isMentor ? "Mentor Operations" : "Discovery"}</Text>
+          <Text style={[styles.panelTitle, { color: colors.text }]}>{isMentor ? "Mentor Operations" : "Discovery"}</Text>
           {isMentor ? (
             <>
-              <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
-                <Text style={styles.cardTitle}>Booking Requests</Text>
-                <Text style={styles.meta}>Review student booking requests and respond from your mentor dashboard.</Text>
+              <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Booking Requests</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Review student booking requests and respond from your mentor dashboard.</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/mentor-dashboard?section=pricing" as never)}>
-                <Text style={styles.cardTitle}>Pricing Management</Text>
-                <Text style={styles.meta}>Update your mentor title and session fee without leaving the existing app flow.</Text>
+              <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/mentor-dashboard?section=pricing" as never)}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Pricing Management</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Update your mentor title and session fee without leaving the existing app flow.</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/mentor-dashboard?section=availability" as never)}>
-                <Text style={styles.cardTitle}>Availability & Slot Management</Text>
-                <Text style={styles.meta}>Publish only the slots you want students to book.</Text>
+              <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/mentor-dashboard?section=availability" as never)}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Availability & Slot Management</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Publish only the slots you want students to book.</Text>
               </TouchableOpacity>
-              <View style={[styles.card, styles.cardBlue]}>
-                <Text style={styles.cardTitle}>Verified Mentor System</Text>
+              <View style={[styles.card, getPanelCardStyle("blue")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Verified Mentor System</Text>
                 {filteredVerifiedMentors.some((item) => item.mentorId === user?.id && item.verifiedBadge) ? (
-                  <Text style={styles.meta}>Your mentor profile currently carries a verified badge.</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>Your mentor profile currently carries a verified badge.</Text>
                 ) : (
-                  <Text style={styles.meta}>Verification status is managed by ORIN admin review and mentor profile quality.</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>Verification status is managed by ORIN admin review and mentor profile quality.</Text>
                 )}
               </View>
             </>
           ) : (
             <>
-              <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/domains" as never)}>
-                <Text style={styles.cardTitle}>Domains</Text>
-                <Text style={styles.meta}>Browse mentorship categories and mentors.</Text>
+              <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/domains" as never)}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Domains</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Browse mentorship categories and mentors.</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.card, styles.cardBlue]} onPress={() => router.push("/domain-guide" as never)}>
-                <Text style={styles.cardTitle}>Domain Guide</Text>
-                <Text style={styles.meta}>Understand domain paths and sub-domains.</Text>
+              <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/domain-guide" as never)}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Domain Guide</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Understand domain paths and sub-domains.</Text>
               </TouchableOpacity>
-              <View style={[styles.card, styles.cardBlue]}>
-                <Text style={styles.cardTitle}>Verified Mentor System</Text>
+              <View style={[styles.card, getPanelCardStyle("blue")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Verified Mentor System</Text>
                 {filteredVerifiedMentors.length === 0 ? (
-                  <Text style={styles.meta}>No verified mentors available now.</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>No verified mentors available now.</Text>
                 ) : (
                   filteredVerifiedMentors.slice(0, 6).map((item) => (
-                    <Text key={item.mentorId} style={styles.meta}>
+                    <Text key={item.mentorId} style={[styles.meta, { color: colors.textMuted }]}>
                       {item.name} {item.verifiedBadge ? "(Verified)" : ""} | Rating {item.rating || 0}
                     </Text>
                   ))
@@ -554,71 +569,74 @@ export default function MentorshipHubScreen() {
 
       {!loading && activeSection === "interaction" ? (
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>{isMentor ? "Student Interaction" : "Interaction"}</Text>
+          <Text style={[styles.panelTitle, { color: colors.text }]}>{isMentor ? "Student Interaction" : "Interaction"}</Text>
           {isMentor ? (
             <>
-              <TouchableOpacity style={[styles.card, styles.cardGreen]} onPress={() => router.push("/chat" as never)}>
-                <Text style={styles.cardTitle}>Student Chats</Text>
-                <Text style={styles.meta}>Open your conversation workspace for student coordination and follow-up.</Text>
+              <TouchableOpacity style={[styles.card, getPanelCardStyle("green")]} onPress={() => router.push("/chat" as never)}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Student Chats</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Open your conversation workspace for student coordination and follow-up.</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.card, styles.cardGreen]}
+                style={[styles.card, getPanelCardStyle("green")]}
                 onPress={() => router.push("/mentor-dashboard?section=growth&growth=live" as never)}
               >
-                <Text style={styles.cardTitle}>Create / Manage Programs</Text>
-                <Text style={styles.meta}>Run live sessions and multi-week sprints from one mentor program workspace.</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Create / Manage Programs</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Run live sessions and multi-week sprints from one mentor program workspace.</Text>
               </TouchableOpacity>
-              <View style={[styles.card, styles.cardGreen]}>
-                <Text style={styles.cardTitle}>Mentor Groups</Text>
+              <View style={[styles.card, getPanelCardStyle("green")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Mentor Groups</Text>
                 {filteredMentorGroups.length === 0 ? (
-                  <Text style={styles.meta}>No mentor groups available.</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>No mentor groups available.</Text>
                 ) : (
                   filteredMentorGroups.slice(0, 6).map((item) => (
-                    <Text key={item.id} style={styles.meta}>
+                    <Text key={item.id} style={[styles.meta, { color: colors.textMuted }]}>
                       {item.name} | Mentor: {item.mentor?.name || "Mentor"} | Students: {item.membersCount || 0}
                     </Text>
                   ))
                 )}
               </View>
-              <View style={[styles.card, styles.cardGreen]}>
-                <Text style={styles.cardTitle}>Mentor Live Sessions</Text>
+              <View style={[styles.card, getPanelCardStyle("green")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Mentor Live Sessions</Text>
                 {filteredLiveSessions.length === 0 ? (
-                  <Text style={styles.meta}>No live sessions scheduled.</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>No live sessions scheduled.</Text>
                 ) : (
                   filteredLiveSessions.slice(0, 6).map((item) => (
                     <View key={item.id} style={styles.liveSessionCard}>
                       {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
-                      <Text style={styles.cardTitle}>{item.title}</Text>
-                      <Text style={styles.meta}>{item.topic || "Live mentor session"}</Text>
-                      {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
-                      <Text style={styles.meta}>
+                      <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>{item.topic || "Live mentor session"}</Text>
+                      {item.description ? <Text style={[styles.meta, { color: colors.textMuted }]}>{item.description}</Text> : null}
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
                         {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
                       </Text>
-                      <Text style={styles.meta}>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
                         {item.sessionMode === "paid" ? `Paid • INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
                       </Text>
-                      <Text style={styles.meta}>Interested: {item.interestedCount || 0}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>Interested: {item.interestedCount || 0}</Text>
                     </View>
                   ))
                 )}
               </View>
-              <View style={[styles.card, styles.cardGreen]}>
-                <Text style={styles.cardTitle}>Sprint Programs</Text>
+              <View style={[styles.card, getPanelCardStyle("green")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Sprint Programs</Text>
                 {filteredSprints.length === 0 ? (
-                  <Text style={styles.meta}>No sprint programs available.</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>No sprint programs available.</Text>
                 ) : (
                   filteredSprints.slice(0, 6).map((item) => (
                     <View key={item.id} style={styles.liveSessionCard}>
                       {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
-                      <Text style={styles.cardTitle}>{item.title}</Text>
-                      <Text style={styles.meta}>{item.domain || "Sprint Program"}</Text>
-                      <Text style={styles.meta}>
+                      <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>{item.domain || "Sprint Program"}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
                         {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()}
                       </Text>
-                      <Text style={styles.meta}>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
                         {item.sessionMode === "paid" ? `Paid • INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
                       </Text>
-                      <Text style={styles.meta}>Enrolled: {item.participantCount || 0}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>Enrolled: {item.participantCount || 0}</Text>
+                      <TouchableOpacity style={styles.openBtn} onPress={() => router.push(`/sprints/${item.id}` as never)}>
+                        <Text style={styles.openBtnText}>View Sprint Detail</Text>
+                      </TouchableOpacity>
                     </View>
                   ))
                 )}
@@ -626,36 +644,36 @@ export default function MentorshipHubScreen() {
             </>
           ) : (
             <>
-              <View style={[styles.card, styles.cardGreen]}>
-                <Text style={styles.cardTitle}>Mentor Groups</Text>
+              <View style={[styles.card, getPanelCardStyle("green")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Mentor Groups</Text>
                 {filteredMentorGroups.length === 0 ? (
-                  <Text style={styles.meta}>No mentor groups available.</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>No mentor groups available.</Text>
                 ) : (
                   filteredMentorGroups.slice(0, 6).map((item) => (
-                    <Text key={item.id} style={styles.meta}>
+                    <Text key={item.id} style={[styles.meta, { color: colors.textMuted }]}>
                       {item.name} | Mentor: {item.mentor?.name || "Mentor"} | Students: {item.membersCount || 0}
                     </Text>
                   ))
                 )}
               </View>
-              <View style={[styles.card, styles.cardGreen]}>
-                <Text style={styles.cardTitle}>Mentor Live Sessions</Text>
+              <View style={[styles.card, getPanelCardStyle("green")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Mentor Live Sessions</Text>
                 {filteredLiveSessions.length === 0 ? (
-                  <Text style={styles.meta}>No live sessions scheduled.</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>No live sessions scheduled.</Text>
                 ) : (
                   filteredLiveSessions.slice(0, 6).map((item) => (
                     <View key={item.id} style={styles.liveSessionCard}>
                       {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
-                      <Text style={styles.cardTitle}>{item.title}</Text>
-                      <Text style={styles.meta}>{item.topic || "Live mentor session"}</Text>
-                      {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
-                      <Text style={styles.meta}>
+                      <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>{item.topic || "Live mentor session"}</Text>
+                      {item.description ? <Text style={[styles.meta, { color: colors.textMuted }]}>{item.description}</Text> : null}
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
                         {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
                       </Text>
-                      <Text style={styles.meta}>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
                         {item.sessionMode === "paid" ? `Paid • INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
                       </Text>
-                      <Text style={styles.meta}>Interested: {item.interestedCount || 0}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>Interested: {item.interestedCount || 0}</Text>
                       <TouchableOpacity
                         style={styles.openBtn}
                         onPress={() => toggleLiveSessionInterest(item.id)}
@@ -682,24 +700,27 @@ export default function MentorshipHubScreen() {
                   ))
                 )}
               </View>
-              <View style={[styles.card, styles.cardGreen]}>
-                <Text style={styles.cardTitle}>Sprint Programs</Text>
+              <View style={[styles.card, getPanelCardStyle("green")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Sprint Programs</Text>
                 {filteredSprints.length === 0 ? (
-                  <Text style={styles.meta}>No sprint programs available.</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>No sprint programs available.</Text>
                 ) : (
                   filteredSprints.slice(0, 6).map((item) => (
                     <View key={item.id} style={styles.liveSessionCard}>
                       {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
-                      <Text style={styles.cardTitle}>{item.title}</Text>
-                      <Text style={styles.meta}>{item.domain || "Sprint Program"}</Text>
-                      {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
-                      <Text style={styles.meta}>
+                      <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>{item.domain || "Sprint Program"}</Text>
+                      {item.description ? <Text style={[styles.meta, { color: colors.textMuted }]}>{item.description}</Text> : null}
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
                         {item.mentor?.name || "Mentor"} | {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()}
                       </Text>
-                      <Text style={styles.meta}>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
                         {item.sessionMode === "paid" ? `Paid • INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
                       </Text>
-                      <Text style={styles.meta}>Enrollment: {item.participantCount || 0}/{item.maxParticipants || 20}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>Enrollment: {item.participantCount || 0}/{item.maxParticipants || 20}</Text>
+                      <TouchableOpacity style={styles.openBtn} onPress={() => router.push(`/sprints/${item.id}` as never)}>
+                        <Text style={styles.openBtnText}>View Sprint Detail</Text>
+                      </TouchableOpacity>
                       {item.curriculumDocumentUrl ? (
                         <TouchableOpacity style={styles.openBtn} onPress={() => Linking.openURL(item.curriculumDocumentUrl || "")}>
                           <Text style={styles.openBtnText}>View Curriculum</Text>
@@ -727,63 +748,63 @@ export default function MentorshipHubScreen() {
 
       {!loading && activeSection === "session_management" ? (
         <View style={styles.panel}>
-          <Text style={styles.panelTitle}>Session Management</Text>
+          <Text style={[styles.panelTitle, { color: colors.text }]}>Session Management</Text>
           {isMentor ? (
             <>
-              <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
-                <Text style={styles.cardTitle}>View Booking Requests</Text>
-                <Text style={styles.meta}>Pending student requests: {bookings.filter((item) => item.status === "pending").length}</Text>
+              <TouchableOpacity style={[styles.card, getPanelCardStyle("orange")]} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>View Booking Requests</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Pending student requests: {bookings.filter((item) => item.status === "pending").length}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=sessions" as never)}>
-                <Text style={styles.cardTitle}>Upcoming Sessions</Text>
-                <Text style={styles.meta}>Confirmed or active sessions: {confirmedSessions.length}</Text>
+              <TouchableOpacity style={[styles.card, getPanelCardStyle("orange")]} onPress={() => router.push("/mentor-dashboard?section=sessions" as never)}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Upcoming Sessions</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Confirmed or active sessions: {confirmedSessions.length}</Text>
               </TouchableOpacity>
-              <View style={[styles.card, styles.cardOrange]}>
-                <Text style={styles.cardTitle}>Completed Sessions</Text>
-                <Text style={styles.meta}>{completedSessions.length} completed mentoring session(s)</Text>
+              <View style={[styles.card, getPanelCardStyle("orange")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Completed Sessions</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{completedSessions.length} completed mentoring session(s)</Text>
               </View>
-              <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=availability" as never)}>
-                <Text style={styles.cardTitle}>Manage Availability Slots</Text>
-                <Text style={styles.meta}>Open mentor availability controls.</Text>
+              <TouchableOpacity style={[styles.card, getPanelCardStyle("orange")]} onPress={() => router.push("/mentor-dashboard?section=availability" as never)}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Manage Availability Slots</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Open mentor availability controls.</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=pricing" as never)}>
-                <Text style={styles.cardTitle}>Manage Pricing</Text>
-                <Text style={styles.meta}>Open mentor pricing controls for session fee updates.</Text>
+              <TouchableOpacity style={[styles.card, getPanelCardStyle("orange")]} onPress={() => router.push("/mentor-dashboard?section=pricing" as never)}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Manage Pricing</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Open mentor pricing controls for session fee updates.</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.card, styles.cardOrange]} onPress={() => router.push("/mentor-dashboard?section=sessions" as never)}>
-                <Text style={styles.cardTitle}>Add Session Notes & Meet Links</Text>
-                <Text style={styles.meta}>Use the mentor sessions panel to add links and session delivery details.</Text>
+              <TouchableOpacity style={[styles.card, getPanelCardStyle("orange")]} onPress={() => router.push("/mentor-dashboard?section=sessions" as never)}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Add Session Notes & Meet Links</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Use the mentor sessions panel to add links and session delivery details.</Text>
               </TouchableOpacity>
             </>
           ) : (
             <>
-              <View style={[styles.card, styles.cardOrange]}>
-                <Text style={styles.cardTitle}>Session History & Notes</Text>
+              <View style={[styles.card, getPanelCardStyle("orange")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Session History & Notes</Text>
                 {sessionHistory.length === 0 ? (
-                  <Text style={styles.meta}>No completed sessions yet.</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>No completed sessions yet.</Text>
                 ) : (
                   sessionHistory.slice(0, 5).map((item) => (
-                    <Text key={item.sessionId} style={styles.meta}>
+                    <Text key={item.sessionId} style={[styles.meta, { color: colors.textMuted }]}>
                       {item.mentorName} | {item.date} {item.time}
                     </Text>
                   ))
                 )}
               </View>
-              <View style={[styles.card, styles.cardOrange]}>
-                <Text style={styles.cardTitle}>Pending Payments</Text>
-                <Text style={styles.meta}>{pendingSessions.length} session(s)</Text>
+              <View style={[styles.card, getPanelCardStyle("orange")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Pending Payments</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{pendingSessions.length} session(s)</Text>
               </View>
-              <View style={[styles.card, styles.cardOrange]}>
-                <Text style={styles.cardTitle}>Awaiting Verification</Text>
-                <Text style={styles.meta}>{waitingSessions.length} session(s)</Text>
+              <View style={[styles.card, getPanelCardStyle("orange")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Awaiting Verification</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{waitingSessions.length} session(s)</Text>
               </View>
-              <View style={[styles.card, styles.cardOrange]}>
-                <Text style={styles.cardTitle}>Confirmed Sessions</Text>
-                <Text style={styles.meta}>{confirmedSessions.length} session(s)</Text>
+              <View style={[styles.card, getPanelCardStyle("orange")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Confirmed Sessions</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{confirmedSessions.length} session(s)</Text>
               </View>
-              <View style={[styles.card, styles.cardOrange]}>
-                <Text style={styles.cardTitle}>Legacy Booking Requests</Text>
-                <Text style={styles.meta}>{bookings.length} request(s)</Text>
+              <View style={[styles.card, getPanelCardStyle("orange")]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Legacy Booking Requests</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{bookings.length} request(s)</Text>
               </View>
               <TouchableOpacity style={styles.openBtn} onPress={() => router.push("/student-sessions" as never)}>
                 <Text style={styles.openBtnText}>Open Full Session Panel</Text>
@@ -871,3 +892,5 @@ const styles = StyleSheet.create({
   },
   openBtnText: { color: "#fff", fontWeight: "700" }
 });
+
+

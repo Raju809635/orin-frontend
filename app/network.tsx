@@ -85,7 +85,7 @@ type FeedComment = {
   _id: string;
   content: string;
   createdAt?: string;
-  authorId?: { _id?: string; name?: string; role?: string } | null;
+  authorId?: { _id?: string; name?: string; role?: string; profilePhotoUrl?: string } | null;
 };
 
 type Suggestion = {
@@ -93,12 +93,13 @@ type Suggestion = {
   name: string;
   role: "student" | "mentor";
   reason: string;
+  profilePhotoUrl?: string;
 };
 
 type ConnectionRow = {
   _id: string;
-  requesterId?: { _id?: string; name?: string; role?: string } | null;
-  recipientId?: { _id?: string; name?: string; role?: string } | null;
+  requesterId?: { _id?: string; name?: string; role?: string; profilePhotoUrl?: string } | null;
+  recipientId?: { _id?: string; name?: string; role?: string; profilePhotoUrl?: string } | null;
   status: "pending" | "accepted" | "rejected" | "blocked";
 };
 
@@ -106,6 +107,7 @@ type CircleMember = {
   id: string;
   name: string;
   role: string;
+  profilePhotoUrl?: string;
 };
 
 type NetworkSectionId = "compose" | "feed" | "connections";
@@ -151,6 +153,7 @@ export default function NetworkScreen() {
   const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({});
   const [expandablePosts, setExpandablePosts] = useState<Record<string, boolean>>({});
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestionPhotoById, setSuggestionPhotoById] = useState<Record<string, string>>({});
   const [pendingIncoming, setPendingIncoming] = useState<ConnectionRow[]>([]);
   const [circleMembers, setCircleMembers] = useState<CircleMember[]>([]);
   const [requestedCircleIds, setRequestedCircleIds] = useState<Record<string, boolean>>({});
@@ -229,7 +232,8 @@ export default function NetworkScreen() {
           members.push({
             id: other,
             name: otherUser?.name || "Connection",
-            role: otherUser?.role || "student"
+            role: otherUser?.role || "student",
+            profilePhotoUrl: otherUser?.profilePhotoUrl || ""
           });
         }
       }
@@ -314,6 +318,47 @@ export default function NetworkScreen() {
   useEffect(() => {
     void loadData(false);
   }, [activeSection, loadData]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const missingIds = suggestions
+      .filter((item) => !item.profilePhotoUrl && !suggestionPhotoById[item.id])
+      .slice(0, 12)
+      .map((item) => item.id);
+
+    if (missingIds.length === 0) return;
+
+    (async () => {
+      const rows = await Promise.all(
+        missingIds.map(async (id) => {
+          try {
+            const { data } = await api.get(`/api/profiles/public/${id}`);
+            return [id, data?.profile?.profilePhotoUrl || ""] as const;
+          } catch {
+            return [id, ""] as const;
+          }
+        })
+      );
+
+      if (cancelled) return;
+
+      setSuggestionPhotoById((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        rows.forEach(([id, url]) => {
+          if (url && next[id] !== url) {
+            next[id] = url;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [suggestions, suggestionPhotoById]);
 
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
@@ -659,13 +704,30 @@ export default function NetworkScreen() {
               multiline
             />
             <View style={styles.rowItem}>
-              <TouchableOpacity style={styles.secondaryButton} onPress={uploadPostImages} disabled={uploadingPostImage}>
+              <TouchableOpacity
+                style={[
+                  styles.secondaryButton,
+                  {
+                    borderColor: colors.border,
+                    backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF"
+                  },
+                  uploadingPostImage && styles.disabledBtn
+                ]}
+                onPress={uploadPostImages}
+                disabled={uploadingPostImage}
+              >
                 <Text style={[styles.secondaryButtonText, { color: colors.text }]}>{uploadingPostImage ? "Uploading..." : "Add Photos"}</Text>
               </TouchableOpacity>
               {postImageUrls.length ? (
                 <TouchableOpacity
                   onPress={() => setPostImageUrls([])}
-                  style={[styles.secondaryButton, { borderColor: "#F04438" }]}
+                  style={[
+                    styles.secondaryButton,
+                    {
+                      borderColor: "#F04438",
+                      backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF"
+                    }
+                  ]}
                 >
                   <Text style={[styles.secondaryButtonText, { color: "#B42318" }]}>Clear</Text>
                 </TouchableOpacity>
@@ -689,8 +751,16 @@ export default function NetworkScreen() {
               filteredSuggestions.slice(0, 8).map((item) => {
                 const inCircle = Boolean(circleMemberIds[item.id]);
                 const requested = Boolean(requestedCircleIds[item.id]);
+                const suggestionPhoto = item.profilePhotoUrl || suggestionPhotoById[item.id] || "";
                 return (
                   <View key={`discover-${item.id}`} style={styles.rowItem}>
+                    {suggestionPhoto ? (
+                      <Image source={{ uri: suggestionPhoto }} style={styles.commentAvatarImage} />
+                    ) : (
+                      <View style={styles.commentAvatar}>
+                        <Text style={styles.commentAvatarText}>{String(item.name || "U").trim().charAt(0).toUpperCase()}</Text>
+                      </View>
+                    )}
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.rowTitle, { color: colors.text }]}>{item.name}</Text>
                       <Text style={[styles.meta, { color: colors.textMuted }]}>{item.reason}</Text>
@@ -741,6 +811,13 @@ export default function NetworkScreen() {
                   style={styles.rowItem}
                   onPress={() => router.push(`/public-profile/${member.id}` as never)}
                 >
+                  {member.profilePhotoUrl ? (
+                    <Image source={{ uri: member.profilePhotoUrl }} style={styles.commentAvatarImage} />
+                  ) : (
+                    <View style={styles.commentAvatar}>
+                      <Text style={styles.commentAvatarText}>{String(member.name || "U").trim().charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.rowTitle, { color: colors.text }]}>{member.name}</Text>
                     <Text style={[styles.meta, { color: colors.textMuted }]}>{member.role}</Text>
@@ -1080,9 +1157,13 @@ export default function NetworkScreen() {
                   return (
                     <View key={item._id} style={styles.commentItem}>
                       <View style={styles.commentTopRow}>
-                        <View style={styles.commentAvatar}>
-                          <Text style={styles.commentAvatarText}>{commentInitial}</Text>
-                        </View>
+                        {item.authorId?.profilePhotoUrl ? (
+                          <Image source={{ uri: item.authorId.profilePhotoUrl }} style={styles.commentAvatarImage} />
+                        ) : (
+                          <View style={styles.commentAvatar}>
+                            <Text style={styles.commentAvatarText}>{commentInitial}</Text>
+                          </View>
+                        )}
                         <View style={styles.commentMetaBlock}>
                           <Text style={styles.commentAuthor}>{item.authorId?.name || "User"}</Text>
                           <Text style={styles.metaSmall}>{item.createdAt ? new Date(item.createdAt).toLocaleString() : ""}</Text>
@@ -1539,6 +1620,13 @@ const styles = StyleSheet.create({
     borderColor: "#CFE8D6"
   },
   commentAvatarText: { color: "#1F7A4C", fontWeight: "900" },
+  commentAvatarImage: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    borderColor: "#CFE8D6"
+  },
   commentMetaBlock: { flex: 1 },
   commentAuthor: { color: "#1E2B24", fontWeight: "800" },
   commentBody: { color: "#344054", marginTop: 4, lineHeight: 18 },
