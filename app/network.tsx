@@ -102,6 +102,12 @@ type ConnectionRow = {
   status: "pending" | "accepted" | "rejected" | "blocked";
 };
 
+type CircleMember = {
+  id: string;
+  name: string;
+  role: string;
+};
+
 type NetworkSectionId = "compose" | "feed" | "connections";
 
 const networkSections: { id: NetworkSectionId; label: string }[] = [
@@ -146,6 +152,7 @@ export default function NetworkScreen() {
   const [expandablePosts, setExpandablePosts] = useState<Record<string, boolean>>({});
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [pendingIncoming, setPendingIncoming] = useState<ConnectionRow[]>([]);
+  const [circleMembers, setCircleMembers] = useState<CircleMember[]>([]);
   const [requestedCircleIds, setRequestedCircleIds] = useState<Record<string, boolean>>({});
   const [circleMemberIds, setCircleMemberIds] = useState<Record<string, boolean>>({});
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
@@ -209,14 +216,26 @@ export default function NetworkScreen() {
     setRequestedCircleIds(requested);
 
     const inCircle: Record<string, boolean> = {};
+    const members: CircleMember[] = [];
     acceptedRows.forEach((item) => {
       const requesterId = String(item?.requesterId?._id || "");
       const recipientId = String(item?.recipientId?._id || "");
       const me = String(user?.id || "");
-      const other = requesterId === me ? recipientId : recipientId === me ? requesterId : "";
-      if (other) inCircle[other] = true;
+      const otherUser = requesterId === me ? item?.recipientId : recipientId === me ? item?.requesterId : null;
+      const other = String(otherUser?._id || "");
+      if (other) {
+        inCircle[other] = true;
+        if (String(otherUser?.role || "").toLowerCase() !== "mentor") {
+          members.push({
+            id: other,
+            name: otherUser?.name || "Connection",
+            role: otherUser?.role || "student"
+          });
+        }
+      }
     });
     setCircleMemberIds(inCircle);
+    setCircleMembers(members);
   }, [user?.id]);
 
   const loadFeedSection = useCallback(async (refresh = false, force = false) => {
@@ -710,6 +729,24 @@ export default function NetworkScreen() {
                     <Text style={styles.actionDanger}>Reject</Text>
                   </TouchableOpacity>
                 </View>
+              ))
+            )}
+            <Text style={[styles.cardTitle, { color: colors.text, marginTop: 18 }]}>Your Circle</Text>
+            {circleMembers.length === 0 ? (
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Accepted student connections will appear here.</Text>
+            ) : (
+              circleMembers.map((member) => (
+                <TouchableOpacity
+                  key={`circle-${member.id}`}
+                  style={styles.rowItem}
+                  onPress={() => router.push(`/public-profile/${member.id}` as never)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.rowTitle, { color: colors.text }]}>{member.name}</Text>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>{member.role}</Text>
+                  </View>
+                  <Text style={styles.action}>View Profile</Text>
+                </TouchableOpacity>
               ))
             )}
           </View>

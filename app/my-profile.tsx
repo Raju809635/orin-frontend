@@ -127,6 +127,15 @@ export default function MyProfileScreen() {
 
   const avatarUrl = publicProfile?.profilePhotoUrl || "";
   const skillPreview = useMemo(() => (publicProfile?.skills || mentorProfile?.specializations || []).slice(0, 4), [mentorProfile?.specializations, publicProfile?.skills]);
+  const circleConnections = useMemo(
+    () =>
+      connections.filter((item) => {
+        const isRequester = String(item.requesterId?._id || "") === String(user?.id || "");
+        const other = isRequester ? item.recipientId : item.requesterId;
+        return String(other?.role || "").toLowerCase() !== "mentor";
+      }),
+    [connections, user?.id]
+  );
 
   const loadProfileData = useCallback(async (refresh = false) => {
     try {
@@ -217,26 +226,26 @@ export default function MyProfileScreen() {
           )}
           <View style={styles.statsRow}>
             <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("insights")}>
-              <Text style={styles.statValue}>{myPosts.length}</Text>
-              <Text style={[styles.statLabel, activeList === "insights" && styles.statLabelActive]}>Insights</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{myPosts.length}</Text>
+              <Text style={[styles.statLabel, { color: activeList === "insights" ? colors.accent : colors.textMuted }, activeList === "insights" && styles.statLabelActive]}>Insights</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("circle")}>
-              <Text style={styles.statValue}>{overview?.connections?.accepted ?? 0}</Text>
-              <Text style={[styles.statLabel, activeList === "circle" && styles.statLabelActive]}>Circle</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{overview?.connections?.accepted ?? 0}</Text>
+              <Text style={[styles.statLabel, { color: activeList === "circle" ? colors.accent : colors.textMuted }, activeList === "circle" && styles.statLabelActive]}>Circle</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("following")}>
-              <Text style={styles.statValue}>{overview?.follow?.following ?? 0}</Text>
-              <Text style={[styles.statLabel, activeList === "following" && styles.statLabelActive]}>Following</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{overview?.follow?.following ?? 0}</Text>
+              <Text style={[styles.statLabel, { color: activeList === "following" ? colors.accent : colors.textMuted }, activeList === "following" && styles.statLabelActive]}>Following</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.statPlain} onPress={() => setActiveList("audience")}>
-              <Text style={styles.statValue}>{overview?.follow?.followers ?? 0}</Text>
-              <Text style={[styles.statLabel, activeList === "audience" && styles.statLabelActive]}>Audience</Text>
+              <Text style={[styles.statValue, { color: colors.text }]}>{overview?.follow?.followers ?? 0}</Text>
+              <Text style={[styles.statLabel, { color: activeList === "audience" ? colors.accent : colors.textMuted }, activeList === "audience" && styles.statLabelActive]}>Audience</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <Text style={[styles.name, { color: colors.text }]}>{user?.name || "ORIN User"}</Text>
-        <Text style={styles.role}>{user?.role === "mentor" ? "Mentor" : "Student"}</Text>
+        <Text style={[styles.role, { color: colors.accent }]}>{user?.role === "mentor" ? "Mentor" : "Student"}</Text>
         {heroTitle ? <Text style={[styles.headline, { color: colors.text }]}>{sanitizeDisplayText(heroTitle)}</Text> : null}
         {heroMeta ? <Text style={[styles.subMeta, { color: colors.textMuted }]}>{heroMeta}</Text> : null}
         {publicProfile?.about || publicProfile?.bio ? (
@@ -327,10 +336,10 @@ export default function MyProfileScreen() {
       {activeList === "circle" ? (
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[styles.cardTitle, { color: colors.text }]}>My Circle</Text>
-          {connections.length === 0 ? (
+          {circleConnections.length === 0 ? (
             <Text style={[styles.emptyText, { color: colors.textMuted }]}>No accepted connections yet.</Text>
           ) : (
-            connections.slice(0, 20).map((item) => {
+            circleConnections.slice(0, 20).map((item) => {
               const isRequester = String(item.requesterId?._id || "") === String(user?.id || "");
               const other = isRequester ? item.recipientId : item.requesterId;
               return (

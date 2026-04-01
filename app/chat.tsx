@@ -62,6 +62,12 @@ type StudentSession = {
   };
 };
 
+type ConnectionRow = {
+  _id: string;
+  requesterId?: { _id?: string; name?: string; role?: "student" | "mentor" | "admin" } | null;
+  recipientId?: { _id?: string; name?: string; role?: "student" | "mentor" | "admin" } | null;
+};
+
 const QUICK_EMOJIS = ["😊", "🔥", "👏", "💡", "🚀", "🙏"];
 
 const MESSAGE_TABS = ["Mentors", "Circle"] as const;
@@ -115,6 +121,7 @@ export default function ChatScreen() {
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [confirmedMentors, setConfirmedMentors] = useState<CounterpartUser[]>([]);
+  const [circleContacts, setCircleContacts] = useState<CounterpartUser[]>([]);
   const [activeUserId, setActiveUserId] = useState<string>("");
   const [activeUser, setActiveUser] = useState<CounterpartUser | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -193,6 +200,25 @@ export default function ChatScreen() {
       } else {
         setConfirmedMentors([]);
       }
+
+      const acceptedConnectionsRes = await api.get<ConnectionRow[]>("/api/network/connections?status=accepted");
+      const me = String(user?.id || "");
+      const nextCircle = (acceptedConnectionsRes.data || [])
+        .map((item) => {
+          const requesterId = String(item?.requesterId?._id || "");
+          const recipientId = String(item?.recipientId?._id || "");
+          const other = requesterId === me ? item?.recipientId : recipientId === me ? item?.requesterId : null;
+          if (!other?._id || String(other.role || "").toLowerCase() === "mentor") return null;
+          return {
+            _id: other._id,
+            name: other.name || "Connection",
+            email: "",
+            role: (other.role || "student") as CounterpartUser["role"],
+            status: "approved" as const
+          };
+        })
+        .filter((item): item is CounterpartUser => Boolean(item));
+      setCircleContacts(nextCircle);
 
       if (!activeUserId && data.length > 0) {
         setActiveUserId(data[0].counterpartId);
@@ -384,13 +410,16 @@ export default function ChatScreen() {
         </View>
 
         <View style={styles.quickActionsRow}>
-          <TouchableOpacity style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => router.push("/mentors" as never)}>
+          <TouchableOpacity
+            style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            onPress={() => (activeTab === "Mentors" ? router.push("/mentors" as never) : setActiveUserId(circleContacts[0]?._id || ""))}
+          >
             <Ionicons name="search-outline" size={16} color={colors.accent} />
-            <Text style={styles.quickActionText}>{activeTab === "Mentors" ? "Find Mentor" : "Find People"}</Text>
+            <Text style={[styles.quickActionText, { color: colors.text }]}>{activeTab === "Mentors" ? "Find Mentor" : "Find People"}</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => router.push("/network?section=connections" as never)}>
             <Ionicons name="add-outline" size={16} color={colors.accent} />
-            <Text style={styles.quickActionText}>New Chat</Text>
+            <Text style={[styles.quickActionText, { color: colors.text }]}>New Chat</Text>
           </TouchableOpacity>
         </View>
 
@@ -427,6 +456,40 @@ export default function ChatScreen() {
                 <Text style={styles.emptyEmoji}>💬</Text>
                 <Text style={[styles.emptyTitle, { color: colors.text }]}>Start a conversation</Text>
                 <Text style={[styles.emptyText, { color: colors.textMuted }]}>Connect with people from Network or confirm a mentor session to begin chatting.</Text>
+              </View>
+            )}
+          </>
+        ) : null}
+
+        {activeTab === "Circle" ? (
+          <>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Circle</Text>
+            {circleContacts.length > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.confirmedList}
+                contentContainerStyle={styles.confirmedListContent}
+              >
+                {circleContacts.map((item) => (
+                  <TouchableOpacity key={item._id} style={[styles.mentorProfileCard, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => setActiveUserId(item._id)}>
+                    <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.accentSoft }]}>
+                      <Text style={styles.avatarText}>{getInitial(item.name)}</Text>
+                    </View>
+                    <Text style={[styles.mentorName, { color: colors.text }]} numberOfLines={1}>
+                      {item.name}
+                    </Text>
+                    <Text style={[styles.mentorMail, { color: colors.textMuted }]} numberOfLines={1}>
+                      {item.role}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={styles.emptyEmoji}>💬</Text>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>No circle contacts yet</Text>
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>Accepted non-mentor connections from your circle will appear here.</Text>
               </View>
             )}
           </>

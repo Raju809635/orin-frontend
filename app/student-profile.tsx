@@ -12,9 +12,11 @@ import {
   View
 } from "react-native";
 import { api } from "@/lib/api";
+import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
 import { pickAndUploadResumeFile } from "@/utils/resumeUpload";
+import DateField from "@/components/profile/date-field";
 
 type ProfileProject = {
   title: string;
@@ -121,13 +123,23 @@ function normalizeEducation(education: any = {}): ProfileEducation {
   };
 }
 
+function parseCommaSeparated(value: string) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export default function StudentProfileScreen() {
+  const { colors } = useAppTheme();
   const [profile, setProfile] = useState<StudentProfile>(emptyProfile);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadingResume, setUploadingResume] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [skillsDraft, setSkillsDraft] = useState("");
+  const [projectTechDrafts, setProjectTechDrafts] = useState<Record<number, string>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -154,6 +166,12 @@ export default function StudentProfileScreen() {
             : [],
           experiences: Array.isArray(profileData.experiences) ? profileData.experiences.map(normalizeExperience) : []
         });
+        setSkillsDraft(Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean).join(", ") : "");
+        setProjectTechDrafts(
+          Array.isArray(profileData.projects)
+            ? Object.fromEntries(profileData.projects.map((project: any, index: number) => [index, normalizeProject(project).tech.join(", ")]))
+            : {}
+        );
       } catch (e: any) {
         if (mounted) setError(e?.response?.data?.message || "Failed to load profile");
       } finally {
@@ -165,13 +183,21 @@ export default function StudentProfileScreen() {
     };
   }, []);
 
-  const skillsValue = useMemo(() => (profile.skills || []).join(", "), [profile.skills]);
+  const skillsValue = useMemo(() => skillsDraft, [skillsDraft]);
 
   const updateProject = (index: number, key: keyof ProfileProject, value: string | string[]) => {
     setProfile((prev) => ({
       ...prev,
       projects: prev.projects.map((item, itemIndex) => (itemIndex === index ? { ...item, [key]: value } : item))
     }));
+  };
+
+  const syncProjectTechDraft = (index: number, value: string) => {
+    setProjectTechDrafts((prev) => ({ ...prev, [index]: value }));
+  };
+
+  const commitProjectTechDraft = (index: number) => {
+    updateProject(index, "tech", parseCommaSeparated(projectTechDrafts[index] || ""));
   };
 
   const updateAchievement = (index: number, key: keyof ProfileAchievement, value: string) => {
@@ -207,9 +233,14 @@ export default function StudentProfileScreen() {
       setError(null);
       const payload = {
         ...profile,
-        skills: profile.skills,
+        skills: parseCommaSeparated(skillsDraft),
         education: profile.education.filter((item) => item.school || item.degree || item.year),
-        projects: profile.projects.filter((item) => item.title || item.description || item.link || item.tech.length),
+        projects: profile.projects
+          .map((item, index) => ({
+            ...item,
+            tech: parseCommaSeparated(projectTechDrafts[index] ?? item.tech.join(", "))
+          }))
+          .filter((item) => item.title || item.description || item.link || item.tech.length),
         achievements: profile.achievements.filter((item) => item.title || item.issuer || item.date || item.url),
         experiences: profile.experiences.filter(
           (item) => item.organization || item.role || item.start || item.end || item.description
@@ -220,6 +251,7 @@ export default function StudentProfileScreen() {
       setProfile((prev) => ({
         ...prev,
         ...profileData,
+        skills: Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : payload.skills,
         education: Array.isArray(profileData.education) ? profileData.education.map(normalizeEducation) : payload.education,
         projects: Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects,
         achievements: Array.isArray(profileData.achievements)
@@ -229,6 +261,9 @@ export default function StudentProfileScreen() {
           ? profileData.experiences.map(normalizeExperience)
           : payload.experiences
       }));
+      setSkillsDraft((Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : payload.skills).join(", "));
+      const nextProjects = Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects;
+      setProjectTechDrafts(Object.fromEntries(nextProjects.map((item, index) => [index, item.tech.join(", ")])));
       notify("Student profile updated");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Save failed");
@@ -308,182 +343,193 @@ export default function StudentProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0B3D2E" />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Student Profile</Text>
-      <Text style={styles.sub}>Profile completeness: {profile.profileCompleteness || 0}%</Text>
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>Student Profile</Text>
+      <Text style={[styles.sub, { color: colors.textMuted }]}>Profile completeness: {profile.profileCompleteness || 0}%</Text>
 
       <View style={styles.photoWrap}>
         {profile.profilePhotoUrl ? (
           <Image source={{ uri: profile.profilePhotoUrl }} style={styles.photo} />
         ) : (
-          <View style={[styles.photo, styles.photoFallback]}>
-            <Text style={styles.photoFallbackText}>{(profile.headline || "S").trim().charAt(0).toUpperCase() || "S"}</Text>
+          <View style={[styles.photo, styles.photoFallback, { backgroundColor: colors.accentSoft }]}>
+            <Text style={[styles.photoFallbackText, { color: colors.accent }]}>{(profile.headline || "S").trim().charAt(0).toUpperCase() || "S"}</Text>
           </View>
         )}
-        <TouchableOpacity style={styles.uploadBtn} onPress={uploadPhoto} disabled={uploadingPhoto}>
-          <Text style={styles.uploadBtnText}>{uploadingPhoto ? "Uploading..." : "Upload Profile Picture"}</Text>
+        <TouchableOpacity style={[styles.uploadBtn, { borderColor: colors.accent, backgroundColor: colors.surfaceAlt }]} onPress={uploadPhoto} disabled={uploadingPhoto}>
+          <Text style={[styles.uploadBtnText, { color: colors.accent }]}>{uploadingPhoto ? "Uploading..." : "Upload Profile Picture"}</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.label}>Headline</Text>
-      <TextInput style={styles.input} value={profile.headline} onChangeText={(headline) => setProfile((prev) => ({ ...prev, headline }))} />
+      <Text style={[styles.label, { color: colors.text }]}>Headline</Text>
+      <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} value={profile.headline} onChangeText={(headline) => setProfile((prev) => ({ ...prev, headline }))} />
 
-      <Text style={styles.label}>College</Text>
-      <TextInput style={styles.input} value={profile.collegeName} onChangeText={(collegeName) => setProfile((prev) => ({ ...prev, collegeName }))} />
+      <Text style={[styles.label, { color: colors.text }]}>College</Text>
+      <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} value={profile.collegeName} onChangeText={(collegeName) => setProfile((prev) => ({ ...prev, collegeName }))} />
 
-      <Text style={styles.label}>State</Text>
-      <TextInput style={styles.input} value={profile.state} onChangeText={(state) => setProfile((prev) => ({ ...prev, state }))} />
+      <Text style={[styles.label, { color: colors.text }]}>State</Text>
+      <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} value={profile.state} onChangeText={(state) => setProfile((prev) => ({ ...prev, state }))} />
 
-      <Text style={styles.label}>About</Text>
-      <TextInput style={[styles.input, styles.multiline]} multiline value={profile.about} onChangeText={(about) => setProfile((prev) => ({ ...prev, about }))} />
+      <Text style={[styles.label, { color: colors.text }]}>About</Text>
+      <TextInput style={[styles.input, styles.multiline, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} multiline value={profile.about} onChangeText={(about) => setProfile((prev) => ({ ...prev, about }))} />
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Education</Text>
-            <Text style={styles.sectionSub}>Add college, degree, and passing year to make your profile more complete.</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Education</Text>
+            <Text style={[styles.sectionSub, { color: colors.textMuted }]}>Add college, degree, and passing year to make your profile more complete.</Text>
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => ({ ...prev, education: [...prev.education, emptyEducation()] }))}>
-            <Text style={styles.addBtnText}>+ Add</Text>
+          <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.accentSoft }]} onPress={() => setProfile((prev) => ({ ...prev, education: [...prev.education, emptyEducation()] }))}>
+            <Text style={[styles.addBtnText, { color: colors.accent }]}>+ Add</Text>
           </TouchableOpacity>
         </View>
-        {profile.education.length === 0 ? <Text style={styles.emptyText}>No education added yet.</Text> : null}
+        {profile.education.length === 0 ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No education added yet.</Text> : null}
         {profile.education.map((item, index) => (
-          <View key={`education-${index}`} style={styles.entryCard}>
+          <View key={`education-${index}`} style={[styles.entryCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
             <View style={styles.entryHeader}>
-              <Text style={styles.entryTitle}>Education {index + 1}</Text>
+              <Text style={[styles.entryTitle, { color: colors.text }]}>Education {index + 1}</Text>
               <TouchableOpacity onPress={() => setProfile((prev) => ({ ...prev, education: prev.education.filter((_, itemIndex) => itemIndex !== index) }))}>
                 <Text style={styles.removeText}>Remove</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} placeholder="School / College" value={item.school} onChangeText={(value) => updateEducation(index, "school", value)} />
-            <TextInput style={styles.input} placeholder="Degree / Program" value={item.degree} onChangeText={(value) => updateEducation(index, "degree", value)} />
-            <TextInput style={styles.input} placeholder="Year" value={item.year} onChangeText={(value) => updateEducation(index, "year", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="School / College" placeholderTextColor={colors.textMuted} value={item.school} onChangeText={(value) => updateEducation(index, "school", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Degree / Program" placeholderTextColor={colors.textMuted} value={item.degree} onChangeText={(value) => updateEducation(index, "degree", value)} />
+            <DateField label="Passing Year" mode="year" value={item.year} placeholder="Select passing year" onChange={(value) => updateEducation(index, "year", value)} />
           </View>
         ))}
       </View>
 
-      <Text style={styles.label}>Skills (comma separated)</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Skills (comma separated)</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
         value={skillsValue}
-        onChangeText={(val) =>
-          setProfile((prev) => ({
-            ...prev,
-            skills: val
-              .split(",")
-              .map((s) => s.trim())
-              .filter(Boolean)
-          }))
-        }
+        placeholder="React, Python, Communication"
+        placeholderTextColor={colors.textMuted}
+        onChangeText={setSkillsDraft}
+        onBlur={() => setProfile((prev) => ({ ...prev, skills: parseCommaSeparated(skillsDraft) }))}
       />
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Projects</Text>
-            <Text style={styles.sectionSub}>Add projects with tech stack, link, and description.</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Projects</Text>
+            <Text style={[styles.sectionSub, { color: colors.textMuted }]}>Add projects with tech stack, link, and description.</Text>
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => ({ ...prev, projects: [...prev.projects, emptyProject()] }))}>
-            <Text style={styles.addBtnText}>+ Add</Text>
+          <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.accentSoft }]} onPress={() => {
+            setProfile((prev) => ({ ...prev, projects: [...prev.projects, emptyProject()] }));
+            setProjectTechDrafts((prev) => ({ ...prev, [profile.projects.length]: "" }));
+          }}>
+            <Text style={[styles.addBtnText, { color: colors.accent }]}>+ Add</Text>
           </TouchableOpacity>
         </View>
-        {profile.projects.length === 0 ? <Text style={styles.emptyText}>No projects added yet.</Text> : null}
+        {profile.projects.length === 0 ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No projects added yet.</Text> : null}
         {profile.projects.map((item, index) => (
-          <View key={`project-${index}`} style={styles.entryCard}>
+          <View key={`project-${index}`} style={[styles.entryCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
             <View style={styles.entryHeader}>
-              <Text style={styles.entryTitle}>Project {index + 1}</Text>
-              <TouchableOpacity onPress={() => setProfile((prev) => ({ ...prev, projects: prev.projects.filter((_, itemIndex) => itemIndex !== index) }))}>
+              <Text style={[styles.entryTitle, { color: colors.text }]}>Project {index + 1}</Text>
+              <TouchableOpacity onPress={() => {
+                setProfile((prev) => ({ ...prev, projects: prev.projects.filter((_, itemIndex) => itemIndex !== index) }));
+                setProjectTechDrafts((prev) => {
+                  const next: Record<number, string> = {};
+                  Object.entries(prev).forEach(([key, draft]) => {
+                    const numericKey = Number(key);
+                    if (numericKey < index) next[numericKey] = draft;
+                    if (numericKey > index) next[numericKey - 1] = draft;
+                  });
+                  return next;
+                });
+              }}>
                 <Text style={styles.removeText}>Remove</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} placeholder="Title" value={item.title} onChangeText={(value) => updateProject(index, "title", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Title" placeholderTextColor={colors.textMuted} value={item.title} onChangeText={(value) => updateProject(index, "title", value)} />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
               placeholder="Tech stack (comma separated)"
-              value={item.tech.join(", ")}
-              onChangeText={(value) => updateProject(index, "tech", value.split(",").map((tech) => tech.trim()).filter(Boolean))}
+              placeholderTextColor={colors.textMuted}
+              value={projectTechDrafts[index] ?? item.tech.join(", ")}
+              onChangeText={(value) => syncProjectTechDraft(index, value)}
+              onBlur={() => commitProjectTechDraft(index)}
             />
-            <TextInput style={styles.input} placeholder="GitHub / Demo link" value={item.link} onChangeText={(value) => updateProject(index, "link", value)} autoCapitalize="none" />
-            <TextInput style={[styles.input, styles.multilineSmall]} placeholder="Description" multiline value={item.description} onChangeText={(value) => updateProject(index, "description", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="GitHub / Demo link" placeholderTextColor={colors.textMuted} value={item.link} onChangeText={(value) => updateProject(index, "link", value)} autoCapitalize="none" />
+            <TextInput style={[styles.input, styles.multilineSmall, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Description" placeholderTextColor={colors.textMuted} multiline value={item.description} onChangeText={(value) => updateProject(index, "description", value)} />
           </View>
         ))}
       </View>
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Achievements</Text>
-            <Text style={styles.sectionSub}>Add certifications, awards, and recognitions.</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Achievements</Text>
+            <Text style={[styles.sectionSub, { color: colors.textMuted }]}>Add certifications, awards, and recognitions.</Text>
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => ({ ...prev, achievements: [...prev.achievements, emptyAchievement()] }))}>
-            <Text style={styles.addBtnText}>+ Add</Text>
+          <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.accentSoft }]} onPress={() => setProfile((prev) => ({ ...prev, achievements: [...prev.achievements, emptyAchievement()] }))}>
+            <Text style={[styles.addBtnText, { color: colors.accent }]}>+ Add</Text>
           </TouchableOpacity>
         </View>
-        {profile.achievements.length === 0 ? <Text style={styles.emptyText}>No achievements added yet.</Text> : null}
+        {profile.achievements.length === 0 ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No achievements added yet.</Text> : null}
         {profile.achievements.map((item, index) => (
-          <View key={`achievement-${index}`} style={styles.entryCard}>
+          <View key={`achievement-${index}`} style={[styles.entryCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
             <View style={styles.entryHeader}>
-              <Text style={styles.entryTitle}>Achievement {index + 1}</Text>
+              <Text style={[styles.entryTitle, { color: colors.text }]}>Achievement {index + 1}</Text>
               <TouchableOpacity onPress={() => setProfile((prev) => ({ ...prev, achievements: prev.achievements.filter((_, itemIndex) => itemIndex !== index) }))}>
                 <Text style={styles.removeText}>Remove</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} placeholder="Title" value={item.title} onChangeText={(value) => updateAchievement(index, "title", value)} />
-            <TextInput style={styles.input} placeholder="Issuer" value={item.issuer} onChangeText={(value) => updateAchievement(index, "issuer", value)} />
-            <TextInput style={styles.input} placeholder="Date" value={item.date} onChangeText={(value) => updateAchievement(index, "date", value)} />
-            <TextInput style={styles.input} placeholder="URL (optional)" value={item.url} onChangeText={(value) => updateAchievement(index, "url", value)} autoCapitalize="none" />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Title" placeholderTextColor={colors.textMuted} value={item.title} onChangeText={(value) => updateAchievement(index, "title", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Issuer" placeholderTextColor={colors.textMuted} value={item.issuer} onChangeText={(value) => updateAchievement(index, "issuer", value)} />
+            <DateField label="Achievement Date" value={item.date} placeholder="Select achievement date" onChange={(value) => updateAchievement(index, "date", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="URL (optional)" placeholderTextColor={colors.textMuted} value={item.url} onChangeText={(value) => updateAchievement(index, "url", value)} autoCapitalize="none" />
           </View>
         ))}
       </View>
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Experience</Text>
-            <Text style={styles.sectionSub}>Add internships, work, research, or volunteer roles.</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Experience</Text>
+            <Text style={[styles.sectionSub, { color: colors.textMuted }]}>Add internships, work, research, or volunteer roles.</Text>
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => ({ ...prev, experiences: [...prev.experiences, emptyExperience()] }))}>
-            <Text style={styles.addBtnText}>+ Add</Text>
+          <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.accentSoft }]} onPress={() => setProfile((prev) => ({ ...prev, experiences: [...prev.experiences, emptyExperience()] }))}>
+            <Text style={[styles.addBtnText, { color: colors.accent }]}>+ Add</Text>
           </TouchableOpacity>
         </View>
-        {profile.experiences.length === 0 ? <Text style={styles.emptyText}>No experience added yet.</Text> : null}
+        {profile.experiences.length === 0 ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No experience added yet.</Text> : null}
         {profile.experiences.map((item, index) => (
-          <View key={`experience-${index}`} style={styles.entryCard}>
+          <View key={`experience-${index}`} style={[styles.entryCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
             <View style={styles.entryHeader}>
-              <Text style={styles.entryTitle}>Experience {index + 1}</Text>
+              <Text style={[styles.entryTitle, { color: colors.text }]}>Experience {index + 1}</Text>
               <TouchableOpacity onPress={() => setProfile((prev) => ({ ...prev, experiences: prev.experiences.filter((_, itemIndex) => itemIndex !== index) }))}>
                 <Text style={styles.removeText}>Remove</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} placeholder="Organization" value={item.organization} onChangeText={(value) => updateExperience(index, "organization", value)} />
-            <TextInput style={styles.input} placeholder="Role" value={item.role} onChangeText={(value) => updateExperience(index, "role", value)} />
-            <TextInput style={styles.input} placeholder="Start" value={item.start} onChangeText={(value) => updateExperience(index, "start", value)} />
-            <TextInput style={styles.input} placeholder="End" value={item.end} onChangeText={(value) => updateExperience(index, "end", value)} />
-            <TextInput style={[styles.input, styles.multilineSmall]} placeholder="Description" multiline value={item.description} onChangeText={(value) => updateExperience(index, "description", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Organization" placeholderTextColor={colors.textMuted} value={item.organization} onChangeText={(value) => updateExperience(index, "organization", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Role" placeholderTextColor={colors.textMuted} value={item.role} onChangeText={(value) => updateExperience(index, "role", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Start" placeholderTextColor={colors.textMuted} value={item.start} onChangeText={(value) => updateExperience(index, "start", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="End" placeholderTextColor={colors.textMuted} value={item.end} onChangeText={(value) => updateExperience(index, "end", value)} />
+            <TextInput style={[styles.input, styles.multilineSmall, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Description" placeholderTextColor={colors.textMuted} multiline value={item.description} onChangeText={(value) => updateExperience(index, "description", value)} />
           </View>
         ))}
       </View>
 
-      <Text style={styles.label}>Career Goals</Text>
-      <TextInput style={styles.input} value={profile.careerGoals} onChangeText={(careerGoals) => setProfile((prev) => ({ ...prev, careerGoals }))} />
+      <Text style={[styles.label, { color: colors.text }]}>Career Goals</Text>
+      <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} value={profile.careerGoals} onChangeText={(careerGoals) => setProfile((prev) => ({ ...prev, careerGoals }))} />
 
-      <View style={styles.resumeSection}>
-        <Text style={styles.resumeTitle}>Resume (PDF/DOC)</Text>
-        <Text style={styles.resumeSub}>
+      <View style={[styles.resumeSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.resumeTitle, { color: colors.text }]}>Resume (PDF/DOC)</Text>
+        <Text style={[styles.resumeSub, { color: colors.textMuted }]}>
           Upload your resume file. Students and mentors can open it from your profile when needed.
         </Text>
 
         <View style={styles.resumeActions}>
-          <TouchableOpacity style={styles.uploadBtn} onPress={uploadResume} disabled={uploadingResume}>
-            <Text style={styles.uploadBtnText}>{uploadingResume ? "Uploading..." : profile.resumeUrl ? "Replace Resume" : "Upload Resume"}</Text>
+          <TouchableOpacity style={[styles.uploadBtn, { borderColor: colors.accent, backgroundColor: colors.surfaceAlt }]} onPress={uploadResume} disabled={uploadingResume}>
+            <Text style={[styles.uploadBtnText, { color: colors.accent }]}>{uploadingResume ? "Uploading..." : profile.resumeUrl ? "Replace Resume" : "Upload Resume"}</Text>
           </TouchableOpacity>
           {profile.resumeUrl ? (
             <TouchableOpacity style={styles.resumeOpenBtn} onPress={openResume} disabled={uploadingResume}>
@@ -497,17 +543,18 @@ export default function StudentProfileScreen() {
           ) : null}
         </View>
 
-        <Text style={styles.resumeLinkLabel}>Resume link (auto-filled after upload)</Text>
+        <Text style={[styles.resumeLinkLabel, { color: colors.text }]}>Resume link (auto-filled after upload)</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
           value={profile.resumeUrl}
           onChangeText={(resumeUrl) => setProfile((prev) => ({ ...prev, resumeUrl }))}
           placeholder="https://..."
+          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
         />
       </View>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
       <TouchableOpacity style={styles.button} onPress={save} disabled={saving}>
         <Text style={styles.buttonText}>{saving ? "Saving..." : "Save Profile"}</Text>
       </TouchableOpacity>

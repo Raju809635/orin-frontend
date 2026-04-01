@@ -13,10 +13,12 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { useAppTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
 import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
 import { pickAndUploadResumeFile } from "@/utils/resumeUpload";
+import DateField from "@/components/profile/date-field";
 
 type ProfileAchievement = {
   title: string;
@@ -133,7 +135,15 @@ function normalizeEducation(value: any = {}): ProfileEducation {
   };
 }
 
+function parseCommaSeparated(value: string) {
+  return String(value || "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export default function MentorProfileScreen() {
+  const { colors } = useAppTheme();
   const [profile, setProfile] = useState<MentorProfile | null>(null);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -142,6 +152,7 @@ export default function MentorProfileScreen() {
   const [uploadingResume, setUploadingResume] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
+  const [projectTechDrafts, setProjectTechDrafts] = useState<Record<number, string>>({});
   const dragOffset = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -181,6 +192,13 @@ export default function MentorProfileScreen() {
             ? profilePayload.specializations.filter(Boolean)
             : []
         });
+        setProjectTechDrafts(
+          Array.isArray(profilePayload.projects)
+            ? Object.fromEntries(
+                profilePayload.projects.map((project: any, index: number) => [index, normalizeProject(project).tech.join(", ")])
+              )
+            : {}
+        );
         setCategories(Array.isArray(categoryData.categories) ? categoryData.categories : []);
       } catch (e: any) {
         if (mounted) setError(e?.response?.data?.message || "Failed to load profile");
@@ -238,6 +256,14 @@ export default function MentorProfileScreen() {
           }
         : prev
     );
+  };
+
+  const syncProjectTechDraft = (index: number, value: string) => {
+    setProjectTechDrafts((prev) => ({ ...prev, [index]: value }));
+  };
+
+  const commitProjectTechDraft = (index: number) => {
+    updateProject(index, "tech", parseCommaSeparated(projectTechDrafts[index] || ""));
   };
 
   const updateExperience = (index: number, key: keyof ProfileExperience, value: string) => {
@@ -367,7 +393,12 @@ export default function MentorProfileScreen() {
         expertiseDomains: profile.specializations,
         education: profile.education.filter((item) => item.school || item.degree || item.year),
         achievements: profile.achievements.filter((item) => item.title || item.issuer || item.date || item.url),
-        projects: profile.projects.filter((item) => item.title || item.description || item.link || item.tech.length),
+        projects: profile.projects
+          .map((item, index) => ({
+            ...item,
+            tech: parseCommaSeparated(projectTechDrafts[index] ?? item.tech.join(", "))
+          }))
+          .filter((item) => item.title || item.description || item.link || item.tech.length),
         experiences: profile.experiences.filter(
           (item) => item.organization || item.role || item.start || item.end || item.description
         )
@@ -396,6 +427,8 @@ export default function MentorProfileScreen() {
             }
           : prev
       );
+      const nextProjects = Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects;
+      setProjectTechDrafts(Object.fromEntries(nextProjects.map((item, index) => [index, item.tech.join(", ")])));
       notify("Mentor profile updated");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Save failed");
@@ -421,63 +454,63 @@ export default function MentorProfileScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0B3D2E" />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   if (!profile) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.error}>{error || "Profile unavailable"}</Text>
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <Text style={[styles.error, { color: colors.danger }]}>{error || "Profile unavailable"}</Text>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Mentor Profile</Text>
-      <Text style={styles.sub}>Profile completeness: {profile.profileCompleteness || 0}%</Text>
+    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
+      <Text style={[styles.title, { color: colors.text }]}>Mentor Profile</Text>
+      <Text style={[styles.sub, { color: colors.textMuted }]}>Profile completeness: {profile.profileCompleteness || 0}%</Text>
       <View style={styles.photoWrap}>
         {profile.profilePhotoUrl ? (
           <Image source={{ uri: profile.profilePhotoUrl }} style={styles.photo} />
         ) : (
-          <View style={[styles.photo, styles.photoFallback]}>
-            <Text style={styles.photoFallbackText}>
+          <View style={[styles.photo, styles.photoFallback, { backgroundColor: colors.accentSoft }]}>
+            <Text style={[styles.photoFallbackText, { color: colors.accent }]}>
               {(profile.title || "M").trim().charAt(0).toUpperCase() || "M"}
             </Text>
           </View>
         )}
-        <TouchableOpacity style={styles.uploadBtn} onPress={uploadPhoto} disabled={uploadingPhoto}>
-          <Text style={styles.uploadBtnText}>{uploadingPhoto ? "Uploading..." : "Upload Profile Picture"}</Text>
+        <TouchableOpacity style={[styles.uploadBtn, { borderColor: colors.accent, backgroundColor: colors.surfaceAlt }]} onPress={uploadPhoto} disabled={uploadingPhoto}>
+          <Text style={[styles.uploadBtnText, { color: colors.accent }]}>{uploadingPhoto ? "Uploading..." : "Upload Profile Picture"}</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.label}>Title</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Title</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
         value={profile.title}
         onChangeText={(title) => setProfile((prev) => (prev ? { ...prev, title } : prev))}
       />
 
-      <Text style={styles.label}>Company</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Company</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
         value={profile.company}
         onChangeText={(company) => setProfile((prev) => (prev ? { ...prev, company } : prev))}
       />
 
-      <Text style={styles.label}>State</Text>
+      <Text style={[styles.label, { color: colors.text }]}>State</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
         value={profile.state}
         onChangeText={(state) => setProfile((prev) => (prev ? { ...prev, state } : prev))}
       />
 
-      <Text style={styles.label}>Experience Years</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Experience Years</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
         keyboardType="numeric"
         value={String(profile.experienceYears || 0)}
         onChangeText={(val) =>
@@ -485,9 +518,9 @@ export default function MentorProfileScreen() {
         }
       />
 
-      <Text style={styles.label}>Session Price (INR)</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Session Price (INR)</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
         keyboardType="numeric"
         value={String(profile.sessionPrice || 0)}
         onChangeText={(val) =>
@@ -495,15 +528,15 @@ export default function MentorProfileScreen() {
         }
       />
 
-      <Text style={styles.label}>Phone Number</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Phone Number</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
         keyboardType="phone-pad"
         value={profile.phoneNumber}
         onChangeText={(phoneNumber) => setProfile((prev) => (prev ? { ...prev, phoneNumber } : prev))}
       />
 
-      <Text style={styles.label}>Primary Category</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Primary Category</Text>
       <View style={styles.selectionWrap}>
         {categories.map((cat) => {
           const active = profile.primaryCategory === cat.primary;
@@ -530,17 +563,17 @@ export default function MentorProfileScreen() {
         })}
       </View>
 
-      <Text style={styles.label}>Subcategory</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Subcategory</Text>
       <View style={styles.selectionWrap}>
         {subCategoryOptions.length === 0 ? (
-          <Text style={styles.hint}>Choose primary category first.</Text>
+          <Text style={[styles.hint, { color: colors.textMuted }]}>Choose primary category first.</Text>
         ) : (
           subCategoryOptions.map((sub) => {
             const active = profile.subCategory === sub.sub;
             return (
               <TouchableOpacity
                 key={sub.sub}
-                style={[styles.optionChip, active && styles.optionChipActive]}
+                style={[styles.optionChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
                 onPress={() =>
                   setProfile((prev) =>
                     prev
@@ -553,35 +586,35 @@ export default function MentorProfileScreen() {
                   )
                 }
               >
-                <Text style={[styles.optionText, active && styles.optionTextActive]}>{sub.sub}</Text>
+                <Text style={[styles.optionText, { color: active ? colors.accent : colors.textMuted }, active && styles.optionTextActive]}>{sub.sub}</Text>
               </TouchableOpacity>
             );
           })
         )}
       </View>
 
-      <Text style={styles.label}>Specializations</Text>
+      <Text style={[styles.label, { color: colors.text }]}>Specializations</Text>
       <View style={styles.selectionWrap}>
         {specializationOptions.length === 0 ? (
-          <Text style={styles.hint}>Choose subcategory first.</Text>
+          <Text style={[styles.hint, { color: colors.textMuted }]}>Choose subcategory first.</Text>
         ) : (
           specializationOptions.map((spec) => {
             const active = profile.specializations.includes(spec);
             return (
               <TouchableOpacity
                 key={spec}
-                style={[styles.optionChip, active && styles.optionChipActive]}
+                style={[styles.optionChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
                 onPress={() => toggleSpecialization(spec)}
               >
-                <Text style={[styles.optionText, active && styles.optionTextActive]}>{spec}</Text>
+                <Text style={[styles.optionText, { color: active ? colors.accent : colors.textMuted }, active && styles.optionTextActive]}>{spec}</Text>
               </TouchableOpacity>
             );
           })
         )}
       </View>
 
-      <Text style={styles.label}>Reorder Selected Specializations (drag)</Text>
-      {profile.specializations.length === 0 ? <Text style={styles.hint}>Select at least one specialization.</Text> : null}
+      <Text style={[styles.label, { color: colors.text }]}>Reorder Selected Specializations (drag)</Text>
+      {profile.specializations.length === 0 ? <Text style={[styles.hint, { color: colors.textMuted }]}>Select at least one specialization.</Text> : null}
       {profile.specializations.map((spec, index) => {
         const isDragging = draggingIndex === index;
         return (
@@ -590,152 +623,174 @@ export default function MentorProfileScreen() {
             {...panResponders[index]?.panHandlers}
             style={[
               styles.dragRow,
+              { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
               isDragging && {
                 zIndex: 2,
                 transform: [{ translateY: dragOffset }]
               }
             ]}
           >
-            <Text style={styles.dragHandle}>|||</Text>
-            <Text style={styles.dragText}>{spec}</Text>
+            <Text style={[styles.dragHandle, { color: colors.textMuted }]}>|||</Text>
+            <Text style={[styles.dragText, { color: colors.text }]}>{spec}</Text>
           </Animated.View>
         );
       })}
 
-      <Text style={styles.label}>About</Text>
+      <Text style={[styles.label, { color: colors.text }]}>About</Text>
       <TextInput
-        style={[styles.input, styles.multiline]}
+        style={[styles.input, styles.multiline, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
         multiline
         value={profile.about}
         onChangeText={(about) => setProfile((prev) => (prev ? { ...prev, about } : prev))}
       />
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Education</Text>
-            <Text style={styles.sectionSub}>Show degrees, colleges, or qualifications that support your mentor profile.</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Education</Text>
+            <Text style={[styles.sectionSub, { color: colors.textMuted }]}>Show degrees, colleges, or qualifications that support your mentor profile.</Text>
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => (prev ? { ...prev, education: [...prev.education, emptyEducation()] } : prev))}>
-            <Text style={styles.addBtnText}>+ Add</Text>
+          <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.accentSoft }]} onPress={() => setProfile((prev) => (prev ? { ...prev, education: [...prev.education, emptyEducation()] } : prev))}>
+            <Text style={[styles.addBtnText, { color: colors.accent }]}>+ Add</Text>
           </TouchableOpacity>
         </View>
-        {profile.education.length === 0 ? <Text style={styles.emptyText}>No education added yet.</Text> : null}
+        {profile.education.length === 0 ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No education added yet.</Text> : null}
         {profile.education.map((item, index) => (
-          <View key={`education-${index}`} style={styles.entryCard}>
+          <View key={`education-${index}`} style={[styles.entryCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
             <View style={styles.entryHeader}>
-              <Text style={styles.entryTitle}>Education {index + 1}</Text>
+              <Text style={[styles.entryTitle, { color: colors.text }]}>Education {index + 1}</Text>
               <TouchableOpacity onPress={() => setProfile((prev) => (prev ? { ...prev, education: prev.education.filter((_, itemIndex) => itemIndex !== index) } : prev))}>
                 <Text style={styles.removeText}>Remove</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} placeholder="School / College" value={item.school} onChangeText={(value) => updateEducation(index, "school", value)} />
-            <TextInput style={styles.input} placeholder="Degree / Qualification" value={item.degree} onChangeText={(value) => updateEducation(index, "degree", value)} />
-            <TextInput style={styles.input} placeholder="Year" value={item.year} onChangeText={(value) => updateEducation(index, "year", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="School / College" placeholderTextColor={colors.textMuted} value={item.school} onChangeText={(value) => updateEducation(index, "school", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Degree / Qualification" placeholderTextColor={colors.textMuted} value={item.degree} onChangeText={(value) => updateEducation(index, "degree", value)} />
+            <DateField label="Passing Year" mode="year" value={item.year} placeholder="Select passing year" onChange={(value) => updateEducation(index, "year", value)} />
           </View>
         ))}
       </View>
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Achievements</Text>
-            <Text style={styles.sectionSub}>Add certifications, badges, and recognitions.</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Achievements</Text>
+            <Text style={[styles.sectionSub, { color: colors.textMuted }]}>Add certifications, badges, and recognitions.</Text>
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => (prev ? { ...prev, achievements: [...prev.achievements, emptyAchievement()] } : prev))}>
-            <Text style={styles.addBtnText}>+ Add</Text>
+          <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.accentSoft }]} onPress={() => setProfile((prev) => (prev ? { ...prev, achievements: [...prev.achievements, emptyAchievement()] } : prev))}>
+            <Text style={[styles.addBtnText, { color: colors.accent }]}>+ Add</Text>
           </TouchableOpacity>
         </View>
-        {profile.achievements.length === 0 ? <Text style={styles.emptyText}>No achievements added yet.</Text> : null}
+        {profile.achievements.length === 0 ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No achievements added yet.</Text> : null}
         {profile.achievements.map((item, index) => (
-          <View key={`achievement-${index}`} style={styles.entryCard}>
+          <View key={`achievement-${index}`} style={[styles.entryCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
             <View style={styles.entryHeader}>
-              <Text style={styles.entryTitle}>Achievement {index + 1}</Text>
+              <Text style={[styles.entryTitle, { color: colors.text }]}>Achievement {index + 1}</Text>
               <TouchableOpacity onPress={() => setProfile((prev) => (prev ? { ...prev, achievements: prev.achievements.filter((_, itemIndex) => itemIndex !== index) } : prev))}>
                 <Text style={styles.removeText}>Remove</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} placeholder="Title" value={item.title} onChangeText={(value) => updateAchievement(index, "title", value)} />
-            <TextInput style={styles.input} placeholder="Issuer" value={item.issuer} onChangeText={(value) => updateAchievement(index, "issuer", value)} />
-            <TextInput style={styles.input} placeholder="Date" value={item.date} onChangeText={(value) => updateAchievement(index, "date", value)} />
-            <TextInput style={styles.input} placeholder="URL (optional)" value={item.url} onChangeText={(value) => updateAchievement(index, "url", value)} autoCapitalize="none" />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Title" placeholderTextColor={colors.textMuted} value={item.title} onChangeText={(value) => updateAchievement(index, "title", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Issuer" placeholderTextColor={colors.textMuted} value={item.issuer} onChangeText={(value) => updateAchievement(index, "issuer", value)} />
+            <DateField label="Achievement Date" value={item.date} placeholder="Select achievement date" onChange={(value) => updateAchievement(index, "date", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="URL (optional)" placeholderTextColor={colors.textMuted} value={item.url} onChangeText={(value) => updateAchievement(index, "url", value)} autoCapitalize="none" />
           </View>
         ))}
       </View>
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Projects</Text>
-            <Text style={styles.sectionSub}>Show mentor projects, case studies, or learning resources.</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Projects</Text>
+            <Text style={[styles.sectionSub, { color: colors.textMuted }]}>Show mentor projects, case studies, or learning resources.</Text>
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => (prev ? { ...prev, projects: [...prev.projects, emptyProject()] } : prev))}>
-            <Text style={styles.addBtnText}>+ Add</Text>
+          <TouchableOpacity
+            style={[styles.addBtn, { backgroundColor: colors.accentSoft }]}
+            onPress={() => {
+              setProfile((prev) => (prev ? { ...prev, projects: [...prev.projects, emptyProject()] } : prev));
+              setProjectTechDrafts((prev) => ({ ...prev, [profile.projects.length]: "" }));
+            }}
+          >
+            <Text style={[styles.addBtnText, { color: colors.accent }]}>+ Add</Text>
           </TouchableOpacity>
         </View>
-        {profile.projects.length === 0 ? <Text style={styles.emptyText}>No projects added yet.</Text> : null}
+        {profile.projects.length === 0 ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No projects added yet.</Text> : null}
         {profile.projects.map((item, index) => (
-          <View key={`project-${index}`} style={styles.entryCard}>
+          <View key={`project-${index}`} style={[styles.entryCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
             <View style={styles.entryHeader}>
-              <Text style={styles.entryTitle}>Project {index + 1}</Text>
-              <TouchableOpacity onPress={() => setProfile((prev) => (prev ? { ...prev, projects: prev.projects.filter((_, itemIndex) => itemIndex !== index) } : prev))}>
+              <Text style={[styles.entryTitle, { color: colors.text }]}>Project {index + 1}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setProfile((prev) => (prev ? { ...prev, projects: prev.projects.filter((_, itemIndex) => itemIndex !== index) } : prev));
+                  setProjectTechDrafts((prev) => {
+                    const next: Record<number, string> = {};
+                    Object.entries(prev).forEach(([key, draft]) => {
+                      const numericKey = Number(key);
+                      if (numericKey < index) next[numericKey] = draft;
+                      if (numericKey > index) next[numericKey - 1] = draft;
+                    });
+                    return next;
+                  });
+                }}
+              >
                 <Text style={styles.removeText}>Remove</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} placeholder="Title" value={item.title} onChangeText={(value) => updateProject(index, "title", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Title" placeholderTextColor={colors.textMuted} value={item.title} onChangeText={(value) => updateProject(index, "title", value)} />
             <TextInput
-              style={styles.input}
+              style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
               placeholder="Tech stack (comma separated)"
-              value={item.tech.join(", ")}
-              onChangeText={(value) => updateProject(index, "tech", value.split(",").map((tech) => tech.trim()).filter(Boolean))}
+              placeholderTextColor={colors.textMuted}
+              value={projectTechDrafts[index] ?? item.tech.join(", ")}
+              onChangeText={(value) => syncProjectTechDraft(index, value)}
+              onBlur={() => commitProjectTechDraft(index)}
             />
-            <TextInput style={styles.input} placeholder="GitHub / Link" value={item.link} onChangeText={(value) => updateProject(index, "link", value)} autoCapitalize="none" />
-            <TextInput style={[styles.input, styles.multilineSmall]} placeholder="Description" multiline value={item.description} onChangeText={(value) => updateProject(index, "description", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="GitHub / Link" placeholderTextColor={colors.textMuted} value={item.link} onChangeText={(value) => updateProject(index, "link", value)} autoCapitalize="none" />
+            <TextInput style={[styles.input, styles.multilineSmall, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Description" placeholderTextColor={colors.textMuted} multiline value={item.description} onChangeText={(value) => updateProject(index, "description", value)} />
           </View>
         ))}
       </View>
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <View>
-            <Text style={styles.sectionTitle}>Experience</Text>
-            <Text style={styles.sectionSub}>List mentoring, work, startup, or leadership experience.</Text>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Experience</Text>
+            <Text style={[styles.sectionSub, { color: colors.textMuted }]}>List mentoring, work, startup, or leadership experience.</Text>
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setProfile((prev) => (prev ? { ...prev, experiences: [...prev.experiences, emptyExperience()] } : prev))}>
-            <Text style={styles.addBtnText}>+ Add</Text>
+          <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.accentSoft }]} onPress={() => setProfile((prev) => (prev ? { ...prev, experiences: [...prev.experiences, emptyExperience()] } : prev))}>
+            <Text style={[styles.addBtnText, { color: colors.accent }]}>+ Add</Text>
           </TouchableOpacity>
         </View>
-        {profile.experiences.length === 0 ? <Text style={styles.emptyText}>No experience added yet.</Text> : null}
+        {profile.experiences.length === 0 ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No experience added yet.</Text> : null}
         {profile.experiences.map((item, index) => (
-          <View key={`experience-${index}`} style={styles.entryCard}>
+          <View key={`experience-${index}`} style={[styles.entryCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
             <View style={styles.entryHeader}>
-              <Text style={styles.entryTitle}>Experience {index + 1}</Text>
+              <Text style={[styles.entryTitle, { color: colors.text }]}>Experience {index + 1}</Text>
               <TouchableOpacity onPress={() => setProfile((prev) => (prev ? { ...prev, experiences: prev.experiences.filter((_, itemIndex) => itemIndex !== index) } : prev))}>
                 <Text style={styles.removeText}>Remove</Text>
               </TouchableOpacity>
             </View>
-            <TextInput style={styles.input} placeholder="Organization" value={item.organization} onChangeText={(value) => updateExperience(index, "organization", value)} />
-            <TextInput style={styles.input} placeholder="Role" value={item.role} onChangeText={(value) => updateExperience(index, "role", value)} />
-            <TextInput style={styles.input} placeholder="Start" value={item.start} onChangeText={(value) => updateExperience(index, "start", value)} />
-            <TextInput style={styles.input} placeholder="End" value={item.end} onChangeText={(value) => updateExperience(index, "end", value)} />
-            <TextInput style={[styles.input, styles.multilineSmall]} placeholder="Description" multiline value={item.description} onChangeText={(value) => updateExperience(index, "description", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Organization" placeholderTextColor={colors.textMuted} value={item.organization} onChangeText={(value) => updateExperience(index, "organization", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Role" placeholderTextColor={colors.textMuted} value={item.role} onChangeText={(value) => updateExperience(index, "role", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Start" placeholderTextColor={colors.textMuted} value={item.start} onChangeText={(value) => updateExperience(index, "start", value)} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="End" placeholderTextColor={colors.textMuted} value={item.end} onChangeText={(value) => updateExperience(index, "end", value)} />
+            <TextInput style={[styles.input, styles.multilineSmall, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Description" placeholderTextColor={colors.textMuted} multiline value={item.description} onChangeText={(value) => updateExperience(index, "description", value)} />
           </View>
         ))}
       </View>
 
-      <Text style={styles.label}>LinkedIn URL</Text>
+      <Text style={[styles.label, { color: colors.text }]}>LinkedIn URL</Text>
       <TextInput
-        style={styles.input}
+        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
         value={profile.linkedInUrl}
         onChangeText={(linkedInUrl) => setProfile((prev) => (prev ? { ...prev, linkedInUrl } : prev))}
       />
 
-      <View style={styles.resumeSection}>
-        <Text style={styles.resumeTitle}>Resume (PDF/DOC)</Text>
-        <Text style={styles.resumeSub}>Upload your resume for students to view when deciding to book sessions.</Text>
+      <View style={[styles.resumeSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.resumeTitle, { color: colors.text }]}>Resume (PDF/DOC)</Text>
+        <Text style={[styles.resumeSub, { color: colors.textMuted }]}>Upload your resume for students to view when deciding to book sessions.</Text>
         <View style={styles.resumeActions}>
-          <TouchableOpacity style={styles.uploadBtn} onPress={uploadResume} disabled={uploadingResume}>
-            <Text style={styles.uploadBtnText}>
+          <TouchableOpacity style={[styles.uploadBtn, { borderColor: colors.accent, backgroundColor: colors.surfaceAlt }]} onPress={uploadResume} disabled={uploadingResume}>
+            <Text style={[styles.uploadBtnText, { color: colors.accent }]}>
               {uploadingResume ? "Uploading..." : profile.resumeUrl ? "Replace Resume" : "Upload Resume"}
             </Text>
           </TouchableOpacity>
@@ -751,17 +806,18 @@ export default function MentorProfileScreen() {
           ) : null}
         </View>
 
-        <Text style={styles.resumeLinkLabel}>Resume link (auto-filled after upload)</Text>
+        <Text style={[styles.resumeLinkLabel, { color: colors.text }]}>Resume link (auto-filled after upload)</Text>
         <TextInput
-          style={styles.input}
+          style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
           value={profile.resumeUrl}
           onChangeText={(resumeUrl) => setProfile((prev) => (prev ? { ...prev, resumeUrl } : prev))}
           placeholder="https://..."
+          placeholderTextColor={colors.textMuted}
           autoCapitalize="none"
         />
       </View>
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
       <TouchableOpacity style={styles.button} onPress={save} disabled={saving}>
         <Text style={styles.buttonText}>{saving ? "Saving..." : "Save Profile"}</Text>
       </TouchableOpacity>
