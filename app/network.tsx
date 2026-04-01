@@ -726,6 +726,22 @@ export default function NetworkScreen() {
     return Math.max(220, Math.min(520, computedHeight));
   }
 
+  function getGridRowHeight(uris: string[], columnWidth: number, fallback = 230) {
+    const heights = uris
+      .map((uri) => {
+        const size = mediaSizeByUrl[uri];
+        if (!size?.width || !size?.height) return null;
+        const ratio = size.width / size.height;
+        return columnWidth / ratio;
+      })
+      .filter((value): value is number => typeof value === "number" && Number.isFinite(value));
+
+    if (!heights.length) return fallback;
+
+    const avgHeight = heights.reduce((sum, value) => sum + value, 0) / heights.length;
+    return Math.max(190, Math.min(320, avgHeight));
+  }
+
   function renderMediaLayout(postId: string, media: string[]) {
     if (!media.length) return null;
 
@@ -746,13 +762,14 @@ export default function NetworkScreen() {
     const extraCount = media.length - visible.length;
 
     if (visible.length === 2) {
+      const tileHeight = getGridRowHeight(visible, (feedMediaWidth - 4) / 2);
       return (
         <View style={styles.mediaGridRow}>
           {visible.map((uri, idx) => (
             <TouchableOpacity
               key={`${postId}-two-${idx}`}
               activeOpacity={0.95}
-              style={styles.mediaHalf}
+              style={[styles.mediaHalf, { height: tileHeight }]}
               onPress={() => setViewer({ visible: true, postId, images: media, index: idx })}
             >
               <Image source={{ uri }} style={styles.mediaFill} resizeMode="cover" />
