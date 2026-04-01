@@ -136,6 +136,7 @@ const EXPAND_FALLBACK_THRESHOLD = 140;
 const NETWORK_SECTION_STALE_MS = 2 * 60 * 1000;
 const { width } = Dimensions.get("window");
 const carouselWidth = Math.max(width - 56, 280);
+const feedMediaWidth = width - 32;
 const REACTION_ORDER = ["like", "love", "wow", "care", "sad", "angry"] as const;
 const REACTION_OPTIONS: Record<(typeof REACTION_ORDER)[number], { emoji: string; label: string }> = {
   like: { emoji: "\u{1F44D}", label: "Like" },
@@ -167,6 +168,7 @@ export default function NetworkScreen() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestionPhotoById, setSuggestionPhotoById] = useState<Record<string, string>>({});
   const [personPhotoById, setPersonPhotoById] = useState<Record<string, string>>({});
+  const [mediaSizeByUrl, setMediaSizeByUrl] = useState<Record<string, { width: number; height: number }>>({});
   const [pendingIncoming, setPendingIncoming] = useState<ConnectionRow[]>([]);
   const [circleMembers, setCircleMembers] = useState<CircleMember[]>([]);
   const [requestedCircleIds, setRequestedCircleIds] = useState<Record<string, boolean>>({});
@@ -427,6 +429,53 @@ export default function NetworkScreen() {
     };
   }, [circleMembers, commentsModal.comments, personPhotoById]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const mediaUrls = Array.from(
+      new Set(
+        posts
+          .flatMap((post) => post.mediaUrls || [])
+          .filter(Boolean)
+          .filter((uri) => !mediaSizeByUrl[uri])
+      )
+    ).slice(0, 20);
+
+    if (mediaUrls.length === 0) return;
+
+    (async () => {
+      const rows = await Promise.all(
+        mediaUrls.map(
+          (uri) =>
+            new Promise<readonly [string, { width: number; height: number } | null]>((resolve) => {
+              Image.getSize(
+                uri,
+                (w, h) => resolve([uri, { width: w, height: h }] as const),
+                () => resolve([uri, null] as const)
+              );
+            })
+        )
+      );
+
+      if (cancelled) return;
+
+      setMediaSizeByUrl((prev) => {
+        const next = { ...prev };
+        let changed = false;
+        rows.forEach(([uri, size]) => {
+          if (size && !next[uri]) {
+            next[uri] = size;
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mediaSizeByUrl, posts]);
+
   const normalizedSearch = searchQuery.trim().toLowerCase();
 
   const filteredSuggestions = normalizedSearch
@@ -669,6 +718,100 @@ export default function NetworkScreen() {
     }
 
     setLikesModal({ visible: true, postId: post._id, users: Array.from(unique.values()) });
+  }
+
+  function getSingleImageHeight(uri: string) {
+    const size = mediaSizeByUrl[uri];
+    if (!size?.width || !size?.height) return 320;
+    const ratio = size.width / size.height;
+    const computedHeight = feedMediaWidth / ratio;
+    return Math.max(220, Math.min(520, computedHeight));
+  }
+
+  function renderMediaLayout(postId: string, media: string[]) {
+    if (!media.length) return null;
+
+    if (media.length === 1) {
+      const uri = media[0];
+      return (
+        <TouchableOpacity
+          activeOpacity={0.95}
+          style={styles.singleMediaWrap}
+          onPress={() => setViewer({ visible: true, postId, images: media, index: 0 })}
+        >
+          <Image source={{ uri }} style={[styles.singlePostImage, { height: getSingleImageHeight(uri) }]} resizeMode="cover" />
+        </TouchableOpacity>
+      );
+    }
+
+    const visible = media.slice(0, 4);
+    const extraCount = media.length - visible.length;
+
+    if (visible.length === 2) {
+      return (
+        <View style={styles.mediaGridRow}>
+          {visible.map((uri, idx) => (
+            <TouchableOpacity
+              key={`${postId}-two-${idx}`}
+              activeOpacity={0.95}
+              style={styles.mediaHalf}
+              onPress={() => setViewer({ visible: true, postId, images: media, index: idx })}
+            >
+              <Image source={{ uri }} style={styles.mediaFill} resizeMode="cover" />
+            </TouchableOpacity>
+          ))}
+        </View>
+      );
+    }
+
+    if (visible.length === 3) {
+      return (
+        <View style={styles.mediaGridRow}>
+          <TouchableOpacity
+            activeOpacity={0.95}
+            style={[styles.mediaHalf, styles.mediaTall]}
+            onPress={() => setViewer({ visible: true, postId, images: media, index: 0 })}
+          >
+            <Image source={{ uri: visible[0] }} style={styles.mediaFill} resizeMode="cover" />
+          </TouchableOpacity>
+          <View style={styles.mediaStack}>
+            {visible.slice(1).map((uri, idx) => (
+              <TouchableOpacity
+                key={`${postId}-three-${idx + 1}`}
+                activeOpacity={0.95}
+                style={[styles.mediaHalf, styles.mediaShort]}
+                onPress={() => setViewer({ visible: true, postId, images: media, index: idx + 1 })}
+              >
+                <Image source={{ uri }} style={styles.mediaFill} resizeMode="cover" />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.mediaFourGrid}>
+        {visible.map((uri, idx) => {
+          const isLast = idx === visible.length - 1 && extraCount > 0;
+          return (
+            <TouchableOpacity
+              key={`${postId}-four-${idx}`}
+              activeOpacity={0.95}
+              style={styles.mediaQuarter}
+              onPress={() => setViewer({ visible: true, postId, images: media, index: idx })}
+            >
+              <Image source={{ uri }} style={styles.mediaFill} resizeMode="cover" />
+              {isLast ? (
+                <View style={styles.mediaOverlay}>
+                  <Text style={styles.mediaOverlayText}>+{extraCount}</Text>
+                </View>
+              ) : null}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    );
   }
 
   function replyToComment(item: FeedComment) {
@@ -975,7 +1118,6 @@ export default function NetworkScreen() {
                 const isOwnPost = authorId && String(authorId) === String(user?.id || "");
                 const isFollowing = authorId ? Boolean(followingState[authorId]) : false;
                 const media = (post.mediaUrls || []).slice(0, 5);
-                const currentIndex = carouselIndexByPost[post._id] || 0;
                 const userReaction = post.userReaction || null;
                 const totalReactions = REACTION_ORDER.reduce(
                   (sum, type) => sum + Number(post.reactionCounts?.[type] || 0),
@@ -995,7 +1137,7 @@ export default function NetworkScreen() {
                 const summaryCommentCount = Number(post.commentCount || 0);
 
                 return (
-                  <View key={post._id} style={[styles.postCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <View key={post._id} style={styles.postCard}>
                     <View style={styles.postHeader}>
                       <TouchableOpacity
                         style={styles.authorWrap}
@@ -1078,27 +1220,7 @@ export default function NetworkScreen() {
                       );
                     })()}
 
-                    {media.length ? (
-                      <>
-                        <ScrollView
-                          horizontal
-                          pagingEnabled
-                          showsHorizontalScrollIndicator={false}
-                          onMomentumScrollEnd={(e) => onCarouselScroll(post._id, e.nativeEvent.contentOffset.x)}
-                        >
-                          {media.map((uri, idx) => (
-                            <TouchableOpacity key={`${post._id}-media-${idx}`} activeOpacity={0.9} onPress={() => setViewer({ visible: true, postId: post._id, images: media, index: idx })}>
-                              <Image source={{ uri }} style={[styles.postImage, { borderColor: colors.border }]} resizeMode="cover" />
-                            </TouchableOpacity>
-                          ))}
-                        </ScrollView>
-                        <View style={styles.dotRow}>
-                          {media.map((_, idx) => (
-                            <View key={`${post._id}-dot-${idx}`} style={[styles.dot, { backgroundColor: colors.border }, idx === currentIndex ? [styles.dotActive, { backgroundColor: colors.accent }] : null]} />
-                          ))}
-                        </View>
-                      </>
-                    ) : null}
+                    {media.length ? renderMediaLayout(post._id, media) : null}
 
                     {(summaryReactionCount > 0 || summaryCommentCount > 0) ? (
                       <TouchableOpacity
@@ -1556,7 +1678,7 @@ const styles = StyleSheet.create({
   rowTitle: { color: "#1E2B24", fontWeight: "700" },
   action: { color: "#175CD3", fontWeight: "700" },
   actionDanger: { color: "#B42318", fontWeight: "700" },
-  feedSection: { gap: 14 },
+  feedSection: { gap: 10 },
   startPostCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -1589,13 +1711,9 @@ const styles = StyleSheet.create({
   },
   startPostPlaceholder: { color: "#667085", fontWeight: "600" },
   postCard: {
-    borderWidth: 1,
-    borderColor: "#E4E7EC",
-    borderRadius: 18,
-    paddingVertical: 14,
-    paddingHorizontal: 14,
+    paddingVertical: 12,
     marginVertical: 2,
-    backgroundColor: "#FFFFFF"
+    backgroundColor: "transparent"
   },
   postHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   authorWrap: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
@@ -1637,15 +1755,33 @@ const styles = StyleSheet.create({
   postLink: { color: "#175CD3", fontWeight: "700" },
   viewMoreBtn: { marginTop: 6, alignSelf: "flex-start" },
   viewMoreText: { color: "#175CD3", fontWeight: "800" },
-  postImage: {
-    width: carouselWidth,
-    height: 240,
-    borderRadius: 14,
-    marginTop: 10,
-    marginRight: 8,
-    borderWidth: 1,
-    borderColor: "#E4E7EC"
+  singleMediaWrap: { marginTop: 12 },
+  singlePostImage: {
+    width: feedMediaWidth,
+    borderRadius: 18,
+    backgroundColor: "#E5E7EB"
   },
+  mediaGridRow: { marginTop: 12, flexDirection: "row", gap: 4 },
+  mediaHalf: { flex: 1, borderRadius: 16, overflow: "hidden", backgroundColor: "#E5E7EB" },
+  mediaTall: { height: 264 },
+  mediaShort: { height: 130 },
+  mediaStack: { flex: 1, gap: 4 },
+  mediaFourGrid: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 4 },
+  mediaQuarter: {
+    width: (feedMediaWidth - 4) / 2,
+    height: 150,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: "#E5E7EB"
+  },
+  mediaFill: { width: "100%", height: "100%" },
+  mediaOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(15,23,42,0.42)",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  mediaOverlayText: { color: "#FFFFFF", fontSize: 30, fontWeight: "900" },
   dotRow: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: 8 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#D0D5DD" },
   dotActive: { width: 14, backgroundColor: "#1F7A4C", borderRadius: 7 },
