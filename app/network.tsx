@@ -9,7 +9,6 @@ import {
   Platform,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -24,6 +23,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadPostImages } from "@/utils/postMediaUpload";
+import { sharePost } from "@/utils/sharePost";
 import { sanitizeDisplayText } from "@/utils/textSanitize";
 import GlobalHeader from "@/components/global-header";
 
@@ -597,10 +597,10 @@ export default function NetworkScreen() {
   async function react(postId: string, action: "like" | "react" | "save" | "share", reactionType?: (typeof REACTION_ORDER)[number]) {
     try {
       const post = posts.find((p) => p._id === postId);
-      if (action === "share" && post?.content) {
-        await Share.share({
-          message: `${sanitizeDisplayText(post.content)}\n\nShared via ORIN`
-        });
+      if (action === "share") {
+        if (!post) return;
+        const didShare = await sharePost(post);
+        if (!didShare) return;
       }
       await api.post(`/api/network/feed/${postId}/react`, reactionType ? { action, reactionType } : { action });
       setReactionMenuFor(null);
