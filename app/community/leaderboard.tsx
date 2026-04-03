@@ -26,11 +26,14 @@ type LeaderboardEntry = {
 type LeaderboardResponse = {
   dateKey?: string;
   collegeName?: string;
+  stateName?: string;
   collegeTop: LeaderboardEntry[];
+  stateTop?: LeaderboardEntry[];
   globalTop?: LeaderboardEntry[];
   me?: {
     score?: number;
     collegeRank?: number | null;
+    stateRank?: number | null;
     globalRank?: number | null;
   };
 };
@@ -85,21 +88,25 @@ export default function CommunityLeaderboardPage() {
 
   const activeEntries = useMemo(() => {
     if (activeTab === "global") return data?.globalTop || [];
-    if (activeTab === "state") return data?.globalTop || [];
+    if (activeTab === "state") return data?.stateTop || [];
     return data?.collegeTop || [];
-  }, [activeTab, data?.collegeTop, data?.globalTop]);
+  }, [activeTab, data?.collegeTop, data?.globalTop, data?.stateTop]);
 
   const activeTitle = useMemo(() => {
     if (activeTab === "college") return data?.collegeName ? `${data.collegeName} Leaderboard` : "College Leaderboard";
-    if (activeTab === "state") return "State Leaderboard";
+    if (activeTab === "state") return data?.stateName ? `${data.stateName} Leaderboard` : "State Leaderboard";
     return "Global Leaderboard";
-  }, [activeTab, data?.collegeName]);
+  }, [activeTab, data?.collegeName, data?.stateName]);
 
   const activeSubtitle = useMemo(() => {
     if (activeTab === "college") return "Compete with learners from your college and push toward the podium.";
-    if (activeTab === "state") return "Regional competition view is using your broader global pool until state data is connected.";
+    if (activeTab === "state") {
+      return data?.stateName
+        ? "See how you rank against learners from your state."
+        : "Add your state in profile to join the state leaderboard.";
+    }
     return "See where you stand against ORIN learners across the platform.";
-  }, [activeTab]);
+  }, [activeTab, data?.stateName]);
 
   const topThree = useMemo(
     () =>
@@ -116,11 +123,14 @@ export default function CommunityLeaderboardPage() {
     if (activeTab === "college" && data?.me?.collegeRank) {
       return { rank: data.me.collegeRank, score: data.me.score || 0, name: user?.name || "You" };
     }
-    if ((activeTab === "global" || activeTab === "state") && data?.me?.globalRank) {
+    if (activeTab === "state" && data?.me?.stateRank) {
+      return { rank: data.me.stateRank, score: data.me.score || 0, name: user?.name || "You" };
+    }
+    if (activeTab === "global" && data?.me?.globalRank) {
       return { rank: data.me.globalRank, score: data.me.score || 0, name: user?.name || "You" };
     }
     return null;
-  }, [activeEntries, activeTab, data?.me?.collegeRank, data?.me?.globalRank, data?.me?.score, user?.id, user?.name]);
+  }, [activeEntries, activeTab, data?.me?.collegeRank, data?.me?.globalRank, data?.me?.score, data?.me?.stateRank, user?.id, user?.name]);
 
   const nextTargetEntry = useMemo(() => {
     if (!myEntry) return activeEntries[0] || null;

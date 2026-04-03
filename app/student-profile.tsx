@@ -136,6 +136,8 @@ export default function StudentProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [savingPhoto, setSavingPhoto] = useState(false);
+  const [photoDirty, setPhotoDirty] = useState(false);
   const [uploadingResume, setUploadingResume] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [skillsDraft, setSkillsDraft] = useState("");
@@ -251,6 +253,7 @@ export default function StudentProfileScreen() {
       setProfile((prev) => ({
         ...prev,
         ...profileData,
+        state: typeof profileData.state === "string" ? profileData.state : payload.state,
         skills: Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : payload.skills,
         education: Array.isArray(profileData.education) ? profileData.education.map(normalizeEducation) : payload.education,
         projects: Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects,
@@ -264,6 +267,7 @@ export default function StudentProfileScreen() {
       setSkillsDraft((Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : payload.skills).join(", "));
       const nextProjects = Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects;
       setProjectTechDrafts(Object.fromEntries(nextProjects.map((item, index) => [index, item.tech.join(", ")])));
+      setPhotoDirty(false);
       notify("Student profile updated");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Save failed");
@@ -279,12 +283,42 @@ export default function StudentProfileScreen() {
       const uploadedUrl = await pickAndUploadProfilePhoto();
       if (!uploadedUrl) return;
       setProfile((prev) => ({ ...prev, profilePhotoUrl: uploadedUrl }));
-      notify("Profile photo uploaded. Save profile to apply.");
+      setPhotoDirty(true);
+      notify("Photo selected. Save photo to apply it everywhere.");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to upload profile photo");
     } finally {
       setUploadingPhoto(false);
     }
+  }
+
+  async function savePhoto() {
+    try {
+      setSavingPhoto(true);
+      setError(null);
+      const { data } = await api.patch("/api/profiles/student/me", { profilePhotoUrl: profile.profilePhotoUrl });
+      setProfile((prev) => ({ ...prev, profilePhotoUrl: data?.profile?.profilePhotoUrl || prev.profilePhotoUrl }));
+      setPhotoDirty(false);
+      notify("Profile photo saved.");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to save profile photo");
+    } finally {
+      setSavingPhoto(false);
+    }
+  }
+
+  async function removePhoto() {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      Alert.alert("Delete photo?", "This removes your profile photo from ORIN.", [
+        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+        { text: "Delete", style: "destructive", onPress: () => resolve(true) }
+      ]);
+    });
+    if (!confirmed) return;
+
+    setProfile((prev) => ({ ...prev, profilePhotoUrl: "" }));
+    setPhotoDirty(true);
+    notify("Photo removed locally. Save photo to apply.");
   }
 
   async function uploadResume() {
@@ -362,9 +396,18 @@ export default function StudentProfileScreen() {
             <Text style={[styles.photoFallbackText, { color: colors.accent }]}>{(profile.headline || "S").trim().charAt(0).toUpperCase() || "S"}</Text>
           </View>
         )}
-        <TouchableOpacity style={[styles.uploadBtn, { borderColor: colors.accent, backgroundColor: colors.surfaceAlt }]} onPress={uploadPhoto} disabled={uploadingPhoto}>
-          <Text style={[styles.uploadBtnText, { color: colors.accent }]}>{uploadingPhoto ? "Uploading..." : "Upload Profile Picture"}</Text>
-        </TouchableOpacity>
+        <View style={styles.photoActionRow}>
+          <TouchableOpacity style={[styles.uploadBtn, { borderColor: colors.accent, backgroundColor: colors.surfaceAlt }]} onPress={uploadPhoto} disabled={uploadingPhoto}>
+            <Text style={[styles.uploadBtnText, { color: colors.accent }]}>{uploadingPhoto ? "Cropping..." : profile.profilePhotoUrl ? "Change Photo" : "Add Photo"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.uploadBtn, { borderColor: colors.border, backgroundColor: colors.surfaceAlt, opacity: photoDirty ? 1 : 0.65 }]} onPress={savePhoto} disabled={!photoDirty || savingPhoto}>
+            <Text style={[styles.uploadBtnText, { color: colors.text }]}>{savingPhoto ? "Saving..." : "Save Photo"}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.uploadBtn, { borderColor: colors.danger, backgroundColor: colors.surfaceAlt, opacity: profile.profilePhotoUrl ? 1 : 0.65 }]} onPress={removePhoto} disabled={!profile.profilePhotoUrl}>
+            <Text style={[styles.uploadBtnText, { color: colors.danger }]}>Delete</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={[styles.photoHint, { color: colors.textMuted }]}>You can crop while selecting. Save Photo updates your avatar separately from the rest of the profile.</Text>
       </View>
 
       <Text style={[styles.label, { color: colors.text }]}>Headline</Text>
@@ -586,6 +629,8 @@ const styles = StyleSheet.create({
   photo: { width: 92, height: 92, borderRadius: 46, borderWidth: 2, borderColor: "#D0D5DD" },
   photoFallback: { alignItems: "center", justifyContent: "center", backgroundColor: "#E8F5EE" },
   photoFallbackText: { color: "#0B3D2E", fontSize: 30, fontWeight: "700" },
+  photoActionRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 8, marginTop: 10 },
+  photoHint: { marginTop: 10, textAlign: "center", fontSize: 12, maxWidth: 320 },
   uploadBtn: { marginTop: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 999, borderWidth: 1, borderColor: "#0B3D2E" },
   uploadBtnText: { color: "#0B3D2E", fontWeight: "700" },
   sectionCard: {

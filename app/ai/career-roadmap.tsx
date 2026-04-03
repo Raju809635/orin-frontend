@@ -1,9 +1,9 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -19,12 +19,49 @@ import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 
-type RoadmapStep = { stepNumber: number; title: string; completed?: boolean };
-type CareerRoadmapResponse = { goal: string; steps: RoadmapStep[] };
+type RoadmapStep = {
+  id: string;
+  stepNumber: number;
+  title: string;
+  completed?: boolean;
+  status?: "locked" | "active" | "completed";
+  startedAt?: string | null;
+  completedAt?: string | null;
+  unlockedAt?: string | null;
+  proofStatus?: "not_submitted" | "submitted" | "approved";
+  proofSubmitted?: boolean;
+  proofSubmittedAt?: string | null;
+  proofImageUrl?: string;
+  canStart?: boolean;
+  canSubmitProof?: boolean;
+  proofRequired?: boolean;
+};
+type CareerRoadmapResponse = {
+  goal: string;
+  steps: RoadmapStep[];
+  progress?: {
+    completedSteps?: number;
+    totalSteps?: number;
+    progressPercent?: number;
+    currentStepId?: string;
+    lockHours?: number;
+  };
+};
 
 const GENERATION_STAGES = ["Analyzing goal...", "Building steps...", "Optimizing path..."];
 const MISSION_XP = 20;
-const STORAGE_PREFIX = "orin:career-roadmap-progress:";
+
+function formatRoadmapDate(value?: string | null) {
+  if (!value) return "soon";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "soon";
+  return date.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
 
 export default function AiCareerRoadmapPage() {
   const { colors, isDark } = useAppTheme();
@@ -39,9 +76,12 @@ export default function AiCareerRoadmapPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStage, setGenerationStage] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [completedSteps, setCompletedSteps] = useState<number[]>([]);
-  const [activeStepNumber, setActiveStepNumber] = useState<number | null>(null);
   const [claimingCertificate, setClaimingCertificate] = useState(false);
+  const [proofText, setProofText] = useState("");
+  const [proofLink, setProofLink] = useState("");
+  const [proofImageUrl, setProofImageUrl] = useState("");
+  const [uploadingProof, setUploadingProof] = useState(false);
+  const [submittingProof, setSubmittingProof] = useState(false);
   const initialLoadRef = useRef(false);
 
   useEffect(() => {
@@ -83,45 +123,6 @@ export default function AiCareerRoadmapPage() {
   const goalLabel = useMemo(
     () => [primaryCategory, subCategory, focus].filter(Boolean).join(" > "),
     [primaryCategory, subCategory, focus]
-  );
-
-  const roadmapKey = useMemo(() => {
-    const goal = customGoal.trim() || goalLabel || data?.goal || "career-growth";
-    return `${STORAGE_PREFIX}${goal.toLowerCase()}`;
-  }, [customGoal, data?.goal, goalLabel]);
-
-  const loadProgress = useCallback(async () => {
-    try {
-      const raw = await AsyncStorage.getItem(roadmapKey);
-      const parsed = raw ? JSON.parse(raw) : null;
-      setCompletedSteps(Array.isArray(parsed?.completedSteps) ? parsed.completedSteps : []);
-      setActiveStepNumber(Number.isFinite(parsed?.activeStepNumber) ? Number(parsed.activeStepNumber) : null);
-    } catch {
-      setCompletedSteps([]);
-      setActiveStepNumber(null);
-    }
-  }, [roadmapKey]);
-
-  useEffect(() => {
-    if (!data) return;
-    loadProgress();
-  }, [data, loadProgress]);
-
-  const persistProgress = useCallback(
-    async (steps: number[], nextActiveStepNumber: number | null) => {
-      setCompletedSteps(steps);
-      setActiveStepNumber(nextActiveStepNumber);
-      try {
-        await AsyncStorage.setItem(
-          roadmapKey,
-          JSON.stringify({
-            completedSteps: steps,
-            activeStepNumber: nextActiveStepNumber
-          })
-        );
-      } catch {}
-    },
-    [roadmapKey]
   );
 
   const load = useCallback(
@@ -172,49 +173,122 @@ export default function AiCareerRoadmapPage() {
 
   useFocusEffect(
     useCallback(() => {
-      if (data) loadProgress();
-    }, [data, loadProgress])
+      if (data) load(true);
+    }, [data, load])
   );
 
+  const completedSteps = useMemo(
+    () => (data?.steps || []).filter((step) => step.completed).map((step) => step.stepNumber),
+    [data]
+  );
   const completedCount = completedSteps.length;
   const totalSteps = data?.steps.length || 0;
-  const progressPct = totalSteps ? Math.round((completedCount / totalSteps) * 100) : 0;
+  const progressPct = Number(data?.progress?.progressPercent || (totalSteps ? Math.round((completedCount / totalSteps) * 100) : 0));
   const totalXp = completedCount * MISSION_XP;
-  const currentMission = data?.steps.find((step) => !completedSteps.includes(step.stepNumber));
+  const currentMission = data?.steps.find((step) => step.status === "active") || null;
+  const nextRoadmapStep = data?.steps.find((step) => !step.completed) || null;
+  const lockedMission = !currentMission && nextRoadmapStep?.status === "locked" ? nextRoadmapStep : null;
   const nextTarget = Math.max(0, 100 - (totalXp % 100 || 0));
   const streakDays = completedCount ? Math.min(completedCount, 14) : 0;
   const currentLevelIndex = Math.min(Math.floor(totalXp / 100), 5);
   const nextLevelIndex = Math.min(currentLevelIndex + 1, 5);
   const levels = ["Starter", "Explorer", "Builder", "Pro", "Elite", "Legend"];
   const socialCount = 12 + totalSteps * 14;
+  const isMissionStarted = Boolean(currentMission?.startedAt);
+
+  useEffect(() => {
+    if (!currentMission || !currentMission.startedAt) {
+      setProofText("");
+      setProofLink("");
+      setProofImageUrl("");
+      return;
+    }
+    setProofImageUrl(currentMission.proofImageUrl || "");
+  }, [currentMission]);
 
   const startMission = useCallback(
-    async (stepNumber: number) => {
-      if (!currentMission || currentMission.stepNumber !== stepNumber) {
-        notify("Finish your current mission first.");
-        return;
+    async (stepId: string) => {
+      try {
+        await api.post(`/api/network/career-roadmap/${encodeURIComponent(stepId)}/start`);
+        notify("Mission started. Complete the work, then submit proof.");
+        await load(true);
+      } catch (e: any) {
+        notify(e?.response?.data?.message || "Unable to start mission.");
       }
-      if (completedSteps.includes(stepNumber)) {
-        notify("This mission is already completed.");
-        return;
-      }
-      await persistProgress(completedSteps, stepNumber);
-      notify("Mission started. Complete it after you finish the work.");
     },
-    [completedSteps, currentMission, persistProgress]
+    [load]
   );
 
-  const completeMission = useCallback(
-    async (stepNumber: number) => {
-      if (activeStepNumber !== stepNumber) {
-        notify("Start this mission before completing it.");
-        return;
+  const uploadProofImage = useCallback(async () => {
+    let ImagePicker: any;
+    try {
+      ImagePicker = await import("expo-image-picker");
+    } catch {
+      notify("Image upload requires the latest Android build.");
+      return;
+    }
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) return;
+    } catch {
+      // Continue and try picker launch directly on OEM Android devices.
+    }
+
+    try {
+      setUploadingProof(true);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker?.MediaTypeOptions?.Images ?? ["images"],
+        quality: 0.85,
+        allowsEditing: true
+      } as any);
+
+      if (result?.canceled || !result?.assets?.length) return;
+      const asset = result.assets[0];
+      const formData = new FormData();
+      formData.append("file", {
+        uri: asset.uri,
+        name: asset.fileName || `roadmap-proof-${Date.now()}.jpg`,
+        type: asset.mimeType || "image/jpeg"
+      } as any);
+
+      const { data: uploadRes } = await api.post<{ url: string }>("/api/uploads/image", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data"
+        }
+      });
+      if (uploadRes?.url) {
+        setProofImageUrl(uploadRes.url);
+        notify("Proof screenshot added.");
       }
-      const next = [...completedSteps, stepNumber].sort((a, b) => a - b);
-      await persistProgress(next, null);
-      notify(`Mission completed. +${MISSION_XP} XP`);
+    } catch (e: any) {
+      notify(e?.response?.data?.message || "Unable to upload proof screenshot.");
+    } finally {
+      setUploadingProof(false);
+    }
+  }, []);
+
+  const submitProof = useCallback(
+    async (stepId: string) => {
+      try {
+        setSubmittingProof(true);
+        await api.post(`/api/network/career-roadmap/${encodeURIComponent(stepId)}/submit-proof`, {
+          proofText,
+          proofLink,
+          proofImageUrl
+        });
+        setProofText("");
+        setProofLink("");
+        setProofImageUrl("");
+        notify(`Proof submitted. +${MISSION_XP} XP`);
+        await load(true);
+      } catch (e: any) {
+        notify(e?.response?.data?.message || "Unable to submit proof.");
+      } finally {
+        setSubmittingProof(false);
+      }
     },
-    [activeStepNumber, completedSteps, persistProgress]
+    [load, proofImageUrl, proofLink, proofText]
   );
 
   const futurePreview = useMemo(() => {
@@ -378,11 +452,60 @@ export default function AiCareerRoadmapPage() {
               <Text style={styles.todayXp}>+{MISSION_XP} XP</Text>
             </View>
             <Text style={styles.todayTitle}>{currentMission.title}</Text>
-            <Text style={[styles.meta, { color: colors.textMuted }]}>Complete 1 more task to move your journey ahead today.</Text>
-            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => startMission(currentMission.stepNumber)} disabled={activeStepNumber === currentMission.stepNumber}>
-              <Text style={styles.primaryBtnText}>{activeStepNumber === currentMission.stepNumber ? "Mission In Progress" : "Start Mission"}</Text>
-            </TouchableOpacity>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
+              {isMissionStarted
+                ? "Submit at least one proof item to complete this mission and unlock the next week on schedule."
+                : "Start this mission first, then come back with a screenshot, proof link, or short proof note."}
+            </Text>
+            {!isMissionStarted ? (
+              <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => startMission(currentMission.id)}>
+                <Text style={styles.primaryBtnText}>Start Mission</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.proofForm}>
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                  value={proofText}
+                  onChangeText={setProofText}
+                  placeholder="What did you complete? Add a short proof note"
+                  placeholderTextColor={colors.textMuted}
+                  multiline
+                />
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                  value={proofLink}
+                  onChangeText={setProofLink}
+                  placeholder="Project / GitHub / Drive / practice link (optional)"
+                  placeholderTextColor={colors.textMuted}
+                  autoCapitalize="none"
+                />
+                {proofImageUrl ? (
+                  <Image source={{ uri: proofImageUrl }} style={styles.proofPreview} />
+                ) : null}
+                <View style={styles.actionRow}>
+                  <TouchableOpacity style={[styles.secondaryOutlineBtn, { borderColor: colors.accent }]} onPress={uploadProofImage} disabled={uploadingProof}>
+                    <Text style={[styles.secondaryOutlineBtnText, { color: colors.accent }]}>
+                      {uploadingProof ? "Uploading..." : proofImageUrl ? "Change Screenshot" : "Upload Screenshot"}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, { backgroundColor: colors.accent }]}
+                    onPress={() => submitProof(currentMission.id)}
+                    disabled={submittingProof}
+                  >
+                    <Text style={styles.primaryBtnText}>{submittingProof ? "Submitting..." : "Submit Proof"}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </LinearGradient>
+        ) : lockedMission ? (
+          <View style={[styles.doneCard, { backgroundColor: isDark ? colors.surfaceAlt : "#F7FFF9", borderColor: colors.border }]}>
+            <Text style={[styles.doneTitle, { color: colors.text }]}>Next mission locked</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
+              {lockedMission.title} unlocks on {formatRoadmapDate(lockedMission.unlockedAt)}. This keeps roadmap progress effort-based instead of instant click-through.
+            </Text>
+          </View>
         ) : (
           <View style={[styles.doneCard, { backgroundColor: isDark ? colors.surfaceAlt : "#F7FFF9", borderColor: colors.border }]}>
             <Text style={[styles.doneTitle, { color: colors.text }]}>Journey completed</Text>
@@ -447,25 +570,29 @@ export default function AiCareerRoadmapPage() {
                       <Text style={styles.missionTitle}>{step.title}</Text>
                       <Text style={styles.meta}>
                         {isCompleted
-                          ? "Completed. Badge unlocked and streak continues."
-                          : "Upload proof like a project link or screenshot after completing this mission."}
+                          ? "Completed with proof submitted. Badge unlocked and streak continues."
+                          : step.status === "locked"
+                            ? `Locked until ${formatRoadmapDate(step.unlockedAt)}`
+                            : step.startedAt
+                              ? "Mission in progress. Submit proof from Today's Mission to complete it."
+                              : "Start the mission, do the work, then submit proof to complete it."}
                       </Text>
                       <TouchableOpacity
                         style={[
                           styles.secondaryBtn,
                           isCompleted && styles.completedBtn,
-                          activeStepNumber === step.stepNumber && styles.inProgressBtn,
-                          !isCompleted && !isCurrent && styles.lockedBtn
+                          step.startedAt && step.status === "active" && styles.inProgressBtn,
+                          !isCompleted && step.status === "locked" && styles.lockedBtn
                         ]}
-                        disabled={isCompleted || (!isCurrent && activeStepNumber !== step.stepNumber)}
-                        onPress={() => (activeStepNumber === step.stepNumber ? completeMission(step.stepNumber) : startMission(step.stepNumber))}
+                        disabled={isCompleted || step.status === "locked" || Boolean(step.startedAt)}
+                        onPress={() => startMission(step.id)}
                       >
                         <Text style={[
                           styles.secondaryBtnText,
                           isCompleted && styles.completedBtnText,
-                          !isCompleted && !isCurrent && styles.lockedBtnText
+                          !isCompleted && step.status === "locked" && styles.lockedBtnText
                         ]}>
-                          {isCompleted ? "Completed" : activeStepNumber === step.stepNumber ? "Complete Mission" : isCurrent ? "Start Mission" : "Locked"}
+                          {isCompleted ? "Completed" : step.status === "locked" ? "Locked" : step.startedAt ? "In Progress" : "Start Mission"}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -509,8 +636,10 @@ export default function AiCareerRoadmapPage() {
           <Text style={styles.sectionTitle}>Actions</Text>
         </View>
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => currentMission && startMission(currentMission.stepNumber)} disabled={!currentMission || activeStepNumber === currentMission?.stepNumber}>
-            <Text style={styles.primaryBtnText}>{activeStepNumber && currentMission?.stepNumber === activeStepNumber ? "Mission In Progress" : "Continue Journey"}</Text>
+          <TouchableOpacity style={styles.primaryBtn} onPress={() => currentMission && startMission(currentMission.id)} disabled={!currentMission || Boolean(currentMission.startedAt)}>
+            <Text style={styles.primaryBtnText}>
+              {currentMission ? (currentMission.startedAt ? "Mission In Progress" : "Continue Journey") : "Journey Complete"}
+            </Text>
           </TouchableOpacity>
           {progressPct === 100 ? (
             <TouchableOpacity style={styles.secondaryOutlineBtn} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
@@ -533,7 +662,6 @@ export default function AiCareerRoadmapPage() {
                   focus,
                   goal: data.goal,
                   completedSteps,
-                  activeStepNumber,
                   steps: data.steps || []
                 }
               });
@@ -646,6 +774,8 @@ const styles = StyleSheet.create({
   previewItem: { color: "#344054", lineHeight: 22 },
   meta: { color: "#667085", lineHeight: 20 },
   error: { color: "#B42318" },
+  proofForm: { gap: 10 },
+  proofPreview: { width: "100%", height: 180, borderRadius: 14, backgroundColor: "#E5E7EB" },
   primaryBtn: {
     alignSelf: "flex-start",
     backgroundColor: "#1F7A4C",

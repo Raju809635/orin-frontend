@@ -9,6 +9,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View
 } from "react-native";
@@ -65,8 +66,36 @@ type ResumeData = {
   education?: ResumeEducation[];
   careerGoal?: string;
   linkedInUrl?: string;
+  location?: string;
+  strengths?: string;
   rating?: number;
   totalStudentsMentored?: number;
+};
+
+type MissingField = {
+  id: string;
+  label: string;
+  prompt: string;
+  recommendedValue?: string;
+};
+
+type ResumeReadiness = {
+  score?: number;
+  level?: string;
+  onePageOptimized?: boolean;
+};
+
+type ResumeOverrides = {
+  targetRole: string;
+  phone: string;
+  location: string;
+  linkedInUrl: string;
+  careerGoal: string;
+  summary: string;
+  strengths: string;
+  projectDescription: string;
+  experienceDescription: string;
+  educationDetail: string;
 };
 
 type ResumeResponse = {
@@ -75,6 +104,8 @@ type ResumeResponse = {
   markdown?: string;
   previewHtml?: string;
   templates?: string[];
+  missingFields?: MissingField[];
+  readiness?: ResumeReadiness;
   export?: { fileName?: string; pdfFileName?: string };
 };
 
@@ -110,22 +141,45 @@ function chipList(items: string[] = []) {
   return items.filter(Boolean).slice(0, 6);
 }
 
+const EMPTY_OVERRIDES: ResumeOverrides = {
+  targetRole: "",
+  phone: "",
+  location: "",
+  linkedInUrl: "",
+  careerGoal: "",
+  summary: "",
+  strengths: "",
+  projectDescription: "",
+  experienceDescription: "",
+  educationDetail: ""
+};
+
 export default function AiResumeBuilderPage() {
   const { colors, isDark } = useAppTheme();
-  const [selectedTemplate, setSelectedTemplate] = useState<TemplateKey>("modern");
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateKey>("corporate");
   const [data, setData] = useState<ResumeResponse | null>(null);
+  const [resumeInputs, setResumeInputs] = useState<ResumeOverrides>(EMPTY_OVERRIDES);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const resumeInputsRef = React.useRef<ResumeOverrides>(EMPTY_OVERRIDES);
 
-  const load = useCallback(async (refresh = false, template: TemplateKey = selectedTemplate) => {
+  React.useEffect(() => {
+    resumeInputsRef.current = resumeInputs;
+  }, [resumeInputs]);
+
+  const load = useCallback(async (refresh = false, template: TemplateKey = selectedTemplate, overrides: ResumeOverrides = EMPTY_OVERRIDES) => {
     try {
       if (refresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const res = await api.get<ResumeResponse>("/api/network/resume/generate", {
-        params: { template }
-      });
+      const res = await api.post<ResumeResponse>(
+        "/api/network/resume/generate",
+        overrides,
+        {
+          params: { template }
+        }
+      );
       const nextData = res.data || null;
       setData(nextData);
       AsyncStorage.setItem(`${CACHE_KEY_PREFIX}-${template}`, JSON.stringify(nextData)).catch(() => undefined);
@@ -145,7 +199,7 @@ export default function AiResumeBuilderPage() {
 
   useFocusEffect(
     useCallback(() => {
-      load(false, selectedTemplate);
+      load(false, selectedTemplate, resumeInputsRef.current);
     }, [load, selectedTemplate])
   );
 
@@ -164,14 +218,14 @@ export default function AiResumeBuilderPage() {
   const changeTemplate = useCallback(
     async (template: TemplateKey) => {
       setSelectedTemplate(template);
-      await load(true, template);
+      await load(true, template, resumeInputs);
     },
-    [load]
+    [load, resumeInputs]
   );
 
   const generateResume = useCallback(async () => {
-    await load(true, selectedTemplate);
-  }, [load, selectedTemplate]);
+    await load(true, selectedTemplate, resumeInputs);
+  }, [load, resumeInputs, selectedTemplate]);
 
   const downloadText = useCallback(async () => {
     if (!plainText) {
@@ -294,7 +348,7 @@ export default function AiResumeBuilderPage() {
     <ScrollView
       style={{ backgroundColor: colors.background }}
       contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true, selectedTemplate)} />}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true, selectedTemplate, resumeInputs)} />}
     >
       <View style={styles.hero}>
         <Text style={styles.pageTitle}>AI Resume Builder</Text>
@@ -333,9 +387,118 @@ export default function AiResumeBuilderPage() {
           <Text style={styles.sectionTitle}>Resume Engine</Text>
         </View>
         <Text style={styles.meta}>Uses your live ORIN profile data, role-specific fields, and a structured summary.</Text>
+        <View style={styles.readinessCard}>
+          <View>
+            <Text style={styles.readinessLabel}>Resume Readiness</Text>
+            <Text style={styles.readinessValue}>{data?.readiness?.score || 0}/100</Text>
+            <Text style={styles.meta}>{data?.readiness?.level || "Needs more detail"}</Text>
+          </View>
+          <View style={styles.readinessBadge}>
+            <Text style={styles.readinessBadgeText}>{data?.readiness?.onePageOptimized ? "1 Page" : "Draft"}</Text>
+          </View>
+        </View>
+        {data?.missingFields?.length ? (
+          <View style={styles.missingWrap}>
+            <Text style={styles.previewBlockTitle}>Still Missing</Text>
+            {data.missingFields.map((field) => (
+              <View key={field.id} style={styles.missingCard}>
+                <Text style={styles.missingTitle}>{field.label}</Text>
+                <Text style={styles.meta}>{field.prompt}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.successText}>This resume is looking company-ready. Use Generate Resume after any final polish.</Text>
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="create-outline" size={18} color="#0F7B6C" />
+          <Text style={styles.sectionTitle}>Complete Missing Details</Text>
+        </View>
+        <Text style={styles.meta}>Fill only what is missing or weak. ORIN will blend this with the profile data and keep the resume to one page.</Text>
+        <TextInput
+          style={styles.input}
+          value={resumeInputs.targetRole}
+          onChangeText={(text) => setResumeInputs((prev) => ({ ...prev, targetRole: text }))}
+          placeholder="Target role, e.g. Software Engineer Intern"
+          placeholderTextColor="#98A2B3"
+        />
+        <View style={styles.dualRow}>
+          <TextInput
+            style={[styles.input, styles.halfInput]}
+            value={resumeInputs.phone}
+            onChangeText={(text) => setResumeInputs((prev) => ({ ...prev, phone: text }))}
+            placeholder="Phone number"
+            placeholderTextColor="#98A2B3"
+            keyboardType="phone-pad"
+          />
+          <TextInput
+            style={[styles.input, styles.halfInput]}
+            value={resumeInputs.location}
+            onChangeText={(text) => setResumeInputs((prev) => ({ ...prev, location: text }))}
+            placeholder="City, State"
+            placeholderTextColor="#98A2B3"
+          />
+        </View>
+        <TextInput
+          style={styles.input}
+          value={resumeInputs.linkedInUrl}
+          onChangeText={(text) => setResumeInputs((prev) => ({ ...prev, linkedInUrl: text }))}
+          placeholder="LinkedIn URL"
+          placeholderTextColor="#98A2B3"
+          autoCapitalize="none"
+        />
+        <TextInput
+          style={styles.input}
+          value={resumeInputs.careerGoal}
+          onChangeText={(text) => setResumeInputs((prev) => ({ ...prev, careerGoal: text }))}
+          placeholder="Career focus, e.g. Backend development, Data analytics"
+          placeholderTextColor="#98A2B3"
+        />
+        <TextInput
+          style={[styles.input, styles.textarea]}
+          value={resumeInputs.summary}
+          onChangeText={(text) => setResumeInputs((prev) => ({ ...prev, summary: text }))}
+          placeholder="2-3 line professional summary with strengths, domain, and outcomes"
+          placeholderTextColor="#98A2B3"
+          multiline
+        />
+        <TextInput
+          style={[styles.input, styles.textarea]}
+          value={resumeInputs.strengths}
+          onChangeText={(text) => setResumeInputs((prev) => ({ ...prev, strengths: text }))}
+          placeholder="Key strengths, e.g. problem solving, APIs, data storytelling"
+          placeholderTextColor="#98A2B3"
+          multiline
+        />
+        <TextInput
+          style={[styles.input, styles.textarea]}
+          value={resumeInputs.projectDescription}
+          onChangeText={(text) => setResumeInputs((prev) => ({ ...prev, projectDescription: text }))}
+          placeholder="If project descriptions are weak, add one strong project impact note here"
+          placeholderTextColor="#98A2B3"
+          multiline
+        />
+        <TextInput
+          style={[styles.input, styles.textarea]}
+          value={resumeInputs.experienceDescription}
+          onChangeText={(text) => setResumeInputs((prev) => ({ ...prev, experienceDescription: text }))}
+          placeholder="If experience is weak, add role impact here"
+          placeholderTextColor="#98A2B3"
+          multiline
+        />
+        <TextInput
+          style={styles.input}
+          value={resumeInputs.educationDetail}
+          onChangeText={(text) => setResumeInputs((prev) => ({ ...prev, educationDetail: text }))}
+          placeholder="Education detail if missing, e.g. B.Tech CSE"
+          placeholderTextColor="#98A2B3"
+        />
         <View style={styles.actionRow}>
           <TouchableOpacity style={styles.primaryBtn} onPress={generateResume}>
-            <Text style={styles.primaryBtnText}>Generate Resume</Text>
+            <Text style={styles.primaryBtnText}>Build One-Page Resume</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryBtn} onPress={downloadPdf}>
             <Text style={styles.secondaryBtnText}>Download PDF</Text>
@@ -377,7 +540,7 @@ export default function AiResumeBuilderPage() {
                 <Text style={styles.previewName}>{resume.name}</Text>
                 <Text style={styles.previewRole}>{resume.roleLabel || resume.role || "Career Builder"}</Text>
                 <Text style={styles.previewMeta}>
-                  {[resume.email, resume.phone].filter(Boolean).join(" | ") || "Contact details unavailable"}
+                  {[resume.email, resume.phone, resume.location].filter(Boolean).join(" | ") || "Contact details unavailable"}
                 </Text>
               </View>
             </View>
@@ -387,6 +550,13 @@ export default function AiResumeBuilderPage() {
                 <Text style={styles.previewBlockTitle}>Professional Summary</Text>
                 <Text style={styles.previewText}>{data?.summary || resume.summary || "Summary will appear here."}</Text>
               </View>
+
+              {resume.strengths ? (
+                <View style={styles.previewBlock}>
+                  <Text style={styles.previewBlockTitle}>Strengths</Text>
+                  <Text style={styles.previewText}>{resume.strengths}</Text>
+                </View>
+              ) : null}
 
               {chipList(resume.skills || []).length ? (
                 <View style={styles.previewBlock}>
@@ -557,9 +727,78 @@ const styles = StyleSheet.create({
     color: "#667085",
     lineHeight: 20
   },
+  successText: {
+    color: "#0F7B6C",
+    fontWeight: "700"
+  },
   error: {
     color: "#B42318",
     fontWeight: "700"
+  },
+  readinessCard: {
+    borderWidth: 1,
+    borderColor: "#B8E0C8",
+    borderRadius: 16,
+    backgroundColor: "#F4FBF7",
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  readinessLabel: {
+    color: "#667085",
+    fontWeight: "700"
+  },
+  readinessValue: {
+    color: "#102A22",
+    fontSize: 24,
+    fontWeight: "900",
+    marginTop: 4
+  },
+  readinessBadge: {
+    backgroundColor: "#0F7B6C",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  readinessBadgeText: {
+    color: "#FFFFFF",
+    fontWeight: "800"
+  },
+  missingWrap: {
+    gap: 8
+  },
+  missingCard: {
+    borderWidth: 1,
+    borderColor: "#F1D6AE",
+    backgroundColor: "#FFF8EE",
+    borderRadius: 14,
+    padding: 12
+  },
+  missingTitle: {
+    color: "#8A4B00",
+    fontWeight: "800",
+    marginBottom: 4
+  },
+  dualRow: {
+    flexDirection: "row",
+    gap: 10
+  },
+  halfInput: {
+    flex: 1
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    color: "#101828",
+    paddingHorizontal: 12,
+    paddingVertical: 11
+  },
+  textarea: {
+    minHeight: 92,
+    textAlignVertical: "top"
   },
   actionRow: {
     flexDirection: "row",
