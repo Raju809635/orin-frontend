@@ -1,5 +1,4 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -187,12 +186,6 @@ export default function AiCareerRoadmapPage() {
     initialLoadRef.current = true;
     load();
   }, [primaryCategory, load]);
-
-  useFocusEffect(
-    useCallback(() => {
-      if (data) load(true);
-    }, [data, load])
-  );
 
   const completedSteps = useMemo(
     () => (data?.steps || []).filter((step) => step.completed).map((step) => step.stepNumber),
@@ -540,7 +533,7 @@ export default function AiCareerRoadmapPage() {
           <Text style={styles.sectionTitle}>AI Generation</Text>
         </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {(loading || isGenerating) ? (
+        {!data && (loading || isGenerating) ? (
           <View style={styles.generateCard}>
             <ActivityIndicator size="large" color="#1F7A4C" />
             <Text style={styles.generateTitle}>Creating your roadmap...</Text>
