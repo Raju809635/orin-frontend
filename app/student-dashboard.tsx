@@ -294,6 +294,36 @@ type LiveSessionOrderResponse = {
   razorpayKeyId?: string;
 };
 
+type SprintItem = {
+  id: string;
+  title: string;
+  domain?: string;
+  description?: string;
+  posterImageUrl?: string;
+  curriculumDocumentUrl?: string;
+  curriculumFileType?: string;
+  startDate: string;
+  endDate: string;
+  durationWeeks?: number;
+  totalLiveSessions?: number;
+  sessionMode?: "free" | "paid";
+  price?: number;
+  currency?: string;
+  minParticipants?: number;
+  maxParticipants?: number;
+  participantCount?: number;
+  seatsLeft?: number;
+  isSoldOut?: boolean;
+  mentor?: { id?: string; name?: string };
+  myEnrollment?: {
+    id: string;
+    paymentMode?: "free" | "razorpay";
+    paymentStatus?: "pending" | "paid" | "failed" | "cancelled";
+    enrollmentStatus?: "pending_payment" | "enrolled" | "cancelled";
+    paymentDueAt?: string | null;
+  } | null;
+};
+
 type ResumeResponse = {
   markdown: string;
   export?: { fileName?: string };
@@ -434,6 +464,7 @@ export default function StudentDashboard() {
   const [opportunities, setOpportunities] = useState<OpportunityItem[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
+  const [sprints, setSprints] = useState<SprintItem[]>([]);
   const [togglingLiveInterestId, setTogglingLiveInterestId] = useState<string | null>(null);
   const [resumePreview, setResumePreview] = useState<ResumeResponse | null>(null);
   const [skillGap, setSkillGap] = useState<SkillGapResponse | null>(null);
@@ -496,10 +527,12 @@ export default function StudentDashboard() {
     const cacheKey = "overview";
     if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
     markSectionFetched(cacheKey);
-    const [liveSessionsRes] = await Promise.allSettled([
-      api.get<LiveSessionItem[]>("/api/network/live-sessions")
+    const [liveSessionsRes, sprintsRes] = await Promise.allSettled([
+      api.get<LiveSessionItem[]>("/api/network/live-sessions"),
+      api.get<SprintItem[]>("/api/network/sprints")
     ]);
     setLiveSessions(liveSessionsRes.status === "fulfilled" ? liveSessionsRes.value.data || [] : []);
+    setSprints(sprintsRes.status === "fulfilled" ? sprintsRes.value.data || [] : []);
   }, [markSectionFetched, shouldSkipSectionFetch]);
 
   const loadSessionsSection = useCallback(async (refresh = false, force = false) => {
@@ -1364,7 +1397,7 @@ export default function StudentDashboard() {
   if (user?.role !== "student") {
     return (
       <View style={styles.centered}>
-        <Text style={styles.error}>Access denied for current role.</Text>
+        <Text style={[styles.error, { color: colors.danger }]}>Access denied for current role.</Text>
       </View>
     );
   }
@@ -1389,18 +1422,18 @@ export default function StudentDashboard() {
     >
       {normalizedQuery ? (
         <>
-          <Text style={styles.searchMeta}>
+          <Text style={[styles.searchMeta, { color: colors.textMuted }]}>
             {totalSearchMatches > 0
               ? `Search results: ${totalSearchMatches} match${totalSearchMatches > 1 ? "es" : ""}`
               : "No results for your search"}
           </Text>
-          {totalSearchMatches > 0 ? <Text style={styles.searchMetaDetail}>Matched in: {searchBreakdown}</Text> : null}
+          {totalSearchMatches > 0 ? <Text style={[styles.searchMetaDetail, { color: colors.textMuted }]}>Matched in: {searchBreakdown}</Text> : null}
           {totalSearchMatches > 0 ? (
             <View style={styles.searchResultList}>
               {searchResultItems.map((item) => (
                 <View key={item.id} style={styles.searchResultCard}>
-                  <Text style={styles.searchResultTitle}>{item.title}</Text>
-                  <Text style={styles.searchResultSubtitle}>{item.subtitle}</Text>
+                  <Text style={[styles.searchResultTitle, { color: colors.text }]}>{item.title}</Text>
+                  <Text style={[styles.searchResultSubtitle, { color: colors.textMuted }]}>{item.subtitle}</Text>
                 </View>
               ))}
             </View>
@@ -1420,7 +1453,7 @@ export default function StudentDashboard() {
 
       {activeSection !== "overview" ? (
         <TouchableOpacity style={styles.sectionBackButton} onPress={() => setActiveSection("overview")}>
-          <Text style={styles.sectionBackButtonText}>Back to Dashboard Home</Text>
+          <Text style={[styles.sectionBackButtonText, { color: colors.accent }]}>Back to Dashboard Home</Text>
         </TouchableOpacity>
       ) : null}
 
@@ -1459,7 +1492,7 @@ export default function StudentDashboard() {
         {newsLoading && activeNewsArticles.length === 0 ? (
           <View style={styles.newsLoaderWrap}>
             <ActivityIndicator size="small" color="#1F7A4C" />
-            <Text style={styles.meta}>Loading updates...</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Loading updates...</Text>
           </View>
         ) : activeNewsArticles.length === 0 ? (
           <View style={[styles.newsLoaderWrap, { borderColor: colors.border, backgroundColor: colors.surface }]}>
@@ -1474,7 +1507,7 @@ export default function StudentDashboard() {
               <View style={styles.newsMetaRow}>
                 <Text style={[styles.newsSource, { color: colors.textMuted }]} numberOfLines={1}>{item.source || "News Source"}</Text>
                 <TouchableOpacity onPress={() => item.url && Linking.openURL(item.url)}>
-                  <Text style={styles.newsReadMore}>Read More</Text>
+                  <Text style={[styles.newsReadMore, { color: colors.accent }]}>Read More</Text>
                 </TouchableOpacity>
 
               </View>
@@ -1485,18 +1518,18 @@ export default function StudentDashboard() {
 
       <Text style={[styles.sectionHeader, { color: colors.text }]}>Featured</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
-        <TouchableOpacity style={[styles.featureCard, styles.featureCardOne]} onPress={() => router.push("/domains")}>
-          <Text style={[styles.featurePill, { backgroundColor: colors.surface, color: colors.text }]}>Discover</Text>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardOne, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/domains")}>
+          <Text style={[styles.featurePill, { backgroundColor: colors.surfaceAlt, color: colors.text }]}>Discover</Text>
           <Text style={[styles.featureTitle, { color: colors.text }]}>Top Mentor Domains</Text>
           <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Browse all approved mentors by category and specialization.</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo]} onPress={() => router.push("/chat" as never)}>
-          <Text style={[styles.featurePill, { backgroundColor: colors.surface, color: colors.text }]}>Connect</Text>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/chat" as never)}>
+          <Text style={[styles.featurePill, { backgroundColor: colors.surfaceAlt, color: colors.text }]}>Connect</Text>
           <Text style={[styles.featureTitle, { color: colors.text }]}>Session Conversations</Text>
           <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Message confirmed mentors and prepare before live sessions.</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.featureCard, styles.featureCardThree]} onPress={() => router.push("/ai-assistant" as never)}>
-          <Text style={[styles.featurePill, { backgroundColor: colors.surface, color: colors.text }]}>Boost</Text>
+        <TouchableOpacity style={[styles.featureCard, styles.featureCardThree, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/ai-assistant" as never)}>
+          <Text style={[styles.featurePill, { backgroundColor: colors.surfaceAlt, color: colors.text }]}>Boost</Text>
           <Text style={[styles.featureTitle, { color: colors.text }]}>AI Career Coach</Text>
           <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Get study plans, interview prep ideas, and guidance instantly.</Text>
         </TouchableOpacity>
@@ -1505,7 +1538,7 @@ export default function StudentDashboard() {
       <Text style={[styles.sectionHeader, { color: colors.text }]}>Live Banners</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.bannerRow}>
         {studentBanners.map((banner) => (
-          <View key={banner.key} style={[styles.bannerCard, { backgroundColor: colors.surface, borderColor: banner.border || colors.border }]}>
+          <View key={banner.key} style={[styles.bannerCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Text style={[styles.bannerTag, { backgroundColor: colors.surfaceAlt, color: colors.text }]}>{banner.tag}</Text>
             <Text style={[styles.bannerTitle, { color: colors.text }]}>{banner.title}</Text>
             <Text style={[styles.bannerCopy, { color: colors.textMuted }]}>{banner.copy}</Text>
@@ -1521,34 +1554,38 @@ export default function StudentDashboard() {
       </View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.liveBannerRow}>
         {liveSessions.length === 0 ? (
-          <View style={styles.liveBannerEmpty}>
-            <Text style={styles.meta}>No upcoming live sessions right now.</Text>
+          <View style={[styles.liveBannerEmpty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>No upcoming live sessions right now.</Text>
           </View>
         ) : (
           liveSessions.slice(0, 8).map((item) => (
-            <View key={item.id} style={styles.liveBannerCard}>
+            <View key={item.id} style={[styles.liveBannerCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {item.posterImageUrl ? (
                 <Image source={{ uri: item.posterImageUrl }} style={styles.liveBannerImage} resizeMode="cover" />
               ) : (
-                <View style={styles.liveBannerImagePlaceholder}>
-                  <Text style={styles.liveBannerPlaceholderText}>Live Session</Text>
+                <View style={[styles.liveBannerImagePlaceholder, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                  <Text style={[styles.liveBannerPlaceholderText, { color: colors.textMuted }]}>Live Session</Text>
                 </View>
               )}
-              <Text style={styles.liveBannerTitle} numberOfLines={2}>{item.title}</Text>
-              <Text style={styles.liveBannerMeta} numberOfLines={1}>
+              <Text style={[styles.liveBannerTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
+              <Text style={[styles.liveBannerMeta, { color: colors.textMuted }]} numberOfLines={1}>
                 {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
               </Text>
-              <Text style={styles.liveBannerMeta} numberOfLines={1}>
+              <Text style={[styles.liveBannerMeta, { color: colors.textMuted }]} numberOfLines={1}>
                 {item.sessionMode === "paid" ? `INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
               </Text>
               <View style={styles.liveBannerFooter}>
-                <Text style={styles.liveBannerMeta}>Interested: {item.interestedCount || 0}</Text>
+                <Text style={[styles.liveBannerMeta, { color: colors.textMuted }]}>Interested: {item.interestedCount || 0}</Text>
                 <TouchableOpacity
-                  style={[styles.liveBannerBtn, togglingLiveInterestId === item.id && styles.disabledButton]}
+                  style={[
+                    styles.liveBannerBtn,
+                    { borderColor: colors.accent, backgroundColor: colors.accentSoft },
+                    togglingLiveInterestId === item.id && styles.disabledButton
+                  ]}
                   onPress={() => toggleLiveSessionInterest(item.id)}
                   disabled={togglingLiveInterestId === item.id}
                 >
-                  <Text style={styles.liveBannerBtnText}>
+                  <Text style={[styles.liveBannerBtnText, { color: colors.accent }]}>
                     {togglingLiveInterestId === item.id
                       ? "..."
                       : item.isInterested
@@ -1558,8 +1595,11 @@ export default function StudentDashboard() {
                 </TouchableOpacity>
 
               </View>
-              <TouchableOpacity style={styles.liveBannerBtn} onPress={() => openLiveSessionBooking(item)}>
-                <Text style={styles.liveBannerBtnText}>
+              <TouchableOpacity
+                style={[styles.liveBannerBtn, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]}
+                onPress={() => openLiveSessionBooking(item)}
+              >
+                <Text style={[styles.liveBannerBtnText, { color: colors.accent }]}>
                   {item.myBooking?.bookingStatus === "booked"
                     ? item.meetingLink
                       ? "Join Live"
@@ -1576,34 +1616,85 @@ export default function StudentDashboard() {
         )}
       </ScrollView>
 
+      <View style={styles.sectionHeaderRow}>
+        <Text style={[styles.sectionHeader, { color: colors.text }]}>Sprint Programs</Text>
+        <TouchableOpacity onPress={() => router.push("/mentorship?section=interaction" as never)}>
+          <Text style={[styles.sectionHeaderLink, { color: colors.accent }]}>View all</Text>
+        </TouchableOpacity>
+      </View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.liveBannerRow}>
+        {sprints.length === 0 ? (
+          <View style={[styles.liveBannerEmpty, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>No sprint programs open right now.</Text>
+          </View>
+        ) : (
+          sprints.slice(0, 6).map((item) => (
+            <View key={item.id} style={[styles.liveBannerCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {item.posterImageUrl ? (
+                <Image source={{ uri: item.posterImageUrl }} style={styles.liveBannerImage} resizeMode="cover" />
+              ) : (
+                <View style={[styles.liveBannerImagePlaceholder, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                  <Text style={[styles.liveBannerPlaceholderText, { color: colors.textMuted }]}>Sprint Program</Text>
+                </View>
+              )}
+              <Text style={[styles.liveBannerTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
+              <Text style={[styles.liveBannerMeta, { color: colors.textMuted }]} numberOfLines={1}>
+                {item.mentor?.name || "Mentor"} | {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()}
+              </Text>
+              <Text style={[styles.liveBannerMeta, { color: colors.textMuted }]} numberOfLines={1}>
+                {item.sessionMode === "paid" ? `INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
+              </Text>
+              <View style={styles.liveBannerFooter}>
+                <Text style={[styles.liveBannerMeta, { color: colors.textMuted }]}>Weeks: {item.durationWeeks || 1}</Text>
+                <Text style={[styles.liveBannerMeta, { color: colors.textMuted }]}>
+                  {item.myEnrollment?.enrollmentStatus === "enrolled"
+                    ? "Joined"
+                    : item.myEnrollment?.enrollmentStatus === "pending_payment"
+                      ? "Payment Pending"
+                      : item.isSoldOut
+                        ? "Sold Out"
+                        : `${item.participantCount || 0}/${item.maxParticipants || 20}`}
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.liveBannerBtn, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]}
+                onPress={() => router.push(`/sprints/${item.id}` as never)}
+              >
+                <Text style={[styles.liveBannerBtnText, { color: colors.accent }]}>View Sprint</Text>
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+      </ScrollView>
+
       {FEATURE_FLAGS.dailyEngagement ? (
         <>
         <Text style={[styles.sectionHeader, { color: colors.text }]}>Daily Career Quiz</Text>
-          <View style={styles.dailyCard}>
+          <View style={[styles.dailyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             {!dailyDashboard ? (
-              <Text style={styles.empty}>Daily quiz unavailable right now.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>Daily quiz unavailable right now.</Text>
             ) : (
               <>
-                <Text style={styles.dailyTitle}>Reputation Score: {dailyDashboard.reputationScore}</Text>
-                <Text style={styles.dailyMeta}>Tag: {dailyDashboard.levelTag}</Text>
-                <Text style={styles.dailyItem}>
+                <Text style={[styles.dailyTitle, { color: colors.text }]}>Reputation Score: {dailyDashboard.reputationScore}</Text>
+                <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>Tag: {dailyDashboard.levelTag}</Text>
+                <Text style={[styles.dailyItem, { color: colors.text }]}>
                   Domain: {dailyDashboard.dailyQuiz?.domain || "Career Domain"}
                 </Text>
-                <Text style={styles.dailyMeta}>
+                <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>
                   Streak: {dailyDashboard.streakDays} days | XP: {dailyDashboard.xp}
                 </Text>
-                <Text style={styles.dailyMeta}>
+                <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>
                   Leaderboard: College #{dailyDashboard.leaderboard?.collegeRank ?? "-"} | Global #
                   {dailyDashboard.leaderboard?.globalRank ?? "-"}
                 </Text>
                 {dailyDashboard.dailyQuiz?.result ? (
-                  <View style={styles.dailyResultCard}>
-                    <Text style={styles.dailyResultTitle}>Today's Quiz Completed</Text>
-                    <Text style={styles.dailyMeta}>
+                  <View style={[styles.dailyResultCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                    <Text style={[styles.dailyResultTitle, { color: colors.text }]}>Today's Quiz Completed</Text>
+                    <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>
                       Score: {dailyDashboard.dailyQuiz.result.score}/{dailyDashboard.dailyQuiz.result.totalQuestions}
                     </Text>
-                    <Text style={styles.dailyMeta}>XP Earned: +{dailyDashboard.dailyQuiz.result.xpEarned}</Text>
-                    <Text style={styles.dailyMeta}>Streak: {dailyDashboard.dailyQuiz.result.streak} days</Text>
+                    <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>XP Earned: +{dailyDashboard.dailyQuiz.result.xpEarned}</Text>
+                    <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>Streak: {dailyDashboard.dailyQuiz.result.streak} days</Text>
                   </View>
                 ) : null}
                 <TouchableOpacity
@@ -1622,8 +1713,8 @@ export default function StudentDashboard() {
                         : "Start Daily Quiz"}
                   </Text>
                 </TouchableOpacity>
-                {dailyDashboard.dailyQuiz?.message ? <Text style={styles.dailyMeta}>{dailyDashboard.dailyQuiz.message}</Text> : null}
-                {quizMessage ? <Text style={styles.dailyMeta}>{quizMessage}</Text> : null}
+                {dailyDashboard.dailyQuiz?.message ? <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>{dailyDashboard.dailyQuiz.message}</Text> : null}
+                {quizMessage ? <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>{quizMessage}</Text> : null}
               </>
             )}
           </View>
@@ -1631,8 +1722,8 @@ export default function StudentDashboard() {
       ) : null}
 
       <Text style={[styles.sectionHeader, { color: colors.text }]}>ORIN Collaborate</Text>
-      <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo]} onPress={() => router.push("/collaborate" as never)}>
-        <Text style={[styles.featurePill, { backgroundColor: colors.surface, color: colors.text }]}>Community</Text>
+      <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/collaborate" as never)}>
+        <Text style={[styles.featurePill, { backgroundColor: colors.surfaceAlt, color: colors.text }]}>Community</Text>
         <Text style={[styles.featureTitle, { color: colors.text }]}>Collaborate with ORIN</Text>
         <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Share ideas, partnerships, and initiatives with the ORIN team.</Text>
       </TouchableOpacity>
@@ -1658,23 +1749,23 @@ export default function StudentDashboard() {
 
       {growthSubSection === "ai" ? (
         <>
-      <Text style={styles.groupTitle}>AI Intelligence</Text>
-      <Text style={styles.groupNote}>Personalized AI guidance based on your goal, skills, and progress.</Text>
-      <Text style={styles.sectionHeader}>AI Mentor Matching</Text>
+      <Text style={[styles.groupTitle, { color: colors.text }]}>AI Intelligence</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Personalized AI guidance based on your goal, skills, and progress.</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>AI Mentor Matching</Text>
       <View style={styles.matchWrap}>
         {mentorMatches.length === 0 ? (
-          <Text style={styles.empty}>No mentor recommendations available right now.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>No mentor recommendations available right now.</Text>
         ) : (
           mentorMatches.slice(0, 5).map((item) => (
             <View key={item.mentorId} style={styles.matchCard}>
-              <Text style={styles.matchName}>{item.name}</Text>
-              <Text style={styles.matchMeta}>
+              <Text style={[styles.matchName, { color: colors.text }]}>{item.name}</Text>
+              <Text style={[styles.matchMeta, { color: colors.textMuted }]}>
                 {item.primaryCategory || "General"} {item.subCategory ? `> ${item.subCategory}` : ""}
               </Text>
-              <Text style={styles.matchMeta}>
+              <Text style={[styles.matchMeta, { color: colors.textMuted }]}>
                 Experience {item.experienceYears || 0} yrs | Rating {item.rating || 0}
               </Text>
-              <Text style={styles.matchScore}>Match Score: {item.matchScore}%</Text>
+              <Text style={[styles.matchScore, { color: colors.accent }]}>Match Score: {item.matchScore}%</Text>
               <View style={styles.matchActions}>
                 <TouchableOpacity
                   style={styles.matchBtn}
@@ -1694,59 +1785,59 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={styles.sectionHeader}>AI Skill Gap Analyzer</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>AI Skill Gap Analyzer</Text>
       <View style={styles.roadmapCard}>
         {!skillGap ? (
-          <Text style={styles.empty}>Skill gap analysis unavailable right now.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>Skill gap analysis unavailable right now.</Text>
         ) : (
           <>
-            <Text style={styles.roadmapGoal}>Goal: {skillGap.goal}</Text>
-            <Text style={styles.historyMeta}>Current Skills: {skillGap.currentSkills.join(", ") || "None yet"}</Text>
-            <Text style={styles.historyMeta}>
+            <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Goal: {skillGap.goal}</Text>
+            <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Current Skills: {skillGap.currentSkills.join(", ") || "None yet"}</Text>
+            <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
               Missing Skills: {skillGap.missingSkills.length ? skillGap.missingSkills.join(", ") : "No gaps detected"}
             </Text>
-            <Text style={styles.historyMeta}>
+            <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
               Suggested Courses: {skillGap.suggestions?.courses?.slice(0, 3).join(", ") || "No suggestions"}
             </Text>
           </>
         )}
       </View>
 
-      <Text style={styles.sectionHeader}>Skill Radar</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Skill Radar</Text>
       <View style={styles.roadmapCard}>
         {!dailyDashboard?.skillRadar || (dailyDashboard.skillRadar.skills || []).length === 0 ? (
-          <Text style={styles.empty}>Complete daily quiz to unlock your skill radar.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>Complete daily quiz to unlock your skill radar.</Text>
         ) : (
           <>
-            <Text style={styles.roadmapGoal}>Domain: {dailyDashboard.skillRadar.domain}</Text>
+            <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Domain: {dailyDashboard.skillRadar.domain}</Text>
             {(dailyDashboard.skillRadar.skills || []).map((item) => (
               <View key={`${item.name}-${item.score}`} style={styles.radarRow}>
-                <Text style={styles.historyMeta}>{item.name}</Text>
-                <Text style={styles.historyMeta}>{item.score}/100</Text>
+                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.name}</Text>
+                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.score}/100</Text>
               </View>
             ))}
           </>
         )}
       </View>
 
-      <Text style={styles.sectionHeader}>Career Intelligence</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Career Intelligence</Text>
       <View style={styles.roadmapCard}>
         {!dailyDashboard?.careerIntelligence ? (
-          <Text style={styles.empty}>Complete today&apos;s quiz to get personalized intelligence.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>Complete today&apos;s quiz to get personalized intelligence.</Text>
         ) : (
           <>
-            <Text style={styles.roadmapGoal}>Strength: {dailyDashboard.careerIntelligence.strength}</Text>
-            <Text style={styles.historyMeta}>
+            <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Strength: {dailyDashboard.careerIntelligence.strength}</Text>
+            <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
               Needs Improvement: {(dailyDashboard.careerIntelligence.needsImprovement || []).join(", ") || "No major gaps"}
             </Text>
-            <Text style={styles.historyMeta}>Next Step: {dailyDashboard.careerIntelligence.recommendedNextStep}</Text>
+            <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Next Step: {dailyDashboard.careerIntelligence.recommendedNextStep}</Text>
             {dailyDashboard.careerIntelligence.trendingOpportunity?.title ? (
-              <Text style={styles.historyMeta}>
+              <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
                 Trending Opportunity: {dailyDashboard.careerIntelligence.trendingOpportunity.title}
               </Text>
             ) : null}
             {(dailyDashboard.careerIntelligence.mentorRecommendations || []).length ? (
-              <Text style={styles.historyMeta}>
+              <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
                 Recommended Mentors:{" "}
                 {dailyDashboard.careerIntelligence.mentorRecommendations?.map((item) => item.name).join(", ")}
               </Text>
@@ -1755,34 +1846,34 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={styles.groupTitle}>Trust & Mentor Quality</Text>
-      <Text style={styles.groupNote}>Verified mentors and transparent quality signals for safer mentorship.</Text>
-      <Text style={styles.sectionHeader}>Verified Mentor System</Text>
+      <Text style={[styles.groupTitle, { color: colors.text }]}>Trust & Mentor Quality</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Verified mentors and transparent quality signals for safer mentorship.</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Verified Mentor System</Text>
       <View style={styles.matchWrap}>
         {verifiedMentors.length === 0 ? (
-          <Text style={styles.empty}>No verified mentors available currently.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>No verified mentors available currently.</Text>
         ) : (
           verifiedMentors.slice(0, 4).map((item) => (
             <View key={item.mentorId} style={styles.matchCard}>
-              <Text style={styles.matchName}>
+              <Text style={[styles.matchName, { color: colors.text }]}>
                 {item.name} {item.verifiedBadge ? "(Verified)" : ""}
               </Text>
-              <Text style={styles.matchMeta}>{item.title || "Mentor"}</Text>
-              <Text style={styles.matchMeta}>Rating: {item.rating || 0}</Text>
+              <Text style={[styles.matchMeta, { color: colors.textMuted }]}>{item.title || "Mentor"}</Text>
+              <Text style={[styles.matchMeta, { color: colors.textMuted }]}>Rating: {item.rating || 0}</Text>
             </View>
           ))
         )}
       </View>
 
-      <Text style={styles.groupTitle}>Career Progress</Text>
-      <Text style={styles.groupNote}>Roadmaps, opportunities, and live sessions to accelerate your journey.</Text>
-      <Text style={styles.sectionHeader}>AI Career Roadmap</Text>
+      <Text style={[styles.groupTitle, { color: colors.text }]}>Career Progress</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Roadmaps, opportunities, and live sessions to accelerate your journey.</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>AI Career Roadmap</Text>
       <View style={styles.roadmapCard}>
         {!roadmap ? (
-          <Text style={styles.empty}>Roadmap unavailable right now.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>Roadmap unavailable right now.</Text>
         ) : (
           <>
-            <Text style={styles.roadmapGoal}>Goal: {roadmap.goal}</Text>
+            <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Goal: {roadmap.goal}</Text>
             {roadmap.steps.map((step) => (
               <Text key={`${step.stepNumber}-${step.title}`} style={styles.roadmapStep}>
                 Step {step.stepNumber}: {step.title}
@@ -1792,32 +1883,32 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={styles.sectionHeader}>Internships & Opportunities</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Internships & Opportunities</Text>
       <View style={styles.opportunityWrap}>
         {opportunities.length === 0 ? (
-          <Text style={styles.empty}>No opportunities available right now.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>No opportunities available right now.</Text>
         ) : (
           opportunities.slice(0, 5).map((item) => (
             <View key={item._id} style={styles.opportunityCard}>
-              <Text style={styles.opportunityTitle}>{item.title}</Text>
-              <Text style={styles.opportunityMeta}>
+              <Text style={[styles.opportunityTitle, { color: colors.text }]}>{item.title}</Text>
+              <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>
                 {item.company || "ORIN Network"} | {item.role || item.type || "Opportunity"}
               </Text>
-              <Text style={styles.opportunityMeta}>Duration: {item.duration || "Flexible"}</Text>
+              <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>Duration: {item.duration || "Flexible"}</Text>
             </View>
           ))
         )}
       </View>
 
-      <Text style={styles.sectionHeader}>College Leaderboard</Text>
-      <View style={styles.leaderboardCard}>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>College Leaderboard</Text>
+      <View style={[styles.leaderboardCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {!leaderboard || leaderboard.collegeTop.length === 0 ? (
-          <Text style={styles.empty}>Leaderboard will appear after enough activity.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>Leaderboard will appear after enough activity.</Text>
         ) : (
           <>
-            <Text style={styles.leaderboardTitle}>{leaderboard.collegeName || "Your College"}</Text>
+            <Text style={[styles.leaderboardTitle, { color: colors.text }]}>{leaderboard.collegeName || "Your College"}</Text>
             {leaderboard.collegeTop.slice(0, 5).map((entry) => (
-              <Text key={`${entry.rank}-${entry.name}`} style={styles.leaderboardRow}>
+              <Text key={`${entry.rank}-${entry.name}`} style={[styles.leaderboardRow, { color: colors.textMuted }]}>
                 {entry.rank}. {entry.name} - {entry.score}
               </Text>
             ))}
@@ -1825,30 +1916,34 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={styles.sectionHeader}>Mentor Live Sessions</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Mentor Live Sessions</Text>
       <View style={styles.liveWrap}>
         {liveSessions.length === 0 ? (
-          <Text style={styles.empty}>No upcoming live sessions right now.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>No upcoming live sessions right now.</Text>
         ) : (
           liveSessions.slice(0, 5).map((item) => (
-            <View key={item.id} style={styles.liveCard}>
+            <View key={item.id} style={[styles.liveCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveImage} /> : null}
-              <Text style={styles.liveTitle}>{item.title}</Text>
-              <Text style={styles.liveMeta}>{item.topic || "Live mentoring session"}</Text>
-              {item.description ? <Text style={styles.liveMeta}>{item.description}</Text> : null}
-              <Text style={styles.liveMeta}>
+              <Text style={[styles.liveTitle, { color: colors.text }]}>{item.title}</Text>
+              <Text style={[styles.liveMeta, { color: colors.textMuted }]}>{item.topic || "Live mentoring session"}</Text>
+              {item.description ? <Text style={[styles.liveMeta, { color: colors.textMuted }]}>{item.description}</Text> : null}
+              <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
                 Mentor: {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
               </Text>
-              <Text style={styles.liveBannerMeta} numberOfLines={1}>
+              <Text style={[styles.liveBannerMeta, { color: colors.textMuted }]} numberOfLines={1}>
                 {item.sessionMode === "paid" ? `INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
               </Text>
-              <Text style={styles.liveMeta}>Interested: {item.interestedCount || 0}</Text>
+              <Text style={[styles.liveMeta, { color: colors.textMuted }]}>Interested: {item.interestedCount || 0}</Text>
               <TouchableOpacity
-                style={[styles.matchBtn, togglingLiveInterestId === item.id && styles.disabledButton]}
+                style={[
+                  styles.matchBtn,
+                  { borderColor: colors.accent, backgroundColor: colors.surfaceAlt },
+                  togglingLiveInterestId === item.id && styles.disabledButton
+                ]}
                 onPress={() => toggleLiveSessionInterest(item.id)}
                 disabled={togglingLiveInterestId === item.id}
               >
-                <Text style={styles.matchBtnText}>
+                <Text style={[styles.matchBtnText, { color: colors.accent }]}>
                   {togglingLiveInterestId === item.id
                     ? "Updating..."
                     : item.isInterested
@@ -1857,8 +1952,11 @@ export default function StudentDashboard() {
                 </Text>
 
               </TouchableOpacity>
-              <TouchableOpacity style={styles.matchBtn} onPress={() => openLiveSessionBooking(item)}>
-                <Text style={styles.matchBtnText}>
+              <TouchableOpacity
+                style={[styles.matchBtn, { borderColor: colors.accent, backgroundColor: colors.surfaceAlt }]}
+                onPress={() => openLiveSessionBooking(item)}
+              >
+                <Text style={[styles.matchBtnText, { color: colors.accent }]}>
                   {item.myBooking?.bookingStatus === "booked"
                     ? item.meetingLink
                       ? "Join Live"
@@ -1880,20 +1978,20 @@ export default function StudentDashboard() {
 
       {growthSubSection === "community" ? (
       <>
-      <Text style={styles.groupTitle}>Community & Collaboration</Text>
-      <Text style={styles.groupNote}>Learn together through challenges, certifications, and mentor-led groups.</Text>
-      <Text style={styles.sectionHeader}>Community Challenges</Text>
+      <Text style={[styles.groupTitle, { color: colors.text }]}>Community & Collaboration</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Learn together through challenges, certifications, and mentor-led groups.</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Community Challenges</Text>
       <View style={styles.opportunityWrap}>
         {challenges.length === 0 ? (
-          <Text style={styles.empty}>No active challenges right now.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>No active challenges right now.</Text>
         ) : (
           challenges.slice(0, 4).map((item) => (
             <View key={item.id} style={styles.opportunityCard}>
-              <Text style={styles.opportunityTitle}>{item.title}</Text>
-              <Text style={styles.opportunityMeta}>
+              <Text style={[styles.opportunityTitle, { color: colors.text }]}>{item.title}</Text>
+              <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>
                 {item.domain || "General"} | Participants: {item.participantsCount || 0}
               </Text>
-              <Text style={styles.opportunityMeta}>Deadline: {new Date(item.deadline).toLocaleDateString()}</Text>
+              <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>Deadline: {new Date(item.deadline).toLocaleDateString()}</Text>
               <TouchableOpacity style={styles.matchBtn} onPress={() => joinChallenge(item.id)}>
                 <Text style={styles.matchBtnText}>Join Challenge</Text>
               </TouchableOpacity>
@@ -1902,32 +2000,32 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={styles.sectionHeader}>ORIN Certification System</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>ORIN Certification System</Text>
       <View style={styles.historyWrap}>
         {certifications.length === 0 ? (
-          <Text style={styles.empty}>No certifications yet.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>No certifications yet.</Text>
         ) : (
           certifications.slice(0, 5).map((item) => (
             <View key={item.id} style={styles.historyCard}>
-              <Text style={styles.historyTitle}>{item.title}</Text>
-              <Text style={styles.historyMeta}>Level: {item.level || "Beginner"}</Text>
+              <Text style={[styles.historyTitle, { color: colors.text }]}>{item.title}</Text>
+              <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Level: {item.level || "Beginner"}</Text>
             </View>
           ))
         )}
       </View>
 
-      <Text style={styles.sectionHeader}>Mentor Groups</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Mentor Groups</Text>
       <View style={styles.opportunityWrap}>
         {mentorGroups.length === 0 ? (
-          <Text style={styles.empty}>No mentor groups available.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>No mentor groups available.</Text>
         ) : (
           mentorGroups.slice(0, 4).map((item) => (
             <View key={item.id} style={styles.opportunityCard}>
-              <Text style={styles.opportunityTitle}>{item.name}</Text>
-              <Text style={styles.opportunityMeta}>
+              <Text style={[styles.opportunityTitle, { color: colors.text }]}>{item.name}</Text>
+              <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>
                 Mentor: {item.mentor?.name || "Mentor"} | Students: {item.membersCount || 0}
               </Text>
-              <Text style={styles.opportunityMeta}>{item.schedule || "Weekly sessions"}</Text>
+              <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>{item.schedule || "Weekly sessions"}</Text>
               <TouchableOpacity style={styles.matchBtn} onPress={() => joinGroup(item.id)}>
                 <Text style={styles.matchBtnText}>Join Group</Text>
 
@@ -1942,15 +2040,15 @@ export default function StudentDashboard() {
 
       {growthSubSection === "resources" ? (
       <>
-      <Text style={styles.groupTitle}>Resources & Portfolio</Text>
-      <Text style={styles.groupNote}>Build projects, access knowledge, and generate your resume.</Text>
-      <Text style={styles.sectionHeader}>AI Project Idea Generator</Text>
+      <Text style={[styles.groupTitle, { color: colors.text }]}>Resources & Portfolio</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Build projects, access knowledge, and generate your resume.</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>AI Project Idea Generator</Text>
       <View style={styles.roadmapCard}>
         {!projectIdeas ? (
-          <Text style={styles.empty}>Project ideas unavailable right now.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>Project ideas unavailable right now.</Text>
         ) : (
           <>
-            <Text style={styles.roadmapGoal}>Goal: {projectIdeas.goal}</Text>
+            <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Goal: {projectIdeas.goal}</Text>
             {projectIdeas.ideas.slice(0, 5).map((idea, idx) => (
               <Text key={`${idea.title}-${idx}`} style={styles.roadmapStep}>
                 {idx + 1}. {idea.title}
@@ -1960,45 +2058,45 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={styles.sectionHeader}>Knowledge Library</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Knowledge Library</Text>
       <View style={styles.historyWrap}>
         {knowledgeLibrary.length === 0 ? (
-          <Text style={styles.empty}>No resources available right now.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>No resources available right now.</Text>
         ) : (
           knowledgeLibrary.slice(0, 6).map((item) => (
             <View key={item.id} style={styles.historyCard}>
-              <Text style={styles.historyTitle}>{item.title}</Text>
-              <Text style={styles.historyMeta}>{item.type}</Text>
-              <Text style={styles.historyMeta}>{item.description || ""}</Text>
+              <Text style={[styles.historyTitle, { color: colors.text }]}>{item.title}</Text>
+              <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.type}</Text>
+              <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.description || ""}</Text>
             </View>
           ))
         )}
       </View>
 
-      <Text style={styles.groupTitle}>Reputation & Ranking</Text>
-      <Text style={styles.groupNote}>Track your ORIN standing and percentile among learners.</Text>
-      <Text style={styles.sectionHeader}>ORIN Reputation Score</Text>
+      <Text style={[styles.groupTitle, { color: colors.text }]}>Reputation & Ranking</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Track your ORIN standing and percentile among learners.</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>ORIN Reputation Score</Text>
       <View style={styles.leaderboardCard}>
         {!reputationSummary ? (
-          <Text style={styles.empty}>Reputation summary unavailable.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>Reputation summary unavailable.</Text>
         ) : (
           <>
-            <Text style={styles.leaderboardTitle}>Reputation Score: {reputationSummary.score}</Text>
-            <Text style={styles.leaderboardRow}>{reputationSummary.levelTag}</Text>
-            <Text style={styles.leaderboardRow}>Top {reputationSummary.topPercent}% learners</Text>
+            <Text style={[styles.leaderboardTitle, { color: colors.text }]}>Reputation Score: {reputationSummary.score}</Text>
+            <Text style={[styles.leaderboardRow, { color: colors.textMuted }]}>{reputationSummary.levelTag}</Text>
+            <Text style={[styles.leaderboardRow, { color: colors.textMuted }]}>Top {reputationSummary.topPercent}% learners</Text>
           </>
         )}
       </View>
 
-      <Text style={styles.sectionHeader}>AI Resume Builder</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>AI Resume Builder</Text>
       <View style={styles.resumeCard}>
         {!resumePreview?.markdown ? (
-          <Text style={styles.empty}>Resume preview unavailable right now.</Text>
+          <Text style={[styles.empty, { color: colors.textMuted }]}>Resume preview unavailable right now.</Text>
         ) : (
           <>
-            <Text style={styles.resumeTitle}>Resume generated</Text>
-            <Text style={styles.resumeMeta}>File: {resumePreview.export?.fileName || "orin_resume.md"}</Text>
-            <Text style={styles.resumeSnippet} numberOfLines={5}>
+            <Text style={[styles.resumeTitle, { color: colors.text }]}>Resume generated</Text>
+            <Text style={[styles.resumeMeta, { color: colors.textMuted }]}>File: {resumePreview.export?.fileName || "orin_resume.md"}</Text>
+            <Text style={[styles.resumeSnippet, { color: colors.textMuted }]} numberOfLines={5}>
               {markdownToPlainText(resumePreview.markdown)}
             </Text>
           </>
@@ -2012,10 +2110,10 @@ export default function StudentDashboard() {
 
       {FEATURE_FLAGS.networking && activeSection === "network" ? (
         <>
-          <Text style={styles.sectionHeader}>Circle Activity</Text>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>Circle Activity</Text>
           <View style={styles.feedWrap}>
             {networkFeed.length === 0 ? (
-              <Text style={styles.empty}>No network activity yet.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No network activity yet.</Text>
             ) : (
               networkFeed.map((post) => (
                 <View key={post._id} style={styles.feedCard}>
@@ -2025,10 +2123,10 @@ export default function StudentDashboard() {
                     }
                     disabled={!post.authorId?._id}
                   >
-                    <Text style={styles.feedAuthor}>{post.authorId?.name || "ORIN User"}</Text>
+                    <Text style={[styles.feedAuthor, { color: colors.text }]}>{post.authorId?.name || "ORIN User"}</Text>
                   </TouchableOpacity>
-                  <Text style={styles.feedLine}>{post.content}</Text>
-                  <Text style={styles.feedMeta}>
+                  <Text style={[styles.feedLine, { color: colors.text }]}>{post.content}</Text>
+                  <Text style={[styles.feedMeta, { color: colors.textMuted }]}>
                     {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0}
                   </Text>
                   <View style={styles.feedActions}>
@@ -2046,15 +2144,15 @@ export default function StudentDashboard() {
 
       {FEATURE_FLAGS.smartSuggestions && activeSection === "network" ? (
         <>
-          <Text style={styles.sectionHeader}>Discover Circle</Text>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>Discover Circle</Text>
           <View style={styles.suggestionWrap}>
             {suggestions.length === 0 ? (
-              <Text style={styles.empty}>No suggestions available right now.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No suggestions available right now.</Text>
             ) : (
               suggestions.map((item, index) => (
                 <View key={`${item.id}-${index}`} style={styles.suggestionCard}>
-                  <Text style={styles.suggestionName}>{item.name}</Text>
-                  <Text style={styles.suggestionReason}>{item.reason}</Text>
+                  <Text style={[styles.suggestionName, { color: colors.text }]}>{item.name}</Text>
+                  <Text style={[styles.suggestionReason, { color: colors.textMuted }]}>{item.reason}</Text>
                   <View style={styles.suggestionActions}>
                     <Text style={styles.suggestionAction}>Connect</Text>
                     <Text style={styles.suggestionAction}>Follow</Text>
@@ -2072,22 +2170,22 @@ export default function StudentDashboard() {
         </View>
       ) : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
       {!isLoading && activeSection === "sessions" ? (
         <>
-          <Text style={styles.sectionHeader}>Session History & Notes</Text>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>Session History & Notes</Text>
           <View style={styles.historyWrap}>
             {sessionHistory.length === 0 ? (
-              <Text style={styles.empty}>No completed sessions yet.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No completed sessions yet.</Text>
             ) : (
               sessionHistory.slice(0, 6).map((item) => (
                 <View key={item.sessionId} style={styles.historyCard}>
-                  <Text style={styles.historyTitle}>{item.mentorName}</Text>
-                  <Text style={styles.historyMeta}>
+                  <Text style={[styles.historyTitle, { color: colors.text }]}>{item.mentorName}</Text>
+                  <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
                     {item.date} {item.time}
                   </Text>
-                  <Text style={styles.historyMeta}>Notes: {item.notes?.trim() ? item.notes : "No notes yet."}</Text>
+                  <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Notes: {item.notes?.trim() ? item.notes : "No notes yet."}</Text>
                   <View style={styles.historyActions}>
                     <TouchableOpacity style={styles.historyBtn} onPress={() => addQuickSessionNote(item.sessionId)}>
                       <Text style={styles.historyBtnText}>Add Note</Text>
@@ -2107,7 +2205,7 @@ export default function StudentDashboard() {
           <View style={styles.panel}>
             <Text style={[styles.panelTitle, styles.panelTitlePending]}>Pending Payments</Text>
             {filteredPendingPaymentSessions.length === 0 ? (
-              <Text style={styles.empty}>No pending payments.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No pending payments.</Text>
             ) : (
               filteredPendingPaymentSessions.map((session) => {
                 const instructions = session.paymentInstructions;
@@ -2115,23 +2213,23 @@ export default function StudentDashboard() {
                 const isManualPayment = session.paymentMode === "manual";
                 return (
                   <View key={session._id} style={[styles.card, styles.cardPending]}>
-                    <Text style={styles.title}>{session.mentorId?.name || "Mentor"}</Text>
-                    <Text style={styles.meta}>
+                    <Text style={[styles.title, { color: colors.text }]}>{session.mentorId?.name || "Mentor"}</Text>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>
                       {session.date} {session.time} | {session.currency || "INR"} {session.amount}
                     </Text>
-                    <Text style={styles.statusWarning}>Payment status: {session.paymentStatus}</Text>
+                    <Text style={[styles.statusWarning, { color: colors.warning }]}>Payment status: {session.paymentStatus}</Text>
                     {session.paymentRejectReason ? (
-                      <Text style={styles.error}>Reason: {session.paymentRejectReason}</Text>
+                      <Text style={[styles.error, { color: colors.danger }]}>Reason: {session.paymentRejectReason}</Text>
                     ) : null}
                     {isManualPayment ? (
                       <>
-                        <Text style={styles.meta}>UPI ID: {instructions?.upiId || "Not configured"}</Text>
+                        <Text style={[styles.meta, { color: colors.textMuted }]}>UPI ID: {instructions?.upiId || "Not configured"}</Text>
                         {instructions?.qrImageUrl ? (
                           <Image source={{ uri: instructions.qrImageUrl }} style={styles.qrImage} resizeMode="contain" />
                         ) : (
-                          <Text style={styles.meta}>QR image not configured by admin.</Text>
+                          <Text style={[styles.meta, { color: colors.textMuted }]}>QR image not configured by admin.</Text>
                         )}
-                        <Text style={styles.meta}>
+                        <Text style={[styles.meta, { color: colors.textMuted }]}>
                           Pay before:{" "}
                           {instructions?.dueAt ? new Date(instructions.dueAt).toLocaleString() : "No due time set"}
                         </Text>
@@ -2146,8 +2244,8 @@ export default function StudentDashboard() {
                       </>
                     ) : (
                       <>
-                        <Text style={styles.meta}>Secure Razorpay payment is still pending for this slot.</Text>
-                        <Text style={styles.meta}>
+                        <Text style={[styles.meta, { color: colors.textMuted }]}>Secure Razorpay payment is still pending for this slot.</Text>
+                        <Text style={[styles.meta, { color: colors.textMuted }]}>
                           Complete payment before:{" "}
                           {session.paymentDueAt ? new Date(session.paymentDueAt).toLocaleString() : "the payment window expires"}
                         </Text>
@@ -2186,15 +2284,15 @@ export default function StudentDashboard() {
           <View style={styles.panel}>
             <Text style={[styles.panelTitle, styles.panelTitleWaiting]}>Awaiting Verification</Text>
             {filteredWaitingVerificationSessions.length === 0 ? (
-              <Text style={styles.empty}>No sessions waiting for verification.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No sessions waiting for verification.</Text>
             ) : (
               filteredWaitingVerificationSessions.map((session) => (
                 <View key={session._id} style={[styles.card, styles.cardWaiting]}>
-                  <Text style={styles.title}>{session.mentorId?.name || "Mentor"}</Text>
-                  <Text style={styles.meta}>
+                  <Text style={[styles.title, { color: colors.text }]}>{session.mentorId?.name || "Mentor"}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
                     {session.date} {session.time} | {session.currency || "INR"} {session.amount}
                   </Text>
-                  <Text style={styles.statusInfo}>Payment submitted. Awaiting admin verification.</Text>
+                  <Text style={[styles.statusInfo, { color: colors.accent }]}>Payment submitted. Awaiting admin verification.</Text>
                 </View>
               ))
             )}
@@ -2203,21 +2301,21 @@ export default function StudentDashboard() {
           <View style={styles.panel}>
             <Text style={[styles.panelTitle, styles.panelTitleConfirmed]}>Confirmed Sessions</Text>
             {filteredConfirmedSessions.length === 0 ? (
-              <Text style={styles.empty}>No confirmed sessions yet.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No confirmed sessions yet.</Text>
             ) : (
               filteredConfirmedSessions.map((session) => (
                 <View key={session._id} style={[styles.card, styles.cardConfirmed]}>
-                  <Text style={styles.title}>{session.mentorId?.name || "Mentor"}</Text>
-                  <Text style={styles.meta}>
+                  <Text style={[styles.title, { color: colors.text }]}>{session.mentorId?.name || "Mentor"}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
                     {session.date} {session.time} | Amount: {session.currency || "INR"} {session.amount}
                   </Text>
-                  <Text style={styles.status}>Payment: {session.paymentStatus} | Session: {session.sessionStatus}</Text>
+                  <Text style={[styles.status, { color: colors.accent }]}>Payment: {session.paymentStatus} | Session: {session.sessionStatus}</Text>
                   {session.meetingLink ? (
                     <TouchableOpacity style={styles.joinButton} onPress={() => Linking.openURL(session.meetingLink as string)}>
                       <Text style={styles.joinButtonText}>Join Session</Text>
                     </TouchableOpacity>
                   ) : (
-                    <Text style={styles.meta}>Meeting link will appear after mentor updates.</Text>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>Meeting link will appear after mentor updates.</Text>
                   )}
                 </View>
               ))
@@ -2227,14 +2325,14 @@ export default function StudentDashboard() {
           <View style={styles.panel}>
             <Text style={[styles.panelTitle, styles.panelTitleLegacy]}>Legacy Booking Requests</Text>
             {filteredBookings.length === 0 ? (
-              <Text style={styles.empty}>No booking requests yet.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No booking requests yet.</Text>
             ) : (
               filteredBookings.map((item) => (
                 <View key={item._id} style={[styles.card, styles.cardLegacy]}>
-                  <Text style={styles.title}>{item.mentor?.name || "Mentor"}</Text>
-                  <Text style={styles.meta}>{item.mentor?.email}</Text>
-                  <Text style={styles.meta}>{new Date(item.scheduledAt).toLocaleString()}</Text>
-                  <Text style={styles.status}>Status: {item.status}</Text>
+                  <Text style={[styles.title, { color: colors.text }]}>{item.mentor?.name || "Mentor"}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>{item.mentor?.email}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>{new Date(item.scheduledAt).toLocaleString()}</Text>
+                  <Text style={[styles.status, { color: colors.accent }]}>Status: {item.status}</Text>
                 </View>
               ))
             )}
@@ -2243,31 +2341,31 @@ export default function StudentDashboard() {
       ) : null}
 
       <TouchableOpacity style={styles.logout} onPress={logout}>
-        <Text style={styles.logoutText}>Logout</Text>
+        <Text style={[styles.logoutText, { color: colors.danger }]}>Logout</Text>
       </TouchableOpacity>
     </ScrollView>
     <Modal visible={quizVisible} transparent={false} animationType="slide" onRequestClose={() => setQuizVisible(false)}>
       <View style={[styles.quizModalWrap, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 14 }]}>
         <View style={styles.quizTopBar}>
-          <Text style={styles.quizDomain}>{dailyQuiz?.domain || dailyDashboard?.dailyQuiz?.domain || "Career Quiz"}</Text>
+          <Text style={[styles.quizDomain, { color: colors.text }]}>{dailyQuiz?.domain || dailyDashboard?.dailyQuiz?.domain || "Career Quiz"}</Text>
           <TouchableOpacity onPress={() => setQuizVisible(false)} style={styles.quizCloseBtn}>
             <Ionicons name="close" size={18} color="#1E2B24" />
           </TouchableOpacity>
         </View>
-        <Text style={styles.quizMeta}>Streak: {dailyDashboard?.streakDays || dailyQuiz?.streak || 0} days</Text>
-        <Text style={styles.quizMeta}>XP: {quizXp}</Text>
+        <Text style={[styles.quizMeta, { color: colors.textMuted }]}>Streak: {dailyDashboard?.streakDays || dailyQuiz?.streak || 0} days</Text>
+        <Text style={[styles.quizMeta, { color: colors.textMuted }]}>XP: {quizXp}</Text>
         <View style={styles.quizProgressTrack}>
           <View style={[styles.quizProgressFill, { width: `${Math.max(6, progressRatio * 100)}%` }]} />
         </View>
         {quizResult ? (
           <View style={styles.quizResultScreen}>
             <Text style={styles.quizResultEmoji}>Great</Text>
-            <Text style={styles.quizResultTitle}>Quiz Completed</Text>
-            <Text style={styles.quizResultMeta}>
+            <Text style={[styles.quizResultTitle, { color: colors.text }]}>Quiz Completed</Text>
+            <Text style={[styles.quizResultMeta, { color: colors.textMuted }]}>
               Score: {quizResult.score}/{quizResult.totalQuestions}
             </Text>
-            <Text style={styles.quizResultMeta}>XP Earned: +{quizResult.xpEarned}</Text>
-            <Text style={styles.quizResultMeta}>Streak: {quizResult.streak} days</Text>
+            <Text style={[styles.quizResultMeta, { color: colors.textMuted }]}>XP Earned: +{quizResult.xpEarned}</Text>
+            <Text style={[styles.quizResultMeta, { color: colors.textMuted }]}>Streak: {quizResult.streak} days</Text>
             <TouchableOpacity style={styles.dailyTaskButton} onPress={() => setQuizVisible(false)}>
               <Text style={styles.dailyTaskButtonText}>Close</Text>
             </TouchableOpacity>
@@ -2279,10 +2377,10 @@ export default function StudentDashboard() {
               { transform: [{ translateX: slideAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -16] }) }] }
             ]}
           >
-            <Text style={styles.quizQuestionMeta}>
+            <Text style={[styles.quizQuestionMeta, { color: colors.accent }]}>
               Question {quizIndex + 1}/5 | {currentQuizQuestion.difficulty.toUpperCase()}
             </Text>
-            <Text style={styles.quizQuestionText}>{currentQuizQuestion.question}</Text>
+            <Text style={[styles.quizQuestionText, { color: colors.text }]}>{currentQuizQuestion.question}</Text>
             <View style={styles.quizOptionsWrap}>
               {currentQuizQuestion.options.map((option) => {
                 const isSelected = selectedOption === option;
@@ -2301,7 +2399,7 @@ export default function StudentDashboard() {
                       if (!quizFeedback) setSelectedOption(option);
                     }}
                   >
-                    <Text style={styles.quizOptionText}>{option}</Text>
+                    <Text style={[styles.quizOptionText, { color: colors.text }]}>{option}</Text>
                   </Pressable>
                 );
               })}
@@ -2311,7 +2409,7 @@ export default function StudentDashboard() {
                 <Text style={quizFeedback === "correct" ? styles.quizFeedbackCorrect : styles.quizFeedbackWrong}>
                   {quizFeedback === "correct" ? "Correct +10 XP" : `Incorrect. Correct: ${currentQuizQuestion.correct}`}
                 </Text>
-                <Text style={styles.quizExplainText}>{currentQuizQuestion.explanation}</Text>
+                <Text style={[styles.quizExplainText, { color: colors.textMuted }]}>{currentQuizQuestion.explanation}</Text>
               </View>
             ) : null}
             {!quizFeedback ? (
@@ -2339,7 +2437,7 @@ export default function StudentDashboard() {
         ) : (
           <View style={styles.quizResultScreen}>
             <ActivityIndicator size="small" color="#1F7A4C" />
-            <Text style={styles.quizResultMeta}>Preparing quiz...</Text>
+            <Text style={[styles.quizResultMeta, { color: colors.textMuted }]}>Preparing quiz...</Text>
           </View>
         )}
       </View>
