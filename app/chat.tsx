@@ -118,6 +118,7 @@ export default function ChatScreen() {
   const requestedUserId = useMemo(() => (params.userId || "").trim(), [params.userId]);
   const { user } = useAuth();
   const { colors } = useAppTheme();
+  const [searchQuery, setSearchQuery] = useState("");
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [confirmedMentors, setConfirmedMentors] = useState<CounterpartUser[]>([]);
@@ -133,6 +134,7 @@ export default function ChatScreen() {
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<(typeof MESSAGE_TABS)[number]>("Mentors");
   const [profilePhotoById, setProfilePhotoById] = useState<Record<string, string>>({});
+  const [threadMode, setThreadMode] = useState(false);
 
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingActiveRef = useRef(false);
@@ -143,13 +145,38 @@ export default function ChatScreen() {
   );
 
   const filteredConversations = useMemo(() => {
-    return conversations.filter((item) =>
+    const baseRows = conversations.filter((item) =>
       activeTab === "Mentors" ? item.counterpart.role === "mentor" : item.counterpart.role !== "mentor"
     );
-  }, [activeTab, conversations]);
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return baseRows;
+    return baseRows.filter((item) =>
+      `${item.counterpart.name} ${item.counterpart.email || ""} ${item.lastMessage || ""}`.toLowerCase().includes(query)
+    );
+  }, [activeTab, conversations, searchQuery]);
+
+  const filteredMentors = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return confirmedMentors;
+    return confirmedMentors.filter((item) => `${item.name} ${item.email || ""}`.toLowerCase().includes(query));
+  }, [confirmedMentors, searchQuery]);
+
+  const filteredCircleContacts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return circleContacts;
+    return circleContacts.filter((item) => `${item.name} ${item.role || ""}`.toLowerCase().includes(query));
+  }, [circleContacts, searchQuery]);
+
+  const contactLookup = useMemo(() => {
+    const next = new Map<string, CounterpartUser>();
+    confirmedMentors.forEach((item) => next.set(String(item._id || ""), item));
+    circleContacts.forEach((item) => next.set(String(item._id || ""), item));
+    conversations.forEach((item) => next.set(String(item.counterpartId || ""), item.counterpart));
+    return next;
+  }, [circleContacts, confirmedMentors, conversations]);
 
   useEffect(() => {
-    if (!filteredConversations.length) return;
+    if (!filteredConversations.length || activeUserId) return;
     const stillVisible = filteredConversations.some((item) => item.counterpartId === activeUserId);
     if (!stillVisible) {
       setActiveUserId(filteredConversations[0].counterpartId);
@@ -164,6 +191,7 @@ export default function ChatScreen() {
   useEffect(() => {
     if (requestedUserId) {
       setActiveUserId(requestedUserId);
+      setThreadMode(true);
     }
   }, [requestedUserId]);
 
@@ -240,6 +268,15 @@ export default function ChatScreen() {
       return;
     }
 
+    const knownUser = contactLookup.get(activeUserId) || null;
+    if (knownUser) {
+      setActiveUser((prev) => ({
+        ...(prev || {}),
+        ...knownUser,
+        profilePhotoUrl: knownUser.profilePhotoUrl || prev?.profilePhotoUrl || ""
+      }));
+    }
+
     try {
       setError(null);
       const [{ data }, typingRes] = await Promise.all([
@@ -261,9 +298,15 @@ export default function ChatScreen() {
       setMessages(data.messages || []);
       await api.patch(`/api/chat/messages/${activeUserId}/read`);
     } catch (e: any) {
+      if (knownUser) {
+        setMessages([]);
+        setActiveTyping(false);
+        setError(null);
+        return;
+      }
       setError(e?.response?.data?.message || "Failed to load messages.");
     }
-  }, [activeUserId]);
+  }, [activeUserId, contactLookup]);
 
   useFocusEffect(
     useCallback(() => {
@@ -407,6 +450,18 @@ export default function ChatScreen() {
     Alert.alert("Attachments", "File sharing will be added next. The button is now placed in the final chat layout.");
   }
 
+  function openThread(userId: string) {
+    if (!userId) return;
+    setActiveUserId(userId);
+    setThreadMode(true);
+    setMessages([]);
+    setError(null);
+  }
+
+  function closeThread() {
+    setThreadMode(false);
+  }
+
   if (user?.role !== "student" && user?.role !== "mentor") {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -429,8 +484,16 @@ export default function ChatScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
       keyboardVerticalOffset={Platform.OS === "ios" ? 84 : 0}
     >
-      <GlobalHeader searchPlaceholder="Search mentors or circle chats" />
+      {!threadMode ? (
+        <GlobalHeader
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search mentors or circle chats"
+        />
+      ) : null}
       <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {!threadMode ? (
+        <>
         <View style={styles.screenHeader}>
           <Text style={[styles.heading, { color: colors.text }]}>Messages</Text>
           <Text style={[styles.subTitle, { color: colors.textMuted }]}>Stay close to mentors and your circle from one clean conversation hub.</Text>
@@ -460,12 +523,25 @@ export default function ChatScreen() {
         <View style={styles.quickActionsRow}>
           <TouchableOpacity
             style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-            onPress={() => (activeTab === "Mentors" ? router.push("/mentors" as never) : setActiveUserId(circleContacts[0]?._id || ""))}
+            onPress={() => (activeTab === "Mentors" ? router.push("/mentors" as never) : router.push("/network?section=connections" as never))}
           >
             <Ionicons name="search-outline" size={16} color={colors.accent} />
             <Text style={[styles.quickActionText, { color: colors.text }]}>{activeTab === "Mentors" ? "Find Mentor" : "Find People"}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => router.push("/network?section=connections" as never)}>
+          <TouchableOpacity
+            style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            onPress={() => {
+              const nextId =
+                activeTab === "Mentors"
+                  ? filteredMentors[0]?._id || filteredConversations[0]?.counterpartId || ""
+                  : filteredCircleContacts[0]?._id || filteredConversations[0]?.counterpartId || "";
+              if (nextId) {
+                openThread(nextId);
+                return;
+              }
+              router.push(activeTab === "Mentors" ? ("/mentors" as never) : ("/network?section=connections" as never));
+            }}
+          >
             <Ionicons name="add-outline" size={16} color={colors.accent} />
             <Text style={[styles.quickActionText, { color: colors.text }]}>New Chat</Text>
           </TouchableOpacity>
@@ -474,15 +550,15 @@ export default function ChatScreen() {
         {user?.role === "student" && activeTab === "Mentors" ? (
           <>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Confirmed Mentors</Text>
-            {confirmedMentors.length > 0 ? (
+            {filteredMentors.length > 0 ? (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.confirmedList}
                 contentContainerStyle={styles.confirmedListContent}
               >
-                {confirmedMentors.map((item) => (
-                  <TouchableOpacity key={item._id} style={[styles.mentorProfileCard, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => setActiveUserId(item._id)}>
+                {filteredMentors.map((item) => (
+                  <TouchableOpacity key={item._id} style={[styles.mentorProfileCard, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => openThread(item._id)}>
                     {item.profilePhotoUrl ? (
                       <Image source={{ uri: item.profilePhotoUrl }} style={styles.avatar} />
                     ) : (
@@ -512,15 +588,15 @@ export default function ChatScreen() {
         {activeTab === "Circle" ? (
           <>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Circle</Text>
-            {circleContacts.length > 0 ? (
+            {filteredCircleContacts.length > 0 ? (
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 style={styles.confirmedList}
                 contentContainerStyle={styles.confirmedListContent}
               >
-                {circleContacts.map((item) => (
-                  <TouchableOpacity key={item._id} style={[styles.mentorProfileCard, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => setActiveUserId(item._id)}>
+                {filteredCircleContacts.map((item) => (
+                  <TouchableOpacity key={item._id} style={[styles.mentorProfileCard, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => openThread(item._id)}>
                     {item.profilePhotoUrl || profilePhotoById[item._id] ? (
                       <Image source={{ uri: item.profilePhotoUrl || profilePhotoById[item._id] }} style={styles.avatar} />
                     ) : (
@@ -560,7 +636,7 @@ export default function ChatScreen() {
                     { backgroundColor: colors.surface, borderColor: colors.border },
                     isActive && [styles.conversationRowActive, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]
                   ]}
-                  onPress={() => setActiveUserId(item.counterpartId)}
+                  onPress={() => openThread(item.counterpartId)}
                 >
                   <View>
                     {item.counterpart.profilePhotoUrl || profilePhotoById[item.counterpartId] ? (
@@ -604,9 +680,17 @@ export default function ChatScreen() {
           )}
         </View>
 
-        <View style={[styles.threadCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        </>
+        ) : null}
+
+        <View style={[styles.threadCard, threadMode && styles.threadCardFull, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={[styles.threadHeader, { borderBottomColor: colors.border }]}>
             <View style={styles.threadIdentity}>
+              {threadMode ? (
+                <TouchableOpacity style={[styles.backPill, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={closeThread}>
+                  <Ionicons name="arrow-back" size={18} color={colors.text} />
+                </TouchableOpacity>
+              ) : null}
               {activeUser?.profilePhotoUrl || (activeUser?._id ? profilePhotoById[String(activeUser._id)] : "") ? (
                 <Image source={{ uri: activeUser?.profilePhotoUrl || profilePhotoById[String(activeUser?._id || "")] }} style={styles.avatarLarge} />
               ) : (
@@ -719,6 +803,10 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     paddingBottom: 120
+  },
+  threadCardFull: {
+    minHeight: 640,
+    marginTop: 4
   },
   center: {
     flex: 1,
@@ -938,6 +1026,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     flex: 1
+  },
+  backPill: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
   },
   threadHeaderText: {
     flex: 1
