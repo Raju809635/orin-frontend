@@ -235,6 +235,7 @@ export default function StudentProfileScreen() {
       setError(null);
       const payload = {
         ...profile,
+        state: String(profile.state || "").trim(),
         skills: parseCommaSeparated(skillsDraft),
         education: profile.education.filter((item) => item.school || item.degree || item.year),
         projects: profile.projects
@@ -417,7 +418,7 @@ export default function StudentProfileScreen() {
       <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} value={profile.collegeName} onChangeText={(collegeName) => setProfile((prev) => ({ ...prev, collegeName }))} />
 
       <Text style={[styles.label, { color: colors.text }]}>State</Text>
-      <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} value={profile.state} onChangeText={(state) => setProfile((prev) => ({ ...prev, state }))} />
+      <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholder="State" autoCapitalize="words" placeholderTextColor={colors.textMuted} value={profile.state} onChangeText={(state) => setProfile((prev) => ({ ...prev, state }))} />
 
       <Text style={[styles.label, { color: colors.text }]}>About</Text>
       <TextInput style={[styles.input, styles.multiline, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} multiline value={profile.about} onChangeText={(about) => setProfile((prev) => ({ ...prev, about }))} />

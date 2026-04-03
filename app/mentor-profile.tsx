@@ -392,6 +392,7 @@ export default function MentorProfileScreen() {
       setError(null);
       const payload = {
         ...profile,
+        state: String(profile.state || "").trim(),
         expertiseDomains: profile.specializations,
         education: profile.education.filter((item) => item.school || item.degree || item.year),
         achievements: profile.achievements.filter((item) => item.title || item.issuer || item.date || item.url),
@@ -547,6 +548,9 @@ export default function MentorProfileScreen() {
       <Text style={[styles.label, { color: colors.text }]}>State</Text>
       <TextInput
         style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+        placeholder="State"
+        autoCapitalize="words"
+        placeholderTextColor={colors.textMuted}
         value={profile.state}
         onChangeText={(state) => setProfile((prev) => (prev ? { ...prev, state } : prev))}
       />
