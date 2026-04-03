@@ -1,6 +1,6 @@
 import React from "react";
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/context/AuthContext";
@@ -19,10 +19,15 @@ type CommunityModule = {
 
 export default function CommunityGrowthScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ search?: string }>();
   const { user } = useAuth();
   const { colors, isDark } = useAppTheme();
   const isMentor = user?.role === "mentor";
   const [searchQuery, setSearchQuery] = React.useState("");
+
+  React.useEffect(() => {
+    setSearchQuery(String(params.search || "").trim());
+  }, [params.search]);
 
   const modules: CommunityModule[] = [
     {

@@ -106,7 +106,7 @@ type BookingItem = { _id: string; status?: string; scheduledAt: string; mentor?:
 
 export default function MentorshipHubScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ section?: MentorshipSectionId }>();
+  const params = useLocalSearchParams<{ section?: MentorshipSectionId; search?: string }>();
   const { user } = useAuth();
   const { colors, isDark } = useAppTheme();
   const isMentor = user?.role === "mentor";
@@ -165,6 +165,10 @@ export default function MentorshipHubScreen() {
       setActiveSection(section);
     }
   }, [params.section]);
+
+  useEffect(() => {
+    setSearchQuery(String(params.search || "").trim());
+  }, [params.search]);
 
   useFocusEffect(
     useCallback(() => {

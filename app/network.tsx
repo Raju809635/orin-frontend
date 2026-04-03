@@ -155,7 +155,7 @@ function formatPostTime(dateValue?: string) {
 
 export default function NetworkScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ section?: string }>();
+  const params = useLocalSearchParams<{ section?: string; search?: string }>();
   const { user } = useAuth();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
@@ -214,6 +214,10 @@ export default function NetworkScreen() {
     }
   }, [params.section]);
 
+  useEffect(() => {
+    setSearchQuery(String(params.search || "").trim());
+  }, [params.search]);
+
   const shouldSkipSectionFetch = useCallback((key: string, refresh = false, force = false) => {
     const now = Date.now();
     return !refresh && !force && now - (sectionFetchAtRef.current[key] || 0) < NETWORK_SECTION_STALE_MS;
@@ -263,7 +267,6 @@ export default function NetworkScreen() {
   const loadFeedSection = useCallback(async (refresh = false, force = false) => {
     const cacheKey = "feed";
     if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
-    markSectionFetched(cacheKey);
     const feedRes = await api.get<FeedPost[]>("/api/network/feed");
     const nextPosts = feedRes.data || [];
     setPosts(nextPosts);
@@ -273,12 +276,12 @@ export default function NetworkScreen() {
       if (authorId) followMap[authorId] = Boolean(post.authorId?.isFollowing);
     });
     setFollowingState((prev) => ({ ...followMap, ...prev }));
+    markSectionFetched(cacheKey);
   }, [markSectionFetched, shouldSkipSectionFetch]);
 
   const loadComposeSection = useCallback(async (refresh = false, force = false) => {
     const cacheKey = "compose";
     if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
-    markSectionFetched(cacheKey);
     const [suggestionsRes, pendingRes, acceptedRes] = await Promise.allSettled([
       api.get<Suggestion[]>("/api/network/suggestions"),
       api.get<ConnectionRow[]>("/api/network/connections?status=pending"),
@@ -288,12 +291,12 @@ export default function NetworkScreen() {
     const acceptedRows = acceptedRes.status === "fulfilled" ? acceptedRes.value.data || [] : [];
     setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
     applyConnectionState(pendingRows, acceptedRows);
+    markSectionFetched(cacheKey);
   }, [applyConnectionState, markSectionFetched, shouldSkipSectionFetch]);
 
   const loadConnectionsSection = useCallback(async (refresh = false, force = false) => {
     const cacheKey = "connections";
     if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
-    markSectionFetched(cacheKey);
     const [pendingRes, acceptedRes] = await Promise.allSettled([
       api.get<ConnectionRow[]>("/api/network/connections?status=pending"),
       api.get<ConnectionRow[]>("/api/network/connections?status=accepted")
@@ -301,6 +304,7 @@ export default function NetworkScreen() {
     const pendingRows = pendingRes.status === "fulfilled" ? pendingRes.value.data || [] : [];
     const acceptedRows = acceptedRes.status === "fulfilled" ? acceptedRes.value.data || [] : [];
     applyConnectionState(pendingRows, acceptedRows);
+    markSectionFetched(cacheKey);
   }, [applyConnectionState, markSectionFetched, shouldSkipSectionFetch]);
 
   const loadData = useCallback(
@@ -909,9 +913,23 @@ export default function NetworkScreen() {
   }
 
   if (loading) {
+    const loadingLabel =
+      activeSection === "compose"
+        ? "Preparing your post composer..."
+        : activeSection === "connections"
+          ? "Loading your circle..."
+          : "Home feed is loading...";
     return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.accent} />
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <GlobalHeader
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search circle, posts, people"
+        />
+        <View style={[styles.center, { backgroundColor: colors.background, paddingHorizontal: 24 }]}>
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={[styles.meta, { marginTop: 14, color: colors.textMuted, textAlign: "center" }]}>{loadingLabel}</Text>
+        </View>
       </View>
     );
   }
@@ -1120,8 +1138,12 @@ export default function NetworkScreen() {
                 <Text style={[styles.startPostPlaceholder, { color: colors.textMuted }]}>Start a post...</Text>
               </View>
             </TouchableOpacity>
-            {filteredPosts.filter((post) => !hiddenPostIds[post._id]).length === 0 ? (
-              <Text style={[styles.meta, { color: colors.textMuted }]}>No posts yet. Create the first one.</Text>
+            {loading && filteredPosts.length === 0 ? (
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Home feed is loading...</Text>
+            ) : filteredPosts.filter((post) => !hiddenPostIds[post._id]).length === 0 ? (
+              <Text style={[styles.meta, { color: colors.textMuted }]}>
+                {normalizedSearch ? "No posts match your search yet." : "No posts yet. Create the first one."}
+              </Text>
             ) : (
               filteredPosts.filter((post) => !hiddenPostIds[post._id]).map((post) => {
                 const authorId = String(post.authorId?._id || "");

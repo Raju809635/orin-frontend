@@ -8,7 +8,7 @@ import {
   View
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useNavigation, useRouter } from "expo-router";
+import { useFocusEffect, useNavigation, usePathname, useRouter } from "expo-router";
 import { DrawerActions } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
@@ -37,6 +37,7 @@ export default function GlobalHeader({
   searchPlaceholder = "Search ORIN"
 }: GlobalHeaderProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -102,6 +103,17 @@ export default function GlobalHeader({
     else setLocalSearchValue(value);
   }
 
+  function handleSearchSubmit() {
+    if (onSubmitSearch) {
+      onSubmitSearch();
+      return;
+    }
+
+    const nextValue = currentSearchValue.trim();
+    if (!nextValue) return;
+    router.push({ pathname, params: { search: nextValue } } as never);
+  }
+
   return (
     <View style={[styles.safeWrap, { paddingTop: insets.top + 8, backgroundColor: colors.background }]}>
       <View style={styles.row}>
@@ -120,14 +132,16 @@ export default function GlobalHeader({
           </TouchableOpacity>
 
         <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-          <Ionicons name="search" size={18} color={colors.textMuted} />
+          <TouchableOpacity onPress={handleSearchSubmit} activeOpacity={0.8}>
+            <Ionicons name="search" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
           <TextInput
             style={[styles.searchInput, { color: colors.text }]}
             placeholder={searchPlaceholder}
             placeholderTextColor={colors.textMuted}
             value={currentSearchValue}
             onChangeText={handleSearchChange}
-            onSubmitEditing={onSubmitSearch}
+            onSubmitEditing={handleSearchSubmit}
             returnKeyType="search"
           />
         </View>

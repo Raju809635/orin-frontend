@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -48,12 +48,14 @@ function formatPostTime(dateValue?: string) {
 
 export default function SavedPostsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ search?: string }>();
   const { colors } = useAppTheme();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mediaSizeByUrl, setMediaSizeByUrl] = useState<Record<string, { width: number; height: number }>>({});
+  const [searchQuery, setSearchQuery] = useState("");
 
   const loadData = useCallback(async (refresh = false) => {
     try {
@@ -75,6 +77,10 @@ export default function SavedPostsScreen() {
       loadData();
     }, [loadData])
   );
+
+  useEffect(() => {
+    setSearchQuery(String(params.search || "").trim());
+  }, [params.search]);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,6 +126,18 @@ export default function SavedPostsScreen() {
     }
   }
 
+  const filteredPosts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return posts;
+    return posts.filter((post) => {
+      const author = String(post.authorId?.name || "").toLowerCase();
+      const role = String(post.authorId?.role || "").toLowerCase();
+      const content = sanitizeDisplayText(post.content || "").toLowerCase();
+      const type = String(post.postType || "").toLowerCase();
+      return author.includes(query) || role.includes(query) || content.includes(query) || type.includes(query);
+    });
+  }, [posts, searchQuery]);
+
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -130,7 +148,7 @@ export default function SavedPostsScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
-      <GlobalHeader searchPlaceholder="Search saved posts" />
+      <GlobalHeader searchValue={searchQuery} onSearchChange={setSearchQuery} searchPlaceholder="Search saved posts" />
       <ScrollView
         contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} tintColor={colors.accent} />}
@@ -139,10 +157,12 @@ export default function SavedPostsScreen() {
         <Text style={[styles.subTitle, { color: colors.textMuted }]}>Everything you saved stays here as a full post, not just a text summary.</Text>
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
-        {posts.length === 0 ? (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>No saved posts yet.</Text>
+        {filteredPosts.length === 0 ? (
+          <Text style={[styles.empty, { color: colors.textMuted }]}>
+            {searchQuery.trim() ? "No saved posts match your search." : "No saved posts yet."}
+          </Text>
         ) : (
-          posts.map((post) => {
+          filteredPosts.map((post) => {
             const media = (post.mediaUrls || []).filter(Boolean);
             const authorName = post.authorId?.name || "ORIN User";
             const authorRole = (post.authorId?.role || "member").toUpperCase();
