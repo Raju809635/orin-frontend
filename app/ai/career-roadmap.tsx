@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { api } from "@/lib/api";
-import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
+import { getDomainTree, getFallbackDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
@@ -50,6 +50,9 @@ type CareerRoadmapResponse = {
 
 const GENERATION_STAGES = ["Analyzing goal...", "Building steps...", "Optimizing path..."];
 const MISSION_XP = 20;
+const ROADMAP_REQUEST_TIMEOUT_MS = 12000;
+
+const FALLBACK_DOMAIN_TREE = getFallbackDomainTree();
 
 function formatRoadmapDate(value?: string | null) {
   if (!value) return "soon";
@@ -65,10 +68,16 @@ function formatRoadmapDate(value?: string | null) {
 
 export default function AiCareerRoadmapPage() {
   const { colors, isDark } = useAppTheme();
-  const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
-  const [primaryCategory, setPrimaryCategory] = useState("");
-  const [subCategory, setSubCategory] = useState("");
-  const [focus, setFocus] = useState("");
+  const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(FALLBACK_DOMAIN_TREE);
+  const [primaryCategory, setPrimaryCategory] = useState(FALLBACK_DOMAIN_TREE.primaryCategories?.[0] || "");
+  const [subCategory, setSubCategory] = useState((FALLBACK_DOMAIN_TREE.subCategoriesByPrimary?.[FALLBACK_DOMAIN_TREE.primaryCategories?.[0] || ""] || [])[0] || "");
+  const [focus, setFocus] = useState(
+    (
+      FALLBACK_DOMAIN_TREE.focusByPrimarySub?.[
+        `${FALLBACK_DOMAIN_TREE.primaryCategories?.[0] || ""}::${(FALLBACK_DOMAIN_TREE.subCategoriesByPrimary?.[FALLBACK_DOMAIN_TREE.primaryCategories?.[0] || ""] || [])[0] || ""}`
+      ] || []
+    )[0] || ""
+  );
   const [customGoal, setCustomGoal] = useState("");
   const [data, setData] = useState<CareerRoadmapResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,7 +106,10 @@ export default function AiCareerRoadmapPage() {
         setSubCategory((prev) => prev || s);
         setFocus((prev) => prev || f);
       })
-      .catch(() => {});
+      .catch(() => {
+        if (!mounted) return;
+        setDomainTree(FALLBACK_DOMAIN_TREE);
+      });
     return () => {
       mounted = false;
     };
@@ -141,21 +153,26 @@ export default function AiCareerRoadmapPage() {
           setGenerationStage((prev) => (prev + 1) % GENERATION_STAGES.length);
         }, 700);
 
-        const res = await api.get<CareerRoadmapResponse>("/api/network/career-roadmap", {
-          params: {
-            primaryCategory,
-            subCategory,
-            focus,
-            goal: customGoal.trim() || goalLabel
-          }
-        });
+        const res = await Promise.race([
+          api.get<CareerRoadmapResponse>("/api/network/career-roadmap", {
+            params: {
+              primaryCategory,
+              subCategory,
+              focus,
+              goal: customGoal.trim() || goalLabel
+            }
+          }),
+          new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error("Roadmap generation is taking too long. Please try again.")), ROADMAP_REQUEST_TIMEOUT_MS)
+          )
+        ]);
 
         if (stageTimer) clearInterval(stageTimer);
         await new Promise((resolve) => setTimeout(resolve, 900));
         setData(res.data || null);
       } catch (e: any) {
         if (stageTimer) clearInterval(stageTimer);
-        setError(e?.response?.data?.message || "Failed to load roadmap.");
+        setError(e?.response?.data?.message || e?.message || "Failed to load roadmap.");
       } finally {
         setIsGenerating(false);
         setLoading(false);

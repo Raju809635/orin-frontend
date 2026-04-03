@@ -82,6 +82,10 @@ function buildResponse(tree: Record<string, Record<string, string[]>>): DomainTr
   };
 }
 
+export function getFallbackDomainTree(): DomainTreeResponse {
+  return buildResponse(FALLBACK_TREE);
+}
+
 export async function getDomainTree(): Promise<DomainTreeResponse> {
   const now = Date.now();
   if (cached && now - cached.at < CACHE_MS) return cached.data;
@@ -90,7 +94,7 @@ export async function getDomainTree(): Promise<DomainTreeResponse> {
     cached = { at: now, data };
     return data;
   } catch {
-    const data = cached?.data || buildResponse(FALLBACK_TREE);
+    const data = cached?.data || getFallbackDomainTree();
     cached = { at: now, data };
     return data;
   }
