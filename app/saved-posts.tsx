@@ -1,8 +1,21 @@
-import React, { useCallback, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Dimensions,
+  Image,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
+} from "react-native";
+import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { useAppTheme } from "@/context/ThemeContext";
+import GlobalHeader from "@/components/global-header";
+import { sanitizeDisplayText } from "@/utils/textSanitize";
 
 type FeedPost = {
   _id: string;
@@ -13,14 +26,34 @@ type FeedPost = {
   shareCount?: number;
   saveCount?: number;
   isSaved?: boolean;
-  authorId?: { _id?: string; name?: string; role?: string } | null;
+  createdAt?: string;
+  mediaUrls?: string[];
+  authorId?: {
+    _id?: string;
+    name?: string;
+    role?: string;
+    profilePhotoUrl?: string;
+  } | null;
 };
 
+const { width } = Dimensions.get("window");
+const MEDIA_WIDTH = width - 32;
+
+function formatPostTime(dateValue?: string) {
+  if (!dateValue) return "";
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString();
+}
+
 export default function SavedPostsScreen() {
+  const router = useRouter();
+  const { colors } = useAppTheme();
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mediaSizeByUrl, setMediaSizeByUrl] = useState<Record<string, { width: number; height: number }>>({});
 
   const loadData = useCallback(async (refresh = false) => {
     try {
@@ -43,6 +76,41 @@ export default function SavedPostsScreen() {
     }, [loadData])
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    const missingMedia = posts
+      .flatMap((post) => post.mediaUrls || [])
+      .filter((uri) => uri && !mediaSizeByUrl[uri])
+      .slice(0, 30);
+
+    if (!missingMedia.length) return;
+
+    missingMedia.forEach((uri) => {
+      Image.getSize(
+        uri,
+        (imageWidth, imageHeight) => {
+          if (cancelled) return;
+          setMediaSizeByUrl((prev) =>
+            prev[uri] ? prev : { ...prev, [uri]: { width: imageWidth, height: imageHeight } }
+          );
+        },
+        () => undefined
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mediaSizeByUrl, posts]);
+
+  function getImageHeight(uri: string) {
+    const size = mediaSizeByUrl[uri];
+    if (!size?.width || !size?.height) return 320;
+    const ratio = size.width / size.height;
+    const computedHeight = MEDIA_WIDTH / ratio;
+    return Math.max(220, Math.min(520, computedHeight));
+  }
+
   async function toggleSave(postId: string) {
     try {
       await api.post(`/api/network/feed/${postId}/react`, { action: "save" });
@@ -54,71 +122,116 @@ export default function SavedPostsScreen() {
 
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#1F7A4C" />
+      <View style={[styles.center, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
       </View>
     );
   }
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
-    >
-      <Text style={styles.title}>Saved Posts</Text>
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+    <View style={[styles.screen, { backgroundColor: colors.background }]}>
+      <GlobalHeader searchPlaceholder="Search saved posts" />
+      <ScrollView
+        contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} tintColor={colors.accent} />}
+      >
+        <Text style={[styles.title, { color: colors.text }]}>Saved Posts</Text>
+        <Text style={[styles.subTitle, { color: colors.textMuted }]}>Everything you saved stays here as a full post, not just a text summary.</Text>
+        {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
-      {posts.length === 0 ? (
-        <Text style={styles.empty}>No saved posts yet.</Text>
-      ) : (
-        posts.map((post) => (
-          <View key={post._id} style={styles.card}>
-            <Text style={styles.author}>{post.authorId?.name || "ORIN User"}</Text>
-            <Text style={styles.meta}>{(post.authorId?.role || "member").toUpperCase()}</Text>
-            <Text style={styles.content}>{post.content}</Text>
-            <Text style={styles.meta}>
-              {post.postType} | Likes {post.likeCount || 0} | Comments {post.commentCount || 0} | Shares {post.shareCount || 0}
-            </Text>
-            <TouchableOpacity style={styles.unsaveBtn} onPress={() => toggleSave(post._id)}>
-              <Ionicons name="bookmark" size={16} color="#B42318" />
-              <Text style={styles.unsaveText}>Remove from Saved</Text>
-            </TouchableOpacity>
-          </View>
-        ))
-      )}
-    </ScrollView>
+        {posts.length === 0 ? (
+          <Text style={[styles.empty, { color: colors.textMuted }]}>No saved posts yet.</Text>
+        ) : (
+          posts.map((post) => {
+            const media = (post.mediaUrls || []).filter(Boolean);
+            const authorName = post.authorId?.name || "ORIN User";
+            const authorRole = (post.authorId?.role || "member").toUpperCase();
+            return (
+              <View key={post._id} style={styles.postWrap}>
+                <TouchableOpacity
+                  style={styles.authorRow}
+                  onPress={() => (post.authorId?._id ? router.push(`/public-profile/${post.authorId._id}` as never) : undefined)}
+                  disabled={!post.authorId?._id}
+                >
+                  {post.authorId?.profilePhotoUrl ? (
+                    <Image source={{ uri: post.authorId.profilePhotoUrl }} style={styles.avatar} />
+                  ) : (
+                    <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
+                      <Text style={[styles.avatarText, { color: colors.accent }]}>
+                        {authorName.trim().charAt(0).toUpperCase() || "U"}
+                      </Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.authorName, { color: colors.text }]}>{authorName}</Text>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>
+                      {authorRole} {post.createdAt ? `| ${formatPostTime(post.createdAt)}` : ""}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <Text style={[styles.content, { color: colors.text }]}>{sanitizeDisplayText(post.content || "")}</Text>
+
+                {media.map((uri, idx) => (
+                  <Image
+                    key={`${post._id}-${idx}`}
+                    source={{ uri }}
+                    style={[styles.mediaImage, { height: getImageHeight(uri) }]}
+                    resizeMode="cover"
+                  />
+                ))}
+
+                <Text style={[styles.stats, { color: colors.textMuted }]}>
+                  Likes {post.likeCount || 0} | Comments {post.commentCount || 0} | Shares {post.shareCount || 0}
+                </Text>
+
+                <TouchableOpacity
+                  style={[styles.unsaveBtn, { borderColor: colors.danger, backgroundColor: colors.surfaceAlt }]}
+                  onPress={() => toggleSave(post._id)}
+                >
+                  <Ionicons name="bookmark" size={16} color={colors.danger} />
+                  <Text style={[styles.unsaveText, { color: colors.danger }]}>Remove from Saved</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { backgroundColor: "#F4F9F6", padding: 16, paddingBottom: 24 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F4F9F6" },
-  title: { fontSize: 24, fontWeight: "800", color: "#13251E", marginBottom: 10 },
-  error: { color: "#B42318", marginBottom: 8 },
-  empty: { color: "#667085" },
-  card: {
-    borderWidth: 1,
-    borderColor: "#E4E7EC",
-    borderRadius: 12,
-    backgroundColor: "#FFFFFF",
-    padding: 12,
-    marginBottom: 10
+  screen: { flex: 1 },
+  container: { padding: 16, paddingBottom: 36, gap: 10 },
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  title: { fontSize: 28, fontWeight: "900" },
+  subTitle: { marginTop: 4, marginBottom: 10, lineHeight: 21, fontWeight: "600" },
+  error: { marginBottom: 8 },
+  empty: { fontWeight: "600" },
+  postWrap: { paddingVertical: 14, gap: 10 },
+  authorRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  avatar: { width: 42, height: 42, borderRadius: 21, borderWidth: 1, borderColor: "#D0D5DD" },
+  avatarFallback: { alignItems: "center", justifyContent: "center" },
+  avatarText: { fontWeight: "800" },
+  authorName: { fontSize: 15, fontWeight: "800" },
+  meta: { fontSize: 12, fontWeight: "700" },
+  content: { fontSize: 16, lineHeight: 28, fontWeight: "500" },
+  mediaImage: {
+    width: MEDIA_WIDTH,
+    borderRadius: 18,
+    backgroundColor: "#E5E7EB"
   },
-  author: { color: "#1E2B24", fontWeight: "800" },
-  meta: { color: "#667085", marginTop: 4, fontSize: 12 },
-  content: { color: "#344054", marginTop: 8, lineHeight: 19 },
+  stats: { fontSize: 12, fontWeight: "700" },
   unsaveBtn: {
-    marginTop: 10,
     alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
     borderWidth: 1,
-    borderColor: "#F04438",
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: "#FFF1F3"
+    paddingHorizontal: 12,
+    paddingVertical: 8
   },
-  unsaveText: { color: "#B42318", fontWeight: "700" }
+  unsaveText: { fontWeight: "700" }
 });

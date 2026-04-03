@@ -61,6 +61,7 @@ function RootDrawer() {
       pathname.startsWith("/chat") ||
       pathname.startsWith("/collaborate") ||
       pathname.startsWith("/domains") ||
+      pathname.startsWith("/sprints") ||
       pathname.startsWith("/news-updates") ||
       pathname.startsWith("/mentorship") ||
       pathname.startsWith("/ai-hub") ||
@@ -125,35 +126,6 @@ function RootDrawer() {
 
       if (typeof (navigation as any).canGoBack === "function" && (navigation as any).canGoBack()) {
         (navigation as any).goBack();
-        return true;
-      }
-
-      if (pathname.startsWith("/mentor/") || pathname.startsWith("/mentors")) {
-        router.push("/domains" as never);
-        return true;
-      }
-      if (pathname.startsWith("/domains") || pathname.startsWith("/domain-guide")) {
-        router.push("/mentorship" as never);
-        return true;
-      }
-      if (pathname.startsWith("/public-profile/")) {
-        router.push("/network?section=feed" as never);
-        return true;
-      }
-      if (
-        pathname.startsWith("/ai-assistant") ||
-        pathname.startsWith("/ai-hub") ||
-        pathname.startsWith("/network") ||
-        pathname.startsWith("/community-growth") ||
-        pathname.startsWith("/news-updates") ||
-        pathname.startsWith("/chat") ||
-        pathname.startsWith("/notifications") ||
-        pathname.startsWith("/my-profile") ||
-        pathname.startsWith("/settings") ||
-        pathname.startsWith("/complaints") ||
-        pathname.startsWith("/collaborate")
-      ) {
-        router.push(homePath as never);
         return true;
       }
 
@@ -370,7 +342,7 @@ function RootDrawer() {
   function renderDrawerContent(props: DrawerContentComponentProps) {
     const openDrawerRoute = (path: string) => {
       props.navigation.closeDrawer();
-      router.replace(path as never);
+      router.push(path as never);
     };
     const profilePath = user?.role === "mentor" ? "/mentor-profile" : "/my-profile";
     const drawerItemTheme = {
