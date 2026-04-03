@@ -49,6 +49,10 @@ type PublicProfileResponse = {
     followers?: Array<{ _id?: string; name?: string; role?: string; profilePhotoUrl?: string }>;
     following?: Array<{ _id?: string; name?: string; role?: string; profilePhotoUrl?: string }>;
   };
+  endorsements?: {
+    counts?: Record<string, number>;
+    viewerEndorsedSkills?: string[];
+  };
 };
 
 export default function PublicProfileScreen() {
@@ -61,6 +65,7 @@ export default function PublicProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [updatingFollow, setUpdatingFollow] = useState(false);
   const [updatingConnection, setUpdatingConnection] = useState(false);
+  const [endorsingSkill, setEndorsingSkill] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [previewPhotoById, setPreviewPhotoById] = useState<Record<string, string>>({});
 
@@ -185,6 +190,21 @@ export default function PublicProfileScreen() {
     }
   }
 
+  async function endorseSkill(skill: string) {
+    const normalizedSkill = String(skill || "").trim();
+    if (!normalizedSkill || !userId || isSelf || endorsingSkill) return;
+    try {
+      setEndorsingSkill(normalizedSkill);
+      await api.post(`/api/network/endorse/${userId}`, { skill: normalizedSkill });
+      notify(`Endorsed ${normalizedSkill}`);
+      await refreshProfile();
+    } catch (e: any) {
+      notify(e?.response?.data?.message || "Unable to endorse skill right now.");
+    } finally {
+      setEndorsingSkill(null);
+    }
+  }
+
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
@@ -215,6 +235,7 @@ export default function PublicProfileScreen() {
     { label: "Circle", value: circleCount },
     { label: "Following", value: data.social?.following ?? 0 }
   ];
+  const endorsedSkills = new Set((data.endorsements?.viewerEndorsedSkills || []).map((item) => String(item).trim()));
 
   function renderPreviewRow(items: Array<{ _id?: string; name?: string; role?: string; profilePhotoUrl?: string }>, emptyText: string) {
     if (!items.length) {
@@ -375,12 +396,40 @@ export default function PublicProfileScreen() {
       {(profile.skills || []).length ? (
         <View style={[styles.sectionCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Skills</Text>
+          {!isSelf ? (
+            <Text style={[styles.sectionHint, { color: colors.textMuted }]}>
+              Tap a skill to endorse it. Each endorsement strengthens the student&apos;s credibility and XP.
+            </Text>
+          ) : null}
           <View style={styles.chips}>
-            {(profile.skills || []).map((item) => (
-              <View key={item} style={[styles.chip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
-                <Text style={[styles.chipText, { color: colors.text }]}>{item}</Text>
-              </View>
-            ))}
+            {(profile.skills || []).map((item) => {
+              const normalized = String(item || "").trim();
+              const count = Number(data.endorsements?.counts?.[normalized] || 0);
+              const alreadyEndorsed = endorsedSkills.has(normalized);
+              const active = alreadyEndorsed || endorsingSkill === normalized;
+              return (
+                <TouchableOpacity
+                  key={normalized}
+                  style={[
+                    styles.chip,
+                    {
+                      borderColor: active ? colors.accent : colors.border,
+                      backgroundColor: active ? colors.accentSoft : colors.surfaceAlt
+                    }
+                  ]}
+                  onPress={() => endorseSkill(normalized)}
+                  disabled={isSelf || alreadyEndorsed || endorsingSkill === normalized}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.chipText, { color: active ? colors.accent : colors.text }]}>
+                    {normalized}
+                  </Text>
+                  <Text style={[styles.chipMeta, { color: active ? colors.accent : colors.textMuted }]}>
+                    {alreadyEndorsed ? `Endorsed | ${count}` : `${count} endorse${count === 1 ? "" : "ments"}`}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </View>
       ) : null}
@@ -466,6 +515,7 @@ const styles = StyleSheet.create({
   followBadge: { fontWeight: "700", textAlign: "center" },
   sectionCard: { borderWidth: 1, borderRadius: 24, padding: 18 },
   sectionTitle: { marginBottom: 10, fontWeight: "900", fontSize: 18 },
+  sectionHint: { marginTop: -2, marginBottom: 12, lineHeight: 20, fontWeight: "600" },
   about: { lineHeight: 24, fontSize: 15, fontWeight: "600" },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
@@ -475,6 +525,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8
   },
   chipText: { fontWeight: "700", fontSize: 12 },
+  chipMeta: { marginTop: 3, fontSize: 10, fontWeight: "700" },
   previewRow: {
     flexDirection: "row",
     alignItems: "center",
