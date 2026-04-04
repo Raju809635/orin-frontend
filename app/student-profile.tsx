@@ -248,7 +248,20 @@ export default function StudentProfileScreen() {
           }
         });
         if (!active) return;
-        setInstitutionResults(Array.isArray(data?.results) ? data.results : []);
+        let nextResults = Array.isArray(data?.results) ? data.results : [];
+
+        if (nextResults.length === 0 && (profile.institutionType || profile.state)) {
+          const fallback = await api.get("/api/profiles/institutions/search", {
+            params: {
+              q: query,
+              limit: 8
+            }
+          });
+          if (!active) return;
+          nextResults = Array.isArray(fallback?.data?.results) ? fallback.data.results : [];
+        }
+
+        setInstitutionResults(nextResults);
       } catch {
         if (active) setInstitutionResults([]);
       } finally {
@@ -594,6 +607,11 @@ export default function StudentProfileScreen() {
             </TouchableOpacity>
           ))}
         </View>
+      ) : null}
+      {institutionFocused && !searchingInstitutions && institutionQuery.trim().length >= 2 && institutionResults.length === 0 ? (
+        <Text style={[styles.helperText, { color: colors.textMuted }]}>
+          No institution match yet. Keep typing or save manually if your institution is rare.
+        </Text>
       ) : null}
       <Text style={[styles.helperText, { color: colors.textMuted }]}>
         Pick a real institution when possible so your institution and state leaderboards stay accurate.
