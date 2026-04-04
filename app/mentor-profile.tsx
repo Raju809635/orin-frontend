@@ -48,6 +48,15 @@ type ProfileEducation = {
   year: string;
 };
 
+type InstitutionSearchResult = {
+  id: string;
+  name: string;
+  institutionType: string;
+  district?: string;
+  state?: string;
+  source?: string;
+};
+
 type MentorProfile = {
   profilePhotoUrl: string;
   title: string;
@@ -57,6 +66,10 @@ type MentorProfile = {
   sessionPrice: number;
   about: string;
   state: string;
+  institutionName: string;
+  institutionType: string;
+  institutionDistrict: string;
+  institutionSource: string;
   education: ProfileEducation[];
   achievements: ProfileAchievement[];
   projects: ProfileProject[];
@@ -142,6 +155,15 @@ function parseCommaSeparated(value: string) {
     .filter(Boolean);
 }
 
+const INSTITUTION_TYPE_OPTIONS = [
+  "School",
+  "Junior College",
+  "Diploma College",
+  "Degree College",
+  "Engineering College",
+  "University"
+];
+
 export default function MentorProfileScreen() {
   const { colors } = useAppTheme();
   const [profile, setProfile] = useState<MentorProfile | null>(null);
@@ -156,6 +178,10 @@ export default function MentorProfileScreen() {
   const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
   const [projectTechDrafts, setProjectTechDrafts] = useState<Record<number, string>>({});
   const dragOffset = useRef(new Animated.Value(0)).current;
+  const [institutionQuery, setInstitutionQuery] = useState("");
+  const [institutionResults, setInstitutionResults] = useState<InstitutionSearchResult[]>([]);
+  const [searchingInstitutions, setSearchingInstitutions] = useState(false);
+  const [institutionFocused, setInstitutionFocused] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -177,6 +203,10 @@ export default function MentorProfileScreen() {
           sessionPrice: Number(profilePayload.sessionPrice || 0),
           about: profilePayload.about || "",
           state: profilePayload.state || "",
+          institutionName: profilePayload.institutionName || "",
+          institutionType: profilePayload.institutionType || "",
+          institutionDistrict: profilePayload.institutionDistrict || "",
+          institutionSource: profilePayload.institutionSource || "",
           education: Array.isArray(profilePayload.education) ? profilePayload.education.map(normalizeEducation) : [],
           achievements: Array.isArray(profilePayload.achievements)
             ? profilePayload.achievements.map(normalizeAchievement)
@@ -201,6 +231,7 @@ export default function MentorProfileScreen() {
               )
             : {}
         );
+        setInstitutionQuery(profilePayload.institutionName || "");
         setCategories(Array.isArray(categoryData.categories) ? categoryData.categories : []);
       } catch (e: any) {
         if (mounted) setError(e?.response?.data?.message || "Failed to load profile");
@@ -222,6 +253,64 @@ export default function MentorProfileScreen() {
     if (!profile?.subCategory) return [];
     return subCategoryOptions.find((sub) => sub.sub === profile.subCategory)?.specializations || [];
   }, [subCategoryOptions, profile?.subCategory]);
+
+  useEffect(() => {
+    if (!profile || !institutionFocused) {
+      setInstitutionResults([]);
+      return;
+    }
+
+    const query = institutionQuery.trim();
+    if (query.length < 2) {
+      setInstitutionResults([]);
+      setSearchingInstitutions(false);
+      return;
+    }
+
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        setSearchingInstitutions(true);
+        const { data } = await api.get("/api/profiles/institutions/search", {
+          params: {
+            q: query,
+            institutionType: profile.institutionType || undefined,
+            state: profile.state || undefined,
+            limit: 8
+          }
+        });
+        if (!active) return;
+        setInstitutionResults(Array.isArray(data?.results) ? data.results : []);
+      } catch {
+        if (active) setInstitutionResults([]);
+      } finally {
+        if (active) setSearchingInstitutions(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [institutionFocused, institutionQuery, profile?.institutionType, profile?.state]);
+
+  const applyInstitutionSelection = (institution: InstitutionSearchResult) => {
+    setProfile((prev) =>
+      prev
+        ? {
+            ...prev,
+            institutionName: institution.name,
+            institutionType: institution.institutionType || prev.institutionType,
+            institutionDistrict: institution.district || "",
+            institutionSource: institution.source || "",
+            state: institution.state || prev.state
+          }
+        : prev
+    );
+    setInstitutionQuery(institution.name);
+    setInstitutionResults([]);
+    setInstitutionFocused(false);
+  };
 
   const toggleSpecialization = (value: string) => {
     setProfile((prev) => {
@@ -392,6 +481,10 @@ export default function MentorProfileScreen() {
       setError(null);
       const payload = {
         ...profile,
+        institutionName: String(profile.institutionName || institutionQuery || "").trim(),
+        institutionType: String(profile.institutionType || "").trim(),
+        institutionDistrict: String(profile.institutionDistrict || "").trim(),
+        institutionSource: String(profile.institutionSource || "").trim(),
         state: String(profile.state || "").trim(),
         expertiseDomains: profile.specializations,
         education: profile.education.filter((item) => item.school || item.degree || item.year),
@@ -413,6 +506,18 @@ export default function MentorProfileScreen() {
             ? {
                 ...prev,
                 ...profileData,
+                institutionName: typeof profileData.institutionName === "string"
+                  ? profileData.institutionName
+                  : payload.institutionName,
+                institutionType: typeof profileData.institutionType === "string"
+                  ? profileData.institutionType
+                  : payload.institutionType,
+                institutionDistrict: typeof profileData.institutionDistrict === "string"
+                  ? profileData.institutionDistrict
+                  : payload.institutionDistrict,
+                institutionSource: typeof profileData.institutionSource === "string"
+                  ? profileData.institutionSource
+                  : payload.institutionSource,
                 state: typeof profileData.state === "string" ? profileData.state : payload.state,
                 education: Array.isArray(profileData.education)
                   ? profileData.education.map(normalizeEducation)
@@ -429,6 +534,11 @@ export default function MentorProfileScreen() {
                 : prev.specializations
             }
           : prev
+      );
+      setInstitutionQuery(
+        typeof profileData.institutionName === "string"
+          ? profileData.institutionName
+          : payload.institutionName
       );
       const nextProjects = Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects;
       setProjectTechDrafts(Object.fromEntries(nextProjects.map((item, index) => [index, item.tech.join(", ")])));
@@ -504,7 +614,10 @@ export default function MentorProfileScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
+      keyboardShouldPersistTaps="handled"
+    >
       <Text style={[styles.title, { color: colors.text }]}>Mentor Profile</Text>
       <Text style={[styles.sub, { color: colors.textMuted }]}>Profile completeness: {profile.profileCompleteness || 0}%</Text>
       <View style={styles.photoWrap}>
@@ -544,6 +657,91 @@ export default function MentorProfileScreen() {
         value={profile.company}
         onChangeText={(company) => setProfile((prev) => (prev ? { ...prev, company } : prev))}
       />
+
+      <Text style={[styles.label, { color: colors.text }]}>Institution Type</Text>
+      <View style={styles.selectionWrap}>
+        {INSTITUTION_TYPE_OPTIONS.map((type) => {
+          const active = profile.institutionType === type;
+          return (
+            <TouchableOpacity
+              key={type}
+              style={[
+                styles.optionChip,
+                { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]
+              ]}
+              onPress={() =>
+                setProfile((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        institutionType: prev.institutionType === type ? "" : type
+                      }
+                    : prev
+                )
+              }
+            >
+              <Text
+                style={[
+                  styles.optionText,
+                  { color: colors.textMuted },
+                  active && [styles.optionTextActive, { color: colors.accent }]
+                ]}
+              >
+                {type}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <Text style={[styles.label, { color: colors.text }]}>Institution</Text>
+      <TextInput
+        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+        placeholder="Search school, college, university..."
+        placeholderTextColor={colors.textMuted}
+        value={institutionQuery}
+        onFocus={() => setInstitutionFocused(true)}
+        onChangeText={(value) => {
+          setInstitutionQuery(value);
+          setInstitutionFocused(true);
+          setProfile((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  institutionName: value,
+                  institutionDistrict: value.trim() ? prev.institutionDistrict : "",
+                  institutionSource: value.trim() ? prev.institutionSource : ""
+                }
+              : prev
+          );
+        }}
+      />
+      {searchingInstitutions ? <ActivityIndicator size="small" color={colors.accent} style={styles.searchLoader} /> : null}
+      {institutionFocused && institutionResults.length > 0 ? (
+        <View style={[styles.suggestionBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {institutionResults.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.suggestionItem, { borderBottomColor: colors.border }]}
+              onPress={() => applyInstitutionSelection(item)}
+            >
+              <Text style={[styles.suggestionTitle, { color: colors.text }]}>{item.name}</Text>
+              <Text style={[styles.suggestionMeta, { color: colors.textMuted }]}>
+                {[item.institutionType, item.district, item.state].filter(Boolean).join(" | ")}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
+      <Text style={[styles.hint, { color: colors.textMuted }]}>
+        Select a real institution when possible so analytics and leaderboards stay clean.
+      </Text>
+      {profile.institutionDistrict || profile.institutionSource ? (
+        <Text style={[styles.hint, { color: colors.textMuted }]}>
+          {[profile.institutionDistrict, profile.institutionSource].filter(Boolean).join(" | ")}
+        </Text>
+      ) : null}
 
       <Text style={[styles.label, { color: colors.text }]}>State</Text>
       <TextInput
@@ -904,6 +1102,20 @@ const styles = StyleSheet.create({
   },
   optionText: { color: "#344054", fontWeight: "600" },
   optionTextActive: { color: "#0B3D2E" },
+  searchLoader: { marginBottom: 8 },
+  suggestionBox: {
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: 8
+  },
+  suggestionItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderBottomWidth: 1
+  },
+  suggestionTitle: { fontSize: 14, fontWeight: "700", color: "#1E2B24" },
+  suggestionMeta: { marginTop: 2, fontSize: 12, color: "#667085" },
   hint: { color: "#667085", marginBottom: 4 },
   dragRow: {
     height: DRAG_ROW_HEIGHT,

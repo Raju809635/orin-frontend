@@ -46,11 +46,24 @@ type ProfileEducation = {
   year: string;
 };
 
+type InstitutionSearchResult = {
+  id: string;
+  name: string;
+  institutionType: string;
+  district?: string;
+  state?: string;
+  source?: string;
+};
+
 type StudentProfile = {
   profilePhotoUrl: string;
   headline: string;
   about: string;
   state: string;
+  institutionName: string;
+  institutionType: string;
+  institutionDistrict: string;
+  institutionSource: string;
   skills: string[];
   careerGoals: string;
   profileCompleteness: number;
@@ -72,6 +85,10 @@ const emptyProfile: StudentProfile = {
   headline: "",
   about: "",
   state: "",
+  institutionName: "",
+  institutionType: "",
+  institutionDistrict: "",
+  institutionSource: "",
   skills: [],
   careerGoals: "",
   profileCompleteness: 0,
@@ -130,6 +147,15 @@ function parseCommaSeparated(value: string) {
     .filter(Boolean);
 }
 
+const INSTITUTION_TYPE_OPTIONS = [
+  "School",
+  "Junior College",
+  "Diploma College",
+  "Degree College",
+  "Engineering College",
+  "University"
+];
+
 export default function StudentProfileScreen() {
   const { colors } = useAppTheme();
   const [profile, setProfile] = useState<StudentProfile>(emptyProfile);
@@ -142,6 +168,10 @@ export default function StudentProfileScreen() {
   const [error, setError] = useState<string | null>(null);
   const [skillsDraft, setSkillsDraft] = useState("");
   const [projectTechDrafts, setProjectTechDrafts] = useState<Record<number, string>>({});
+  const [institutionQuery, setInstitutionQuery] = useState("");
+  const [institutionResults, setInstitutionResults] = useState<InstitutionSearchResult[]>([]);
+  const [searchingInstitutions, setSearchingInstitutions] = useState(false);
+  const [institutionFocused, setInstitutionFocused] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -156,6 +186,10 @@ export default function StudentProfileScreen() {
           headline: profileData.headline || "",
           about: profileData.about || "",
           state: profileData.state || "",
+          institutionName: profileData.institutionName || profileData.collegeName || "",
+          institutionType: profileData.institutionType || "",
+          institutionDistrict: profileData.institutionDistrict || "",
+          institutionSource: profileData.institutionSource || "",
           skills: Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : [],
           careerGoals: profileData.careerGoals || "",
           profileCompleteness: Number(profileData.profileCompleteness || 0),
@@ -174,6 +208,7 @@ export default function StudentProfileScreen() {
             ? Object.fromEntries(profileData.projects.map((project: any, index: number) => [index, normalizeProject(project).tech.join(", ")]))
             : {}
         );
+        setInstitutionQuery(profileData.institutionName || profileData.collegeName || "");
       } catch (e: any) {
         if (mounted) setError(e?.response?.data?.message || "Failed to load profile");
       } finally {
@@ -186,6 +221,61 @@ export default function StudentProfileScreen() {
   }, []);
 
   const skillsValue = useMemo(() => skillsDraft, [skillsDraft]);
+
+  useEffect(() => {
+    if (!institutionFocused) {
+      setInstitutionResults([]);
+      return;
+    }
+
+    const query = institutionQuery.trim();
+    if (query.length < 2) {
+      setInstitutionResults([]);
+      setSearchingInstitutions(false);
+      return;
+    }
+
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        setSearchingInstitutions(true);
+        const { data } = await api.get("/api/profiles/institutions/search", {
+          params: {
+            q: query,
+            institutionType: profile.institutionType || undefined,
+            state: profile.state || undefined,
+            limit: 8
+          }
+        });
+        if (!active) return;
+        setInstitutionResults(Array.isArray(data?.results) ? data.results : []);
+      } catch {
+        if (active) setInstitutionResults([]);
+      } finally {
+        if (active) setSearchingInstitutions(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [institutionFocused, institutionQuery, profile.institutionType, profile.state]);
+
+  const applyInstitutionSelection = (institution: InstitutionSearchResult) => {
+    setProfile((prev) => ({
+      ...prev,
+      institutionName: institution.name,
+      collegeName: institution.name,
+      institutionType: institution.institutionType || prev.institutionType,
+      institutionDistrict: institution.district || "",
+      institutionSource: institution.source || "",
+      state: institution.state || prev.state
+    }));
+    setInstitutionQuery(institution.name);
+    setInstitutionResults([]);
+    setInstitutionFocused(false);
+  };
 
   const updateProject = (index: number, key: keyof ProfileProject, value: string | string[]) => {
     setProfile((prev) => ({
@@ -235,6 +325,11 @@ export default function StudentProfileScreen() {
       setError(null);
       const payload = {
         ...profile,
+        institutionName: String(profile.institutionName || profile.collegeName || institutionQuery || "").trim(),
+        institutionType: String(profile.institutionType || "").trim(),
+        institutionDistrict: String(profile.institutionDistrict || "").trim(),
+        institutionSource: String(profile.institutionSource || "").trim(),
+        collegeName: String(profile.institutionName || profile.collegeName || institutionQuery || "").trim(),
         state: String(profile.state || "").trim(),
         skills: parseCommaSeparated(skillsDraft),
         education: profile.education.filter((item) => item.school || item.degree || item.year),
@@ -254,6 +349,19 @@ export default function StudentProfileScreen() {
       setProfile((prev) => ({
         ...prev,
         ...profileData,
+        institutionName: typeof profileData.institutionName === "string"
+          ? profileData.institutionName
+          : payload.institutionName,
+        institutionType: typeof profileData.institutionType === "string"
+          ? profileData.institutionType
+          : payload.institutionType,
+        institutionDistrict: typeof profileData.institutionDistrict === "string"
+          ? profileData.institutionDistrict
+          : payload.institutionDistrict,
+        institutionSource: typeof profileData.institutionSource === "string"
+          ? profileData.institutionSource
+          : payload.institutionSource,
+        collegeName: typeof profileData.collegeName === "string" ? profileData.collegeName : payload.collegeName,
         state: typeof profileData.state === "string" ? profileData.state : payload.state,
         skills: Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : payload.skills,
         education: Array.isArray(profileData.education) ? profileData.education.map(normalizeEducation) : payload.education,
@@ -265,6 +373,13 @@ export default function StudentProfileScreen() {
           ? profileData.experiences.map(normalizeExperience)
           : payload.experiences
       }));
+      setInstitutionQuery(
+        typeof profileData.institutionName === "string"
+          ? profileData.institutionName
+          : typeof profileData.collegeName === "string"
+            ? profileData.collegeName
+            : payload.institutionName
+      );
       setSkillsDraft((Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : payload.skills).join(", "));
       const nextProjects = Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects;
       setProjectTechDrafts(Object.fromEntries(nextProjects.map((item, index) => [index, item.tech.join(", ")])));
@@ -385,7 +500,10 @@ export default function StudentProfileScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
+    <ScrollView
+      contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
+      keyboardShouldPersistTaps="handled"
+    >
       <Text style={[styles.title, { color: colors.text }]}>Student Profile</Text>
       <Text style={[styles.sub, { color: colors.textMuted }]}>Profile completeness: {profile.profileCompleteness || 0}%</Text>
 
@@ -414,8 +532,77 @@ export default function StudentProfileScreen() {
       <Text style={[styles.label, { color: colors.text }]}>Headline</Text>
       <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} value={profile.headline} onChangeText={(headline) => setProfile((prev) => ({ ...prev, headline }))} />
 
-      <Text style={[styles.label, { color: colors.text }]}>College</Text>
-      <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} value={profile.collegeName} onChangeText={(collegeName) => setProfile((prev) => ({ ...prev, collegeName }))} />
+      <Text style={[styles.label, { color: colors.text }]}>Institution Type</Text>
+      <View style={styles.selectionWrap}>
+        {INSTITUTION_TYPE_OPTIONS.map((type) => {
+          const active = profile.institutionType === type;
+          return (
+            <TouchableOpacity
+              key={type}
+              style={[
+                styles.optionChip,
+                { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]
+              ]}
+              onPress={() =>
+                setProfile((prev) => ({
+                  ...prev,
+                  institutionType: prev.institutionType === type ? "" : type
+                }))
+              }
+            >
+              <Text style={[styles.optionText, { color: colors.textMuted }, active && [styles.optionTextActive, { color: colors.accent }]]}>
+                {type}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <Text style={[styles.label, { color: colors.text }]}>Institution</Text>
+      <TextInput
+        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+        placeholder="Search school, junior college, degree college, university..."
+        placeholderTextColor={colors.textMuted}
+        value={institutionQuery}
+        onFocus={() => setInstitutionFocused(true)}
+        onChangeText={(value) => {
+          setInstitutionQuery(value);
+          setInstitutionFocused(true);
+          setProfile((prev) => ({
+            ...prev,
+            institutionName: value,
+            collegeName: value,
+            institutionDistrict: value.trim() ? prev.institutionDistrict : "",
+            institutionSource: value.trim() ? prev.institutionSource : ""
+          }));
+        }}
+      />
+      {searchingInstitutions ? <ActivityIndicator size="small" color={colors.accent} style={styles.searchLoader} /> : null}
+      {institutionFocused && institutionResults.length > 0 ? (
+        <View style={[styles.suggestionBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          {institutionResults.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={[styles.suggestionItem, { borderBottomColor: colors.border }]}
+              onPress={() => applyInstitutionSelection(item)}
+            >
+              <Text style={[styles.suggestionTitle, { color: colors.text }]}>{item.name}</Text>
+              <Text style={[styles.suggestionMeta, { color: colors.textMuted }]}>
+                {[item.institutionType, item.district, item.state].filter(Boolean).join(" | ")}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
+      <Text style={[styles.helperText, { color: colors.textMuted }]}>
+        Pick a real institution when possible so your institution and state leaderboards stay accurate.
+      </Text>
+      {profile.institutionDistrict || profile.institutionSource ? (
+        <Text style={[styles.helperText, { color: colors.textMuted }]}>
+          {[profile.institutionDistrict, profile.institutionSource].filter(Boolean).join(" | ")}
+        </Text>
+      ) : null}
 
       <Text style={[styles.label, { color: colors.text }]}>State</Text>
       <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholder="State" autoCapitalize="words" placeholderTextColor={colors.textMuted} value={profile.state} onChangeText={(state) => setProfile((prev) => ({ ...prev, state }))} />
@@ -427,7 +614,7 @@ export default function StudentProfileScreen() {
         <View style={styles.sectionHeader}>
           <View>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Education</Text>
-            <Text style={[styles.sectionSub, { color: colors.textMuted }]}>Add college, degree, and passing year to make your profile more complete.</Text>
+            <Text style={[styles.sectionSub, { color: colors.textMuted }]}>Add school, institution, degree, and passing year to make your profile more complete.</Text>
           </View>
           <TouchableOpacity style={[styles.addBtn, { backgroundColor: colors.accentSoft }]} onPress={() => setProfile((prev) => ({ ...prev, education: [...prev.education, emptyEducation()] }))}>
             <Text style={[styles.addBtnText, { color: colors.accent }]}>+ Add</Text>
@@ -648,6 +835,34 @@ const styles = StyleSheet.create({
   addBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: "#E8F5EE" },
   addBtnText: { color: "#0B3D2E", fontWeight: "800" },
   emptyText: { color: "#667085", marginBottom: 4 },
+  selectionWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 10 },
+  optionChip: {
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1
+  },
+  optionChipActive: {
+    backgroundColor: "#E8F5EE",
+    borderColor: "#1F7A4C"
+  },
+  optionText: { fontWeight: "700", color: "#667085" },
+  optionTextActive: { color: "#1F7A4C" },
+  searchLoader: { marginBottom: 8 },
+  suggestionBox: {
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: 8
+  },
+  suggestionItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    borderBottomWidth: 1
+  },
+  suggestionTitle: { fontSize: 14, fontWeight: "700", color: "#1E2B24" },
+  suggestionMeta: { marginTop: 2, fontSize: 12, color: "#667085" },
+  helperText: { marginTop: -2, marginBottom: 10, fontSize: 12, lineHeight: 17 },
   entryCard: {
     marginTop: 10,
     padding: 12,

@@ -41,7 +41,7 @@ type LeaderboardResponse = {
 type LeaderboardTab = "college" | "state" | "global";
 
 const TAB_CONFIG: { key: LeaderboardTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: "college", label: "College", icon: "school-outline" },
+  { key: "college", label: "Institution", icon: "school-outline" },
   { key: "state", label: "State", icon: "map-outline" },
   { key: "global", label: "Global", icon: "earth-outline" }
 ];
@@ -93,13 +93,13 @@ export default function CommunityLeaderboardPage() {
   }, [activeTab, data?.collegeTop, data?.globalTop, data?.stateTop]);
 
   const activeTitle = useMemo(() => {
-    if (activeTab === "college") return data?.collegeName ? `${data.collegeName} Leaderboard` : "College Leaderboard";
+    if (activeTab === "college") return data?.collegeName ? `${data.collegeName} Leaderboard` : "Institution Leaderboard";
     if (activeTab === "state") return data?.stateName ? `${data.stateName} Leaderboard` : "State Leaderboard";
     return "Global Leaderboard";
   }, [activeTab, data?.collegeName, data?.stateName]);
 
   const activeSubtitle = useMemo(() => {
-    if (activeTab === "college") return "Compete with learners from your college and push toward the podium.";
+    if (activeTab === "college") return "Compete with learners from your school, college, or institution and push toward the podium.";
     if (activeTab === "state") {
       return data?.stateName
         ? "See how you rank against learners from your state."
