@@ -43,6 +43,17 @@ if (Platform.OS !== "web") {
 const DASHBOARD_STALE_MS = 2 * 60 * 1000;
 const NEWS_STALE_MS = 5 * 60 * 1000;
 const SECTION_STALE_MS = 2 * 60 * 1000;
+const QUIZ_DOMAIN_OPTIONS = [
+  "Academic",
+  "Competitive Exams",
+  "Professional Courses",
+  "Career & Placements",
+  "Technology & AI",
+  "Startups & Entrepreneurship",
+  "Finance & Investing",
+  "Creative & Design",
+  "Personal Development"
+];
 
 type Booking = {
   _id: string;
@@ -437,6 +448,8 @@ export default function StudentDashboard() {
   const [dailyDashboard, setDailyDashboard] = useState<DailyDashboard | null>(null);
   const [dailyQuiz, setDailyQuiz] = useState<DailyQuizResponse | null>(null);
   const [quizVisible, setQuizVisible] = useState(false);
+  const [quizDomainPickerVisible, setQuizDomainPickerVisible] = useState(false);
+  const [selectedQuizDomain, setSelectedQuizDomain] = useState("Technology & AI");
   const [quizQuestions, setQuizQuestions] = useState<DailyQuizQuestion[]>([]);
   const [quizIndex, setQuizIndex] = useState(0);
   const [selectedOption, setSelectedOption] = useState<string | null>(null);
@@ -1113,11 +1126,14 @@ export default function StudentDashboard() {
     return any[Math.floor(Math.random() * any.length)];
   }
 
-  async function openDailyQuiz() {
+  async function openDailyQuiz(domainOverride?: string) {
     try {
       setQuizLoading(true);
       setError(null);
-      const { data } = await api.get<DailyQuizResponse>("/api/network/daily-quiz");
+      const domain = domainOverride || selectedQuizDomain || dailyDashboard?.dailyQuiz?.domain || "Technology & AI";
+      const { data } = await api.get<DailyQuizResponse>("/api/network/daily-quiz", {
+        params: { domain }
+      });
       setDailyQuiz(data || null);
       if (data?.completedToday || !data?.quiz) {
         setQuizMessage(data?.message || "Today's quiz already completed.");
@@ -1154,6 +1170,17 @@ export default function StudentDashboard() {
     } finally {
       setQuizLoading(false);
     }
+  }
+
+  function openQuizDomainPicker() {
+    setSelectedQuizDomain(dailyDashboard?.dailyQuiz?.domain || dailyQuiz?.domain || selectedQuizDomain || "Technology & AI");
+    setQuizDomainPickerVisible(true);
+  }
+
+  async function startQuizFromSelectedDomain() {
+    const domain = selectedQuizDomain || "Technology & AI";
+    setQuizDomainPickerVisible(false);
+    await openDailyQuiz(domain);
   }
 
   function submitAnswerAndNext() {
@@ -1702,7 +1729,7 @@ export default function StudentDashboard() {
                     styles.dailyTaskButton,
                     (dailyDashboard.dailyQuiz?.completedToday || quizLoading) && styles.dailyTaskButtonDone
                   ]}
-                  onPress={openDailyQuiz}
+                  onPress={openQuizDomainPicker}
                   disabled={Boolean(dailyDashboard.dailyQuiz?.completedToday) || quizLoading}
                 >
                   <Text style={styles.dailyTaskButtonText}>
@@ -2442,6 +2469,54 @@ export default function StudentDashboard() {
         )}
       </View>
     </Modal>
+    <Modal
+      visible={quizDomainPickerVisible}
+      transparent
+      animationType="fade"
+      onRequestClose={() => setQuizDomainPickerVisible(false)}
+    >
+      <View style={styles.quizDomainModalBackdrop}>
+        <View style={[styles.quizDomainModalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.quizDomainModalTitle, { color: colors.text }]}>Choose Quiz Domain</Text>
+          <Text style={[styles.quizDomainModalSubtitle, { color: colors.textMuted }]}>
+            Pick the domain for today&apos;s 5 quiz questions.
+          </Text>
+          <View style={styles.quizDomainChipWrap}>
+            {QUIZ_DOMAIN_OPTIONS.map((domain) => {
+              const active = selectedQuizDomain === domain;
+              return (
+                <TouchableOpacity
+                  key={domain}
+                  style={[
+                    styles.quizDomainChip,
+                    {
+                      borderColor: active ? colors.accent : colors.border,
+                      backgroundColor: active ? colors.accentSoft : colors.surface
+                    }
+                  ]}
+                  onPress={() => setSelectedQuizDomain(domain)}
+                >
+                  <Text style={[styles.quizDomainChipText, { color: active ? colors.accent : colors.textMuted }]}>
+                    {domain}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <View style={styles.quizDomainModalActions}>
+            <TouchableOpacity
+              style={[styles.quizDomainSecondaryButton, { borderColor: colors.border }]}
+              onPress={() => setQuizDomainPickerVisible(false)}
+            >
+              <Text style={[styles.quizDomainSecondaryButtonText, { color: colors.textMuted }]}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.dailyTaskButton} onPress={startQuizFromSelectedDomain}>
+              <Text style={styles.dailyTaskButtonText}>Start Quiz</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
     </View>
   );
 }
@@ -3085,6 +3160,42 @@ const styles = StyleSheet.create({
   quizFeedbackCorrect: { color: "#027A48", fontWeight: "800", marginBottom: 4 },
   quizFeedbackWrong: { color: "#B42318", fontWeight: "800", marginBottom: 4 },
   quizExplainText: { color: "#475467", lineHeight: 18 },
+  quizDomainModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.55)",
+    justifyContent: "center",
+    padding: 20
+  },
+  quizDomainModalCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 18,
+    gap: 14
+  },
+  quizDomainModalTitle: { fontSize: 22, fontWeight: "800" },
+  quizDomainModalSubtitle: { fontSize: 14, lineHeight: 21, fontWeight: "500" },
+  quizDomainChipWrap: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  quizDomainChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10
+  },
+  quizDomainChipText: { fontSize: 14, fontWeight: "700" },
+  quizDomainModalActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  quizDomainSecondaryButton: {
+    flex: 1,
+    minHeight: 42,
+    borderWidth: 1,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  quizDomainSecondaryButtonText: { fontSize: 14, fontWeight: "700" },
   quizResultScreen: {
     flex: 1,
     alignItems: "center",
