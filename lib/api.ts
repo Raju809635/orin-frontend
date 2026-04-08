@@ -36,7 +36,7 @@ export const api = axios.create({
   timeout: 15000
 });
 
-const RETRYABLE_STATUS = new Set([502, 503, 504]);
+const RETRYABLE_STATUS = new Set([502, 503, 504, 521, 522, 523, 524]);
 
 api.interceptors.response.use(
   (response) => response,

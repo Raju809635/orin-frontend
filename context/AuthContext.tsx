@@ -165,7 +165,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           originalRequest.headers.Authorization = `Bearer ${nextToken}`;
           return api.request(originalRequest);
         } catch (refreshError) {
-          await logout();
+          const refreshStatus = refreshError?.response?.status;
+          const isHardAuthFailure = refreshStatus === 401;
+
+          if (isHardAuthFailure) {
+            await logout();
+          }
+
           return Promise.reject(refreshError);
         }
       }
