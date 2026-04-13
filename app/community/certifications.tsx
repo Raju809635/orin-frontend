@@ -263,6 +263,9 @@ export default function CommunityCertificationsPage() {
                     <Text style={styles.cardTitle}>{mapped.title}</Text>
                     <StatusBadge label={item.level?.toLowerCase().includes("advanced") ? "Top Performer" : (item.status || "Completed")} tone={badgeTone} />
                   </View>
+                  {(item.source || "").toLowerCase().includes("admin") || (item.type || "").toLowerCase().includes("admin") ? (
+                    <StatusBadge label="Admin Issued" tone="primary" />
+                  ) : null}
                   <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{mapped.domain || "ORIN Track"} - {formatDate(mapped.issuedAt)}</Text>
                   <Text style={[styles.cardMetaSmall, { color: colors.textMuted }]}>Certificate ID: {mapped.certificateId || mapped.id}</Text>
                 </View>

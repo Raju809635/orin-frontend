@@ -59,6 +59,7 @@ type StudentProfile = {
   profilePhotoUrl: string;
   headline: string;
   about: string;
+  profileType: "student" | "graduate" | "job_seeker";
   state: string;
   institutionName: string;
   institutionType: string;
@@ -84,6 +85,7 @@ const emptyProfile: StudentProfile = {
   profilePhotoUrl: "",
   headline: "",
   about: "",
+  profileType: "student",
   state: "",
   institutionName: "",
   institutionType: "",
@@ -155,6 +157,7 @@ const INSTITUTION_TYPE_OPTIONS = [
   "Engineering College",
   "University"
 ];
+const PROFILE_TYPE_OPTIONS: Array<StudentProfile["profileType"]> = ["student", "graduate", "job_seeker"];
 
 export default function StudentProfileScreen() {
   const { colors } = useAppTheme();
@@ -185,6 +188,7 @@ export default function StudentProfileScreen() {
           profilePhotoUrl: profileData.profilePhotoUrl || "",
           headline: profileData.headline || "",
           about: profileData.about || "",
+          profileType: profileData.profileType || "student",
           state: profileData.state || "",
           institutionName: profileData.institutionName || profileData.collegeName || "",
           institutionType: profileData.institutionType || "",
@@ -338,6 +342,7 @@ export default function StudentProfileScreen() {
       setError(null);
       const payload = {
         ...profile,
+        profileType: String(profile.profileType || "student").trim(),
         institutionName: String(profile.institutionName || profile.collegeName || institutionQuery || "").trim(),
         institutionType: String(profile.institutionType || "").trim(),
         institutionDistrict: String(profile.institutionDistrict || "").trim(),
@@ -362,6 +367,7 @@ export default function StudentProfileScreen() {
       setProfile((prev) => ({
         ...prev,
         ...profileData,
+        profileType: (profileData.profileType || payload.profileType || "student") as StudentProfile["profileType"],
         institutionName: typeof profileData.institutionName === "string"
           ? profileData.institutionName
           : payload.institutionName,
@@ -544,6 +550,34 @@ export default function StudentProfileScreen() {
 
       <Text style={[styles.label, { color: colors.text }]}>Headline</Text>
       <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} value={profile.headline} onChangeText={(headline) => setProfile((prev) => ({ ...prev, headline }))} />
+
+      <Text style={[styles.label, { color: colors.text }]}>Profile Type</Text>
+      <View style={styles.selectionWrap}>
+        {PROFILE_TYPE_OPTIONS.map((type) => {
+          const active = profile.profileType === type;
+          const label = type === "job_seeker" ? "Job Seeker" : type.charAt(0).toUpperCase() + type.slice(1);
+          return (
+            <TouchableOpacity
+              key={type}
+              style={[
+                styles.optionChip,
+                { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]
+              ]}
+              onPress={() =>
+                setProfile((prev) => ({
+                  ...prev,
+                  profileType: type
+                }))
+              }
+            >
+              <Text style={[styles.optionText, { color: colors.textMuted }, active && [styles.optionTextActive, { color: colors.accent }]]}>
+                {label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
 
       <Text style={[styles.label, { color: colors.text }]}>Institution Type</Text>
       <View style={styles.selectionWrap}>

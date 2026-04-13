@@ -7,7 +7,6 @@ import {
   Modal,
   RefreshControl,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -19,6 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { sharePost } from "@/utils/sharePost";
 import { sanitizeDisplayText } from "@/utils/textSanitize";
 
 type Post = {
@@ -38,6 +38,8 @@ type Post = {
   };
   commentCount?: number;
   shareCount?: number;
+  saveCount?: number;
+  isSaved?: boolean;
   isLiked?: boolean;
   comments?: PostComment[];
   mediaUrls?: string[];
@@ -54,7 +56,7 @@ type Post = {
 type PostComment = {
   _id: string;
   content: string;
-  authorId?: { _id?: string; name?: string; role?: string } | null;
+  authorId?: { _id?: string; name?: string; role?: string; profilePhotoUrl?: string } | null;
 };
 
 const FEED_BOTTOM_NAV_SPACE = 108;
@@ -168,16 +170,61 @@ export default function PostsScreen() {
     }, [loadPosts])
   );
 
-  async function react(postId: string, action: "like" | "react" | "share", reactionType?: (typeof REACTION_ORDER)[number]) {
+  async function react(postId: string, action: "like" | "react" | "share" | "save", reactionType?: (typeof REACTION_ORDER)[number]) {
+    const prevPosts = posts;
     try {
       const post = posts.find((p) => p._id === postId);
-      if (action === "share" && post?.content) {
-        await Share.share({ message: `${sanitizeDisplayText(post.content)}\n\nShared via ORIN` });
+      if (action === "share") {
+        if (!post) return;
+        const didShare = await sharePost(post);
+        if (!didShare) return;
       }
+      setPosts((prev) =>
+        prev.map((item) => {
+          if (item._id !== postId) return item;
+          const next = { ...item };
+          if (action === "save") {
+            const nextSaved = !item.isSaved;
+            next.isSaved = nextSaved;
+            next.saveCount = Math.max(0, Number(item.saveCount || 0) + (nextSaved ? 1 : -1));
+            return next;
+          }
+          if (action === "share") {
+            next.shareCount = Math.max(0, Number(item.shareCount || 0) + 1);
+            return next;
+          }
+          const nextType = reactionType || "like";
+          const prevType = item.userReaction || null;
+          if (prevType === nextType) {
+            next.userReaction = null;
+            next.likeCount = Math.max(0, Number(item.likeCount || 0) - 1);
+            if (next.reactionCounts) {
+              next.reactionCounts = {
+                ...next.reactionCounts,
+                [nextType]: Math.max(0, Number(next.reactionCounts?.[nextType] || 0) - 1)
+              };
+            }
+            return next;
+          }
+          next.userReaction = nextType;
+          if (!prevType) {
+            next.likeCount = Number(item.likeCount || 0) + 1;
+          }
+          if (next.reactionCounts) {
+            const nextCounts = { ...next.reactionCounts };
+            if (prevType) {
+              nextCounts[prevType] = Math.max(0, Number(nextCounts[prevType] || 0) - 1);
+            }
+            nextCounts[nextType] = Number(nextCounts[nextType] || 0) + 1;
+            next.reactionCounts = nextCounts;
+          }
+          return next;
+        })
+      );
       await api.post(`/api/network/feed/${postId}/react`, reactionType ? { action, reactionType } : { action });
       setReactionMenuFor(null);
-      await loadPosts(true);
     } catch (e: any) {
+      setPosts(prevPosts);
       setError(e?.response?.data?.message || `Failed to ${action} post.`);
     }
   }
@@ -399,6 +446,10 @@ export default function PostsScreen() {
                     <Ionicons name="share-social-outline" size={16} color="#475467" />
                     <Text style={styles.action}>Share</Text>
                   </TouchableOpacity>
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => react(post._id, "save")}>
+                    <Ionicons name={post.isSaved ? "bookmark" : "bookmark-outline"} size={16} color={post.isSaved ? "#175CD3" : "#475467"} />
+                    <Text style={[styles.action, post.isSaved ? styles.actionActive : null]}>{post.isSaved ? "Saved" : "Save"}</Text>
+                  </TouchableOpacity>
                 </View>
                 {openCommentFor[post._id] ? (
                   <View style={styles.commentComposer}>
@@ -474,7 +525,16 @@ export default function PostsScreen() {
               <ScrollView showsVerticalScrollIndicator={false}>
                 {commentsModal.comments.map((item) => (
                   <View key={item._id} style={styles.commentRow}>
-                    <Text style={styles.commentAuthor}>{item.authorId?.name || "User"}</Text>
+                    <View style={styles.authorWrap}>
+                      {item.authorId?.profilePhotoUrl ? (
+                        <Image source={{ uri: item.authorId.profilePhotoUrl }} style={styles.authorAvatar} />
+                      ) : (
+                        <View style={styles.authorAvatarFallback}>
+                          <Text style={styles.authorAvatarText}>{String(item.authorId?.name || "U").trim().charAt(0).toUpperCase()}</Text>
+                        </View>
+                      )}
+                      <Text style={styles.commentAuthor}>{item.authorId?.name || "User"}</Text>
+                    </View>
                     <Text style={styles.commentBody}>{sanitizeDisplayText(item.content)}</Text>
                   </View>
                 ))}
@@ -560,7 +620,7 @@ const styles = StyleSheet.create({
   },
   reactionDropdownEmoji: { fontSize: 14 },
   reactionDropdownLabel: { color: "#344054", fontWeight: "700", fontSize: 11 },
-  actions: { marginTop: 8, flexDirection: "row", justifyContent: "space-between" },
+  actions: { marginTop: 8, flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 6 },
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",

@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
+  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -599,17 +600,64 @@ export default function NetworkScreen() {
   }
 
   async function react(postId: string, action: "like" | "react" | "save" | "share", reactionType?: (typeof REACTION_ORDER)[number]) {
+    const prevPosts = posts;
     try {
       const post = posts.find((p) => p._id === postId);
+      const wasSaved = Boolean(post?.isSaved);
       if (action === "share") {
         if (!post) return;
         const didShare = await sharePost(post);
         if (!didShare) return;
       }
+      setPosts((prev) =>
+        prev.map((item) => {
+          if (item._id !== postId) return item;
+          const next = { ...item };
+          if (action === "save") {
+            const nextSaved = !item.isSaved;
+            next.isSaved = nextSaved;
+            next.saveCount = Math.max(0, Number(item.saveCount || 0) + (nextSaved ? 1 : -1));
+            return next;
+          }
+          if (action === "share") {
+            next.shareCount = Math.max(0, Number(item.shareCount || 0) + 1);
+            return next;
+          }
+          const nextType = reactionType || "like";
+          const prevType = item.userReaction || null;
+          if (prevType === nextType) {
+            next.userReaction = null;
+            next.likeCount = Math.max(0, Number(item.likeCount || 0) - 1);
+            if (next.reactionCounts) {
+              next.reactionCounts = {
+                ...next.reactionCounts,
+                [nextType]: Math.max(0, Number(next.reactionCounts?.[nextType] || 0) - 1)
+              };
+            }
+            return next;
+          }
+          next.userReaction = nextType;
+          if (!prevType) {
+            next.likeCount = Number(item.likeCount || 0) + 1;
+          }
+          if (next.reactionCounts) {
+            const nextCounts = { ...next.reactionCounts };
+            if (prevType) {
+              nextCounts[prevType] = Math.max(0, Number(nextCounts[prevType] || 0) - 1);
+            }
+            nextCounts[nextType] = Number(nextCounts[nextType] || 0) + 1;
+            next.reactionCounts = nextCounts;
+          }
+          return next;
+        })
+      );
       await api.post(`/api/network/feed/${postId}/react`, reactionType ? { action, reactionType } : { action });
       setReactionMenuFor(null);
-      await loadFeedSection(true, true);
+      if (action === "save") notify(wasSaved ? "Removed from saved." : "Saved for later.");
+      if (action === "share") notify("Shared.");
+      setPostOptionsFor(null);
     } catch (e: any) {
+      setPosts(prevPosts);
       setError(e?.response?.data?.message || `Failed to ${action} post.`);
     }
   }
@@ -1327,6 +1375,18 @@ export default function NetworkScreen() {
                         style={styles.postActionBtn}
                         onPress={() => {
                           setReactionMenuFor(null);
+                          react(post._id, "save");
+                        }}
+                      >
+                         <Ionicons name={post.isSaved ? "bookmark" : "bookmark-outline"} size={16} color={post.isSaved ? colors.accent : colors.textMuted} />
+                         <Text style={[styles.postActionText, { color: post.isSaved ? colors.accent : colors.textMuted }]} numberOfLines={1}>
+                           {post.isSaved ? "Saved" : "Save"}
+                         </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.postActionBtn}
+                        onPress={() => {
+                          setReactionMenuFor(null);
                           openPostOptions(post);
                         }}
                       >
@@ -1416,22 +1476,27 @@ export default function NetworkScreen() {
         onRequestClose={() => setCommentsModal({ visible: false, postId: "", comments: [] })}
       >
         <View style={styles.commentsModalRoot}>
-          <View style={[styles.commentsSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <View style={styles.commentsHeader}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>All Comments</Text>
-              <TouchableOpacity onPress={() => setCommentsModal({ visible: false, postId: "", comments: [] })}>
-                <Ionicons name="close" size={20} color={colors.text} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={{ maxHeight: 360 }}>
-              {commentsModal.comments.length === 0 ? (
-                <View style={styles.commentsEmptyState}>
-                  <Text style={styles.commentsEmptyEmoji}>Comments</Text>
-                  <Text style={[styles.commentsEmptyTitle, { color: colors.text }]}>No comments yet</Text>
-                  <Text style={[styles.commentsEmptyText, { color: colors.textMuted }]}>Be the first to comment!</Text>
-                </View>
-              ) : (
-                commentsModal.comments.map((item) => {
+          <KeyboardAvoidingView
+            style={{ width: "100%", justifyContent: "flex-end" }}
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+          >
+            <View style={[styles.commentsSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.commentsHeader}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>All Comments</Text>
+                <TouchableOpacity onPress={() => setCommentsModal({ visible: false, postId: "", comments: [] })}>
+                  <Ionicons name="close" size={20} color={colors.text} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={{ maxHeight: 360 }} keyboardShouldPersistTaps="handled">
+                {commentsModal.comments.length === 0 ? (
+                  <View style={styles.commentsEmptyState}>
+                    <Text style={styles.commentsEmptyEmoji}>Comments</Text>
+                    <Text style={[styles.commentsEmptyTitle, { color: colors.text }]}>No comments yet</Text>
+                    <Text style={[styles.commentsEmptyText, { color: colors.textMuted }]}>Be the first to comment!</Text>
+                  </View>
+                ) : (
+                  commentsModal.comments.map((item) => {
                   const isMine = String(item.authorId?._id || "") === String(user?.id || "");
                   const editing = editingCommentId === item._id;
                   const commentInitial = String(item.authorId?.name || "U").trim().charAt(0).toUpperCase();
@@ -1501,25 +1566,31 @@ export default function NetworkScreen() {
                       )}
                     </View>
                   );
-                })
-              )}
-            </ScrollView>
-            <View style={[styles.commentComposerSheet, { borderTopColor: colors.border }]}>
-              <View style={styles.commentAvatar}>
-                <Text style={styles.commentAvatarText}>{String(user?.name || "U").trim().charAt(0).toUpperCase()}</Text>
+                  })
+                )}
+              </ScrollView>
+                <View
+                  style={[
+                    styles.commentComposerSheet,
+                    { borderTopColor: colors.border, paddingBottom: Math.max(insets.bottom, 18) }
+                  ]}
+                >
+                <View style={styles.commentAvatar}>
+                  <Text style={styles.commentAvatarText}>{String(user?.name || "U").trim().charAt(0).toUpperCase()}</Text>
+                </View>
+                  <TextInput
+                    style={[styles.commentInput, { color: colors.text }]}
+                    placeholder="Write a comment..."
+                    placeholderTextColor={colors.textMuted}
+                    value={commentDrafts[commentsModal.postId] || ""}
+                    onChangeText={(text) => setCommentDrafts((prev) => ({ ...prev, [commentsModal.postId]: text }))}
+                  />
+                <TouchableOpacity onPress={() => comment(commentsModal.postId)}>
+                  <Text style={styles.action}>Send</Text>
+                </TouchableOpacity>
               </View>
-              <TextInput
-                style={[styles.commentInput, { color: colors.text }]}
-                placeholder="Write a comment..."
-                placeholderTextColor={colors.textMuted}
-                value={commentDrafts[commentsModal.postId] || ""}
-                onChangeText={(text) => setCommentDrafts((prev) => ({ ...prev, [commentsModal.postId]: text }))}
-              />
-              <TouchableOpacity onPress={() => comment(commentsModal.postId)}>
-                <Text style={styles.action}>Send</Text>
-              </TouchableOpacity>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
@@ -1885,7 +1956,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8
   },
-  commentInput: { flex: 1, minHeight: 32, color: "#344054" },
+    commentInput: {
+      flex: 1,
+      minHeight: 40,
+      color: "#344054",
+      paddingVertical: 8,
+      paddingHorizontal: 10
+    },
   commentLine: { marginTop: 6, color: "#475467" },
   viewCommentsLink: { marginTop: 8, color: "#175CD3", fontWeight: "800" },
   commentComposerSheet: {

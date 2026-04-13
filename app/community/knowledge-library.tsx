@@ -3,6 +3,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
+  Linking,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,6 +16,8 @@ import {
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
+import { pickAndUploadProgramDocument } from "@/utils/programDocumentUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import {
@@ -32,6 +36,9 @@ type LibraryItem = {
   description?: string;
   domain?: string;
   url?: string;
+  bannerImageUrl?: string;
+  documentUrl?: string;
+  contributorRole?: "mentor" | "student" | "admin";
   saves?: number;
   recommended?: boolean;
   recommendationReason?: string;
@@ -53,12 +60,16 @@ export default function CommunityLibraryPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
   const [submitForm, setSubmitForm] = useState({
     domain: "",
     type: "other",
     title: "",
     description: "",
-    url: ""
+    url: "",
+    bannerImageUrl: "",
+    documentUrl: ""
   });
 
   const load = useCallback(async (refresh = false) => {
@@ -104,6 +115,32 @@ export default function CommunityLibraryPage() {
       load();
     }, [load])
   );
+
+  async function uploadBanner() {
+    try {
+      setUploadingBanner(true);
+      const url = await pickAndUploadPostImage();
+      if (!url) return;
+      setSubmitForm((prev) => ({ ...prev, bannerImageUrl: url }));
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload banner.");
+    } finally {
+      setUploadingBanner(false);
+    }
+  }
+
+  async function uploadDocument() {
+    try {
+      setUploadingDoc(true);
+      const uploaded = await pickAndUploadProgramDocument();
+      if (!uploaded?.url) return;
+      setSubmitForm((prev) => ({ ...prev, documentUrl: uploaded.url }));
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload document.");
+    } finally {
+      setUploadingDoc(false);
+    }
+  }
 
   const selectedItem = items.find((item) => item.id === selectedId) || null;
 
@@ -193,6 +230,7 @@ export default function CommunityLibraryPage() {
               <View style={styles.tagRow}>
                 <StatusBadge label={item.domain || item.type || "General"} tone="primary" />
                 <StatusBadge label={item.type || "Guide"} tone="neutral" />
+                {item.contributorRole ? <StatusBadge label={`${item.contributorRole} submitted`} tone="neutral" /> : null}
                 {item.title.toLowerCase().includes("beginner") ? <StatusBadge label="Beginner" tone="success" /> : null}
                 {item.recommended ? <StatusBadge label="For You" tone="warning" /> : null}
                 {(item.tags || []).slice(0, 2).map((tag) => (
@@ -236,6 +274,9 @@ export default function CommunityLibraryPage() {
                 <Text style={[styles.detailMeta, { color: colors.textMuted }]}>{selectedItem.domain || "ORIN Resource"} | {selectedItem.type || "Guide"}</Text>
               </View>
             </View>
+            {selectedItem.bannerImageUrl ? (
+              <Image source={{ uri: selectedItem.bannerImageUrl }} style={styles.detailBanner} />
+            ) : null}
             <Text style={[styles.detailText, { color: colors.text }]}>
               {selectedItem.description || "Use this item to strengthen your roadmap, practice a topic, or support an active challenge."}
             </Text>
@@ -252,6 +293,22 @@ export default function CommunityLibraryPage() {
                 onPress={() => setSaved((prev) => ({ ...prev, [selectedItem.id]: !prev[selectedItem.id] }))}
                 style={styles.flexAction}
               />
+              {selectedItem.url ? (
+                <ActionButton
+                  label="Open Resource"
+                  icon="open-outline"
+                  onPress={() => openExternalLink(selectedItem.url, "Resource link missing")}
+                  style={styles.flexAction}
+                />
+              ) : null}
+              {selectedItem.documentUrl ? (
+                <ActionButton
+                  label="Open Document"
+                  icon="document"
+                  onPress={() => openExternalLink(selectedItem.documentUrl, "Document link missing")}
+                  style={styles.flexAction}
+                />
+              ) : null}
               <ActionButton
                 label="Use in Roadmap"
                 icon="trail-sign"
@@ -269,10 +326,10 @@ export default function CommunityLibraryPage() {
         </CommunitySection>
       ) : null}
 
-      {user?.role === "mentor" ? (
+      {user?.role === "mentor" || user?.role === "student" ? (
         <CommunitySection
           title="Contribute to the Library"
-          subtitle="Mentors can submit stronger resources for admin approval without changing the existing review flow."
+          subtitle="Mentors and students can submit resources. Admin approval is required before publishing."
           icon="add-circle"
         >
           <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
@@ -280,6 +337,23 @@ export default function CommunityLibraryPage() {
           <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Title" placeholderTextColor={colors.textMuted} value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />
           <TextInput style={[styles.input, styles.textArea, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Short description" placeholderTextColor={colors.textMuted} value={submitForm.description} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, description: text }))} multiline />
           <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="URL (optional)" placeholderTextColor={colors.textMuted} value={submitForm.url} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, url: text }))} />
+          <View style={styles.uploadRow}>
+            <TouchableOpacity style={styles.uploadBtn} onPress={uploadBanner} disabled={uploadingBanner}>
+              <Text style={styles.uploadBtnText}>{uploadingBanner ? "Uploading..." : submitForm.bannerImageUrl ? "Change Banner" : "Upload Banner"}</Text>
+            </TouchableOpacity>
+            {submitForm.bannerImageUrl ? <Image source={{ uri: submitForm.bannerImageUrl }} style={styles.bannerPreview} /> : null}
+          </View>
+          <View style={styles.uploadRow}>
+            <TouchableOpacity style={styles.uploadBtnAlt} onPress={uploadDocument} disabled={uploadingDoc}>
+              <Text style={styles.uploadBtnText}>{uploadingDoc ? "Uploading..." : submitForm.documentUrl ? "Replace Document" : "Upload Document"}</Text>
+            </TouchableOpacity>
+            {submitForm.documentUrl ? (
+              <TouchableOpacity style={styles.docRow} onPress={() => openExternalLink(submitForm.documentUrl, "Document link missing")}>
+                <Ionicons name="document-text-outline" size={18} color="#175CD3" />
+                <Text style={styles.docText}>Open uploaded document</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
           <ActionButton
             label={submitting ? "Submitting..." : "Submit for Review"}
             icon="send"
@@ -296,10 +370,12 @@ export default function CommunityLibraryPage() {
                   type: submitForm.type.trim() || "other",
                   title: submitForm.title.trim(),
                   description: submitForm.description.trim(),
-                  url: submitForm.url.trim()
+                  url: submitForm.url.trim(),
+                  bannerImageUrl: submitForm.bannerImageUrl.trim(),
+                  documentUrl: submitForm.documentUrl.trim()
                 });
                 Alert.alert("Submitted", "Resource sent to admin for review.");
-                setSubmitForm({ domain: "", type: "other", title: "", description: "", url: "" });
+                setSubmitForm({ domain: "", type: "other", title: "", description: "", url: "", bannerImageUrl: "", documentUrl: "" });
               } catch (e: any) {
                 Alert.alert("Failed", e?.response?.data?.message || "Unable to submit resource.");
               } finally {
@@ -311,6 +387,24 @@ export default function CommunityLibraryPage() {
       ) : null}
     </ScrollView>
   );
+}
+
+function normalizeLink(rawUrl: string) {
+  const cleaned = String(rawUrl || "").trim().replace(/[),.;!?]+$/, "");
+  if (!cleaned) return "";
+  if (/^https?:\/\//i.test(cleaned)) return cleaned;
+  return `https://${cleaned}`;
+}
+
+function openExternalLink(url?: string, missingTitle = "Link Missing") {
+  const normalized = normalizeLink(url || "");
+  if (!normalized) {
+    Alert.alert(missingTitle, "This item does not have a valid link yet.");
+    return;
+  }
+  Linking.openURL(normalized).catch(() => {
+    Alert.alert("Unable to open link", normalized);
+  });
 }
 
 function getCategoryTone(item: { type?: string; domain?: string; title?: string }) {
@@ -373,6 +467,13 @@ const styles = StyleSheet.create({
   detailTitle: { color: "#101828", fontWeight: "800", fontSize: 18 },
   detailMeta: { color: "#667085", fontWeight: "600" },
   detailText: { color: "#475467", lineHeight: 20 },
+  detailBanner: {
+    width: "100%",
+    height: 180,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E4E7EC"
+  },
   input: {
     borderWidth: 1,
     borderColor: "#D0D5DD",
@@ -381,5 +482,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 11
   },
+  uploadRow: { gap: 8 },
+  uploadBtn: {
+    borderWidth: 1,
+    borderColor: "#7A5AF8",
+    backgroundColor: "#F4F3FF",
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center"
+  },
+  uploadBtnAlt: {
+    borderWidth: 1,
+    borderColor: "#175CD3",
+    backgroundColor: "#EFF8FF",
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center"
+  },
+  uploadBtnText: { color: "#344054", fontWeight: "800" },
+  bannerPreview: { width: "100%", height: 140, borderRadius: 14, borderWidth: 1, borderColor: "#E4E7EC" },
+  docRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  docText: { color: "#175CD3", fontWeight: "700" },
   textArea: { minHeight: 92, textAlignVertical: "top" }
 });

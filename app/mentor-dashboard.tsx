@@ -194,6 +194,52 @@ type SprintItem = {
   adminReviewNote?: string;
 };
 
+type SprintPayoutEnrollment = {
+  _id: string;
+  amount: number;
+  platformFeeAmount?: number;
+  mentorPayoutAmount?: number;
+  paymentStatus?: "pending" | "paid" | "failed" | "cancelled";
+  payoutStatus?: "not_ready" | "pending" | "paid" | "issue_reported";
+  mentorPayoutConfirmationStatus?: "not_ready" | "pending" | "confirmed" | "issue_reported";
+  payoutPaidAt?: string | null;
+  payoutReference?: string;
+  payoutNote?: string;
+  mentorPayoutIssueNote?: string;
+  canMentorConfirmPayout?: boolean;
+  sprintId?: {
+    _id?: string;
+    title?: string;
+    startDate?: string;
+    endDate?: string;
+    posterImageUrl?: string;
+  };
+  studentId?: {
+    name?: string;
+    email?: string;
+  };
+};
+
+type MentorSprintPayoutResponse = {
+  summary: {
+    totalEnrollments: number;
+    lifetimeGross: number;
+    platformFees: number;
+    mentorEarnings: number;
+    pendingPayoutAmount: number;
+    paidOutAmount: number;
+    confirmedReceivedAmount: number;
+    issueAmount: number;
+    payoutSetupComplete: boolean;
+  };
+  payoutSetup?: {
+    upiId?: string;
+    qrCodeUrl?: string;
+    phoneNumber?: string;
+  };
+  enrollments: SprintPayoutEnrollment[];
+};
+
 type CertificationItem = {
   id: string;
   title: string;
@@ -210,6 +256,7 @@ type NewsArticle = {
 
 type SectionId = "overview" | "growth" | "pricing" | "availability" | "sessions" | "requests" | "adminChat";
 type MentorGrowthSectionId = "reputation" | "live" | "community";
+type ProgramTabId = "live" | "sprint";
 
 const sectionOrder: { id: SectionId; label: string }[] = [
   { id: "overview", label: "Overview" },
@@ -277,6 +324,7 @@ export default function MentorDashboard() {
   const scrollViewRef = useRef<ScrollView | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [mentorGrowthSection, setMentorGrowthSection] = useState<MentorGrowthSectionId>("reputation");
+  const [programTab, setProgramTab] = useState<ProgramTabId>("live");
   const [panelAnchorY, setPanelAnchorY] = useState(0);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -351,6 +399,8 @@ export default function MentorDashboard() {
   const [mentorProfileSummary, setMentorProfileSummary] = useState<MentorProfilePayload | null>(null);
   const [mentorPayoutSummary, setMentorPayoutSummary] = useState<MentorPayoutResponse["summary"] | null>(null);
   const [mentorPayoutSessions, setMentorPayoutSessions] = useState<Session[]>([]);
+  const [mentorSprintPayoutSummary, setMentorSprintPayoutSummary] = useState<MentorSprintPayoutResponse["summary"] | null>(null);
+  const [mentorSprintPayouts, setMentorSprintPayouts] = useState<SprintPayoutEnrollment[]>([]);
   const calendarDateOptions = useMemo(() => nextDates(14), []);
   const liveSessionTimeOptions = useMemo(
     () => [
@@ -494,6 +544,7 @@ export default function MentorDashboard() {
         sessionRes,
         profileRes,
         payoutRes,
+        sprintPayoutRes,
         verifiedRes,
         challengeRes,
         groupRes,
@@ -506,6 +557,7 @@ export default function MentorDashboard() {
         api.get<Session[]>("/api/sessions/mentor/me"),
         api.get<{ profile?: MentorProfilePayload }>("/api/profiles/mentor/me"),
         api.get<MentorPayoutResponse>("/api/sessions/mentor/payouts"),
+        api.get<MentorSprintPayoutResponse>("/api/network/sprints/mentor/payouts"),
         api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
         api.get<ChallengeItem[]>("/api/network/challenges"),
         api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
@@ -556,6 +608,8 @@ export default function MentorDashboard() {
       setMentorProfileSummary(profileRes.value.data?.profile || null);
       setMentorPayoutSummary(payoutRes.status === "fulfilled" ? payoutRes.value.data?.summary || null : null);
       setMentorPayoutSessions(payoutRes.status === "fulfilled" ? payoutRes.value.data?.sessions || [] : []);
+      setMentorSprintPayoutSummary(sprintPayoutRes.status === "fulfilled" ? sprintPayoutRes.value.data?.summary || null : null);
+      setMentorSprintPayouts(sprintPayoutRes.status === "fulfilled" ? sprintPayoutRes.value.data?.enrollments || [] : []);
       setVerifiedMentors(verifiedRes.status === "fulfilled" ? verifiedRes.value.data || [] : []);
       setChallenges(challengeRes.status === "fulfilled" ? challengeRes.value.data || [] : []);
       setMentorGroups(groupRes.status === "fulfilled" ? groupRes.value.data || [] : []);
@@ -910,6 +964,29 @@ export default function MentorDashboard() {
     }
   }
 
+  async function confirmSprintPayoutReceived(enrollmentId: string) {
+    try {
+      setError(null);
+      await api.patch(`/api/network/sprints/enrollments/${enrollmentId}/payout/confirm`);
+      notify("Sprint payout confirmed.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to confirm sprint payout.");
+    }
+  }
+
+  async function reportSprintPayoutIssue(enrollmentId: string) {
+    try {
+      setError(null);
+      const note = "Sprint payout not received or needs admin review";
+      await api.patch(`/api/network/sprints/enrollments/${enrollmentId}/payout/report-issue`, { issueNote: note });
+      notify("Sprint payout issue reported to admin.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to report sprint payout issue.");
+    }
+  }
+
   async function sendMessageToAdmin() {
     if (!chatMessage.trim()) {
       setError("Message is required for admin chat.");
@@ -1094,7 +1171,7 @@ export default function MentorDashboard() {
   if (user?.role !== "mentor") {
     return (
       <View style={styles.centered}>
-        <Text style={styles.error}>Access denied for current role.</Text>
+        <Text style={[styles.error, { color: colors.danger }]}>Access denied for current role.</Text>
       </View>
     );
   }
@@ -1115,184 +1192,193 @@ export default function MentorDashboard() {
     >
       {normalizedQuery ? (
         <>
-          <Text style={styles.searchMeta}>
+          <Text style={[styles.searchMeta, { color: colors.textMuted }]}>
             {totalSearchMatches > 0
               ? `Search results: ${totalSearchMatches} match${totalSearchMatches > 1 ? "es" : ""}`
               : "No results for your search"}
           </Text>
-          {totalSearchMatches > 0 ? <Text style={styles.searchMetaDetail}>Matched in: {searchBreakdown}</Text> : null}
+          {totalSearchMatches > 0 ? <Text style={[styles.searchMetaDetail, { color: colors.textMuted }]}>Matched in: {searchBreakdown}</Text> : null}
         </>
       ) : null}
 
       <View style={styles.heroBanner}>
-        <Text style={styles.heroEyebrow}>Mentor Workspace</Text>
-        <Text style={styles.heroTitle}>Run Your Mentor Journey From One Place</Text>
-        <Text style={styles.heroSubTitle}>
+        <Text style={[styles.heroEyebrow, { color: colors.accent }]}>Mentor Workspace</Text>
+        <Text style={[styles.heroTitle, { color: colors.text }]}>Run Your Mentor Journey From One Place</Text>
+        <Text style={[styles.heroSubTitle, { color: colors.textMuted }]}>
           Create sessions, review bookings, manage pricing, publish live events, and stay updated without hunting through the app.
         </Text>
       </View>
 
       <View style={styles.journeySummaryRow}>
         <View style={styles.journeySummaryChip}>
-          <Text style={styles.journeySummaryValue}>{pendingRequests.length}</Text>
-          <Text style={styles.journeySummaryLabel}>Requests</Text>
+          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>{pendingRequests.length}</Text>
+          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>Requests</Text>
         </View>
         <View style={styles.journeySummaryChip}>
-          <Text style={styles.journeySummaryValue}>{upcomingSessions.length}</Text>
-          <Text style={styles.journeySummaryLabel}>Upcoming</Text>
+          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>{upcomingSessions.length}</Text>
+          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>Upcoming</Text>
         </View>
         <View style={styles.journeySummaryChip}>
-          <Text style={styles.journeySummaryValue}>{pendingLiveApprovals}</Text>
-          <Text style={styles.journeySummaryLabel}>Live Pending</Text>
+          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>{pendingLiveApprovals}</Text>
+          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>Live Pending</Text>
         </View>
         <View style={styles.journeySummaryChip}>
-          <Text style={styles.journeySummaryValue}>{availableSlotCount}</Text>
-          <Text style={styles.journeySummaryLabel}>Open Slots</Text>
+          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>{availableSlotCount}</Text>
+          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>Open Slots</Text>
         </View>
       </View>
 
-      <Text style={styles.sectionHeader}>Quick Actions</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Quick Actions</Text>
       <View style={styles.quickGrid}>
         {mentorServices.map((item) => (
           <TouchableOpacity key={item.key} style={[styles.quickTile, { borderColor: item.border }]} onPress={() => { item.onPress(); if (item.key !== "chat" && item.key !== "news") { setTimeout(() => revealPanel(), 80); } }}>
             <View style={[styles.iconBadge, { backgroundColor: item.bg }]}>
               <Ionicons name={item.icon} size={18} color={item.tint} />
             </View>
-            <Text style={styles.quickTileTitle}>{item.label}</Text>
+            <Text style={[styles.quickTileTitle, { color: colors.text }]}>{item.label}</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.sectionHeader}>Mentor Operations</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Mentor Operations</Text>
       <View style={styles.focusStack}>
         <TouchableOpacity style={styles.focusCard} onPress={() => openSection("requests")}>
-          <Text style={styles.focusCardTitle}>Booking Requests</Text>
-          <Text style={styles.meta}>
+          <Text style={[styles.focusCardTitle, { color: colors.text }]}>Booking Requests</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
             {pendingRequests.length > 0
               ? `${pendingRequests.length} student request${pendingRequests.length > 1 ? "s" : ""} waiting for your approval`
               : "No pending booking requests right now."}
           </Text>
-          <Text style={styles.focusCardAccent}>Open request approvals</Text>
+          <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open request approvals</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.focusCard} onPress={() => openSection("sessions")}>
-          <Text style={styles.focusCardTitle}>Upcoming Sessions</Text>
-          <Text style={styles.meta}>
+          <Text style={[styles.focusCardTitle, { color: colors.text }]}>Upcoming Sessions</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
             {upcomingSessions.length > 0
               ? `${upcomingSessions.length} upcoming paid/confirmed session${upcomingSessions.length > 1 ? "s" : ""}`
               : "No upcoming sessions yet."}
           </Text>
-          <Text style={styles.focusCardAccent}>Review sessions and meeting links</Text>
+          <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Review sessions and meeting links</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.focusCard} onPress={() => openSection("availability")}>
-          <Text style={styles.focusCardTitle}>Availability & Timing</Text>
-          <Text style={styles.meta}>
+          <Text style={[styles.focusCardTitle, { color: colors.text }]}>Availability & Timing</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
             Weekly slots: {availabilitySlots.length} | Date slots: {dateSpecificSlots.length} | Blocked dates: {blockedDateList.length}
           </Text>
-          <Text style={styles.focusCardAccent}>Open availability controls</Text>
+          <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open availability controls</Text>
         </TouchableOpacity>
 
         <TouchableOpacity style={styles.focusCard} onPress={() => openSection("pricing")}>
-          <Text style={styles.focusCardTitle}>Pricing & Profile</Text>
-          <Text style={styles.meta}>
+          <Text style={[styles.focusCardTitle, { color: colors.text }]}>Pricing & Profile</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
             Title: {mentorTitle || mentorProfileSummary?.title || "Not set"} | Fee: INR {sessionPrice}
           </Text>
-          <Text style={styles.focusCardAccent}>Update mentor title and pricing</Text>
+          <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Update mentor title and pricing</Text>
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.sectionHeader}>Mentor Stats</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Mentor Stats</Text>
       <View style={styles.metricsRow}>
         <View style={styles.metricCard}>
-          <Text style={styles.metricValue}>{studentsMentoredCount}</Text>
-          <Text style={styles.metricLabel}>Students Mentored</Text>
+          <Text style={[styles.metricValue, { color: colors.accent }]}>{studentsMentoredCount}</Text>
+          <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Students Mentored</Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricValue}>{Math.max(completedSessions.length, Number(mentorProfileSummary?.totalSessionsConducted || 0))}</Text>
-          <Text style={styles.metricLabel}>Sessions Completed</Text>
+          <Text style={[styles.metricValue, { color: colors.accent }]}>{Math.max(completedSessions.length, Number(mentorProfileSummary?.totalSessionsConducted || 0))}</Text>
+          <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Sessions Completed</Text>
         </View>
         <View style={styles.metricCard}>
-          <Text style={styles.metricValue}>{Number(mentorProfileSummary?.rating || 0).toFixed(1)}</Text>
-          <Text style={styles.metricLabel}>Rating</Text>
+          <Text style={[styles.metricValue, { color: colors.accent }]}>{Number(mentorProfileSummary?.rating || 0).toFixed(1)}</Text>
+          <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Rating</Text>
         </View>
       </View>
 
       {mentorPayoutSummary ? (
         <>
-          <Text style={styles.sectionHeader}>Earnings & Payouts</Text>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>Earnings & Payouts</Text>
           <View style={styles.metricsRow}>
             <View style={styles.metricCard}>
-              <Text style={styles.metricValue}>INR {Math.round(mentorPayoutSummary.mentorEarnings || 0)}</Text>
-              <Text style={styles.metricLabel}>Your Share</Text>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>INR {Math.round(mentorPayoutSummary.mentorEarnings || 0)}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Your Share</Text>
             </View>
             <View style={styles.metricCard}>
-              <Text style={styles.metricValue}>INR {Math.round(mentorPayoutSummary.pendingPayoutAmount || 0)}</Text>
-              <Text style={styles.metricLabel}>Pending Payouts</Text>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>INR {Math.round(mentorPayoutSummary.pendingPayoutAmount || 0)}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Pending Payouts</Text>
             </View>
             <View style={styles.metricCard}>
-              <Text style={styles.metricValue}>INR {Math.round(mentorPayoutSummary.confirmedReceivedAmount || 0)}</Text>
-              <Text style={styles.metricLabel}>Confirmed Received</Text>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>INR {Math.round(mentorPayoutSummary.confirmedReceivedAmount || 0)}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Confirmed Received</Text>
             </View>
           </View>
         </>
       ) : null}
 
-      <Text style={styles.sectionHeader}>My Programs</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>My Programs</Text>
       <View style={styles.focusStack}>
         <TouchableOpacity
           style={styles.focusCard}
-          onPress={() => openSection("growth", "live")}
+          onPress={() => {
+            setProgramTab("live");
+            openSection("growth", "live");
+          }}
         >
-          <Text style={styles.focusCardTitle}>Manage Programs Pipeline</Text>
-          <Text style={styles.meta}>
+          <Text style={[styles.focusCardTitle, { color: colors.text }]}>Manage Programs Pipeline</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
             Lives approved: {approvedLiveSessionsCount} | Sprint approvals: {pendingSprintApprovals} | Total programs: {liveSessions.length + sprints.length}
           </Text>
-          <Text style={styles.focusCardAccent}>Create, price, schedule, and monitor live sessions plus cohort sprints</Text>
+          <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Create, price, schedule, and monitor live sessions plus cohort sprints</Text>
         </TouchableOpacity>
         {liveSessions.slice(0, 2).map((item) => (
           <TouchableOpacity
             key={item.id}
             style={styles.focusCard}
-            onPress={() => openSection("growth", "live")}
+            onPress={() => {
+              setProgramTab("live");
+              openSection("growth", "live");
+            }}
           >
-            <Text style={styles.focusCardTitle}>{item.title}</Text>
-            <Text style={styles.meta}>
+            <Text style={[styles.focusCardTitle, { color: colors.text }]}>{item.title}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
               {new Date(item.startsAt).toLocaleString()} | {item.sessionMode === "paid" ? `INR ${item.price || 0}` : "Free"}
             </Text>
-            <Text style={styles.meta}>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
               Seats: {item.participantCount || 0}/{item.maxParticipants || 50} | Status: {item.approvalStatus || "pending"}
             </Text>
-            <Text style={styles.focusCardAccent}>Open live session controls</Text>
+            <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open live session controls</Text>
           </TouchableOpacity>
         ))}
         {sprints.slice(0, 2).map((item) => (
           <TouchableOpacity
             key={item.id}
             style={styles.focusCard}
-            onPress={() => openSection("growth", "live")}
+            onPress={() => {
+              setProgramTab("sprint");
+              openSection("growth", "live");
+            }}
           >
-            <Text style={styles.focusCardTitle}>{item.title}</Text>
-            <Text style={styles.meta}>
+            <Text style={[styles.focusCardTitle, { color: colors.text }]}>{item.title}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
               {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()} | {item.sessionMode === "paid" ? `INR ${item.price || 0}` : "Free"}
             </Text>
-            <Text style={styles.meta}>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
               Seats: {item.participantCount || 0}/{item.maxParticipants || 20} | Status: {item.approvalStatus || "pending"}
             </Text>
-            <Text style={styles.focusCardAccent}>Open sprint controls</Text>
+            <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open sprint controls</Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <Text style={styles.sectionHeader}>Mentor News & Updates</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Mentor News & Updates</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.newsRow}>
         {mentorNewsLoading && mentorNews.length === 0 ? (
           <View style={styles.newsStateCard}>
-            <Text style={styles.meta}>Loading mentor updates...</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Loading mentor updates...</Text>
           </View>
         ) : mentorNews.length === 0 ? (
           <View style={styles.newsStateCard}>
-            <Text style={styles.meta}>No mentor news available right now.</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>No mentor news available right now.</Text>
           </View>
         ) : (
           mentorNews.map((item, index) => (
@@ -1301,33 +1387,33 @@ export default function MentorDashboard() {
               style={styles.newsCard}
               onPress={() => router.push("/news-updates" as never)}
             >
-              <Text style={styles.newsTag}>Mentor Update</Text>
-              <Text style={styles.newsTitle} numberOfLines={3}>{item.title}</Text>
-              <Text style={styles.newsDesc} numberOfLines={3}>
+              <Text style={[styles.newsTag, { color: colors.text }]}>Mentor Update</Text>
+              <Text style={[styles.newsTitle, { color: colors.text }]} numberOfLines={3}>{item.title}</Text>
+              <Text style={[styles.newsDesc, { color: colors.textMuted }]} numberOfLines={3}>
                 {item.description || "Tap to open the full News & Updates section."}
               </Text>
-              <Text style={styles.newsSource}>{item.source || "ORIN News"}</Text>
+              <Text style={[styles.newsSource, { color: colors.textMuted }]}>{item.source || "ORIN News"}</Text>
             </TouchableOpacity>
           ))
         )}
       </ScrollView>
 
-      <Text style={styles.sectionHeader}>Mentor Guidance</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Mentor Guidance</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredRow}>
         <TouchableOpacity style={[styles.featureCard, styles.featureCardOne]} onPress={() => openSection("availability")}>
-          <Text style={styles.featurePill}>Plan</Text>
-          <Text style={styles.featureTitle}>Weekly Slot Planning</Text>
-          <Text style={styles.featureCopy}>Publish only the timings you want students to book.</Text>
+          <Text style={[styles.featurePill, { color: colors.text }]}>Plan</Text>
+          <Text style={[styles.featureTitle, { color: colors.text }]}>Weekly Slot Planning</Text>
+          <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Publish only the timings you want students to book.</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.featureCard, styles.featureCardTwo]} onPress={() => openSection("pricing")}>
-          <Text style={styles.featurePill}>Earn</Text>
-          <Text style={styles.featureTitle}>Smart Pricing Control</Text>
-          <Text style={styles.featureCopy}>Set your profile title and session fee with full flexibility.</Text>
+          <Text style={[styles.featurePill, { color: colors.text }]}>Earn</Text>
+          <Text style={[styles.featureTitle, { color: colors.text }]}>Smart Pricing Control</Text>
+          <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Set your profile title and session fee with full flexibility.</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.featureCard, styles.featureCardThree]} onPress={() => openSection("sessions")}>
-          <Text style={styles.featurePill}>Deliver</Text>
-          <Text style={styles.featureTitle}>Meet Link Workflow</Text>
-          <Text style={styles.featureCopy}>Attach session links at the right time and keep delivery clean.</Text>
+          <Text style={[styles.featurePill, { color: colors.text }]}>Deliver</Text>
+          <Text style={[styles.featureTitle, { color: colors.text }]}>Meet Link Workflow</Text>
+          <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Attach session links at the right time and keep delivery clean.</Text>
         </TouchableOpacity>
       </ScrollView>
 
@@ -1354,26 +1440,26 @@ export default function MentorDashboard() {
         </View>
       ) : null}
 
-      {error ? <Text style={styles.error}>{error}</Text> : null}
+      {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
       {!isLoading && activeSection === "overview" ? (
         <View style={[styles.panel, styles.panelOverview]}>
           <Text style={[styles.panelTitle, styles.panelTitleOverview]}>Overview</Text>
           <View style={styles.metricsRow}>
             <View style={styles.metricCard}>
-              <Text style={styles.metricValue}>{pendingRequests.length}</Text>
-              <Text style={styles.metricLabel}>Pending Requests</Text>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{pendingRequests.length}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Pending Requests</Text>
             </View>
             <View style={styles.metricCard}>
-              <Text style={styles.metricValue}>{confirmedPaidSessions.length}</Text>
-              <Text style={styles.metricLabel}>Confirmed Sessions</Text>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{confirmedPaidSessions.length}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Confirmed Sessions</Text>
             </View>
             <View style={styles.metricCard}>
-              <Text style={styles.metricValue}>{messages.length}</Text>
-              <Text style={styles.metricLabel}>Admin Messages</Text>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{messages.length}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Admin Messages</Text>
             </View>
           </View>
-          <Text style={styles.meta}>Use sections above to update price, timings and session actions quickly.</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Use sections above to update price, timings and session actions quickly.</Text>
         </View>
       ) : null}
 
@@ -1397,19 +1483,19 @@ export default function MentorDashboard() {
 
           {mentorGrowthSection === "reputation" ? (
             <>
-          <Text style={styles.metaStrong}>Mentor Verification & Reputation</Text>
+          <Text style={[styles.metaStrong, { color: colors.text }]}>Mentor Verification & Reputation</Text>
           <View style={styles.metricsRow}>
             <View style={styles.metricCard}>
-              <Text style={styles.metricValue}>{verifiedMentors.some((item) => item.mentorId === user.id && item.verifiedBadge) ? "Yes" : "No"}</Text>
-              <Text style={styles.metricLabel}>Verified Badge</Text>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{verifiedMentors.some((item) => item.mentorId === user.id && item.verifiedBadge) ? "Yes" : "No"}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Verified Badge</Text>
             </View>
             <View style={styles.metricCard}>
-              <Text style={styles.metricValue}>{Math.round(reputationSummary?.score || 0)}</Text>
-              <Text style={styles.metricLabel}>Reputation Score</Text>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{Math.round(reputationSummary?.score || 0)}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Reputation Score</Text>
             </View>
             <View style={styles.metricCard}>
-              <Text style={styles.metricValue}>Top {reputationSummary?.topPercent ?? "-"}</Text>
-              <Text style={styles.metricLabel}>Percentile</Text>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>Top {reputationSummary?.topPercent ?? "-"}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Percentile</Text>
             </View>
           </View>
             </>
@@ -1417,9 +1503,29 @@ export default function MentorDashboard() {
 
           {mentorGrowthSection === "live" ? (
             <>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavRow}>
+            {[
+              { id: "live", label: "Live Sessions" },
+              { id: "sprint", label: "Sprints" }
+            ].map((item) => {
+              const active = programTab === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.sectionChip, active && styles.sectionChipActive]}
+                  onPress={() => setProgramTab(item.id as ProgramTabId)}
+                >
+                  <Text style={[styles.sectionChipText, active && styles.sectionChipTextActive]}>{item.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+
+          {programTab === "live" ? (
+            <>
           <View style={styles.card}>
-            <Text style={styles.title}>Create Live Mentor Session</Text>
-            <Text style={styles.formFieldLabel}>Session Title</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Create Live Mentor Session</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Session Title</Text>
             <TextInput
               style={styles.input}
               placeholder="e.g. AI Career Roadmap Live Session"
@@ -1427,7 +1533,7 @@ export default function MentorDashboard() {
               value={liveTitle}
               onChangeText={setLiveTitle}
             />
-            <Text style={styles.formFieldLabel}>Topic</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Topic</Text>
             <TextInput
               style={styles.input}
               placeholder="e.g. Machine Learning for Beginners"
@@ -1435,7 +1541,7 @@ export default function MentorDashboard() {
               value={liveTopic}
               onChangeText={setLiveTopic}
             />
-            <Text style={styles.formFieldLabel}>Description</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Description</Text>
             <TextInput
               style={[styles.input, styles.textAreaInput]}
               placeholder="Tell students what this live session will cover and who should join."
@@ -1444,17 +1550,17 @@ export default function MentorDashboard() {
               onChangeText={setLiveDescription}
               multiline
             />
-            <Text style={styles.formFieldLabel}>Session Poster</Text>
-            <Text style={styles.formFieldHint}>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Session Poster</Text>
+            <Text style={[styles.formFieldHint, { color: colors.textMuted }]}>
               Add a banner or poster so students understand the session topic before they book.
             </Text>
             <TouchableOpacity style={styles.secondaryButton} onPress={uploadLiveSessionPoster} disabled={uploadingLivePoster}>
-              <Text style={styles.secondaryButtonText}>
+              <Text style={[styles.secondaryButtonText, { color: colors.text }]}>
                 {uploadingLivePoster ? "Uploading Poster..." : livePosterImageUrl ? "Change Poster" : "Upload Session Poster"}
               </Text>
             </TouchableOpacity>
             {livePosterImageUrl ? <Image source={{ uri: livePosterImageUrl }} style={styles.livePosterPreview} /> : null}
-            <Text style={styles.formFieldLabel}>Select Date</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Select Date</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
               {calendarDateOptions.map((date) => {
                 const active = liveSessionDate === date;
@@ -1469,7 +1575,7 @@ export default function MentorDashboard() {
                 );
               })}
             </ScrollView>
-            <Text style={styles.formFieldLabel}>Select Time</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Select Time</Text>
             <View style={styles.rowWrap}>
               {liveSessionTimeOptions.map((time) => {
                 const active = liveSessionTime === time;
@@ -1484,10 +1590,10 @@ export default function MentorDashboard() {
                 );
               })}
             </View>
-            <Text style={styles.formFieldHint}>
+            <Text style={[styles.formFieldHint, { color: colors.textMuted }]}>
               Live session starts on {toDateLabel(liveSessionDate)} at {toMeridiemTime(liveSessionTime)}.
             </Text>
-            <Text style={styles.formFieldLabel}>Session Type</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Session Type</Text>
             <View style={styles.rowWrap}>
               {(["free", "paid"] as const).map((mode) => {
                 const active = liveSessionMode === mode;
@@ -1506,7 +1612,7 @@ export default function MentorDashboard() {
             </View>
             {liveSessionMode === "paid" ? (
               <>
-                <Text style={styles.formFieldLabel}>Session Price (INR)</Text>
+                <Text style={[styles.formFieldLabel, { color: colors.text }]}>Session Price (INR)</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="499"
@@ -1517,7 +1623,7 @@ export default function MentorDashboard() {
                 />
               </>
             ) : null}
-            <Text style={styles.formFieldLabel}>Maximum Participants</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Maximum Participants</Text>
             <TextInput
               style={styles.input}
               placeholder="50"
@@ -1526,7 +1632,7 @@ export default function MentorDashboard() {
               onChangeText={setLiveSessionCapacity}
               keyboardType="numeric"
             />
-            <Text style={styles.formFieldLabel}>Duration (minutes)</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Duration (minutes)</Text>
             <TextInput
               style={styles.input}
               placeholder="60"
@@ -1541,31 +1647,35 @@ export default function MentorDashboard() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.title}>Upcoming Live Sessions</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Upcoming Live Sessions</Text>
             {liveSessions.length === 0 ? (
-              <Text style={styles.empty}>No live sessions scheduled.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No live sessions scheduled.</Text>
             ) : (
               liveSessions.slice(0, 5).map((item) => (
                 <View key={item.id} style={styles.liveSessionCard}>
                   {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
-                  <Text style={styles.liveSessionTitle}>{item.title}</Text>
-                  <Text style={styles.meta}>{item.topic || "Live mentor session"}</Text>
-                  {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
-                  <Text style={styles.meta}>Date: {new Date(item.startsAt).toLocaleString()}</Text>
-                  <Text style={styles.meta}>
+                  <Text style={[styles.liveSessionTitle, { color: colors.text }]}>{item.title}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>{item.topic || "Live mentor session"}</Text>
+                  {item.description ? <Text style={[styles.meta, { color: colors.textMuted }]}>{item.description}</Text> : null}
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>Date: {new Date(item.startsAt).toLocaleString()}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
                     Type: {item.sessionMode === "paid" ? `Paid | INR ${item.price || 0}` : "Free"} | Seats: {item.participantCount || 0}/{item.maxParticipants || 50}
                   </Text>
-                  <Text style={styles.meta}>Interested learners: {item.interestedCount || 0}</Text>
-                  <Text style={styles.meta}>Approval: {item.approvalStatus || "pending"}</Text>
-                  {item.adminReviewNote ? <Text style={styles.meta}>Admin note: {item.adminReviewNote}</Text> : null}
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>Interested learners: {item.interestedCount || 0}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>Approval: {item.approvalStatus || "pending"}</Text>
+                  {item.adminReviewNote ? <Text style={[styles.meta, { color: colors.textMuted }]}>Admin note: {item.adminReviewNote}</Text> : null}
                 </View>
               ))
             )}
           </View>
+            </>
+          ) : null}
 
+          {programTab === "sprint" ? (
+            <>
           <View style={styles.card}>
-            <Text style={styles.title}>Create Sprint Program</Text>
-            <Text style={styles.formFieldLabel}>Sprint Title</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Create Sprint Program</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Sprint Title</Text>
             <TextInput
               style={styles.input}
               placeholder="e.g. AI Engineer Career Sprint"
@@ -1573,7 +1683,7 @@ export default function MentorDashboard() {
               value={sprintTitle}
               onChangeText={setSprintTitle}
             />
-            <Text style={styles.formFieldLabel}>Domain</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Domain</Text>
             <TextInput
               style={styles.input}
               placeholder="e.g. AI, Web Development, Data Science"
@@ -1581,7 +1691,7 @@ export default function MentorDashboard() {
               value={sprintDomain}
               onChangeText={setSprintDomain}
             />
-            <Text style={styles.formFieldLabel}>Description</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Description</Text>
             <TextInput
               style={[styles.input, styles.textAreaInput]}
               placeholder="Explain what students will achieve, who this sprint is for, and how the cohort will run."
@@ -1590,25 +1700,25 @@ export default function MentorDashboard() {
               onChangeText={setSprintDescription}
               multiline
             />
-            <Text style={styles.formFieldLabel}>Sprint Poster</Text>
-            <Text style={styles.formFieldHint}>Poster is mandatory. This is the main visual students will trust first.</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Sprint Poster</Text>
+            <Text style={[styles.formFieldHint, { color: colors.textMuted }]}>Poster is mandatory. This is the main visual students will trust first.</Text>
             <TouchableOpacity style={styles.secondaryButton} onPress={uploadSprintPoster} disabled={uploadingSprintPoster}>
-              <Text style={styles.secondaryButtonText}>
+              <Text style={[styles.secondaryButtonText, { color: colors.text }]}>
                 {uploadingSprintPoster ? "Uploading Poster..." : sprintPosterImageUrl ? "Change Sprint Poster" : "Upload Sprint Poster"}
               </Text>
             </TouchableOpacity>
             {sprintPosterImageUrl ? <Image source={{ uri: sprintPosterImageUrl }} style={styles.livePosterPreview} /> : null}
 
-            <Text style={styles.formFieldLabel}>Curriculum Document (Optional PDF/DOC)</Text>
-            <Text style={styles.formFieldHint}>Upload full syllabus or brochure so students can review the sprint before joining.</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Curriculum Document (Optional PDF/DOC)</Text>
+            <Text style={[styles.formFieldHint, { color: colors.textMuted }]}>Upload full syllabus or brochure so students can review the sprint before joining.</Text>
             <TouchableOpacity style={styles.secondaryButton} onPress={uploadSprintDocument} disabled={uploadingSprintDocument}>
-              <Text style={styles.secondaryButtonText}>
+              <Text style={[styles.secondaryButtonText, { color: colors.text }]}>
                 {uploadingSprintDocument ? "Uploading Curriculum..." : sprintDocumentUrl ? "Replace Curriculum Document" : "Upload Curriculum Document"}
               </Text>
             </TouchableOpacity>
-            {sprintDocumentUrl ? <Text style={styles.formFieldHint}>Curriculum uploaded and ready for review.</Text> : null}
+            {sprintDocumentUrl ? <Text style={[styles.formFieldHint, { color: colors.textMuted }]}>Curriculum uploaded and ready for review.</Text> : null}
 
-            <Text style={styles.formFieldLabel}>Sprint Start Date</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Sprint Start Date</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
               {calendarDateOptions.map((date) => {
                 const active = sprintStartDate === date;
@@ -1624,7 +1734,7 @@ export default function MentorDashboard() {
               })}
             </ScrollView>
 
-            <Text style={styles.formFieldLabel}>Sprint End Date</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Sprint End Date</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dateStrip}>
               {calendarDateOptions.map((date) => {
                 const active = sprintEndDate === date;
@@ -1640,7 +1750,7 @@ export default function MentorDashboard() {
               })}
             </ScrollView>
 
-            <Text style={styles.formFieldLabel}>Program Type</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Program Type</Text>
             <View style={styles.rowWrap}>
               {(["free", "paid"] as const).map((mode) => {
                 const active = sprintMode === mode;
@@ -1659,7 +1769,7 @@ export default function MentorDashboard() {
             </View>
             {sprintMode === "paid" ? (
               <>
-                <Text style={styles.formFieldLabel}>Sprint Price (INR)</Text>
+                <Text style={[styles.formFieldLabel, { color: colors.text }]}>Sprint Price (INR)</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="1999"
@@ -1670,7 +1780,7 @@ export default function MentorDashboard() {
                 />
               </>
             ) : null}
-            <Text style={styles.formFieldLabel}>Minimum Participants</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Minimum Participants</Text>
             <TextInput
               style={styles.input}
               placeholder="5"
@@ -1679,7 +1789,7 @@ export default function MentorDashboard() {
               onChangeText={setSprintMinParticipants}
               keyboardType="numeric"
             />
-            <Text style={styles.formFieldLabel}>Maximum Participants</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Maximum Participants</Text>
             <TextInput
               style={styles.input}
               placeholder="20"
@@ -1688,7 +1798,7 @@ export default function MentorDashboard() {
               onChangeText={setSprintMaxParticipants}
               keyboardType="numeric"
             />
-            <Text style={styles.formFieldLabel}>Duration (Weeks)</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Duration (Weeks)</Text>
             <TextInput
               style={styles.input}
               placeholder="4"
@@ -1697,7 +1807,7 @@ export default function MentorDashboard() {
               onChangeText={setSprintWeeks}
               keyboardType="numeric"
             />
-            <Text style={styles.formFieldLabel}>Number of Live Sessions</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Number of Live Sessions</Text>
             <TextInput
               style={styles.input}
               placeholder="4"
@@ -1706,7 +1816,7 @@ export default function MentorDashboard() {
               onChangeText={setSprintLiveSessionsCount}
               keyboardType="numeric"
             />
-            <Text style={styles.formFieldLabel}>Weekly Plan</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Weekly Plan</Text>
             <TextInput
               style={[styles.input, styles.textAreaInput]}
               placeholder={"Week 1: Foundations\nWeek 2: Project setup\nWeek 3: Feedback\nWeek 4: Demo"}
@@ -1715,7 +1825,7 @@ export default function MentorDashboard() {
               onChangeText={setSprintWeeklyPlan}
               multiline
             />
-            <Text style={styles.formFieldLabel}>Outcomes</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Outcomes</Text>
             <TextInput
               style={styles.input}
               placeholder="Portfolio project, Mentor feedback, Sprint certificate"
@@ -1723,7 +1833,7 @@ export default function MentorDashboard() {
               value={sprintOutcomes}
               onChangeText={setSprintOutcomes}
             />
-            <Text style={styles.formFieldLabel}>Tools Used</Text>
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Tools Used</Text>
             <TextInput
               style={styles.input}
               placeholder="Zoom, GitHub, Figma, Python"
@@ -1737,37 +1847,85 @@ export default function MentorDashboard() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.title}>My Sprint Programs</Text>
+            <Text style={[styles.title, { color: colors.text }]}>My Sprint Programs</Text>
             {sprints.length === 0 ? (
-              <Text style={styles.empty}>No sprint programs submitted yet.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No sprint programs submitted yet.</Text>
             ) : (
               sprints.slice(0, 5).map((item) => (
                 <View key={item.id} style={styles.liveSessionCard}>
                   {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveSessionImage} /> : null}
-                  <Text style={styles.liveSessionTitle}>{item.title}</Text>
-                  <Text style={styles.meta}>{item.domain || "Sprint Program"}</Text>
-                  {item.description ? <Text style={styles.meta}>{item.description}</Text> : null}
-                  <Text style={styles.meta}>
+                  <Text style={[styles.liveSessionTitle, { color: colors.text }]}>{item.title}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>{item.domain || "Sprint Program"}</Text>
+                  {item.description ? <Text style={[styles.meta, { color: colors.textMuted }]}>{item.description}</Text> : null}
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
                     {new Date(item.startDate).toLocaleDateString()} - {new Date(item.endDate).toLocaleDateString()} | {item.durationWeeks || 1} weeks
                   </Text>
-                  <Text style={styles.meta}>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
                     Type: {item.sessionMode === "paid" ? `Paid | INR ${item.price || 0}` : "Free"} | Seats: {item.participantCount || 0}/{item.maxParticipants || 20}
                   </Text>
-                  <Text style={styles.meta}>Approval: {item.approvalStatus || "pending"}</Text>
-                  {item.curriculumDocumentUrl ? <Text style={styles.meta}>Curriculum uploaded</Text> : <Text style={styles.meta}>Curriculum optional</Text>}
-                  {item.adminReviewNote ? <Text style={styles.meta}>Admin note: {item.adminReviewNote}</Text> : null}
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>Approval: {item.approvalStatus || "pending"}</Text>
+                  {item.curriculumDocumentUrl ? <Text style={[styles.meta, { color: colors.textMuted }]}>Curriculum uploaded</Text> : <Text style={[styles.meta, { color: colors.textMuted }]}>Curriculum optional</Text>}
+                  {item.adminReviewNote ? <Text style={[styles.meta, { color: colors.textMuted }]}>Admin note: {item.adminReviewNote}</Text> : null}
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/sprints/${item.id}` as never)}>
+                    <Text style={styles.actionText}>Open Detail</Text>
+                  </TouchableOpacity>
                 </View>
               ))
             )}
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.title}>Program Guidance</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Sprint Earnings & Payouts</Text>
+            {mentorSprintPayoutSummary ? (
+              <>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Lifetime gross: INR {mentorSprintPayoutSummary.lifetimeGross}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Your sprint share: INR {mentorSprintPayoutSummary.mentorEarnings}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Pending sprint payouts: INR {mentorSprintPayoutSummary.pendingPayoutAmount}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  Payout setup: {mentorSprintPayoutSummary.payoutSetupComplete ? "Complete" : "Incomplete"}
+                </Text>
+              </>
+            ) : (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No paid sprint enrollments yet.</Text>
+            )}
+            {mentorSprintPayouts.slice(0, 5).map((item) => (
+              <View key={item._id} style={styles.liveSessionCard}>
+                <Text style={[styles.liveSessionTitle, { color: colors.text }]}>{item.sprintId?.title || "Sprint"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  Student: {item.studentId?.name || "Student"} | Gross: INR {item.amount || 0}
+                </Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  ORIN fee: INR {item.platformFeeAmount || 0} | Your share: INR {item.mentorPayoutAmount || 0}
+                </Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  Payout: {item.payoutStatus || "not_ready"} | Mentor confirmation: {item.mentorPayoutConfirmationStatus || "not_ready"}
+                </Text>
+                {item.payoutReference ? <Text style={[styles.meta, { color: colors.textMuted }]}>Reference: {item.payoutReference}</Text> : null}
+                {item.payoutNote ? <Text style={[styles.meta, { color: colors.textMuted }]}>Admin note: {item.payoutNote}</Text> : null}
+                {item.mentorPayoutIssueNote ? <Text style={[styles.meta, { color: colors.textMuted }]}>Issue: {item.mentorPayoutIssueNote}</Text> : null}
+                {item.canMentorConfirmPayout ? (
+                  <View style={styles.inlineActions}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => confirmSprintPayoutReceived(item._id)}>
+                      <Text style={styles.actionText}>Confirm Received</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => reportSprintPayoutIssue(item._id)}>
+                      <Text style={styles.actionText}>Report Issue</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
+            ))}
+          </View>
+            </>
+          ) : null}
+
+          <View style={styles.card}>
+            <Text style={[styles.title, { color: colors.text }]}>Program Guidance</Text>
             {mentorBanners.map((banner) => (
               <View key={banner.key} style={[styles.inlineBanner, { backgroundColor: banner.bg, borderColor: banner.border }]}>
-                <Text style={styles.bannerTag}>{banner.tag}</Text>
-                <Text style={styles.bannerTitle}>{banner.title}</Text>
-                <Text style={styles.bannerCopy}>{banner.copy}</Text>
+                <Text style={[styles.bannerTag, { color: colors.text }]}>{banner.tag}</Text>
+                <Text style={[styles.bannerTitle, { color: colors.text }]}>{banner.title}</Text>
+                <Text style={[styles.bannerCopy, { color: colors.textMuted }]}>{banner.copy}</Text>
               </View>
             ))}
           </View>
@@ -1777,9 +1935,9 @@ export default function MentorDashboard() {
           {mentorGrowthSection === "community" ? (
             <>
           <View style={styles.card}>
-            <Text style={styles.title}>Community Challenges</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Community Challenges</Text>
             {challenges.length === 0 ? (
-              <Text style={styles.empty}>No active challenges.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No active challenges.</Text>
             ) : (
               challenges.slice(0, 5).map((item) => (
                 <Text key={item.id} style={styles.meta}>
@@ -1790,9 +1948,9 @@ export default function MentorDashboard() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.title}>Mentor Groups</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Mentor Groups</Text>
             {mentorGroups.length === 0 ? (
-              <Text style={styles.empty}>No mentor groups available.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No mentor groups available.</Text>
             ) : (
               mentorGroups
                 .filter((group) => String(group.mentor?.id || "") === String(user.id))
@@ -1806,9 +1964,9 @@ export default function MentorDashboard() {
           </View>
 
           <View style={styles.card}>
-            <Text style={styles.title}>ORIN Certifications</Text>
+            <Text style={[styles.title, { color: colors.text }]}>ORIN Certifications</Text>
             {certifications.length === 0 ? (
-              <Text style={styles.empty}>No certifications listed yet.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No certifications listed yet.</Text>
             ) : (
               certifications.slice(0, 5).map((item) => (
                 <Text key={item.id} style={styles.meta}>
@@ -1825,7 +1983,7 @@ export default function MentorDashboard() {
       {!isLoading && activeSection === "pricing" ? (
         <View style={[styles.panel, styles.panelPricing]}>
           <Text style={[styles.panelTitle, styles.panelTitlePricing]}>Profile, Pricing & Payouts</Text>
-          <Text style={styles.meta}>Set your mentor title, session fee, and payout details so ORIN can pay you smoothly.</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Set your mentor title, session fee, and payout details so ORIN can pay you smoothly.</Text>
           <TextInput
             style={styles.input}
             placeholder="Mentor title (e.g. Senior SDE)"
@@ -1852,8 +2010,8 @@ export default function MentorDashboard() {
             onChangeText={setPayoutPhoneNumber}
             keyboardType="phone-pad"
           />
-          <Text style={styles.formFieldLabel}>Payout QR Code</Text>
-          <Text style={styles.formFieldHint}>Upload a QR if you want ORIN admin to have a quick manual payout option.</Text>
+          <Text style={[styles.formFieldLabel, { color: colors.text }]}>Payout QR Code</Text>
+          <Text style={[styles.formFieldHint, { color: colors.textMuted }]}>Upload a QR if you want ORIN admin to have a quick manual payout option.</Text>
           {payoutQrCodeUrl ? <Image source={{ uri: payoutQrCodeUrl }} style={styles.livePosterPreview} /> : null}
           <TouchableOpacity style={styles.primaryButton} onPress={uploadPayoutQrCode} disabled={uploadingPayoutQr}>
             <Text style={styles.primaryButtonText}>{uploadingPayoutQr ? "Uploading..." : payoutQrCodeUrl ? "Change Payout QR" : "Upload Payout QR"}</Text>
@@ -1864,38 +2022,38 @@ export default function MentorDashboard() {
 
           {mentorPayoutSummary ? (
             <View style={styles.card}>
-              <Text style={styles.title}>Earnings Summary</Text>
-              <Text style={styles.meta}>Gross paid by students: INR {mentorPayoutSummary.lifetimeGross}</Text>
-              <Text style={styles.meta}>ORIN platform share: INR {mentorPayoutSummary.platformFees}</Text>
-              <Text style={styles.meta}>Your total share: INR {mentorPayoutSummary.mentorEarnings}</Text>
-              <Text style={styles.meta}>Pending payout amount: INR {mentorPayoutSummary.pendingPayoutAmount}</Text>
-              <Text style={styles.meta}>Paid out by ORIN: INR {mentorPayoutSummary.paidOutAmount}</Text>
-              <Text style={styles.meta}>
+              <Text style={[styles.title, { color: colors.text }]}>Earnings Summary</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Gross paid by students: INR {mentorPayoutSummary.lifetimeGross}</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>ORIN platform share: INR {mentorPayoutSummary.platformFees}</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Your total share: INR {mentorPayoutSummary.mentorEarnings}</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Pending payout amount: INR {mentorPayoutSummary.pendingPayoutAmount}</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Paid out by ORIN: INR {mentorPayoutSummary.paidOutAmount}</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>
                 Payout setup: {mentorPayoutSummary.payoutSetupComplete ? "Complete" : "Incomplete"}
               </Text>
             </View>
           ) : null}
 
           <View style={styles.card}>
-            <Text style={styles.title}>Recent Payout Activity</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Recent Payout Activity</Text>
             {mentorPayoutSessions.length === 0 ? (
-              <Text style={styles.empty}>No paid sessions tracked yet.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No paid sessions tracked yet.</Text>
             ) : (
               mentorPayoutSessions.slice(0, 5).map((session) => (
                 <View key={`payout-${session._id}`} style={styles.liveSessionCard}>
-                  <Text style={styles.liveSessionTitle}>{session.studentId?.name || "Student"}</Text>
-                  <Text style={styles.meta}>
+                  <Text style={[styles.liveSessionTitle, { color: colors.text }]}>{session.studentId?.name || "Student"}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
                     {session.date} {session.time} | Student paid INR {session.amount}
                   </Text>
-                  <Text style={styles.meta}>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
                     ORIN: INR {session.platformFeeAmount || 0} | You: INR {session.mentorPayoutAmount || 0}
                   </Text>
-                  <Text style={styles.meta}>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
                     Payout: {session.payoutStatus || "not_ready"} | Mentor confirmation: {session.mentorPayoutConfirmationStatus || "not_ready"}
                   </Text>
-                  {session.payoutReference ? <Text style={styles.meta}>Reference: {session.payoutReference}</Text> : null}
-                  {session.payoutNote ? <Text style={styles.meta}>Admin note: {session.payoutNote}</Text> : null}
-                  {session.mentorPayoutIssueNote ? <Text style={styles.meta}>Issue: {session.mentorPayoutIssueNote}</Text> : null}
+                  {session.payoutReference ? <Text style={[styles.meta, { color: colors.textMuted }]}>Reference: {session.payoutReference}</Text> : null}
+                  {session.payoutNote ? <Text style={[styles.meta, { color: colors.textMuted }]}>Admin note: {session.payoutNote}</Text> : null}
+                  {session.mentorPayoutIssueNote ? <Text style={[styles.meta, { color: colors.textMuted }]}>Issue: {session.mentorPayoutIssueNote}</Text> : null}
                   {session.canMentorConfirmPayout ? (
                     <View style={styles.actions}>
                       <TouchableOpacity style={[styles.actionButton, styles.approveButton]} onPress={() => confirmPayoutReceived(session._id)}>
@@ -1916,7 +2074,7 @@ export default function MentorDashboard() {
       {!isLoading && activeSection === "availability" ? (
         <View style={[styles.panel, styles.panelAvailability]}>
           <Text style={[styles.panelTitle, styles.panelTitleAvailability]}>Calendar Availability</Text>
-          <Text style={styles.meta}>Set recurring weekly slots or exact date-time slots for the next 14 days.</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Set recurring weekly slots or exact date-time slots for the next 14 days.</Text>
 
           <View style={styles.rowWrap}>
             <TouchableOpacity
@@ -1948,12 +2106,12 @@ export default function MentorDashboard() {
                   onPress={() => setCalendarDate(date)}
                 >
                   <Text style={[styles.dateChipText, active && styles.dateChipTextActive]}>{toDateLabel(date)}</Text>
-                  {isBlocked ? <Text style={styles.dateChipBlockedText}>Blocked</Text> : null}
+                  {isBlocked ? <Text style={[styles.dateChipBlockedText, { color: colors.danger }]}>Blocked</Text> : null}
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
-          <Text style={styles.meta}>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
             Selected Date: {toDateLabel(calendarDate)} ({toDayFromDate(calendarDate)})
           </Text>
 
@@ -2010,14 +2168,14 @@ export default function MentorDashboard() {
             onPress={blockSelectedDate}
             disabled={blockingDate}
           >
-            <Text style={styles.secondaryButtonText}>{blockingDate ? "Blocking..." : "Block Selected Date"}</Text>
+            <Text style={[styles.secondaryButtonText, { color: colors.text }]}>{blockingDate ? "Blocking..." : "Block Selected Date"}</Text>
           </TouchableOpacity>
 
           {availabilitySlots.length === 0 ? (
-            <Text style={styles.empty}>No weekly availability slots set yet.</Text>
+            <Text style={[styles.empty, { color: colors.textMuted }]}>No weekly availability slots set yet.</Text>
           ) : (
             <>
-              <Text style={styles.metaStrong}>Weekly Slots</Text>
+              <Text style={[styles.metaStrong, { color: colors.text }]}>Weekly Slots</Text>
               {availabilitySlots.map((slot) => (
                 <Text key={slot._id} style={styles.meta}>
                   {slot.day}: {toTimeRangeLabel(slot.startTime, slot.endTime)} ({slot.sessionDurationMinutes} min)
@@ -2027,7 +2185,7 @@ export default function MentorDashboard() {
           )}
           {dateSpecificSlots.length > 0 ? (
             <>
-              <Text style={styles.metaStrong}>Date-Specific Slots</Text>
+              <Text style={[styles.metaStrong, { color: colors.text }]}>Date-Specific Slots</Text>
               {dateSpecificSlots.map((slot) => (
                 <Text key={slot._id} style={styles.meta}>
                   {slot.specificDate} ({slot.day}): {toTimeRangeLabel(slot.startTime, slot.endTime)} ({slot.sessionDurationMinutes} min)
@@ -2042,19 +2200,19 @@ export default function MentorDashboard() {
         <View style={[styles.panel, styles.panelSessions]}>
           <Text style={[styles.panelTitle, styles.panelTitleSessions]}>Confirmed Paid Sessions</Text>
           {filteredConfirmedPaidSessions.length === 0 ? (
-            <Text style={styles.empty}>No confirmed sessions yet.</Text>
+            <Text style={[styles.empty, { color: colors.textMuted }]}>No confirmed sessions yet.</Text>
           ) : (
             filteredConfirmedPaidSessions.map((session) => (
               <View key={session._id} style={[styles.card, styles.cardSessions]}>
-                <Text style={styles.title}>{session.studentId?.name || "Student"}</Text>
-                <Text style={styles.meta}>
+                <Text style={[styles.title, { color: colors.text }]}>{session.studentId?.name || "Student"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
                   {session.date} {session.time} | INR {session.amount}
                 </Text>
-                <Text style={styles.status}>
+                <Text style={[styles.status, { color: colors.accent }]}>
                   Payment: {session.paymentStatus} | Session: {session.sessionStatus}
                 </Text>
                 {!canSetMeetingLink(session) ? (
-                  <Text style={styles.meta}>Meeting link can be added only in last 5 minutes before start time.</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>Meeting link can be added only in last 5 minutes before start time.</Text>
                 ) : null}
                 <TextInput
                   style={styles.input}
@@ -2079,20 +2237,20 @@ export default function MentorDashboard() {
           )}
 
           <View style={styles.card}>
-            <Text style={styles.title}>Completed Sessions & Payout Readiness</Text>
+            <Text style={[styles.title, { color: colors.text }]}>Completed Sessions & Payout Readiness</Text>
             {mentorPayoutSessions.filter((item) => item.sessionStatus === "completed" || item.status === "completed").length === 0 ? (
-              <Text style={styles.empty}>No completed paid sessions yet.</Text>
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No completed paid sessions yet.</Text>
             ) : (
               mentorPayoutSessions
                 .filter((item) => item.sessionStatus === "completed" || item.status === "completed")
                 .slice(0, 5)
                 .map((session) => (
                   <View key={`completed-${session._id}`} style={styles.liveSessionCard}>
-                    <Text style={styles.liveSessionTitle}>{session.studentId?.name || "Student"}</Text>
-                    <Text style={styles.meta}>
+                    <Text style={[styles.liveSessionTitle, { color: colors.text }]}>{session.studentId?.name || "Student"}</Text>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>
                       {session.date} {session.time} | Your earning INR {session.mentorPayoutAmount || 0}
                     </Text>
-                    <Text style={styles.meta}>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>
                       Payout: {session.payoutStatus || "not_ready"} | Mentor confirmation: {session.mentorPayoutConfirmationStatus || "not_ready"}
                     </Text>
                   </View>
@@ -2106,14 +2264,14 @@ export default function MentorDashboard() {
         <View style={[styles.panel, styles.panelRequests]}>
           <Text style={[styles.panelTitle, styles.panelTitleRequests]}>Booking Requests</Text>
           {filteredBookings.length === 0 ? (
-            <Text style={styles.empty}>No booking requests yet.</Text>
+            <Text style={[styles.empty, { color: colors.textMuted }]}>No booking requests yet.</Text>
           ) : (
             filteredBookings.map((booking) => (
               <View key={booking._id} style={[styles.card, styles.cardRequests]}>
-                <Text style={styles.title}>{booking.student?.name || "Student"}</Text>
-                <Text style={styles.meta}>{booking.student?.email}</Text>
-                <Text style={styles.meta}>{new Date(booking.scheduledAt).toLocaleString()}</Text>
-                <Text style={styles.status}>Status: {booking.status}</Text>
+                <Text style={[styles.title, { color: colors.text }]}>{booking.student?.name || "Student"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{booking.student?.email}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{new Date(booking.scheduledAt).toLocaleString()}</Text>
+                <Text style={[styles.status, { color: colors.accent }]}>Status: {booking.status}</Text>
                 {booking.status === "pending" ? (
                   <View style={styles.actions}>
                     <TouchableOpacity
@@ -2150,13 +2308,13 @@ export default function MentorDashboard() {
             <Text style={styles.primaryButtonText}>{sendingMessage ? "Sending..." : "Send To Admin"}</Text>
           </TouchableOpacity>
           {filteredMessages.length === 0 ? (
-            <Text style={styles.empty}>No admin messages yet.</Text>
+            <Text style={[styles.empty, { color: colors.textMuted }]}>No admin messages yet.</Text>
           ) : (
             filteredMessages.slice(0, 20).map((msg) => (
               <View key={msg._id} style={[styles.card, styles.cardAdminChat]}>
-                <Text style={styles.metaStrong}>{msg.sender === user?.id ? "You" : "Admin"}</Text>
-                <Text style={styles.meta}>{msg.text}</Text>
-                <Text style={styles.meta}>{new Date(msg.createdAt).toLocaleString()}</Text>
+                <Text style={[styles.metaStrong, { color: colors.text }]}>{msg.sender === user?.id ? "You" : "Admin"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{msg.text}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{new Date(msg.createdAt).toLocaleString()}</Text>
               </View>
             ))
           )}
@@ -2164,7 +2322,7 @@ export default function MentorDashboard() {
       ) : null}
 
       <TouchableOpacity style={styles.logout} onPress={logout}>
-        <Text style={styles.logoutText}>Logout</Text>
+        <Text style={[styles.logoutText, { color: colors.danger }]}>Logout</Text>
       </TouchableOpacity>
     </ScrollView>
     </View>
@@ -2589,6 +2747,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#F8FAFC"
   },
   liveSessionTitle: { color: "#1E2B24", fontWeight: "800", fontSize: 15 },
+  inlineActions: { flexDirection: "row", gap: 10, marginTop: 10, flexWrap: "wrap" },
+  actionBtn: {
+    borderRadius: 10,
+    backgroundColor: "#1F7A4C",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center"
+  },
   actions: { flexDirection: "row", gap: 10, marginTop: 10 },
   actionButton: { flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center" },
   approveButton: { backgroundColor: "#1F7A4C" },

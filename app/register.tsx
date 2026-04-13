@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
@@ -107,7 +107,10 @@ export default function RegisterScreen() {
           secureTextEntry={!showPassword}
           autoCorrect={false}
           autoCapitalize="none"
-          textContentType="newPassword"
+          autoComplete="new-password"
+          keyboardType={Platform.OS === "android" && showPassword ? "visible-password" : "default"}
+          selectionColor="#1F7A4C"
+          cursorColor="#1F7A4C"
           value={password}
           onChangeText={setPassword}
         />
@@ -241,6 +244,7 @@ const styles = StyleSheet.create({
   passwordInput: {
     flex: 1,
     color: "#1E2B24",
+    fontSize: 16,
     paddingHorizontal: 14,
     paddingVertical: 13
   },

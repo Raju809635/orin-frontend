@@ -340,10 +340,12 @@ export default function AiProjectIdeasPage() {
 function buildMissionTemplate(title: string): ProjectMissionState {
   const taskBase = title.toLowerCase();
   const tasks = [
+    { id: `${taskBase}-problem`, title: "Define the problem + target user", done: false },
+    { id: `${taskBase}-plan`, title: "Sketch the flow + features list", done: false },
     { id: `${taskBase}-setup`, title: "Setup project structure", done: false },
-    { id: `${taskBase}-ui`, title: "Build core UI / workflow", done: false },
-    { id: `${taskBase}-logic`, title: "Implement core logic", done: false },
-    { id: `${taskBase}-deploy`, title: "Test and publish outcome", done: false }
+    { id: `${taskBase}-core`, title: "Build the core feature (MVP)", done: false },
+    { id: `${taskBase}-polish`, title: "Add one improvement (UI/UX/data)", done: false },
+    { id: `${taskBase}-deploy`, title: "Test, deploy, and share demo", done: false }
   ];
   return { tasks };
 }

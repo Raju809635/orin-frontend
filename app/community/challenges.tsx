@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import {
@@ -30,9 +32,16 @@ type ChallengeItem = {
   title: string;
   domain?: string;
   description?: string;
+  bannerImageUrl?: string;
+  proofInstructions?: string;
+  participantLimit?: number;
+  submissionStatus?: "not_submitted" | "submitted" | "reviewed" | "accepted" | "rejected";
+  awardedRank?: number;
+  awardedXp?: number;
   participantsCount?: number;
   deadline: string;
   isActive?: boolean;
+  approvalStatus?: "approved" | "pending" | "rejected";
   recommended?: boolean;
   recommendationReason?: string;
   challengeState?: string;
@@ -61,10 +70,18 @@ export default function CommunityChallengesPage() {
     title: "",
     domain: "",
     description: "",
-    deadline: ""
+    deadline: "",
+    bannerImageUrl: "",
+    participantLimit: "",
+    proofInstructions: ""
   });
+  const [uploadingBanner, setUploadingBanner] = useState(false);
   const [joining, setJoining] = useState(false);
-  const [claimingCertificate, setClaimingCertificate] = useState(false);
+  const [proofNote, setProofNote] = useState("");
+  const [proofLinks, setProofLinks] = useState("");
+  const [proofFiles, setProofFiles] = useState<string[]>([]);
+  const [uploadingProofFile, setUploadingProofFile] = useState(false);
+  const [submittingProof, setSubmittingProof] = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -127,6 +144,61 @@ export default function CommunityChallengesPage() {
     }
   }
 
+  async function submitProof() {
+    if (!selected?.id || user?.role !== "student" || !/^[a-fA-F0-9]{24}$/.test(String(selected.id || ""))) return;
+    if (!proofNote.trim() && !proofLinks.trim() && !proofFiles.length) {
+      Alert.alert("Proof required", "Add a short note, link, or upload a proof file.");
+      return;
+    }
+    try {
+      setSubmittingProof(true);
+      const links = proofLinks
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+      await api.post(`/api/network/challenges/${selected.id}/submissions`, {
+        proofNote: proofNote.trim(),
+        proofLinks: links,
+        proofFiles
+      });
+      setProofNote("");
+      setProofLinks("");
+      setProofFiles([]);
+      Alert.alert("Submitted", "Your proof has been submitted for mentor review.");
+      await load(true);
+    } catch (e: any) {
+      Alert.alert("Failed", e?.response?.data?.message || "Unable to submit proof.");
+    } finally {
+      setSubmittingProof(false);
+    }
+  }
+
+  async function uploadBanner() {
+    try {
+      setUploadingBanner(true);
+      const url = await pickAndUploadPostImage();
+      if (!url) return;
+      setSubmitForm((prev) => ({ ...prev, bannerImageUrl: url }));
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload banner.");
+    } finally {
+      setUploadingBanner(false);
+    }
+  }
+
+  async function uploadProofFile() {
+    try {
+      setUploadingProofFile(true);
+      const url = await pickAndUploadPostImage();
+      if (!url) return;
+      setProofFiles((prev) => [...prev, url].slice(0, 4));
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload proof image.");
+    } finally {
+      setUploadingProofFile(false);
+    }
+  }
+
   function toggleTask(taskId: string) {
     if (!selected) return;
     setProgressMap((prev) => ({
@@ -138,39 +210,6 @@ export default function CommunityChallengesPage() {
     }));
   }
 
-  async function claimCertificate() {
-    if (!selected?.id) return;
-    if (completion < 100) {
-      Alert.alert("Complete challenge", "Finish all checklist items before claiming a certificate.");
-      return;
-    }
-    try {
-      setClaimingCertificate(true);
-      const res = await api.post("/api/network/certifications/generate", {
-        type: "challenge",
-        title: `${selected.title} Challenge Completion`,
-        domain: selected.domain || "",
-        level: "Completed",
-        referenceId: selected.id,
-        metadata: {
-          domain: selected.domain || "",
-          challengeTitle: selected.title,
-          totalSteps: DEFAULT_TASKS.length,
-          completedSteps: DEFAULT_TASKS.length
-        }
-      });
-      Alert.alert(
-        "Certificate Ready",
-        res.data?.created
-          ? "Your challenge certificate has been added to Certifications."
-          : "This challenge certificate is already in your Certifications."
-      );
-    } catch (e: any) {
-      Alert.alert("Unable to claim", e?.response?.data?.message || "Unable to claim certificate right now.");
-    } finally {
-      setClaimingCertificate(false);
-    }
-  }
 
   return (
     <ScrollView
@@ -258,6 +297,9 @@ export default function CommunityChallengesPage() {
               <StatPill icon="people" label={`${item.participantsCount || 0} joined`} tone="#FFF7ED" />
               <StatPill icon="flash" label={`+${item.xpHint || 50} XP reward`} tone="#ECFDF3" />
               {item.challengeState ? <StatPill icon="trail-sign" label={item.challengeState} tone="#EEF2FF" /> : null}
+              {user?.role === "mentor" && item.approvalStatus && item.approvalStatus !== "approved" ? (
+                <StatusBadge label={`Status: ${item.approvalStatus}`} tone="warning" />
+              ) : null}
             </View>
             <ProgressBar progress={Math.max(12, Math.min(100, daysRemaining(item.deadline) * 10))} tone="#F97316" />
             <ActionButton label="Join Challenge" icon="arrow-forward" onPress={() => setSelectedId(item.id)} />
@@ -281,10 +323,20 @@ export default function CommunityChallengesPage() {
                 <Text style={styles.cardMeta}>{selected.domain || "General"} • {formatTimeLeft(selected.deadline)}</Text>
               </View>
             </View>
+            {selected.bannerImageUrl ? (
+              <Image source={{ uri: selected.bannerImageUrl }} style={styles.detailBanner} />
+            ) : null}
             <Text style={styles.challengeDescription}>
               {selected.description || "Complete the steps below to turn this challenge into a visible proof of work and XP gain."}
             </Text>
             {selected.recommendationReason ? <Text style={styles.reasonText}>{selected.recommendationReason}</Text> : null}
+
+            {selected.proofInstructions ? (
+              <View style={styles.detailPanel}>
+                <Text style={styles.requirementTitle}>Proof Instructions</Text>
+                <Text style={styles.challengeDescription}>{selected.proofInstructions}</Text>
+              </View>
+            ) : null}
 
             <View style={styles.detailPanel}>
               <View style={styles.inlineBetween}>
@@ -324,15 +376,60 @@ export default function CommunityChallengesPage() {
                   onPress={participate}
                   disabled={joining || !/^[a-fA-F0-9]{24}$/.test(String(selected.id || ""))}
                 />
-                {completion === 100 ? (
-                  <ActionButton
-                    label={claimingCertificate ? "Claiming..." : "Claim Certificate"}
-                    icon="ribbon"
-                    variant="secondary"
-                    onPress={claimCertificate}
-                    disabled={claimingCertificate || !/^[a-fA-F0-9]{24}$/.test(String(selected.id || ""))}
+                <View style={styles.proofCard}>
+                  <Text style={styles.requirementTitle}>Submit Proof</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea]}
+                    placeholder="Short proof note (what you built, what you learned)"
+                    value={proofNote}
+                    onChangeText={setProofNote}
+                    multiline
                   />
-                ) : null}
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Links (GitHub, Drive, Demo) — comma separated"
+                    value={proofLinks}
+                    onChangeText={setProofLinks}
+                    autoCapitalize="none"
+                  />
+                  <View style={styles.uploadRow}>
+                    <TouchableOpacity style={styles.uploadBtn} onPress={uploadProofFile} disabled={uploadingProofFile}>
+                      <Text style={styles.uploadBtnText}>{uploadingProofFile ? "Uploading..." : "Upload Proof Image"}</Text>
+                    </TouchableOpacity>
+                    {proofFiles.length ? (
+                      <View style={styles.proofThumbRow}>
+                        {proofFiles.map((uri, index) => (
+                          <View key={`${selected.id}-proof-${index}`} style={styles.proofThumbWrap}>
+                            <Image source={{ uri }} style={styles.proofThumb} />
+                            <TouchableOpacity
+                              style={styles.proofRemove}
+                              onPress={() => setProofFiles((prev) => prev.filter((_, i) => i !== index))}
+                            >
+                              <Ionicons name="close" size={14} color="#FFFFFF" />
+                            </TouchableOpacity>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                  <ActionButton
+                    label={submittingProof ? "Submitting..." : "Submit Proof"}
+                    icon="cloud-upload"
+                    variant="secondary"
+                    onPress={submitProof}
+                    disabled={submittingProof || !/^[a-fA-F0-9]{24}$/.test(String(selected.id || ""))}
+                  />
+                  {selected.submissionStatus && selected.submissionStatus !== "not_submitted" ? (
+                    <View style={styles.statusRow}>
+                      <StatusBadge
+                        label={`Status: ${selected.submissionStatus}`}
+                        tone={selected.submissionStatus === "accepted" ? "success" : selected.submissionStatus === "rejected" ? "danger" : "primary"}
+                      />
+                      {selected.awardedRank ? <StatusBadge label={`Rank #${selected.awardedRank}`} tone="warning" /> : null}
+                      {selected.awardedXp ? <StatusBadge label={`+${selected.awardedXp} XP`} tone="success" /> : null}
+                    </View>
+                  ) : null}
+                </View>
               </View>
             ) : (
               <StatusBadge label="Mentors can design and submit challenge ideas below" tone="primary" />
@@ -364,7 +461,15 @@ export default function CommunityChallengesPage() {
         >
           <TextInput style={styles.input} placeholder="Challenge title" value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />
           <TextInput style={styles.input} placeholder="Domain (optional)" value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
+          <View style={styles.uploadRow}>
+            <TouchableOpacity style={styles.uploadBtn} onPress={uploadBanner} disabled={uploadingBanner}>
+              <Text style={styles.uploadBtnText}>{uploadingBanner ? "Uploading..." : submitForm.bannerImageUrl ? "Change Banner" : "Upload Banner"}</Text>
+            </TouchableOpacity>
+            {submitForm.bannerImageUrl ? <Image source={{ uri: submitForm.bannerImageUrl }} style={styles.bannerPreview} /> : null}
+          </View>
           <TextInput style={[styles.input, styles.textArea]} placeholder="Description" value={submitForm.description} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, description: text }))} multiline />
+          <TextInput style={styles.input} placeholder="Participant limit (optional)" value={submitForm.participantLimit} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, participantLimit: text }))} keyboardType="number-pad" />
+          <TextInput style={[styles.input, styles.textArea]} placeholder="Proof instructions (what students must submit)" value={submitForm.proofInstructions} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, proofInstructions: text }))} multiline />
           <TextInput style={styles.input} placeholder="Deadline (YYYY-MM-DD HH:mm)" value={submitForm.deadline} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, deadline: text }))} />
           <ActionButton
             label={submitting ? "Submitting..." : "Submit for Review"}
@@ -385,10 +490,13 @@ export default function CommunityChallengesPage() {
                   title: submitForm.title.trim(),
                   domain: submitForm.domain.trim(),
                   description: submitForm.description.trim(),
-                  deadline: submitForm.deadline.trim().replace(" ", "T")
+                  deadline: submitForm.deadline.trim().replace(" ", "T"),
+                  bannerImageUrl: submitForm.bannerImageUrl.trim(),
+                  participantLimit: submitForm.participantLimit.trim(),
+                  proofInstructions: submitForm.proofInstructions.trim()
                 });
                 Alert.alert("Submitted", "Challenge idea sent to admin for review.");
-                setSubmitForm({ title: "", domain: "", description: "", deadline: "" });
+                setSubmitForm({ title: "", domain: "", description: "", deadline: "", bannerImageUrl: "", participantLimit: "", proofInstructions: "" });
                 await load(true);
               } catch (e: any) {
                 Alert.alert("Failed", e?.response?.data?.message || "Unable to submit challenge.");
@@ -476,6 +584,13 @@ const styles = StyleSheet.create({
     borderColor: "#F9DBAF",
     gap: 12
   },
+  detailBanner: {
+    width: "100%",
+    height: 180,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#F9DBAF"
+  },
   detailHead: { flex: 1, gap: 4 },
   detailTitle: { color: "#101828", fontWeight: "800", fontSize: 18 },
   detailPanel: {
@@ -487,6 +602,15 @@ const styles = StyleSheet.create({
     gap: 10
   },
   detailActionStack: { gap: 10 },
+  proofCard: {
+    borderRadius: 16,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    backgroundColor: "#FFFFFF",
+    gap: 10
+  },
+  statusRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   requirementTitle: { color: "#101828", fontWeight: "800" },
   progressValue: { color: "#F97316", fontWeight: "800" },
   taskList: { gap: 10 },
@@ -517,6 +641,31 @@ const styles = StyleSheet.create({
   taskTitleDone: { color: "#027A48" },
   taskMeta: { color: "#667085", fontSize: 12 },
   taskXp: { color: "#F97316", fontWeight: "800", fontSize: 12 },
+  uploadRow: { gap: 8 },
+  uploadBtn: {
+    borderWidth: 1,
+    borderColor: "#F97316",
+    backgroundColor: "#FFF7ED",
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center"
+  },
+  uploadBtnText: { color: "#B54708", fontWeight: "800" },
+  bannerPreview: { width: "100%", height: 140, borderRadius: 14, borderWidth: 1, borderColor: "#F9DBAF" },
+  proofThumbRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  proofThumbWrap: { width: 78, height: 78 },
+  proofThumb: { width: "100%", height: "100%", borderRadius: 12, borderWidth: 1, borderColor: "#F9DBAF" },
+  proofRemove: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#B42318",
+    alignItems: "center",
+    justifyContent: "center"
+  },
   rankRow: {
     flexDirection: "row",
     alignItems: "center",

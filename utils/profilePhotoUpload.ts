@@ -39,11 +39,11 @@ export async function pickAndUploadProfilePhoto(): Promise<string | null> {
   const launchConfigs =
     Platform.OS === "android"
       ? [
-          { mediaTypes: imageMediaType, quality: 0.8, allowsEditing: false, legacy: true },
-          { mediaTypes: imageMediaType, quality: 0.8, allowsEditing: false },
-          { quality: 0.8, allowsEditing: false }
+          { mediaTypes: imageMediaType, quality: 0.8, allowsEditing: true, aspect: [1, 1], legacy: true },
+          { mediaTypes: imageMediaType, quality: 0.8, allowsEditing: true, aspect: [1, 1] },
+          { quality: 0.8, allowsEditing: true, aspect: [1, 1] }
         ]
-      : [{ mediaTypes: imageMediaType, quality: 0.8, allowsEditing: false }];
+      : [{ mediaTypes: imageMediaType, quality: 0.8, allowsEditing: true, aspect: [1, 1] }];
 
   for (const config of launchConfigs) {
     try {

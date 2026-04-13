@@ -7,16 +7,21 @@ export default function PrivacyScreen() {
       <View style={styles.card}>
         <Text style={styles.title}>Privacy Policy</Text>
         <Text style={styles.text}>
-          ORIN collects only the information required to provide mentorship services, account access,
-          booking management, and payment verification.
+          ORIN collects the information needed to provide mentorship, live sessions, sprint programs,
+          AI tools, certificates, social feed features, chat, notifications, and payment handling.
         </Text>
         <Text style={styles.subtitle}>Data We Use</Text>
-        <Text style={styles.text}>- Account details (name, email, phone for mentors)</Text>
-        <Text style={styles.text}>- Profile details and session preferences</Text>
-        <Text style={styles.text}>- Booking and payment verification data</Text>
-        <Text style={styles.text}>- Support and chat records for service quality</Text>
+        <Text style={styles.text}>- Account and profile details</Text>
+        <Text style={styles.text}>- Session, live program, sprint, and certificate data</Text>
+        <Text style={styles.text}>- Razorpay/manual payment and payout verification data</Text>
+        <Text style={styles.text}>- Posts, chat, notifications, complaints, and support records</Text>
+        <Text style={styles.text}>- Uploaded media/files such as profile photos, posters, resumes, and screenshots</Text>
         <Text style={styles.subtitle}>Your Controls</Text>
-        <Text style={styles.text}>You can update profile data, change password, and request account deletion from Settings.</Text>
+        <Text style={styles.text}>
+          You can update profile data, change password, and request account deletion from Settings.
+        </Text>
+        <Text style={styles.subtitle}>Public Policy</Text>
+        <Text style={styles.text}>Full policy URL: https://orin-privacy-policy.vercel.app/privacy-policy</Text>
       </View>
     </ScrollView>
   );

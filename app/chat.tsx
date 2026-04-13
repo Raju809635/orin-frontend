@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -48,6 +49,8 @@ type ChatMessage = {
   text: string;
   createdAt: string;
   readAt?: string | null;
+  editedAt?: string | null;
+  deletedAt?: string | null;
 };
 
 type StudentSession = {
@@ -68,9 +71,37 @@ type ConnectionRow = {
   recipientId?: { _id?: string; name?: string; role?: "student" | "mentor" | "admin"; profilePhotoUrl?: string } | null;
 };
 
+type MentorGroup = {
+  id: string;
+  name: string;
+  domain: string;
+  description: string;
+  mentor?: { id: string | null; name?: string };
+  maxStudents?: number;
+  membersCount?: number;
+  pendingRequestsCount?: number;
+  joined?: boolean;
+  requestPending?: boolean;
+  topicTags?: string[];
+  schedule?: string;
+};
+
+type PublicProfile = {
+  _id?: string;
+  name?: string;
+  headline?: string;
+  role?: string;
+  about?: string;
+  institution?: string;
+  state?: string;
+  profilePhotoUrl?: string;
+  skills?: string[];
+};
+
 const QUICK_EMOJIS = [":)", "<3", "gg", "idea", "go", "ty"];
 
-const MESSAGE_TABS = ["Mentors", "Circle"] as const;
+const MESSAGE_TABS = ["Mentor Chat", "Circle Chat", "Mentor Groups"] as const;
+const GROUP_TABS = ["All Groups", "Joined Groups"] as const;
 
 function formatMessageTime(dateValue?: string) {
   if (!dateValue) return "";
@@ -114,8 +145,9 @@ function getInitial(name?: string) {
 
 export default function ChatScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ userId?: string }>();
+  const params = useLocalSearchParams<{ userId?: string; tab?: string }>();
   const requestedUserId = useMemo(() => (params.userId || "").trim(), [params.userId]);
+  const requestedTab = useMemo(() => String(params.tab || "").trim(), [params.tab]);
   const { user } = useAuth();
   const { colors } = useAppTheme();
   const [searchQuery, setSearchQuery] = useState("");
@@ -125,6 +157,7 @@ export default function ChatScreen() {
   const [circleContacts, setCircleContacts] = useState<CounterpartUser[]>([]);
   const [activeUserId, setActiveUserId] = useState<string>("");
   const [activeUser, setActiveUser] = useState<CounterpartUser | null>(null);
+  const [activeProfile, setActiveProfile] = useState<PublicProfile | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
@@ -132,7 +165,10 @@ export default function ChatScreen() {
   const [activeTyping, setActiveTyping] = useState(false);
   const [showEmojiBar, setShowEmojiBar] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<(typeof MESSAGE_TABS)[number]>("Mentors");
+  const [activeTab, setActiveTab] = useState<(typeof MESSAGE_TABS)[number]>("Mentor Chat");
+  const [groupTab, setGroupTab] = useState<(typeof GROUP_TABS)[number]>("All Groups");
+  const [mentorGroups, setMentorGroups] = useState<MentorGroup[]>([]);
+  const [editingMessageId, setEditingMessageId] = useState<string>("");
   const [profilePhotoById, setProfilePhotoById] = useState<Record<string, string>>({});
   const [threadMode, setThreadMode] = useState(false);
 
@@ -146,7 +182,7 @@ export default function ChatScreen() {
 
   const filteredConversations = useMemo(() => {
     const baseRows = conversations.filter((item) =>
-      activeTab === "Mentors" ? item.counterpart.role === "mentor" : item.counterpart.role !== "mentor"
+      activeTab === "Mentor Chat" ? item.counterpart.role === "mentor" : item.counterpart.role !== "mentor"
     );
     const query = searchQuery.trim().toLowerCase();
     if (!query) return baseRows;
@@ -166,6 +202,12 @@ export default function ChatScreen() {
     if (!query) return circleContacts;
     return circleContacts.filter((item) => `${item.name} ${item.role || ""}`.toLowerCase().includes(query));
   }, [circleContacts, searchQuery]);
+
+  const filteredGroups = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return mentorGroups;
+    return mentorGroups.filter((item) => `${item.name} ${item.domain || ""} ${item.description || ""}`.toLowerCase().includes(query));
+  }, [mentorGroups, searchQuery]);
 
   const contactLookup = useMemo(() => {
     const next = new Map<string, CounterpartUser>();
@@ -195,18 +237,36 @@ export default function ChatScreen() {
     }
   }, [requestedUserId]);
 
+  useEffect(() => {
+    if (!requestedTab) return;
+    const normalized = requestedTab.toLowerCase();
+    if (normalized.includes("mentor") && normalized.includes("group")) {
+      setActiveTab("Mentor Groups");
+      return;
+    }
+    if (normalized.includes("mentor")) {
+      setActiveTab("Mentor Chat");
+      return;
+    }
+    if (normalized.includes("circle")) {
+      setActiveTab("Circle Chat");
+    }
+  }, [requestedTab]);
+
   const loadConversations = useCallback(async () => {
     try {
       setError(null);
-      const [conversationRes, sessionsRes] = await Promise.all([
+      const [conversationRes, sessionsRes, groupsRes] = await Promise.all([
         api.get<Conversation[]>("/api/chat/conversations"),
         user?.role === "student"
           ? api.get<StudentSession[]>("/api/sessions/student/me")
-          : Promise.resolve({ data: [] as StudentSession[] })
+          : Promise.resolve({ data: [] as StudentSession[] }),
+        api.get<MentorGroup[]>("/api/network/mentor-groups").catch(() => ({ data: [] as MentorGroup[] }))
       ]);
 
       const data = conversationRes.data || [];
       setConversations(data);
+      setMentorGroups(groupsRes.data || []);
 
       if (user?.role === "student") {
         const mentorMap = new Map<string, CounterpartUser>();
@@ -320,6 +380,27 @@ export default function ChatScreen() {
   }, [loadThread]);
 
   useEffect(() => {
+    if (!activeUserId) {
+      setActiveProfile(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data } = await api.get(`/api/profiles/public/${activeUserId}`);
+        if (!cancelled) {
+          setActiveProfile(data?.profile || null);
+        }
+      } catch {
+        if (!cancelled) setActiveProfile(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeUserId]);
+
+  useEffect(() => {
     if (!activeUserId) return;
     const interval = setInterval(() => {
       loadConversations();
@@ -428,7 +509,12 @@ export default function ChatScreen() {
     try {
       setSending(true);
       setError(null);
-      await api.post(`/api/chat/messages/${activeUserId}`, { text: text.trim() });
+      if (editingMessageId) {
+        await api.patch(`/api/chat/messages/item/${editingMessageId}`, { text: text.trim() });
+        setEditingMessageId("");
+      } else {
+        await api.post(`/api/chat/messages/${activeUserId}`, { text: text.trim() });
+      }
       if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
       typingActiveRef.current = false;
       setText("");
@@ -456,10 +542,70 @@ export default function ChatScreen() {
     setThreadMode(true);
     setMessages([]);
     setError(null);
+    setEditingMessageId("");
+    setText("");
+  }
+
+  function openGroupThread(groupId: string) {
+    if (!groupId) return;
+    const isValidId = /^[a-f0-9]{24}$/i.test(groupId);
+    if (!isValidId) {
+      Alert.alert("Group unavailable", "This demo group isn't ready for chat yet. Join a live mentor group to start chatting.");
+      return;
+    }
+    router.push(`/mentor-group-chat/${groupId}` as never);
   }
 
   function closeThread() {
     setThreadMode(false);
+    setEditingMessageId("");
+    setText("");
+  }
+
+  function beginEditMessage(message: ChatMessage) {
+    setEditingMessageId(message._id);
+    setText(message.text);
+  }
+
+  function cancelEdit() {
+    setEditingMessageId("");
+    setText("");
+  }
+
+  async function handleDeleteMessage(message: ChatMessage) {
+    try {
+      await api.delete(`/api/chat/messages/item/${message._id}`);
+      await loadThread();
+    } catch (e: any) {
+      Alert.alert("Delete failed", e?.response?.data?.message || "Could not delete this message.");
+    }
+  }
+
+  async function handleCopyMessage(message: ChatMessage) {
+    try {
+      await Clipboard.setStringAsync(message.text || "");
+      Alert.alert("Copied", "Message copied to clipboard.");
+    } catch {
+      Alert.alert("Copy failed", "Could not copy this message.");
+    }
+  }
+
+  function handleMessageActions(message: ChatMessage) {
+    const mine = message.sender === user?.id;
+    const actions = [
+      { text: "Copy", onPress: () => handleCopyMessage(message) },
+      mine ? { text: "Edit", onPress: () => beginEditMessage(message) } : null,
+      mine
+        ? {
+            text: "Delete",
+            style: "destructive" as const,
+            onPress: () => handleDeleteMessage(message)
+          }
+        : null,
+      { text: "Cancel", style: "cancel" as const }
+    ].filter(Boolean) as { text: string; onPress?: () => void; style?: "cancel" | "destructive" }[];
+
+    Alert.alert("Message actions", "Choose an action", actions);
   }
 
   if (user?.role !== "student" && user?.role !== "mentor") {
@@ -481,17 +627,21 @@ export default function ChatScreen() {
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 84 : 0}
     >
       {!threadMode ? (
         <GlobalHeader
           searchValue={searchQuery}
           onSearchChange={setSearchQuery}
-          searchPlaceholder="Search mentors or circle chats"
+          searchPlaceholder="Search mentors, circle, groups"
         />
       ) : null}
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
         {!threadMode ? (
         <>
         <View style={styles.screenHeader}>
@@ -520,34 +670,36 @@ export default function ChatScreen() {
           })}
         </View>
 
-        <View style={styles.quickActionsRow}>
-          <TouchableOpacity
-            style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-            onPress={() => (activeTab === "Mentors" ? router.push("/mentors" as never) : router.push("/network?section=connections" as never))}
-          >
-            <Ionicons name="search-outline" size={16} color={colors.accent} />
-            <Text style={[styles.quickActionText, { color: colors.text }]}>{activeTab === "Mentors" ? "Find Mentor" : "Find People"}</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
-            onPress={() => {
-              const nextId =
-                activeTab === "Mentors"
-                  ? filteredMentors[0]?._id || filteredConversations[0]?.counterpartId || ""
-                  : filteredCircleContacts[0]?._id || filteredConversations[0]?.counterpartId || "";
-              if (nextId) {
-                openThread(nextId);
-                return;
-              }
-              router.push(activeTab === "Mentors" ? ("/mentors" as never) : ("/network?section=connections" as never));
-            }}
-          >
-            <Ionicons name="add-outline" size={16} color={colors.accent} />
-            <Text style={[styles.quickActionText, { color: colors.text }]}>New Chat</Text>
-          </TouchableOpacity>
-        </View>
+        {activeTab !== "Mentor Groups" ? (
+          <View style={styles.quickActionsRow}>
+            <TouchableOpacity
+              style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+              onPress={() => (activeTab === "Mentor Chat" ? router.push("/mentors" as never) : router.push("/network?section=connections" as never))}
+            >
+              <Ionicons name="search-outline" size={16} color={colors.accent} />
+              <Text style={[styles.quickActionText, { color: colors.text }]}>{activeTab === "Mentor Chat" ? "Find Mentor" : "Find People"}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+              onPress={() => {
+                const nextId =
+                  activeTab === "Mentor Chat"
+                    ? filteredMentors[0]?._id || filteredConversations[0]?.counterpartId || ""
+                    : filteredCircleContacts[0]?._id || filteredConversations[0]?.counterpartId || "";
+                if (nextId) {
+                  openThread(nextId);
+                  return;
+                }
+                router.push(activeTab === "Mentor Chat" ? ("/mentors" as never) : ("/network?section=connections" as never));
+              }}
+            >
+              <Ionicons name="add-outline" size={16} color={colors.accent} />
+              <Text style={[styles.quickActionText, { color: colors.text }]}>New Chat</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
 
-        {user?.role === "student" && activeTab === "Mentors" ? (
+        {user?.role === "student" && activeTab === "Mentor Chat" ? (
           <>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Confirmed Mentors</Text>
             {filteredMentors.length > 0 ? (
@@ -585,7 +737,7 @@ export default function ChatScreen() {
           </>
         ) : null}
 
-        {activeTab === "Circle" ? (
+        {activeTab === "Circle Chat" ? (
           <>
             <Text style={[styles.sectionTitle, { color: colors.text }]}>Your Circle</Text>
             {filteredCircleContacts.length > 0 ? (
@@ -623,7 +775,94 @@ export default function ChatScreen() {
           </>
         ) : null}
 
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Chats</Text>
+        {activeTab === "Mentor Groups" ? (
+          <>
+            <View style={styles.groupTabsRow}>
+              {GROUP_TABS.map((tab) => {
+                const active = groupTab === tab;
+                return (
+                  <TouchableOpacity
+                    key={tab}
+                    style={[
+                      styles.groupTab,
+                      { borderColor: colors.border, backgroundColor: colors.surface },
+                      active && [styles.groupTabActive, { borderColor: colors.accent, backgroundColor: colors.accentSoft }]
+                    ]}
+                    onPress={() => setGroupTab(tab)}
+                  >
+                    <Text style={[styles.groupTabText, { color: colors.textMuted }, active && { color: colors.accent }]}>{tab}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.conversationList}>
+              {(groupTab === "Joined Groups" ? filteredGroups.filter((item) => item.joined) : filteredGroups).length > 0 ? (
+                (groupTab === "Joined Groups" ? filteredGroups.filter((item) => item.joined) : filteredGroups).map((group) => (
+                  <View key={group.id} style={[styles.groupCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <View style={styles.groupHeader}>
+                      <View style={styles.groupInfo}>
+                        <Text style={[styles.groupName, { color: colors.text }]}>{group.name}</Text>
+                        <Text style={[styles.groupMeta, { color: colors.textMuted }]}>
+                          {group.domain} · {group.schedule || "Weekly sessions"}
+                        </Text>
+                      </View>
+                      <Text style={[styles.groupCount, { color: colors.textMuted }]}>
+                        {group.membersCount || 0}/{group.maxStudents || "∞"}
+                      </Text>
+                    </View>
+                    <Text style={[styles.groupDesc, { color: colors.textMuted }]} numberOfLines={2}>
+                      {group.description || "Mentor group updates and discussions."}
+                    </Text>
+                    <View style={styles.groupActions}>
+                      {group.joined ? (
+                        <TouchableOpacity
+                          style={[styles.groupBtn, { backgroundColor: colors.accent }]}
+                          onPress={() => openGroupThread(group.id)}
+                        >
+                          <Text style={styles.groupBtnText}>Open Group</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={[styles.groupBtn, { backgroundColor: group.requestPending ? colors.surfaceAlt : colors.accent }]}
+                          onPress={async () => {
+                            if (group.requestPending) return;
+                            try {
+                              await api.post(`/api/network/mentor-groups/${group.id}/join`);
+                              loadConversations();
+                            } catch (e: any) {
+                              Alert.alert("Request failed", e?.response?.data?.message || "Unable to send join request.");
+                            }
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.groupBtnText,
+                              group.requestPending && { color: colors.textMuted }
+                            ]}
+                          >
+                            {group.requestPending ? "Request Sent" : "Request to Join"}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                  <Text style={styles.emptyEmoji}>ðŸ“¢</Text>
+                  <Text style={[styles.emptyTitle, { color: colors.text }]}>No mentor groups yet</Text>
+                  <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                    Mentors create groups and approve student requests. Check back soon.
+                  </Text>
+                </View>
+              )}
+            </View>
+          </>
+        ) : null}
+
+        {activeTab !== "Mentor Groups" ? (
+          <>
+            <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Chats</Text>
         <View style={styles.conversationList}>
           {filteredConversations.length > 0 ? (
             filteredConversations.map((item) => {
@@ -672,7 +911,7 @@ export default function ChatScreen() {
               <Text style={styles.emptyEmoji}>💬</Text>
               <Text style={[styles.emptyTitle, { color: colors.text }]}>No {activeTab.toLowerCase()} conversations yet</Text>
               <Text style={[styles.emptyText, { color: colors.textMuted }]}>
-                {activeTab === "Mentors"
+                {activeTab === "Mentor Chat"
                   ? "Connect with mentors or confirm a mentorship session to start chatting."
                   : "Connect with accepted circle friends to start your first circle chat."}
               </Text>
@@ -710,15 +949,41 @@ export default function ChatScreen() {
             ) : null}
           </View>
 
+          {activeProfile ? (
+            <View style={[styles.profilePreview, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.profilePreviewTop}>
+                <Text style={[styles.profilePreviewName, { color: colors.text }]}>{activeProfile.name || activeUser?.name}</Text>
+                <Text style={[styles.profilePreviewMeta, { color: colors.textMuted }]}>{activeProfile.role || "Member"}</Text>
+              </View>
+              {activeProfile.headline ? (
+                <Text style={[styles.profilePreviewHeadline, { color: colors.text }]}>{activeProfile.headline}</Text>
+              ) : null}
+              {activeProfile.institution || activeProfile.state ? (
+                <Text style={[styles.profilePreviewMeta, { color: colors.textMuted }]}>
+                  {[activeProfile.institution, activeProfile.state].filter(Boolean).join(" · ")}
+                </Text>
+              ) : null}
+              <TouchableOpacity
+                style={[styles.profilePreviewBtn, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}
+                onPress={() => router.push(`/public-profile/${activeUserId}` as never)}
+              >
+                <Text style={[styles.profilePreviewBtnText, { color: colors.accent }]}>View Profile</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           <View style={styles.messageList}>
             {messages.length > 0 ? (
               messages.map((item) => {
                 const mine = item.sender === user?.id;
                 const isLastMine = mine && item._id === lastOutgoingMessageId;
                 const statusText = item.readAt ? "Seen" : "Sent";
+                const isDeleted = Boolean(item.deletedAt);
                 return (
                   <View key={item._id} style={[styles.messageRow, mine ? styles.messageRowMine : styles.messageRowOther]}>
-                    <View
+                    <TouchableOpacity
+                      onLongPress={() => handleMessageActions(item)}
+                      activeOpacity={0.9}
                       style={[
                         styles.bubble,
                         mine
@@ -726,11 +991,16 @@ export default function ChatScreen() {
                           : [styles.bubbleOther, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]
                       ]}
                     >
-                      <Text style={[styles.bubbleText, { color: mine ? "#FFFFFF" : colors.text }, mine && styles.bubbleTextMine]}>{item.text}</Text>
+                      <Text style={[styles.bubbleText, { color: mine ? "#FFFFFF" : colors.text }, mine && styles.bubbleTextMine]}>
+                        {isDeleted ? "Message deleted" : item.text}
+                      </Text>
                       <View style={styles.bubbleFooter}>
                         <Text style={[styles.bubbleMeta, { color: mine ? "#D1FADF" : colors.textMuted }, mine && styles.bubbleMetaMine]}>
                           {formatMessageTime(item.createdAt)}
                         </Text>
+                        {item.editedAt ? (
+                          <Text style={[styles.bubbleMeta, { color: mine ? "#D1FADF" : colors.textMuted }]}>Edited</Text>
+                        ) : null}
                         {isLastMine ? (
                           <View style={styles.readStateWrap}>
                             <Ionicons
@@ -742,7 +1012,7 @@ export default function ChatScreen() {
                           </View>
                         ) : null}
                       </View>
-                    </View>
+                    </TouchableOpacity>
                   </View>
                 );
               })
@@ -765,6 +1035,18 @@ export default function ChatScreen() {
             </View>
           ) : null}
 
+          {editingMessageId ? (
+            <View style={[styles.editBar, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+              <View>
+                <Text style={[styles.editTitle, { color: colors.text }]}>Editing message</Text>
+                <Text style={[styles.editMeta, { color: colors.textMuted }]}>Tap cancel to discard changes.</Text>
+              </View>
+              <TouchableOpacity onPress={cancelEdit}>
+                <Ionicons name="close-circle" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
+          ) : null}
+
           <View style={[styles.composer, { borderTopColor: colors.border }]}>
             <TouchableOpacity style={[styles.iconBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={handleAttachment} disabled={!activeUserId}>
               <Ionicons name="add" size={20} color={colors.textMuted} />
@@ -773,7 +1055,7 @@ export default function ChatScreen() {
               style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]}
               value={text}
               onChangeText={handleTextChange}
-              placeholder={activeUserId ? "Message..." : "Select a chat first"}
+              placeholder={activeUserId ? (editingMessageId ? "Edit your message..." : "Message...") : "Select a chat first"}
               placeholderTextColor={colors.textMuted}
               editable={!!activeUserId && !sending}
               multiline
@@ -802,11 +1084,13 @@ const styles = StyleSheet.create({
     padding: 16
   },
   scrollContent: {
-    paddingBottom: 120
+    paddingBottom: 180,
+    flexGrow: 1
   },
   threadCardFull: {
-    minHeight: 640,
-    marginTop: 4
+    minHeight: 680,
+    marginTop: 4,
+    flexGrow: 1
   },
   center: {
     flex: 1,
@@ -980,6 +1264,70 @@ const styles = StyleSheet.create({
     color: "#667085",
     fontWeight: "600"
   },
+  groupTabsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12
+  },
+  groupTab: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1
+  },
+  groupTabActive: {
+    borderColor: "#1F7A4C",
+    backgroundColor: "#EAF6EF"
+  },
+  groupTabText: {
+    fontWeight: "800",
+    color: "#475467"
+  },
+  groupCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 12
+  },
+  groupHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  groupInfo: {
+    flex: 1
+  },
+  groupName: {
+    fontSize: 16,
+    fontWeight: "800"
+  },
+  groupMeta: {
+    marginTop: 4,
+    fontWeight: "600"
+  },
+  groupCount: {
+    fontWeight: "700"
+  },
+  groupDesc: {
+    marginTop: 8,
+    fontWeight: "600"
+  },
+  groupActions: {
+    marginTop: 10,
+    flexDirection: "row",
+    justifyContent: "flex-end"
+  },
+  groupBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999
+  },
+  groupBtnText: {
+    color: "#FFFFFF",
+    fontWeight: "800"
+  },
   unreadBadge: {
     minWidth: 22,
     height: 22,
@@ -1058,6 +1406,40 @@ const styles = StyleSheet.create({
     color: "#1F7A4C",
     fontWeight: "800",
     fontSize: 12
+  },
+  profilePreview: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    marginTop: 12
+  },
+  profilePreviewTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  profilePreviewName: {
+    fontSize: 16,
+    fontWeight: "800"
+  },
+  profilePreviewMeta: {
+    marginTop: 4,
+    fontWeight: "600"
+  },
+  profilePreviewHeadline: {
+    marginTop: 6,
+    fontWeight: "700"
+  },
+  profilePreviewBtn: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 6
+  },
+  profilePreviewBtnText: {
+    fontWeight: "800"
   },
   messageList: {
     paddingVertical: 12,
@@ -1141,6 +1523,24 @@ const styles = StyleSheet.create({
   },
   emojiText: {
     fontSize: 18
+  },
+  editBar: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  editTitle: {
+    fontWeight: "800"
+  },
+  editMeta: {
+    marginTop: 2,
+    fontWeight: "600",
+    fontSize: 12
   },
   composer: {
     flexDirection: "row",

@@ -3,6 +3,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
   RefreshControl,
   ScrollView,
@@ -15,6 +16,8 @@ import {
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
+import { pickAndUploadProgramDocument } from "@/utils/programDocumentUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import {
@@ -33,8 +36,13 @@ type OpportunityItem = {
   company?: string;
   role?: string;
   type?: string;
+  category?: "workshop" | "internship" | "hackathon" | string;
   duration?: string;
   applicationUrl?: string;
+  bannerImageUrl?: string;
+  supportingDocuments?: string[];
+  isPaid?: boolean;
+  eventDate?: string;
   isActive?: boolean;
   description?: string;
   location?: string;
@@ -47,7 +55,7 @@ type OpportunityItem = {
   readinessHint?: string;
 };
 
-const FILTERS = ["All", "Remote", "Paid", "Recommended"] as const;
+const FILTERS = ["All", "Workshops", "Internships", "Hackathons", "Paid", "Recommended"] as const;
 const STORAGE_KEY = "community-opportunity-saved-v1";
 
 export default function CommunityOpportunitiesPage() {
@@ -61,14 +69,22 @@ export default function CommunityOpportunitiesPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
   const [submitForm, setSubmitForm] = useState({
     title: "",
     company: "",
     role: "",
     duration: "",
     applicationUrl: "",
-    description: ""
+    description: "",
+    category: "internship",
+    bannerImageUrl: "",
+    eventDate: "",
+    supportingDocuments: [] as string[],
+    isPaid: false
   });
+  const [docInput, setDocInput] = useState("");
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -105,13 +121,53 @@ export default function CommunityOpportunitiesPage() {
     }, [load])
   );
 
+  async function uploadBanner() {
+    try {
+      setUploadingBanner(true);
+      const url = await pickAndUploadPostImage();
+      if (!url) return;
+      setSubmitForm((prev) => ({ ...prev, bannerImageUrl: url }));
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload banner.");
+    } finally {
+      setUploadingBanner(false);
+    }
+  }
+
+  async function uploadDocument() {
+    try {
+      setUploadingDoc(true);
+      const uploaded = await pickAndUploadProgramDocument();
+      if (!uploaded?.url) return;
+      setSubmitForm((prev) => ({ ...prev, supportingDocuments: [...prev.supportingDocuments, uploaded.url].slice(0, 4) }));
+    } catch (e: any) {
+      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload document.");
+    } finally {
+      setUploadingDoc(false);
+    }
+  }
+
+  function addDocumentLink() {
+    const normalized = normalizeLink(docInput);
+    if (!normalized) {
+      Alert.alert("Invalid link", "Paste a valid document URL.");
+      return;
+    }
+    setSubmitForm((prev) => ({ ...prev, supportingDocuments: [...prev.supportingDocuments, normalized].slice(0, 4) }));
+    setDocInput("");
+  }
+
   const filtered = useMemo(() => {
     if (filter === "All") return items;
     if (filter === "Recommended") return items.filter((item) => item.recommended).slice(0, 5);
-    return items.filter((item) => {
-      const haystack = `${item.title} ${item.role || ""} ${item.type || ""} ${item.description || ""}`.toLowerCase();
-      return haystack.includes(filter.toLowerCase());
-    });
+    if (filter === "Paid") return items.filter((item) => isPaid(item));
+    const categoryMap: Record<string, string> = {
+      Workshops: "workshop",
+      Internships: "internship",
+      Hackathons: "hackathon"
+    };
+    const target = categoryMap[filter] || "";
+    return items.filter((item) => String(item.category || item.type || "").toLowerCase().includes(target));
   }, [filter, items]);
 
   const selected = items.find((item) => item._id === selectedId) || null;
@@ -128,9 +184,9 @@ export default function CommunityOpportunitiesPage() {
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
     >
       <CommunityHero
-        eyebrow="Internships"
+        eyebrow="Opportunities"
         title="💼 Opportunities for You"
-        subtitle="Make internships feel real and worth acting on. Save the best ones, review details, and apply with one clear next step."
+        subtitle="Workshops, internships, and hackathons — save the best ones, review details, and apply with one clear next step."
         stats={[
           { icon: "briefcase", label: "Open Roles", value: String(items.length) },
           { icon: "sparkles", label: "Recommended", value: String(recommendedCount) },
@@ -141,7 +197,7 @@ export default function CommunityOpportunitiesPage() {
 
       <CommunitySection
         title="Readiness Check"
-        subtitle="Internships unlock when your roadmap and projects show enough momentum. This keeps recommendations realistic."
+        subtitle="Opportunities unlock when your roadmap and projects show enough momentum. This keeps recommendations realistic."
         icon="analytics"
       >
         <View style={[styles.readinessCard, readinessUnlocked ? styles.readinessCardReady : styles.readinessCardLocked]}>
@@ -179,7 +235,7 @@ export default function CommunityOpportunitiesPage() {
       </CommunitySection>
 
       <CommunitySection
-        title="Internship Listings"
+        title="Opportunity Listings"
         subtitle="Each card highlights role, company, fit, and the next action to take."
         icon="rocket"
       >
@@ -217,7 +273,7 @@ export default function CommunityOpportunitiesPage() {
               <View style={styles.tagRow}>
                 <StatusBadge label={isPaid(item) ? "Paid" : "Unpaid / Flexible"} tone={isPaid(item) ? "success" : "warning"} />
                 <StatusBadge label={item.duration || "Flexible duration"} tone="neutral" />
-                <StatusBadge label={item.type || "Internship"} tone="primary" />
+                <StatusBadge label={(item.category || item.type || "Internship").toString()} tone="primary" />
               </View>
 
               <View style={styles.pillRow}>
@@ -243,8 +299,7 @@ export default function CommunityOpportunitiesPage() {
                       Alert.alert("Keep building", item.readinessHint || "Complete your roadmap and finish a project before applying.");
                       return;
                     }
-                    if (item.applicationUrl) Linking.openURL(item.applicationUrl);
-                    else Alert.alert("Application Link Missing", "This opportunity does not have an external application link yet.");
+                    openExternalLink(item.applicationUrl, "Application Link Missing");
                   }}
                   style={styles.flexAction}
                 />
@@ -270,15 +325,30 @@ export default function CommunityOpportunitiesPage() {
                 <Text style={styles.detailMeta}>{selected.company || "ORIN Network"} • {selected.location || deriveLocation(selected)}</Text>
               </View>
             </View>
+            {selected.bannerImageUrl ? (
+              <Image source={{ uri: selected.bannerImageUrl }} style={styles.detailBanner} />
+            ) : null}
             <View style={styles.tagRow}>
               <StatusBadge label={isPaid(selected) ? "Paid" : "Unpaid / Flexible"} tone={isPaid(selected) ? "success" : "warning"} />
               <StatusBadge label={selected.duration || "Flexible duration"} tone="neutral" />
-              <StatusBadge label={selected.type || "Internship"} tone="primary" />
+              <StatusBadge label={(selected.category || selected.type || "Internship").toString()} tone="primary" />
               {selected.recommended ? <StatusBadge label="Recommended for You" tone="primary" /> : null}
+              {selected.eventDate ? <StatusBadge label={`Date: ${selected.eventDate}`} tone="neutral" /> : null}
             </View>
             <Text style={styles.detailText}>
               {selected.description || "This opportunity is available for students looking to build experience, strengthen their profile, and convert learning into practical growth."}
             </Text>
+            {Array.isArray(selected.supportingDocuments) && selected.supportingDocuments.length > 0 ? (
+              <View style={styles.docList}>
+                <Text style={styles.docTitle}>Supporting documents</Text>
+                {selected.supportingDocuments.map((doc, index) => (
+                  <TouchableOpacity key={`${selected._id}-doc-${index}`} style={styles.docRow} onPress={() => openExternalLink(doc, "Document link missing")}>
+                    <Ionicons name="document-text-outline" size={18} color="#175CD3" />
+                    <Text style={styles.docText}>Open document {index + 1}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
             {selected.recommendationReason ? <Text style={styles.reasonText}>{selected.recommendationReason}</Text> : null}
             <View style={styles.requirementCard}>
               <Text style={styles.requirementTitle}>What this role grows</Text>
@@ -320,8 +390,7 @@ export default function CommunityOpportunitiesPage() {
                     Alert.alert("Not ready yet", selected.readinessHint || "Keep progressing through your roadmap and complete a project first.");
                     return;
                   }
-                  if (selected.applicationUrl) Linking.openURL(selected.applicationUrl);
-                  else Alert.alert("Application Link Missing", "This opportunity does not have an external application link yet.");
+                  openExternalLink(selected.applicationUrl, "Application Link Missing");
                 }}
                 style={styles.flexAction}
               />
@@ -333,14 +402,84 @@ export default function CommunityOpportunitiesPage() {
       {user?.role === "mentor" ? (
         <CommunitySection
           title="Submit an Opportunity"
-          subtitle="Mentors can share real opportunities without changing the existing approval flow."
+          subtitle="Mentors can share real opportunities. Admin approval is required before publishing."
           icon="add-circle"
         >
+          <Text style={styles.label}>Category</Text>
+          <View style={styles.choiceRow}>
+            {["internship", "workshop", "hackathon"].map((option) => {
+              const active = submitForm.category === option;
+              return (
+                <TouchableOpacity
+                  key={option}
+                  style={[styles.choiceChip, active && styles.choiceChipActive]}
+                  onPress={() => setSubmitForm((prev) => ({ ...prev, category: option }))}
+                >
+                  <Text style={[styles.choiceText, active && styles.choiceTextActive]}>
+                    {option.charAt(0).toUpperCase() + option.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <View style={styles.choiceRow}>
+            <TouchableOpacity
+              style={[styles.choiceChip, submitForm.isPaid && styles.choiceChipActive]}
+              onPress={() => setSubmitForm((prev) => ({ ...prev, isPaid: !prev.isPaid }))}
+            >
+              <Text style={[styles.choiceText, submitForm.isPaid && styles.choiceTextActive]}>
+                {submitForm.isPaid ? "Paid" : "Free"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <TextInput style={styles.input} placeholder="Title" value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />
           <TextInput style={styles.input} placeholder="Company (optional)" value={submitForm.company} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, company: text }))} />
           <TextInput style={styles.input} placeholder="Role (optional)" value={submitForm.role} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, role: text }))} />
           <TextInput style={styles.input} placeholder="Duration (optional)" value={submitForm.duration} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, duration: text }))} />
+          <View style={styles.uploadRow}>
+            <TouchableOpacity style={styles.uploadBtn} onPress={uploadBanner} disabled={uploadingBanner}>
+              <Text style={styles.uploadBtnText}>{uploadingBanner ? "Uploading..." : submitForm.bannerImageUrl ? "Change Banner" : "Upload Banner"}</Text>
+            </TouchableOpacity>
+            {submitForm.bannerImageUrl ? <Image source={{ uri: submitForm.bannerImageUrl }} style={styles.bannerPreview} /> : null}
+          </View>
+          <TextInput style={styles.input} placeholder="Event date (YYYY-MM-DD) optional" value={submitForm.eventDate} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, eventDate: text }))} />
           <TextInput style={styles.input} placeholder="Application URL (optional)" value={submitForm.applicationUrl} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, applicationUrl: text }))} />
+          <View style={styles.uploadRow}>
+            <TouchableOpacity style={styles.uploadBtnAlt} onPress={uploadDocument} disabled={uploadingDoc}>
+              <Text style={styles.uploadBtnText}>{uploadingDoc ? "Uploading..." : "Upload Supporting Document"}</Text>
+            </TouchableOpacity>
+            <View style={styles.linkRow}>
+              <TextInput
+                style={[styles.input, styles.linkInput]}
+                placeholder="Or paste document link"
+                value={docInput}
+                onChangeText={setDocInput}
+                autoCapitalize="none"
+              />
+              <TouchableOpacity style={styles.linkAddBtn} onPress={addDocumentLink}>
+                <Ionicons name="add" size={18} color="#175CD3" />
+              </TouchableOpacity>
+            </View>
+            {submitForm.supportingDocuments.length ? (
+              <View style={styles.docList}>
+                {submitForm.supportingDocuments.map((doc, index) => (
+                  <TouchableOpacity
+                    key={`doc-${index}`}
+                    style={styles.docRow}
+                    onPress={() => openExternalLink(doc, "Document link missing")}
+                  >
+                    <Ionicons name="document-text-outline" size={18} color="#175CD3" />
+                    <Text style={styles.docText}>Document {index + 1}</Text>
+                    <TouchableOpacity onPress={() => setSubmitForm((prev) => ({ ...prev, supportingDocuments: prev.supportingDocuments.filter((_, i) => i !== index) }))}>
+                      <Ionicons name="close" size={16} color="#B42318" />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+          </View>
           <TextInput style={[styles.input, styles.textArea]} placeholder="Short description (optional)" value={submitForm.description} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, description: text }))} multiline />
           <ActionButton
             label={submitting ? "Submitting..." : "Submit for Review"}
@@ -360,10 +499,28 @@ export default function CommunityOpportunitiesPage() {
                   duration: submitForm.duration.trim(),
                   applicationUrl: submitForm.applicationUrl.trim(),
                   description: submitForm.description.trim(),
-                  type: "internship"
+                  type: submitForm.category || "internship",
+                  category: submitForm.category || "internship",
+                  bannerImageUrl: submitForm.bannerImageUrl.trim(),
+                  eventDate: submitForm.eventDate.trim(),
+                  supportingDocuments: submitForm.supportingDocuments,
+                  isPaid: submitForm.isPaid
                 });
                 Alert.alert("Submitted", "Opportunity sent to admin for review.");
-                setSubmitForm({ title: "", company: "", role: "", duration: "", applicationUrl: "", description: "" });
+                setSubmitForm({
+                  title: "",
+                  company: "",
+                  role: "",
+                  duration: "",
+                  applicationUrl: "",
+                  description: "",
+                  category: "internship",
+                  bannerImageUrl: "",
+                  eventDate: "",
+                  supportingDocuments: [],
+                  isPaid: false
+                });
+                setDocInput("");
                 await load(true);
               } catch (e: any) {
                 Alert.alert("Failed", e?.response?.data?.message || "Unable to submit opportunity.");
@@ -378,7 +535,26 @@ export default function CommunityOpportunitiesPage() {
   );
 }
 
+function normalizeLink(rawUrl: string) {
+  const cleaned = String(rawUrl || "").trim().replace(/[),.;!?]+$/, "");
+  if (!cleaned) return "";
+  if (/^https?:\/\//i.test(cleaned)) return cleaned;
+  return `https://${cleaned}`;
+}
+
+function openExternalLink(url?: string, missingTitle = "Link Missing") {
+  const normalized = normalizeLink(url || "");
+  if (!normalized) {
+    Alert.alert(missingTitle, "This item does not have a valid link yet.");
+    return;
+  }
+  Linking.openURL(normalized).catch(() => {
+    Alert.alert("Unable to open link", normalized);
+  });
+}
+
 function isPaid(item: OpportunityItem) {
+  if (typeof item.isPaid === "boolean") return item.isPaid;
   const haystack = `${item.title} ${item.role || ""} ${item.type || ""} ${item.description || ""}`.toLowerCase();
   return haystack.includes("paid") || haystack.includes("stipend");
 }
@@ -466,7 +642,27 @@ const styles = StyleSheet.create({
     borderColor: "#F9DBAF",
     gap: 10
   },
+  docList: { gap: 8 },
+  docTitle: { color: "#475467", fontWeight: "700" },
+  docRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  docText: { color: "#175CD3", fontWeight: "700" },
   requirementTitle: { color: "#B54708", fontWeight: "800" },
+  label: { color: "#344054", fontWeight: "700" },
+  choiceRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  choiceChip: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: "#FFFFFF"
+  },
+  choiceChipActive: {
+    borderColor: "#4457FF",
+    backgroundColor: "#EEF2FF"
+  },
+  choiceText: { color: "#475467", fontWeight: "700" },
+  choiceTextActive: { color: "#4457FF", fontWeight: "800" },
   input: {
     borderWidth: 1,
     borderColor: "#D0D5DD",
@@ -475,5 +671,43 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 11
   },
-  textArea: { minHeight: 92, textAlignVertical: "top" }
+  uploadRow: { gap: 8 },
+  uploadBtn: {
+    borderWidth: 1,
+    borderColor: "#4457FF",
+    backgroundColor: "#EEF2FF",
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center"
+  },
+  uploadBtnAlt: {
+    borderWidth: 1,
+    borderColor: "#175CD3",
+    backgroundColor: "#EFF8FF",
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center"
+  },
+  uploadBtnText: { color: "#344054", fontWeight: "800" },
+  bannerPreview: { width: "100%", height: 140, borderRadius: 14, borderWidth: 1, borderColor: "#E4E7EC" },
+  linkRow: { flexDirection: "row", gap: 8, alignItems: "center" },
+  linkInput: { flex: 1 },
+  linkAddBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF"
+  },
+  textArea: { minHeight: 92, textAlignVertical: "top" },
+  detailBanner: {
+    width: "100%",
+    height: 180,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E4E7EC"
+  }
 });

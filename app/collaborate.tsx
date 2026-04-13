@@ -49,6 +49,8 @@ export default function CollaborateScreen() {
   const [email, setEmail] = useState("");
   const [organization, setOrganization] = useState("");
   const [message, setMessage] = useState("");
+  const [offerings, setOfferings] = useState("");
+  const [expectations, setExpectations] = useState("");
   const [type, setType] = useState<CollaborateType>("leader");
   const [submitting, setSubmitting] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -72,13 +74,17 @@ export default function CollaborateScreen() {
         email: email.trim().toLowerCase(),
         organization: organization.trim(),
         type,
-        message: message.trim()
+        message: message.trim(),
+        offerings: offerings.trim(),
+        expectations: expectations.trim()
       });
       Alert.alert(
         "Submitted",
         "Your collaboration request is submitted. Admin team will review and contact you."
       );
       setMessage("");
+      setOfferings("");
+      setExpectations("");
       await fetchStatus(email.trim().toLowerCase());
     } catch (error: any) {
       Alert.alert("Unable to submit", error?.response?.data?.message || "Please try again.");
@@ -189,6 +195,24 @@ export default function CollaborateScreen() {
           onChangeText={setMessage}
           multiline
           placeholder="Tell us what collaboration you want."
+        />
+
+        <Text style={styles.label}>What You Offer</Text>
+        <TextInput
+          style={[styles.input, styles.multiline]}
+          value={offerings}
+          onChangeText={setOfferings}
+          multiline
+          placeholder="Share what you can offer to the ORIN community."
+        />
+
+        <Text style={styles.label}>What You Expect</Text>
+        <TextInput
+          style={[styles.input, styles.multiline]}
+          value={expectations}
+          onChangeText={setExpectations}
+          multiline
+          placeholder="Share what you expect from ORIN (support, reach, partnerships)."
         />
 
         <TouchableOpacity style={styles.button} disabled={submitting} onPress={applyNow}>
