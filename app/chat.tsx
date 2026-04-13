@@ -922,6 +922,9 @@ export default function ChatScreen() {
         </>
         ) : null}
 
+        </>
+        ) : null}
+
         <View style={[styles.threadCard, threadMode && styles.threadCardFull, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={[styles.threadHeader, { borderBottomColor: colors.border }]}>
             <View style={styles.threadIdentity}>
