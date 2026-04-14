@@ -153,6 +153,7 @@ type LiveSessionItem = {
   sessionMode?: "free" | "paid";
   price?: number;
   currency?: string;
+  meetingLink?: string;
   maxParticipants?: number;
   participantCount?: number;
   seatsLeft?: number;
@@ -183,6 +184,7 @@ type SprintItem = {
   weeklyPlan?: string[];
   outcomes?: string[];
   tools?: string[];
+  meetingLink?: string;
   sessionMode?: "free" | "paid";
   price?: number;
   currency?: string;
@@ -382,6 +384,8 @@ export default function MentorDashboard() {
   const [chatMessage, setChatMessage] = useState("");
   const [sendingMessage, setSendingMessage] = useState(false);
   const [meetingLinks, setMeetingLinks] = useState<Record<string, string>>({});
+  const [liveSessionLinks, setLiveSessionLinks] = useState<Record<string, string>>({});
+  const [sprintMeetingLinks, setSprintMeetingLinks] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -404,6 +408,7 @@ export default function MentorDashboard() {
   const [liveSessionDate, setLiveSessionDate] = useState(nextDates(14)[0]);
   const [liveSessionTime, setLiveSessionTime] = useState("18:00");
   const [livePosterImageUrl, setLivePosterImageUrl] = useState("");
+  const [liveMeetingLink, setLiveMeetingLink] = useState("");
   const [liveSessionMode, setLiveSessionMode] = useState<"free" | "paid">("free");
   const [liveSessionPrice, setLiveSessionPrice] = useState("499");
   const [liveSessionCapacity, setLiveSessionCapacity] = useState("50");
@@ -419,6 +424,7 @@ export default function MentorDashboard() {
   const [sprintPosterImageUrl, setSprintPosterImageUrl] = useState("");
   const [sprintDocumentUrl, setSprintDocumentUrl] = useState("");
   const [sprintDocumentType, setSprintDocumentType] = useState("pdf");
+  const [sprintMeetingLink, setSprintMeetingLink] = useState("");
   const [sprintMode, setSprintMode] = useState<"free" | "paid">("paid");
   const [sprintPrice, setSprintPrice] = useState("1999");
   const [sprintMinParticipants, setSprintMinParticipants] = useState("5");
@@ -971,6 +977,28 @@ export default function MentorDashboard() {
     }
   }
 
+  async function saveLiveSessionLink(liveSessionId: string) {
+    try {
+      const meetingLink = (liveSessionLinks[liveSessionId] || "").trim();
+      await api.patch(`/api/network/live-sessions/${liveSessionId}/meeting-link`, { meetingLink });
+      notify(meetingLink ? "Live session link saved." : "Live session link cleared.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to update live session link.");
+    }
+  }
+
+  async function saveSprintMeetingLink(sprintId: string) {
+    try {
+      const meetingLink = (sprintMeetingLinks[sprintId] || "").trim();
+      await api.patch(`/api/network/sprints/${sprintId}/meeting-link`, { meetingLink });
+      notify(meetingLink ? "Sprint link saved." : "Sprint link cleared.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to update sprint link.");
+    }
+  }
+
   async function markSessionCompleted(sessionId: string) {
     try {
       setError(null);
@@ -1072,6 +1100,7 @@ export default function MentorDashboard() {
         posterImageUrl: livePosterImageUrl.trim(),
         startsAt: parsed.toISOString(),
         durationMinutes: Number(liveSessionDuration || 60),
+        meetingLink: liveMeetingLink.trim(),
         sessionMode: liveSessionMode,
         price: liveSessionMode === "paid" ? Number(liveSessionPrice || 0) : 0,
         maxParticipants: Number(liveSessionCapacity || 50)
@@ -1082,6 +1111,7 @@ export default function MentorDashboard() {
       setLiveSessionDate(nextDates(14)[0]);
       setLiveSessionTime("18:00");
       setLivePosterImageUrl("");
+      setLiveMeetingLink("");
       setLiveSessionMode("free");
       setLiveSessionPrice("499");
       setLiveSessionCapacity("50");
@@ -1171,6 +1201,7 @@ export default function MentorDashboard() {
         posterImageUrl: sprintPosterImageUrl.trim(),
         curriculumDocumentUrl: sprintDocumentUrl.trim(),
         curriculumFileType: sprintDocumentType,
+        meetingLink: sprintMeetingLink.trim(),
         startDate: new Date(`${sprintStartDate}T00:00:00`).toISOString(),
         endDate: new Date(`${sprintEndDate}T23:59:59`).toISOString(),
         durationWeeks: Number(sprintWeeks || 1),
@@ -1191,6 +1222,7 @@ export default function MentorDashboard() {
       setSprintPosterImageUrl("");
       setSprintDocumentUrl("");
       setSprintDocumentType("pdf");
+      setSprintMeetingLink("");
       setSprintMode("paid");
       setSprintPrice("1999");
       setSprintMinParticipants("5");
@@ -1682,6 +1714,15 @@ export default function MentorDashboard() {
               onChangeText={setLiveSessionDuration}
               keyboardType="numeric"
             />
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Meeting Link (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="https://meet.google.com/... or Zoom link"
+              placeholderTextColor="#98A2B3"
+              value={liveMeetingLink}
+              onChangeText={setLiveMeetingLink}
+              autoCapitalize="none"
+            />
             <TouchableOpacity style={styles.primaryButton} onPress={createMentorLiveSession} disabled={creatingLiveSession}>
               <Text style={styles.primaryButtonText}>{creatingLiveSession ? "Creating..." : "Create Live Session"}</Text>
             </TouchableOpacity>
@@ -1704,7 +1745,21 @@ export default function MentorDashboard() {
                   </Text>
                   <Text style={[styles.meta, { color: colors.textMuted }]}>Interested learners: {item.interestedCount || 0}</Text>
                   <Text style={[styles.meta, { color: colors.textMuted }]}>Approval: {item.approvalStatus || "pending"}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
+                    Link: {item.meetingLink ? "Added by mentor" : "Not added yet"}
+                  </Text>
                   {item.adminReviewNote ? <Text style={[styles.meta, { color: colors.textMuted }]}>Admin note: {item.adminReviewNote}</Text> : null}
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Add or update live session link"
+                    placeholderTextColor="#98A2B3"
+                    value={liveSessionLinks[item.id] ?? item.meetingLink ?? ""}
+                    onChangeText={(value) => setLiveSessionLinks((prev) => ({ ...prev, [item.id]: value }))}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => saveLiveSessionLink(item.id)}>
+                    <Text style={styles.actionText}>{(liveSessionLinks[item.id] ?? item.meetingLink ?? "").trim() ? "Save Link" : "Clear Link"}</Text>
+                  </TouchableOpacity>
                 </View>
               ))
             )}
@@ -1881,6 +1936,15 @@ export default function MentorDashboard() {
               onChangeText={setSprintLiveSessionsCount}
               keyboardType="numeric"
             />
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Sprint Meeting Link (Optional)</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Mentor will use this main sprint join link"
+              placeholderTextColor="#98A2B3"
+              value={sprintMeetingLink}
+              onChangeText={setSprintMeetingLink}
+              autoCapitalize="none"
+            />
             <Text style={[styles.formFieldLabel, { color: colors.text }]}>Weekly Plan</Text>
             <TextInput
               style={[styles.input, styles.textAreaInput]}
@@ -1929,8 +1993,22 @@ export default function MentorDashboard() {
                     Type: {item.sessionMode === "paid" ? `Paid | INR ${item.price || 0}` : "Free"} | Seats: {item.participantCount || 0}/{item.maxParticipants || 20}
                   </Text>
                   <Text style={[styles.meta, { color: colors.textMuted }]}>Approval: {item.approvalStatus || "pending"}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
+                    Link: {item.meetingLink ? "Added by mentor" : "Not added yet"}
+                  </Text>
                   {item.curriculumDocumentUrl ? <Text style={[styles.meta, { color: colors.textMuted }]}>Curriculum uploaded</Text> : <Text style={[styles.meta, { color: colors.textMuted }]}>Curriculum optional</Text>}
                   {item.adminReviewNote ? <Text style={[styles.meta, { color: colors.textMuted }]}>Admin note: {item.adminReviewNote}</Text> : null}
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Add or update sprint link"
+                    placeholderTextColor="#98A2B3"
+                    value={sprintMeetingLinks[item.id] ?? item.meetingLink ?? ""}
+                    onChangeText={(value) => setSprintMeetingLinks((prev) => ({ ...prev, [item.id]: value }))}
+                    autoCapitalize="none"
+                  />
+                  <TouchableOpacity style={styles.actionBtn} onPress={() => saveSprintMeetingLink(item.id)}>
+                    <Text style={styles.actionText}>{(sprintMeetingLinks[item.id] ?? item.meetingLink ?? "").trim() ? "Save Link" : "Clear Link"}</Text>
+                  </TouchableOpacity>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/sprints/${item.id}` as never)}>
                     <Text style={styles.actionText}>Open Detail</Text>
                   </TouchableOpacity>

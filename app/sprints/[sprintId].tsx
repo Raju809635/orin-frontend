@@ -45,6 +45,7 @@ type SprintDetail = {
   weeklyPlan?: string[];
   outcomes?: string[];
   tools?: string[];
+  meetingLink?: string;
   sessionMode?: "free" | "paid";
   price?: number;
   currency?: string;
@@ -322,6 +323,15 @@ export default function SprintDetailPage() {
         ) : (
           <Text style={[styles.meta, { color: colors.textMuted }]}>Curriculum document not uploaded yet.</Text>
         )}
+        {(user?.role === "mentor" || sprint.myEnrollment?.enrollmentStatus === "enrolled") ? (
+          sprint.meetingLink ? (
+            <TouchableOpacity style={[styles.secondaryBtn, { borderColor: colors.border }]} onPress={() => Linking.openURL(sprint.meetingLink || "")}>
+              <Text style={[styles.secondaryBtnText, { color: colors.text }]}>Open Sprint Link</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Mentor has not added the sprint session link yet.</Text>
+          )
+        ) : null}
       </View>
 
       {error ? <Text style={[styles.error, { color: "#B42318" }]}>{error}</Text> : null}
