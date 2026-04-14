@@ -220,6 +220,39 @@ type SprintPayoutEnrollment = {
   };
 };
 
+type MentorLiveSessionBookingRecord = {
+  _id: string;
+  amount?: number;
+  currency?: string;
+  createdAt?: string;
+  studentId?: { _id: string; name: string; email: string };
+  liveSessionId?: {
+    _id: string;
+    title?: string;
+    startsAt?: string;
+    sessionMode?: "free" | "paid";
+    price?: number;
+    currency?: string;
+  };
+};
+
+type MentorSprintEnrollmentRecord = {
+  _id: string;
+  amount?: number;
+  currency?: string;
+  createdAt?: string;
+  studentId?: { _id: string; name: string; email: string };
+  sprintId?: {
+    _id: string;
+    title?: string;
+    startDate?: string;
+    endDate?: string;
+    sessionMode?: "free" | "paid";
+    price?: number;
+    currency?: string;
+  };
+};
+
 type MentorSprintPayoutResponse = {
   summary: {
     totalEnrollments: number;
@@ -360,6 +393,8 @@ export default function MentorDashboard() {
   const [reputationSummary, setReputationSummary] = useState<ReputationSummary | null>(null);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
   const [sprints, setSprints] = useState<SprintItem[]>([]);
+  const [paidLiveBookings, setPaidLiveBookings] = useState<MentorLiveSessionBookingRecord[]>([]);
+  const [paidSprintEnrollments, setPaidSprintEnrollments] = useState<MentorSprintEnrollmentRecord[]>([]);
   const [certifications, setCertifications] = useState<CertificationItem[]>([]);
   const [mentorNews, setMentorNews] = useState<NewsArticle[]>([]);
   const [mentorNewsLoading, setMentorNewsLoading] = useState(false);
@@ -551,7 +586,9 @@ export default function MentorDashboard() {
         reputationRes,
         liveSessionRes,
         sprintRes,
-        certificationsRes
+        certificationsRes,
+        livePaidRes,
+        sprintPaidRes
       ] = await Promise.allSettled([
         api.get<Booking[]>("/api/bookings/mentor"),
         api.get<Session[]>("/api/sessions/mentor/me"),
@@ -564,7 +601,9 @@ export default function MentorDashboard() {
         api.get<ReputationSummary>("/api/network/reputation-summary"),
         api.get<LiveSessionItem[]>("/api/network/live-sessions"),
         api.get<SprintItem[]>("/api/network/sprints"),
-        api.get<CertificationItem[]>("/api/network/certifications")
+        api.get<CertificationItem[]>("/api/network/certifications"),
+        api.get<MentorLiveSessionBookingRecord[]>("/api/network/live-sessions/bookings/mentor"),
+        api.get<MentorSprintEnrollmentRecord[]>("/api/network/sprints/enrollments/mentor")
       ]);
 
       if (bookingRes.status !== "fulfilled" || sessionRes.status !== "fulfilled" || profileRes.status !== "fulfilled") {
@@ -617,6 +656,8 @@ export default function MentorDashboard() {
       setLiveSessions(liveSessionRes.status === "fulfilled" ? liveSessionRes.value.data || [] : []);
       setSprints(sprintRes.status === "fulfilled" ? sprintRes.value.data || [] : []);
       setCertifications(certificationsRes.status === "fulfilled" ? certificationsRes.value.data || [] : []);
+      setPaidLiveBookings(livePaidRes.status === "fulfilled" ? livePaidRes.value.data || [] : []);
+      setPaidSprintEnrollments(sprintPaidRes.status === "fulfilled" ? sprintPaidRes.value.data || [] : []);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to load mentor dashboard.");
     } finally {
@@ -1668,6 +1709,30 @@ export default function MentorDashboard() {
               ))
             )}
           </View>
+          <View style={styles.card}>
+            <Text style={[styles.title, { color: colors.text }]}>Paid Live Session Bookings</Text>
+            {paidLiveBookings.length === 0 ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No paid live-session bookings yet.</Text>
+            ) : (
+              paidLiveBookings.map((booking) => (
+                <View key={booking._id} style={styles.liveSessionCard}>
+                  <Text style={[styles.liveSessionTitle, { color: colors.text }]}>{booking.studentId?.name || "Student"}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>{booking.studentId?.email || "student@orin"}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
+                    Session: {booking.liveSessionId?.title || "Live session"}
+                  </Text>
+                  {booking.liveSessionId?.startsAt ? (
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>
+                      Starts: {new Date(booking.liveSessionId.startsAt).toLocaleString()}
+                    </Text>
+                  ) : null}
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
+                    Paid: INR {booking.amount || booking.liveSessionId?.price || 0}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
             </>
           ) : null}
 
@@ -1869,6 +1934,31 @@ export default function MentorDashboard() {
                   <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/sprints/${item.id}` as never)}>
                     <Text style={styles.actionText}>Open Detail</Text>
                   </TouchableOpacity>
+                </View>
+              ))
+            )}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={[styles.title, { color: colors.text }]}>Paid Sprint Enrollments</Text>
+            {paidSprintEnrollments.length === 0 ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No paid sprint enrollments yet.</Text>
+            ) : (
+              paidSprintEnrollments.map((enrollment) => (
+                <View key={enrollment._id} style={styles.liveSessionCard}>
+                  <Text style={[styles.liveSessionTitle, { color: colors.text }]}>{enrollment.studentId?.name || "Student"}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>{enrollment.studentId?.email || "student@orin"}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
+                    Sprint: {enrollment.sprintId?.title || "Sprint"}
+                  </Text>
+                  {enrollment.sprintId?.startDate ? (
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>
+                      Starts: {new Date(enrollment.sprintId.startDate).toLocaleDateString()}
+                    </Text>
+                  ) : null}
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>
+                    Paid: INR {enrollment.amount || enrollment.sprintId?.price || 0}
+                  </Text>
                 </View>
               ))
             )}
