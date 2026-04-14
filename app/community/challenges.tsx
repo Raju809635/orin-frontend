@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -58,6 +58,7 @@ const DEFAULT_TASKS = [
 export default function CommunityChallengesPage() {
   const { user } = useAuth();
   const { colors } = useAppTheme();
+  const proofLinksInputRef = useRef<TextInput | null>(null);
   const [items, setItems] = useState<ChallengeItem[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [selectedId, setSelectedId] = useState("");
@@ -216,13 +217,19 @@ export default function CommunityChallengesPage() {
     }
   }
 
-  function explainTaskRequirement(taskId: string) {
+  async function handleTaskAction(taskId: string) {
+    if (user?.role !== "student") {
+      Alert.alert("Student proof only", "Proof uploads are available only for students in the challenge flow.");
+      return;
+    }
     if (taskId === "upload-project") {
-      Alert.alert("Upload required", "Upload a real proof image or project file first. Then this step will be marked complete.");
+      await uploadProofFile();
       return;
     }
     if (taskId === "submit-link") {
-      Alert.alert("Link required", "Add a real GitHub, demo, or drive link first. Then this step will be marked complete.");
+      requestAnimationFrame(() => {
+        proofLinksInputRef.current?.focus();
+      });
     }
   }
 
@@ -374,7 +381,7 @@ export default function CommunityChallengesPage() {
                     key={`${selected.id}-${task.id}`}
                     style={[styles.taskItem, done && styles.taskItemDone]}
                     activeOpacity={0.92}
-                    onPress={() => !done && explainTaskRequirement(task.id)}
+                    onPress={() => !done && handleTaskAction(task.id)}
                   >
                     <View style={[styles.taskCheckbox, done && styles.taskCheckboxDone]}>
                       {done ? <Ionicons name="checkmark" size={16} color="#FFFFFF" /> : null}
@@ -407,6 +414,7 @@ export default function CommunityChallengesPage() {
                     multiline
                   />
                   <TextInput
+                    ref={proofLinksInputRef}
                     style={styles.input}
                     placeholder="Links (GitHub, Drive, Demo) — comma separated"
                     value={proofLinks}
