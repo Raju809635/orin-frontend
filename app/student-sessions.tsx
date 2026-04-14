@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -315,54 +316,58 @@ export default function StudentSessionsScreen() {
 
       <Modal visible={noteModal.open} transparent animationType="slide" onRequestClose={() => setNoteModal({ open: false, sessionId: "", note: "" })}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Add Session Note</Text>
-            <TextInput
-              style={styles.input}
-              multiline
-              value={noteModal.note}
-              onChangeText={(text) => setNoteModal((prev) => ({ ...prev, note: text }))}
-              placeholder="Type what you learned in this session"
-            />
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setNoteModal({ open: false, sessionId: "", note: "" })}>
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryBtn} onPress={saveNote}>
-                <Text style={styles.primaryBtnText}>Save</Text>
-              </TouchableOpacity>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Add Session Note</Text>
+              <TextInput
+                style={styles.input}
+                multiline
+                value={noteModal.note}
+                onChangeText={(text) => setNoteModal((prev) => ({ ...prev, note: text }))}
+                placeholder="Type what you learned in this session"
+              />
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => setNoteModal({ open: false, sessionId: "", note: "" })}>
+                  <Text style={styles.secondaryBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.primaryBtn} onPress={saveNote}>
+                  <Text style={styles.primaryBtnText}>Save</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
 
       <Modal visible={reviewModal.open} transparent animationType="slide" onRequestClose={() => setReviewModal({ open: false, sessionId: "", rating: 5, review: "" })}>
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Rate Mentor</Text>
-            <View style={styles.ratingRow}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <TouchableOpacity key={star} onPress={() => setReviewModal((prev) => ({ ...prev, rating: star }))}>
-                  <Text style={[styles.star, reviewModal.rating >= star && styles.starActive]}>?</Text>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Rate Mentor</Text>
+              <View style={styles.ratingRow}>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <TouchableOpacity key={star} onPress={() => setReviewModal((prev) => ({ ...prev, rating: star }))}>
+                    <Text style={[styles.star, reviewModal.rating >= star && styles.starActive]}>?</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                style={styles.input}
+                multiline
+                value={reviewModal.review}
+                onChangeText={(text) => setReviewModal((prev) => ({ ...prev, review: text }))}
+                placeholder="Write quick feedback"
+              />
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={styles.secondaryBtn} onPress={() => setReviewModal({ open: false, sessionId: "", rating: 5, review: "" })}>
+                  <Text style={styles.secondaryBtnText}>Cancel</Text>
                 </TouchableOpacity>
-              ))}
+                <TouchableOpacity style={styles.primaryBtn} onPress={submitRating}>
+                  <Text style={styles.primaryBtnText}>Submit</Text>
+                </TouchableOpacity>
+              </View>
             </View>
-            <TextInput
-              style={styles.input}
-              multiline
-              value={reviewModal.review}
-              onChangeText={(text) => setReviewModal((prev) => ({ ...prev, review: text }))}
-              placeholder="Write quick feedback"
-            />
-            <View style={styles.actionRow}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setReviewModal({ open: false, sessionId: "", rating: 5, review: "" })}>
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryBtn} onPress={submitRating}>
-                <Text style={styles.primaryBtnText}>Submit</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
+          </KeyboardAvoidingView>
         </View>
       </Modal>
     </>

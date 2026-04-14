@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -290,7 +291,8 @@ export default function MentorProfileScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}>
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
       <Text style={styles.heading}>{mentor.user.name}</Text>
       <Text style={styles.meta}>{mentor.user.email}</Text>
       <Text style={styles.domain}>
@@ -407,7 +409,8 @@ export default function MentorProfileScreen() {
           <Text style={styles.secondaryButtonText}>Message Mentor</Text>
         </TouchableOpacity>
       ) : null}
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

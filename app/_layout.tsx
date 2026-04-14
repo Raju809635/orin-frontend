@@ -15,7 +15,7 @@ import {
   View
 } from "react-native";
 import { Drawer } from "expo-router/drawer";
-import { useNavigation, usePathname, useRouter } from "expo-router";
+import { useGlobalSearchParams, useNavigation, usePathname, useRouter } from "expo-router";
 import { DrawerContentScrollView, DrawerItem, DrawerContentComponentProps } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
@@ -25,6 +25,51 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function defaultRouteByRole(role: "student" | "mentor") {
   return "/network?section=feed";
+}
+
+type AppTabKey = "home" | "mentorship" | "journey" | "ai" | "community";
+
+function normalizeRouteParam(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.length ? String(value[0] || "").trim() : "";
+  }
+  return String(value || "").trim();
+}
+
+function buildTrackedRoute(pathname: string, params: Record<string, unknown>) {
+  const query = new URLSearchParams();
+  ["section", "search", "growth", "openQuiz", "domain"].forEach((key) => {
+    const value = normalizeRouteParam(params[key]);
+    if (value) query.set(key, value);
+  });
+  const queryString = query.toString();
+  return queryString ? `${pathname}?${queryString}` : pathname;
+}
+
+function getTabKeyForPath(pathname: string): AppTabKey | null {
+  if (pathname.startsWith("/network") || pathname.startsWith("/posts")) return "home";
+  if (pathname.startsWith("/mentorship") || pathname.startsWith("/domains") || pathname.startsWith("/domain-guide") || pathname.startsWith("/mentor/") || pathname.startsWith("/mentors") || pathname.startsWith("/student-sessions") || pathname.startsWith("/sprints/")) return "mentorship";
+  if (pathname.startsWith("/student-dashboard") || pathname.startsWith("/mentor-dashboard")) return "journey";
+  if (pathname.startsWith("/ai-hub") || pathname.startsWith("/ai/") || pathname.startsWith("/ai-assistant")) return "ai";
+  if (pathname.startsWith("/community-growth") || pathname.startsWith("/community/") || pathname.startsWith("/collaborate")) return "community";
+  return null;
+}
+
+function getDefaultTabPath(tabKey: AppTabKey, user: { role: "student" | "mentor" }) {
+  switch (tabKey) {
+    case "home":
+      return defaultRouteByRole(user.role);
+    case "mentorship":
+      return "/mentorship";
+    case "journey":
+      return user.role === "mentor" ? "/mentor-dashboard?section=overview" : "/student-dashboard?section=overview";
+    case "ai":
+      return "/ai-hub";
+    case "community":
+      return "/community-growth";
+    default:
+      return defaultRouteByRole(user.role);
+  }
 }
 
 function homeRouteForUser(user: { role: "student" | "mentor"; approvalStatus?: "pending" | "approved" | "rejected" }) {
@@ -39,6 +84,7 @@ function RootDrawer() {
   const router = useRouter();
   const navigation = useNavigation();
   const pathname = usePathname();
+  const globalParams = useGlobalSearchParams<Record<string, string | string[]>>();
   const { colors } = useAppTheme();
   const { user, isAuthenticated, isBootstrapping, logout } = useAuth();
   const [isBackendReady, setIsBackendReady] = useState(false);
@@ -48,6 +94,41 @@ function RootDrawer() {
   const [drawerMentorStats, setDrawerMentorStats] = useState<{ rating?: number; studentsMentored?: number } | null>(null);
   const isCheckingUpdateRef = useRef(false);
   const hasPromptedReloadRef = useRef(false);
+  const tabHistoryRef = useRef<Record<AppTabKey, string[]>>({
+    home: [],
+    mentorship: [],
+    journey: [],
+    ai: [],
+    community: []
+  });
+
+  const trackedRoute = buildTrackedRoute(pathname, globalParams);
+
+  useEffect(() => {
+    if (!user) {
+      tabHistoryRef.current = { home: [], mentorship: [], journey: [], ai: [], community: [] };
+      return;
+    }
+
+    (["home", "mentorship", "journey", "ai", "community"] as AppTabKey[]).forEach((tabKey) => {
+      if (!tabHistoryRef.current[tabKey]?.length) {
+        tabHistoryRef.current[tabKey] = [getDefaultTabPath(tabKey, user)];
+      }
+    });
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || !isAuthenticated) return;
+
+    const tabKey = getTabKeyForPath(pathname);
+    if (!tabKey) return;
+
+    const currentHistory = tabHistoryRef.current[tabKey] || [getDefaultTabPath(tabKey, user)];
+    const existingIndex = currentHistory.lastIndexOf(trackedRoute);
+
+    tabHistoryRef.current[tabKey] =
+      existingIndex >= 0 ? currentHistory.slice(0, existingIndex + 1) : [...currentHistory, trackedRoute];
+  }, [isAuthenticated, pathname, trackedRoute, user]);
 
   useEffect(() => {
     if (isBootstrapping) {
@@ -129,12 +210,33 @@ function RootDrawer() {
         return true;
       }
 
-      router.push(homePath as never);
-      return true;
+      const tabKey = getTabKeyForPath(pathname);
+      if (!tabKey) {
+        router.replace(homePath as never);
+        return true;
+      }
+
+      const currentHistory = tabHistoryRef.current[tabKey] || [];
+      if (currentHistory.length > 1) {
+        const nextHistory = currentHistory.slice(0, -1);
+        const previousRoute = nextHistory[nextHistory.length - 1];
+        tabHistoryRef.current[tabKey] = nextHistory;
+        router.replace(previousRoute as never);
+        return true;
+      }
+
+      const tabRoot = getDefaultTabPath(tabKey, user);
+      if (trackedRoute !== tabRoot) {
+        tabHistoryRef.current[tabKey] = [tabRoot];
+        router.replace(tabRoot as never);
+        return true;
+      }
+
+      return false;
     });
 
     return () => sub.remove();
-  }, [isAuthenticated, isBootstrapping, navigation, pathname, router, user]);
+  }, [isAuthenticated, isBootstrapping, navigation, pathname, router, trackedRoute, user]);
 
   useEffect(() => {
     let active = true;
@@ -442,13 +544,24 @@ function RootDrawer() {
     if (tabKey === "journey" && basePath.startsWith("/student-dashboard")) return pathname.startsWith("/student-dashboard");
     if (tabKey === "journey" && basePath.startsWith("/mentor-dashboard")) return pathname.startsWith("/mentor-dashboard");
     if (tabKey === "mentorship") {
-      return pathname.startsWith("/mentorship") || pathname.startsWith("/domains") || pathname.startsWith("/domain-guide") || pathname.startsWith("/mentor/");
+      return pathname.startsWith("/mentorship") || pathname.startsWith("/domains") || pathname.startsWith("/domain-guide") || pathname.startsWith("/mentor/") || pathname.startsWith("/mentors") || pathname.startsWith("/student-sessions") || pathname.startsWith("/sprints/");
     }
-    if (tabKey === "ai") return pathname.startsWith("/ai-hub") || pathname.startsWith("/ai-assistant");
+    if (tabKey === "ai") return pathname.startsWith("/ai-hub") || pathname.startsWith("/ai/") || pathname.startsWith("/ai-assistant");
     if (tabKey === "home") return pathname.startsWith("/network") || pathname.startsWith("/posts");
-    if (tabKey === "community") return pathname.startsWith("/community-growth") || pathname.startsWith("/collaborate");
+    if (tabKey === "community") return pathname.startsWith("/community-growth") || pathname.startsWith("/community/") || pathname.startsWith("/collaborate");
     return pathname.startsWith(basePath);
   };
+
+  function openBottomTab(tab: (typeof tabs)[number]) {
+    if (!user) return;
+    const tabKey = tab.key as AppTabKey;
+    const fallbackPath = getDefaultTabPath(tabKey, user);
+    const tabHistory = tabHistoryRef.current[tabKey];
+    const targetPath = tabHistory?.[tabHistory.length - 1] || fallbackPath;
+
+    if (trackedRoute === targetPath) return;
+    router.replace(targetPath as never);
+  }
 
   return (
     <View style={[styles.appRoot, { backgroundColor: colors.background }]}>
@@ -529,7 +642,7 @@ function RootDrawer() {
                 tab={tab}
                 active={active}
                 colors={colors}
-                onPress={() => router.push(tab.path as never)}
+                onPress={() => openBottomTab(tab)}
               />
             );
           })}

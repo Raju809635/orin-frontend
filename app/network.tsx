@@ -983,17 +983,19 @@ export default function NetworkScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <GlobalHeader
-        searchValue={searchQuery}
-        onSearchChange={setSearchQuery}
-        searchPlaceholder="Search circle, posts, people"
-      />
-      <ScrollView
-        style={{ backgroundColor: colors.background }}
-        contentContainerStyle={[styles.container, { backgroundColor: colors.background, paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true, true)} tintColor={colors.accent} />}
-      >
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: colors.background }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <GlobalHeader
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search circle, posts, people"
+        />
+        <ScrollView
+          style={{ backgroundColor: colors.background }}
+          contentContainerStyle={[styles.container, { backgroundColor: colors.background, paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true, true)} tintColor={colors.accent} />}
+          keyboardShouldPersistTaps="handled"
+        >
         <Text style={[styles.heading, { color: colors.text }]}>Home</Text>
         <Text style={[styles.subheading, { color: colors.textMuted }]}>
           {user?.role === "mentor" ? "Your professional feed for mentor insights, conversations, and visibility." : "Your student growth feed with people, ideas, and progress that match your journey."}
@@ -1405,9 +1407,9 @@ export default function NetworkScreen() {
             )}
           </View>
         ) : null}
-      </ScrollView>
+        </ScrollView>
 
-      <Modal visible={viewer.visible} transparent animationType="fade" onRequestClose={() => setViewer({ visible: false, postId: "", images: [], index: 0 })}>
+        <Modal visible={viewer.visible} transparent animationType="fade" onRequestClose={() => setViewer({ visible: false, postId: "", images: [], index: 0 })}>
         <View style={styles.viewerRoot}>
           <TouchableOpacity style={styles.viewerClose} onPress={() => setViewer({ visible: false, postId: "", images: [], index: 0 })}>
             <Ionicons name="close" size={26} color="#fff" />
@@ -1431,43 +1433,45 @@ export default function NetworkScreen() {
         </View>
       </Modal>
 
-      <Modal
-        visible={Boolean(editingPost)}
-        transparent
-        animationType="fade"
-        onRequestClose={() => (savingPostEdit ? null : setEditingPost(null))}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.editModalCard}>
-            <Text style={styles.cardTitle}>Edit Post</Text>
-            <Text style={styles.meta}>Update your description. Links will remain clickable.</Text>
-            <TextInput
-              style={styles.editPostInput}
-              multiline
-              placeholder="Update your post..."
-              value={editingPost?.content || ""}
-              onChangeText={(text) => setEditingPost((prev) => (prev ? { ...prev, content: text } : prev))}
-              editable={!savingPostEdit}
-            />
-            <View style={styles.editModalActions}>
-              <TouchableOpacity
-                style={[styles.secondaryBtn, savingPostEdit && styles.disabledBtn]}
-                onPress={() => setEditingPost(null)}
-                disabled={savingPostEdit}
-              >
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryBtn, savingPostEdit && styles.disabledBtn]}
-                onPress={savePostEdit}
-                disabled={savingPostEdit}
-              >
-                <Text style={styles.primaryBtnText}>{savingPostEdit ? "Saving..." : "Save"}</Text>
-              </TouchableOpacity>
-            </View>
+        <Modal
+          visible={Boolean(editingPost)}
+          transparent
+          animationType="fade"
+          onRequestClose={() => (savingPostEdit ? null : setEditingPost(null))}
+        >
+          <View style={styles.modalOverlay}>
+            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}>
+              <View style={styles.editModalCard}>
+                <Text style={styles.cardTitle}>Edit Post</Text>
+                <Text style={styles.meta}>Update your description. Links will remain clickable.</Text>
+                <TextInput
+                  style={styles.editPostInput}
+                  multiline
+                  placeholder="Update your post..."
+                  value={editingPost?.content || ""}
+                  onChangeText={(text) => setEditingPost((prev) => (prev ? { ...prev, content: text } : prev))}
+                  editable={!savingPostEdit}
+                />
+                <View style={styles.editModalActions}>
+                  <TouchableOpacity
+                    style={[styles.secondaryBtn, savingPostEdit && styles.disabledBtn]}
+                    onPress={() => setEditingPost(null)}
+                    disabled={savingPostEdit}
+                  >
+                    <Text style={styles.secondaryBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, savingPostEdit && styles.disabledBtn]}
+                    onPress={savePostEdit}
+                    disabled={savingPostEdit}
+                  >
+                    <Text style={styles.primaryBtnText}>{savingPostEdit ? "Saving..." : "Save"}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </KeyboardAvoidingView>
           </View>
-        </View>
-      </Modal>
+        </Modal>
 
       <Modal
         visible={commentsModal.visible}
@@ -1722,7 +1726,8 @@ export default function NetworkScreen() {
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
-    </View>
+      </View>
+    </KeyboardAvoidingView>
   );
 }
 

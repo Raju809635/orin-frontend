@@ -130,6 +130,17 @@ export default function CommunityChallengesPage() {
   const topChallenge = activeChallenges[0];
   const topNames = (leaderboard?.globalTop || []).slice(0, 3).map((entry) => entry.name);
 
+  function setSelectedTaskProgress(taskId: string, done: boolean) {
+    if (!selected?.id) return;
+    setProgressMap((prev) => ({
+      ...prev,
+      [selected.id]: {
+        ...(prev[selected.id] || {}),
+        [taskId]: done
+      }
+    }));
+  }
+
   async function participate() {
     if (!selected?.id || user?.role !== "student" || !/^[a-fA-F0-9]{24}$/.test(String(selected.id || ""))) return;
     try {
@@ -161,6 +172,8 @@ export default function CommunityChallengesPage() {
         proofLinks: links,
         proofFiles
       });
+      setSelectedTaskProgress("upload-project", proofFiles.length > 0);
+      setSelectedTaskProgress("submit-link", links.length > 0);
       setProofNote("");
       setProofLinks("");
       setProofFiles([]);
@@ -191,7 +204,11 @@ export default function CommunityChallengesPage() {
       setUploadingProofFile(true);
       const url = await pickAndUploadPostImage();
       if (!url) return;
-      setProofFiles((prev) => [...prev, url].slice(0, 4));
+      setProofFiles((prev) => {
+        const next = [...prev, url].slice(0, 4);
+        setSelectedTaskProgress("upload-project", next.length > 0);
+        return next;
+      });
     } catch (e: any) {
       Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload proof image.");
     } finally {
@@ -199,15 +216,14 @@ export default function CommunityChallengesPage() {
     }
   }
 
-  function toggleTask(taskId: string) {
-    if (!selected) return;
-    setProgressMap((prev) => ({
-      ...prev,
-      [selected.id]: {
-        ...(prev[selected.id] || {}),
-        [taskId]: !(prev[selected.id] || {})[taskId]
-      }
-    }));
+  function explainTaskRequirement(taskId: string) {
+    if (taskId === "upload-project") {
+      Alert.alert("Upload required", "Upload a real proof image or project file first. Then this step will be marked complete.");
+      return;
+    }
+    if (taskId === "submit-link") {
+      Alert.alert("Link required", "Add a real GitHub, demo, or drive link first. Then this step will be marked complete.");
+    }
   }
 
 
@@ -354,7 +370,12 @@ export default function CommunityChallengesPage() {
               {DEFAULT_TASKS.map((task) => {
                 const done = !!selectedTasks[task.id];
                 return (
-                  <TouchableOpacity key={`${selected.id}-${task.id}`} style={[styles.taskItem, done && styles.taskItemDone]} activeOpacity={0.92} onPress={() => toggleTask(task.id)}>
+                  <TouchableOpacity
+                    key={`${selected.id}-${task.id}`}
+                    style={[styles.taskItem, done && styles.taskItemDone]}
+                    activeOpacity={0.92}
+                    onPress={() => !done && explainTaskRequirement(task.id)}
+                  >
                     <View style={[styles.taskCheckbox, done && styles.taskCheckboxDone]}>
                       {done ? <Ionicons name="checkmark" size={16} color="#FFFFFF" /> : null}
                     </View>
@@ -389,7 +410,14 @@ export default function CommunityChallengesPage() {
                     style={styles.input}
                     placeholder="Links (GitHub, Drive, Demo) — comma separated"
                     value={proofLinks}
-                    onChangeText={setProofLinks}
+                    onChangeText={(text) => {
+                      setProofLinks(text);
+                      const hasLinks = text
+                        .split(",")
+                        .map((item) => item.trim())
+                        .filter(Boolean).length > 0;
+                      setSelectedTaskProgress("submit-link", hasLinks);
+                    }}
                     autoCapitalize="none"
                   />
                   <View style={styles.uploadRow}>
@@ -403,7 +431,13 @@ export default function CommunityChallengesPage() {
                             <Image source={{ uri }} style={styles.proofThumb} />
                             <TouchableOpacity
                               style={styles.proofRemove}
-                              onPress={() => setProofFiles((prev) => prev.filter((_, i) => i !== index))}
+                              onPress={() =>
+                                setProofFiles((prev) => {
+                                  const next = prev.filter((_, i) => i !== index);
+                                  setSelectedTaskProgress("upload-project", next.length > 0);
+                                  return next;
+                                })
+                              }
                             >
                               <Ionicons name="close" size={14} color="#FFFFFF" />
                             </TouchableOpacity>

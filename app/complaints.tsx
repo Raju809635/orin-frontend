@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
@@ -94,7 +96,7 @@ export default function ComplaintsScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}>
       <Text style={styles.heading}>Raise Complaint</Text>
       <Text style={styles.sub}>Share issues, blockers, or support needs with admin.</Text>
 
@@ -174,7 +176,7 @@ export default function ComplaintsScreen() {
           )}
         />
       )}
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 

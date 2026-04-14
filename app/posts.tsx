@@ -3,8 +3,10 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
+  KeyboardAvoidingView,
   Linking,
   Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -278,18 +280,20 @@ export default function PostsScreen() {
 
   return (
     <>
-      <ScrollView
-        contentContainerStyle={[styles.container, { paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadPosts(true)} />}
-      >
-        <Text style={styles.heading}>Public Posts</Text>
-        <Text style={styles.subheading}>Explore public updates from students and mentors.</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}>
+        <ScrollView
+          contentContainerStyle={[styles.container, { paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadPosts(true)} />}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Text style={styles.heading}>Public Posts</Text>
+          <Text style={styles.subheading}>Explore public updates from students and mentors.</Text>
+          {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        {posts.length === 0 ? (
-          <Text style={styles.empty}>No public posts yet.</Text>
-        ) : (
-          posts.map((post) => {
+          {posts.length === 0 ? (
+            <Text style={styles.empty}>No public posts yet.</Text>
+          ) : (
+            posts.map((post) => {
             const authorId = String(post.authorId?._id || "");
             const isOwnPost = authorId && String(authorId) === String(user?.id || "");
             const isFollowing = authorId ? Boolean(followingState[authorId]) : false;
@@ -471,9 +475,10 @@ export default function PostsScreen() {
                 ) : null}
               </View>
             );
-          })
-        )}
-      </ScrollView>
+            })
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <Modal visible={viewer.visible} transparent animationType="fade" onRequestClose={() => setViewer({ visible: false, postId: "", images: [], index: 0 })}>
         <View style={styles.viewerRoot}>
