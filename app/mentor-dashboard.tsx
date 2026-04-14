@@ -49,6 +49,7 @@ type Session = {
   payoutNote?: string;
   mentorPayoutIssueNote?: string;
   canMentorConfirmPayout?: boolean;
+  meetingProvider?: "manual" | "jitsi";
   meetingLink?: string;
   studentId?: {
     name?: string;
@@ -153,6 +154,7 @@ type LiveSessionItem = {
   sessionMode?: "free" | "paid";
   price?: number;
   currency?: string;
+  meetingProvider?: "manual" | "jitsi";
   meetingLink?: string;
   maxParticipants?: number;
   participantCount?: number;
@@ -184,6 +186,7 @@ type SprintItem = {
   weeklyPlan?: string[];
   outcomes?: string[];
   tools?: string[];
+  meetingProvider?: "manual" | "jitsi";
   meetingLink?: string;
   sessionMode?: "free" | "paid";
   price?: number;
@@ -408,6 +411,7 @@ export default function MentorDashboard() {
   const [liveSessionDate, setLiveSessionDate] = useState(nextDates(14)[0]);
   const [liveSessionTime, setLiveSessionTime] = useState("18:00");
   const [livePosterImageUrl, setLivePosterImageUrl] = useState("");
+  const [liveMeetingProvider, setLiveMeetingProvider] = useState<"manual" | "jitsi">("manual");
   const [liveMeetingLink, setLiveMeetingLink] = useState("");
   const [liveSessionMode, setLiveSessionMode] = useState<"free" | "paid">("free");
   const [liveSessionPrice, setLiveSessionPrice] = useState("499");
@@ -424,6 +428,7 @@ export default function MentorDashboard() {
   const [sprintPosterImageUrl, setSprintPosterImageUrl] = useState("");
   const [sprintDocumentUrl, setSprintDocumentUrl] = useState("");
   const [sprintDocumentType, setSprintDocumentType] = useState("pdf");
+  const [sprintMeetingProvider, setSprintMeetingProvider] = useState<"manual" | "jitsi">("manual");
   const [sprintMeetingLink, setSprintMeetingLink] = useState("");
   const [sprintMode, setSprintMode] = useState<"free" | "paid">("paid");
   const [sprintPrice, setSprintPrice] = useState("1999");
@@ -969,7 +974,10 @@ export default function MentorDashboard() {
         setError("Meeting link is required.");
         return;
       }
-      await api.patch(`/api/sessions/${sessionId}/meeting-link`, { meetingLink });
+      await api.patch(`/api/sessions/${sessionId}/meeting-link`, {
+        meetingProvider: "manual",
+        meetingLink
+      });
       notify("Meeting link updated.");
       await fetchDashboard(true);
     } catch (e: any) {
@@ -977,22 +985,41 @@ export default function MentorDashboard() {
     }
   }
 
-  async function saveLiveSessionLink(liveSessionId: string) {
+  async function generateSessionJitsiLink(sessionId: string) {
     try {
-      const meetingLink = (liveSessionLinks[liveSessionId] || "").trim();
-      await api.patch(`/api/network/live-sessions/${liveSessionId}/meeting-link`, { meetingLink });
-      notify(meetingLink ? "Live session link saved." : "Live session link cleared.");
+      setError(null);
+      await api.patch(`/api/sessions/${sessionId}/meeting-link`, {
+        meetingProvider: "jitsi"
+      });
+      notify("Jitsi link generated.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Failed to generate Jitsi link.");
+    }
+  }
+
+  async function saveLiveSessionLink(liveSessionId: string, provider: "manual" | "jitsi" = "manual") {
+    try {
+      const meetingLink = provider === "manual" ? (liveSessionLinks[liveSessionId] || "").trim() : "";
+      await api.patch(`/api/network/live-sessions/${liveSessionId}/meeting-link`, {
+        meetingProvider: provider,
+        meetingLink
+      });
+      notify(provider === "jitsi" ? "Live session Jitsi link generated." : meetingLink ? "Live session link saved." : "Live session link cleared.");
       await fetchDashboard(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to update live session link.");
     }
   }
 
-  async function saveSprintMeetingLink(sprintId: string) {
+  async function saveSprintMeetingLink(sprintId: string, provider: "manual" | "jitsi" = "manual") {
     try {
-      const meetingLink = (sprintMeetingLinks[sprintId] || "").trim();
-      await api.patch(`/api/network/sprints/${sprintId}/meeting-link`, { meetingLink });
-      notify(meetingLink ? "Sprint link saved." : "Sprint link cleared.");
+      const meetingLink = provider === "manual" ? (sprintMeetingLinks[sprintId] || "").trim() : "";
+      await api.patch(`/api/network/sprints/${sprintId}/meeting-link`, {
+        meetingProvider: provider,
+        meetingLink
+      });
+      notify(provider === "jitsi" ? "Sprint Jitsi link generated." : meetingLink ? "Sprint link saved." : "Sprint link cleared.");
       await fetchDashboard(true);
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to update sprint link.");
@@ -1100,7 +1127,8 @@ export default function MentorDashboard() {
         posterImageUrl: livePosterImageUrl.trim(),
         startsAt: parsed.toISOString(),
         durationMinutes: Number(liveSessionDuration || 60),
-        meetingLink: liveMeetingLink.trim(),
+        meetingProvider: liveMeetingProvider,
+        meetingLink: liveMeetingProvider === "manual" ? liveMeetingLink.trim() : "",
         sessionMode: liveSessionMode,
         price: liveSessionMode === "paid" ? Number(liveSessionPrice || 0) : 0,
         maxParticipants: Number(liveSessionCapacity || 50)
@@ -1111,6 +1139,7 @@ export default function MentorDashboard() {
       setLiveSessionDate(nextDates(14)[0]);
       setLiveSessionTime("18:00");
       setLivePosterImageUrl("");
+      setLiveMeetingProvider("manual");
       setLiveMeetingLink("");
       setLiveSessionMode("free");
       setLiveSessionPrice("499");
@@ -1201,7 +1230,8 @@ export default function MentorDashboard() {
         posterImageUrl: sprintPosterImageUrl.trim(),
         curriculumDocumentUrl: sprintDocumentUrl.trim(),
         curriculumFileType: sprintDocumentType,
-        meetingLink: sprintMeetingLink.trim(),
+        meetingProvider: sprintMeetingProvider,
+        meetingLink: sprintMeetingProvider === "manual" ? sprintMeetingLink.trim() : "",
         startDate: new Date(`${sprintStartDate}T00:00:00`).toISOString(),
         endDate: new Date(`${sprintEndDate}T23:59:59`).toISOString(),
         durationWeeks: Number(sprintWeeks || 1),
@@ -1222,6 +1252,7 @@ export default function MentorDashboard() {
       setSprintPosterImageUrl("");
       setSprintDocumentUrl("");
       setSprintDocumentType("pdf");
+      setSprintMeetingProvider("manual");
       setSprintMeetingLink("");
       setSprintMode("paid");
       setSprintPrice("1999");
@@ -1714,15 +1745,35 @@ export default function MentorDashboard() {
               onChangeText={setLiveSessionDuration}
               keyboardType="numeric"
             />
-            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Meeting Link (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="https://meet.google.com/... or Zoom link"
-              placeholderTextColor="#98A2B3"
-              value={liveMeetingLink}
-              onChangeText={setLiveMeetingLink}
-              autoCapitalize="none"
-            />
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Meeting Setup</Text>
+            <View style={styles.rowWrap}>
+              {(["manual", "jitsi"] as const).map((provider) => {
+                const active = liveMeetingProvider === provider;
+                return (
+                  <TouchableOpacity
+                    key={`live-provider-${provider}`}
+                    style={[styles.dayChip, active && styles.dayChipActive]}
+                    onPress={() => setLiveMeetingProvider(provider)}
+                  >
+                    <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>
+                      {provider === "manual" ? "Manual Link" : "Generate Jitsi"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {liveMeetingProvider === "manual" ? (
+              <TextInput
+                style={styles.input}
+                placeholder="https://meet.google.com/... or Zoom link"
+                placeholderTextColor="#98A2B3"
+                value={liveMeetingLink}
+                onChangeText={setLiveMeetingLink}
+                autoCapitalize="none"
+              />
+            ) : (
+              <Text style={[styles.formFieldHint, { color: colors.textMuted }]}>ORIN will create a Jitsi room when this live session is created.</Text>
+            )}
             <TouchableOpacity style={styles.primaryButton} onPress={createMentorLiveSession} disabled={creatingLiveSession}>
               <Text style={styles.primaryButtonText}>{creatingLiveSession ? "Creating..." : "Create Live Session"}</Text>
             </TouchableOpacity>
@@ -1746,20 +1797,25 @@ export default function MentorDashboard() {
                   <Text style={[styles.meta, { color: colors.textMuted }]}>Interested learners: {item.interestedCount || 0}</Text>
                   <Text style={[styles.meta, { color: colors.textMuted }]}>Approval: {item.approvalStatus || "pending"}</Text>
                   <Text style={[styles.meta, { color: colors.textMuted }]}>
-                    Link: {item.meetingLink ? "Added by mentor" : "Not added yet"}
+                    Meeting: {item.meetingProvider === "jitsi" ? "Jitsi" : "Manual"} | {item.meetingLink ? "Added by mentor" : "Not added yet"}
                   </Text>
                   {item.adminReviewNote ? <Text style={[styles.meta, { color: colors.textMuted }]}>Admin note: {item.adminReviewNote}</Text> : null}
                   <TextInput
                     style={styles.input}
                     placeholder="Add or update live session link"
                     placeholderTextColor="#98A2B3"
-                    value={liveSessionLinks[item.id] ?? item.meetingLink ?? ""}
+                    value={liveSessionLinks[item.id] ?? (item.meetingProvider === "manual" ? item.meetingLink ?? "" : "")}
                     onChangeText={(value) => setLiveSessionLinks((prev) => ({ ...prev, [item.id]: value }))}
                     autoCapitalize="none"
                   />
-                  <TouchableOpacity style={styles.actionBtn} onPress={() => saveLiveSessionLink(item.id)}>
-                    <Text style={styles.actionText}>{(liveSessionLinks[item.id] ?? item.meetingLink ?? "").trim() ? "Save Link" : "Clear Link"}</Text>
-                  </TouchableOpacity>
+                  <View style={styles.rowWrap}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => saveLiveSessionLink(item.id, "manual")}>
+                      <Text style={styles.actionText}>{(liveSessionLinks[item.id] ?? item.meetingLink ?? "").trim() ? "Save Manual Link" : "Clear Link"}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => saveLiveSessionLink(item.id, "jitsi")}>
+                      <Text style={styles.actionText}>Generate Jitsi</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               ))
             )}
@@ -1936,15 +1992,35 @@ export default function MentorDashboard() {
               onChangeText={setSprintLiveSessionsCount}
               keyboardType="numeric"
             />
-            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Sprint Meeting Link (Optional)</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Mentor will use this main sprint join link"
-              placeholderTextColor="#98A2B3"
-              value={sprintMeetingLink}
-              onChangeText={setSprintMeetingLink}
-              autoCapitalize="none"
-            />
+            <Text style={[styles.formFieldLabel, { color: colors.text }]}>Sprint Meeting Setup</Text>
+            <View style={styles.rowWrap}>
+              {(["manual", "jitsi"] as const).map((provider) => {
+                const active = sprintMeetingProvider === provider;
+                return (
+                  <TouchableOpacity
+                    key={`sprint-provider-${provider}`}
+                    style={[styles.dayChip, active && styles.dayChipActive]}
+                    onPress={() => setSprintMeetingProvider(provider)}
+                  >
+                    <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>
+                      {provider === "manual" ? "Manual Link" : "Generate Jitsi"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {sprintMeetingProvider === "manual" ? (
+              <TextInput
+                style={styles.input}
+                placeholder="Mentor will use this main sprint join link"
+                placeholderTextColor="#98A2B3"
+                value={sprintMeetingLink}
+                onChangeText={setSprintMeetingLink}
+                autoCapitalize="none"
+              />
+            ) : (
+              <Text style={[styles.formFieldHint, { color: colors.textMuted }]}>ORIN will create a Jitsi room when this sprint is created.</Text>
+            )}
             <Text style={[styles.formFieldLabel, { color: colors.text }]}>Weekly Plan</Text>
             <TextInput
               style={[styles.input, styles.textAreaInput]}
@@ -1994,7 +2070,7 @@ export default function MentorDashboard() {
                   </Text>
                   <Text style={[styles.meta, { color: colors.textMuted }]}>Approval: {item.approvalStatus || "pending"}</Text>
                   <Text style={[styles.meta, { color: colors.textMuted }]}>
-                    Link: {item.meetingLink ? "Added by mentor" : "Not added yet"}
+                    Meeting: {item.meetingProvider === "jitsi" ? "Jitsi" : "Manual"} | {item.meetingLink ? "Added by mentor" : "Not added yet"}
                   </Text>
                   {item.curriculumDocumentUrl ? <Text style={[styles.meta, { color: colors.textMuted }]}>Curriculum uploaded</Text> : <Text style={[styles.meta, { color: colors.textMuted }]}>Curriculum optional</Text>}
                   {item.adminReviewNote ? <Text style={[styles.meta, { color: colors.textMuted }]}>Admin note: {item.adminReviewNote}</Text> : null}
@@ -2002,13 +2078,18 @@ export default function MentorDashboard() {
                     style={styles.input}
                     placeholder="Add or update sprint link"
                     placeholderTextColor="#98A2B3"
-                    value={sprintMeetingLinks[item.id] ?? item.meetingLink ?? ""}
+                    value={sprintMeetingLinks[item.id] ?? (item.meetingProvider === "manual" ? item.meetingLink ?? "" : "")}
                     onChangeText={(value) => setSprintMeetingLinks((prev) => ({ ...prev, [item.id]: value }))}
                     autoCapitalize="none"
                   />
-                  <TouchableOpacity style={styles.actionBtn} onPress={() => saveSprintMeetingLink(item.id)}>
-                    <Text style={styles.actionText}>{(sprintMeetingLinks[item.id] ?? item.meetingLink ?? "").trim() ? "Save Link" : "Clear Link"}</Text>
-                  </TouchableOpacity>
+                  <View style={styles.rowWrap}>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => saveSprintMeetingLink(item.id, "manual")}>
+                      <Text style={styles.actionText}>{(sprintMeetingLinks[item.id] ?? item.meetingLink ?? "").trim() ? "Save Manual Link" : "Clear Link"}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionBtn} onPress={() => saveSprintMeetingLink(item.id, "jitsi")}>
+                      <Text style={styles.actionText}>Generate Jitsi</Text>
+                    </TouchableOpacity>
+                  </View>
                   <TouchableOpacity style={styles.actionBtn} onPress={() => router.push(`/sprints/${item.id}` as never)}>
                     <Text style={styles.actionText}>Open Detail</Text>
                   </TouchableOpacity>
@@ -2382,19 +2463,31 @@ export default function MentorDashboard() {
                 {!canSetMeetingLink(session) ? (
                   <Text style={[styles.meta, { color: colors.textMuted }]}>Meeting link can be added only in last 5 minutes before start time.</Text>
                 ) : null}
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  Meeting provider: {session.meetingProvider === "jitsi" ? "Jitsi" : "Manual link"}
+                </Text>
                 <TextInput
                   style={styles.input}
                   placeholder="https://meet.google.com/..."
-                  value={meetingLinks[session._id] ?? session.meetingLink ?? ""}
+                  value={meetingLinks[session._id] ?? (session.meetingProvider === "manual" ? session.meetingLink ?? "" : "")}
                   onChangeText={(value) => setMeetingLinks((prev) => ({ ...prev, [session._id]: value }))}
                 />
-                <TouchableOpacity
-                  style={[styles.primaryButton, !canSetMeetingLink(session) && styles.disabledButton]}
-                  onPress={() => saveMeetingLink(session._id)}
-                  disabled={!canSetMeetingLink(session)}
-                >
-                  <Text style={styles.primaryButtonText}>Save Meet Link</Text>
-                </TouchableOpacity>
+                <View style={styles.rowWrap}>
+                  <TouchableOpacity
+                    style={[styles.primaryButton, !canSetMeetingLink(session) && styles.disabledButton]}
+                    onPress={() => saveMeetingLink(session._id)}
+                    disabled={!canSetMeetingLink(session)}
+                  >
+                    <Text style={styles.primaryButtonText}>Save Manual Link</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.secondaryButton, !canSetMeetingLink(session) && styles.disabledButton]}
+                    onPress={() => generateSessionJitsiLink(session._id)}
+                    disabled={!canSetMeetingLink(session)}
+                  >
+                    <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Generate Jitsi</Text>
+                  </TouchableOpacity>
+                </View>
                 {canMarkSessionCompleted(session) ? (
                   <TouchableOpacity style={styles.primaryButton} onPress={() => markSessionCompleted(session._id)}>
                     <Text style={styles.primaryButtonText}>Mark Session Completed</Text>
