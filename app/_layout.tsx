@@ -564,15 +564,15 @@ function RootDrawer() {
     if (!user) return;
     const tabKey = tab.key as AppTabKey;
     const fallbackPath = getDefaultTabPath(tabKey, user);
+    if (tabKey === "journey") {
+      if (trackedRoute === fallbackPath) return;
+      router.replace(fallbackPath as never);
+      return;
+    }
     const tabHistory = tabHistoryRef.current[tabKey];
     const candidatePath = tabHistory?.[tabHistory.length - 1] || fallbackPath;
     const candidateBasePath = String(candidatePath || "").split("?")[0];
-    const targetPath =
-      tabKey === "journey"
-        ? candidateBasePath.startsWith("/student-dashboard") || candidateBasePath.startsWith("/mentor-dashboard")
-          ? candidatePath
-          : fallbackPath
-        : candidatePath;
+    const targetPath = candidateBasePath ? candidatePath : fallbackPath;
 
     if (trackedRoute === targetPath) return;
     router.replace(targetPath as never);
