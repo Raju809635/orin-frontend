@@ -372,6 +372,7 @@ type ChallengeItem = {
   domain?: string;
   deadline: string;
   participantsCount?: number;
+  mentor?: { id?: string | null; name?: string } | null;
 };
 
 type CertificationItem = {
@@ -400,6 +401,7 @@ type LibraryItem = {
   title: string;
   description?: string;
   institutionName?: string;
+  mentor?: { id?: string | null; name?: string } | null;
 };
 
 type KnowledgeLibraryResponse = {
@@ -2158,6 +2160,9 @@ export default function StudentDashboard() {
               <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>
                 {item.domain || "General"} | Participants: {item.participantsCount || 0}
               </Text>
+              {item.mentor?.name ? (
+                <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>By {item.mentor.name}</Text>
+              ) : null}
               <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>Deadline: {new Date(item.deadline).toLocaleDateString()}</Text>
               <TouchableOpacity style={styles.matchBtn} onPress={() => joinChallenge(item.id)}>
                 <Text style={styles.matchBtnText}>Join Challenge</Text>
@@ -2234,6 +2239,7 @@ export default function StudentDashboard() {
             <View key={item.id} style={styles.historyCard}>
               <Text style={[styles.historyTitle, { color: colors.text }]}>{item.title}</Text>
               <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.type}</Text>
+              {item.mentor?.name ? <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Uploaded by {item.mentor.name}</Text> : null}
               <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.description || ""}</Text>
             </View>
           ))
@@ -2249,6 +2255,7 @@ export default function StudentDashboard() {
             <View key={`institution-${item.id}`} style={styles.historyCard}>
               <Text style={[styles.historyTitle, { color: colors.text }]}>{item.title}</Text>
               <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.institutionName || studentInstitutionName || "Institution Resource"}</Text>
+              {item.mentor?.name ? <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Uploaded by {item.mentor.name}</Text> : null}
               <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.description || ""}</Text>
             </View>
           ))

@@ -43,6 +43,21 @@ type LibraryItem = {
   bannerImageUrl?: string;
   documentUrl?: string;
   contributorRole?: "mentor" | "student" | "admin";
+  mentor?: { id?: string | null; name?: string } | null;
+  submission?: {
+    id: string;
+    status: "submitted" | "reviewed" | "accepted" | "rejected";
+    proofText?: string;
+    proofLink?: string;
+    proofFiles?: string[];
+    submittedAt?: string | null;
+    mentorReview?: {
+      reviewedAt?: string | null;
+      notes?: string;
+      xpAwarded?: number;
+      certificateId?: string | null;
+    };
+  } | null;
   saves?: number;
   recommended?: boolean;
   recommendationReason?: string;
@@ -122,6 +137,11 @@ export default function CommunityLibraryPage() {
   const [submitting, setSubmitting] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [proofText, setProofText] = useState("");
+  const [proofLink, setProofLink] = useState("");
+  const [proofFiles, setProofFiles] = useState<string[]>([]);
+  const [uploadingProofFile, setUploadingProofFile] = useState(false);
+  const [submittingProof, setSubmittingProof] = useState(false);
   const [submitForm, setSubmitForm] = useState({
     domain: "",
     type: "other",
@@ -249,6 +269,44 @@ export default function CommunityLibraryPage() {
     }
   }
 
+  async function uploadProofFile() {
+    try {
+      setUploadingProofFile(true);
+      const url = await pickAndUploadPostImage();
+      if (!url) return;
+      setProofFiles((prev) => [...prev, url].slice(0, 4));
+    } catch (e: any) {
+      handleAppError(e, { mode: "alert", title: "Upload failed", fallbackMessage: "Unable to upload proof file." });
+    } finally {
+      setUploadingProofFile(false);
+    }
+  }
+
+  async function submitResourceProof() {
+    if (!selectedItem?.id) return;
+    if (!proofText.trim() && !proofLink.trim() && !proofFiles.length) {
+      Alert.alert("Proof required", "Add a short note, link, or proof file.");
+      return;
+    }
+    try {
+      setSubmittingProof(true);
+      await api.post(`/api/network/knowledge-library/${selectedItem.id}/submissions`, {
+        proofText: proofText.trim(),
+        proofLink: proofLink.trim(),
+        proofFiles
+      });
+      setProofText("");
+      setProofLink("");
+      setProofFiles([]);
+      Alert.alert("Submitted", "Your resource proof has been sent to the mentor for review.");
+      await load(true);
+    } catch (e: any) {
+      handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit resource proof." });
+    } finally {
+      setSubmittingProof(false);
+    }
+  }
+
   const derived = useMemo(() => {
     const recommended = items.filter((item, index) => {
       if (item.recommended) return true;
@@ -321,6 +379,12 @@ export default function CommunityLibraryPage() {
       setSelectedId(visibleItems[0]?.id || "");
     }
   }, [selectedId, visibleItems]);
+
+  useEffect(() => {
+    setProofText(selectedItem?.submission?.proofText || "");
+    setProofLink(selectedItem?.submission?.proofLink || "");
+    setProofFiles(selectedItem?.submission?.proofFiles || []);
+  }, [selectedItem]);
 
   const drawerItems = (
     <View
@@ -511,11 +575,14 @@ export default function CommunityLibraryPage() {
                     <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
                     {drawerSection === "trending" || index < 2 ? <StatusBadge label="Trending" tone="warning" /> : null}
                   </View>
-                  <Text numberOfLines={2} style={[styles.cardDescription, { color: colors.textMuted }]}>
-                    {item.description || "A guided ORIN resource you can use in roadmap planning and practice."}
-                  </Text>
-                  {item.recommendationReason ? <Text style={[styles.reasonText, { color: colors.accent }]}>{item.recommendationReason}</Text> : null}
-                </View>
+                <Text numberOfLines={2} style={[styles.cardDescription, { color: colors.textMuted }]}>
+                  {item.description || "A guided ORIN resource you can use in roadmap planning and practice."}
+                </Text>
+                {item.mentor?.name ? (
+                  <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Uploaded by {item.mentor.name}</Text>
+                ) : null}
+                {item.recommendationReason ? <Text style={[styles.reasonText, { color: colors.accent }]}>{item.recommendationReason}</Text> : null}
+              </View>
               </View>
 
               <View style={styles.tagRow}>
@@ -579,6 +646,9 @@ export default function CommunityLibraryPage() {
             <Text style={[styles.detailText, { color: colors.text }]}>
               {selectedItem.description || "Use this item to strengthen your roadmap, practice a topic, or support an active challenge."}
             </Text>
+            {selectedItem.mentor?.name ? (
+              <Text style={[styles.detailMeta, { color: colors.textMuted }]}>Uploaded by {selectedItem.mentor.name}</Text>
+            ) : null}
             {selectedItem.recommendationReason ? <Text style={[styles.reasonText, { color: colors.accent }]}>{selectedItem.recommendationReason}</Text> : null}
             <View style={styles.pillRow}>
               <StatPill icon="git-network" label="Use in Roadmap" tone="#EEF2FF" />
@@ -621,6 +691,66 @@ export default function CommunityLibraryPage() {
               variant="ghost"
               onPress={() => Alert.alert("Practice Challenge", "This CTA is ready. We can next connect it directly to the challenge flow if you want that bridge too.")}
             />
+            {user?.role === "student" && selectedItem.mentor?.id ? (
+              <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: colors.border }}>
+                <Text style={[styles.detailTitle, { color: colors.text }]}>Submit Work To {selectedItem.mentor?.name || "Mentor"}</Text>
+                <Text style={[styles.detailMeta, { color: colors.textMuted }]}>Your proof will go to the mentor who uploaded this resource.</Text>
+                {selectedItem.submission ? (
+                  <View style={styles.tagRow}>
+                    <StatusBadge
+                      label={`Status: ${selectedItem.submission.status}`}
+                      tone={
+                        selectedItem.submission.status === "accepted"
+                          ? "success"
+                          : selectedItem.submission.status === "rejected"
+                            ? "danger"
+                            : "primary"
+                      }
+                    />
+                    {selectedItem.submission.mentorReview?.xpAwarded ? (
+                      <StatusBadge label={`+${selectedItem.submission.mentorReview.xpAwarded} XP`} tone="success" />
+                    ) : null}
+                  </View>
+                ) : null}
+                {selectedItem.submission?.mentorReview?.notes ? (
+                  <Text style={[styles.detailMeta, { color: colors.textMuted }]}>Mentor note: {selectedItem.submission.mentorReview.notes}</Text>
+                ) : null}
+                {selectedItem.submission?.status !== "accepted" ? (
+                  <>
+                    <TextInput
+                      style={[styles.input, styles.textArea, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                      placeholder="What did you complete using this resource?"
+                      placeholderTextColor={colors.textMuted}
+                      value={proofText}
+                      onChangeText={setProofText}
+                      multiline
+                    />
+                    <TextInput
+                      style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                      placeholder="Project / GitHub / demo link (optional)"
+                      placeholderTextColor={colors.textMuted}
+                      value={proofLink}
+                      onChangeText={setProofLink}
+                      autoCapitalize="none"
+                    />
+                    <View style={styles.uploadRow}>
+                      <TouchableOpacity style={styles.uploadBtn} onPress={uploadProofFile} disabled={uploadingProofFile}>
+                        <Text style={styles.uploadBtnText}>{uploadingProofFile ? "Uploading..." : proofFiles.length ? "Add More Proof" : "Upload Proof"}</Text>
+                      </TouchableOpacity>
+                      {proofFiles.length ? (
+                        <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{proofFiles.length} file{proofFiles.length === 1 ? "" : "s"} attached</Text>
+                      ) : null}
+                    </View>
+                    <ActionButton
+                      label={submittingProof ? "Submitting..." : selectedItem.submission ? "Resubmit Proof" : "Submit Proof"}
+                      icon="cloud-upload"
+                      onPress={submitResourceProof}
+                      disabled={submittingProof}
+                    />
+                  </>
+                ) : null}
+              </View>
+            ) : null}
           </View>
         </CommunitySection>
       ) : null}

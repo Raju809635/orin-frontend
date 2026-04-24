@@ -32,6 +32,7 @@ type ChallengeItem = {
   id: string;
   title: string;
   domain?: string;
+  mentor?: { id?: string | null; name?: string } | null;
   description?: string;
   bannerImageUrl?: string;
   proofInstructions?: string;
@@ -311,6 +312,7 @@ export default function CommunityChallengesPage() {
                   {item.recommended ? <StatusBadge label="For You" tone="primary" /> : null}
                 </View>
                 <Text style={styles.cardMeta}>{item.domain || "General"} • {formatTimeLeft(item.deadline)}</Text>
+                {item.mentor?.name ? <Text style={styles.cardMeta}>By {item.mentor.name}</Text> : null}
               </View>
             </View>
             <Text numberOfLines={2} style={styles.challengeDescription}>
@@ -345,6 +347,7 @@ export default function CommunityChallengesPage() {
               <View style={styles.detailHead}>
                 <Text style={styles.detailTitle}>{selected.title}</Text>
                 <Text style={styles.cardMeta}>{selected.domain || "General"} • {formatTimeLeft(selected.deadline)}</Text>
+                {selected.mentor?.name ? <Text style={styles.cardMeta}>By {selected.mentor.name}</Text> : null}
               </View>
             </View>
             {selected.bannerImageUrl ? (
