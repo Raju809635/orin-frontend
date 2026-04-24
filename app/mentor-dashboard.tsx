@@ -764,7 +764,7 @@ export default function MentorDashboard() {
     } finally {
       setSubmittingResource(false);
     }
-  }, [fetchDashboard, resourceBannerImageUrl, resourceClassName, resourceDescription, resourceDocumentUrl, resourceDomain, resourceScope, resourceTitle, resourceUrl]);
+  }, [resourceBannerImageUrl, resourceClassName, resourceDescription, resourceDocumentUrl, resourceDomain, resourceScope, resourceTitle, resourceUrl]);
 
   const submitMentorChallenge = useCallback(async () => {
     if (!challengeTitle.trim() || !challengeDeadline) {
@@ -798,7 +798,7 @@ export default function MentorDashboard() {
     } finally {
       setSubmittingChallenge(false);
     }
-  }, [challengeBannerImageUrl, challengeClassName, challengeDeadline, challengeDescription, challengeDomain, challengeParticipantLimit, challengeProofInstructions, challengeScope, challengeTitle, fetchDashboard]);
+  }, [challengeBannerImageUrl, challengeClassName, challengeDeadline, challengeDescription, challengeDomain, challengeParticipantLimit, challengeProofInstructions, challengeScope, challengeTitle]);
 
   const saveMentorCertificateTemplate = useCallback(async () => {
     if (!templateTitle.trim()) {
@@ -827,7 +827,7 @@ export default function MentorDashboard() {
     } finally {
       setSubmittingTemplate(false);
     }
-  }, [fetchDashboard, templateClassName, templateDescription, templateScope, templateTitle, templateType, templateXpReward]);
+  }, [templateClassName, templateDescription, templateScope, templateTitle, templateType, templateXpReward]);
 
   const uploadMentorResourceBanner = useCallback(async () => {
     try {
@@ -888,7 +888,7 @@ export default function MentorDashboard() {
     } finally {
       setReviewingInstitutionSubmissionId(null);
     }
-  }, [fetchDashboard, institutionReviewDrafts]);
+  }, [institutionReviewDrafts]);
 
   const updateResourceReviewDraft = useCallback((submissionId: string, patch: Partial<{ xpAwarded: string; notes: string; issueCertificate: boolean }>) => {
     setResourceReviewDrafts((prev) => ({
@@ -919,7 +919,7 @@ export default function MentorDashboard() {
     } finally {
       setReviewingResourceSubmissionId(null);
     }
-  }, [fetchDashboard, resourceReviewDrafts]);
+  }, [resourceReviewDrafts]);
 
   const mentorBanners = [
     {
