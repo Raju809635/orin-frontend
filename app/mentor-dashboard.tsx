@@ -442,7 +442,7 @@ export default function MentorDashboard() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: string; growth?: string }>();
   const { user, logout } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const scrollViewRef = useRef<ScrollView | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [mentorGrowthSection, setMentorGrowthSection] = useState<MentorGrowthSectionId>("reputation");
