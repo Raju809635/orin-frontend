@@ -439,7 +439,7 @@ function nextDates(days = 14) {
 }
 
 function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
+  return Array.isArray(value) ? value.filter((item) => item != null) as T[] : [];
 }
 
 export default function MentorDashboard() {
@@ -1089,13 +1089,14 @@ export default function MentorDashboard() {
   );
 
   const pendingRequests = useMemo(
-    () => bookings.filter((booking) => booking.status === "pending"),
+    () => bookings.filter((booking) => booking?.status === "pending"),
     [bookings]
   );
 
   const upcomingSessions = useMemo(
     () =>
       sessions.filter((session) => {
+        if (!session) return false;
         const fallbackStart = session.date && session.time ? new Date(`${session.date}T${session.time}:00.000Z`).getTime() : NaN;
         const startValue = session.scheduledStart ? new Date(session.scheduledStart).getTime() : fallbackStart;
         return Number.isFinite(startValue) && startValue >= Date.now() && session.sessionStatus !== "completed";
@@ -1104,14 +1105,14 @@ export default function MentorDashboard() {
   );
 
   const completedSessions = useMemo(
-    () => sessions.filter((session) => session.sessionStatus === "completed" || session.status === "completed"),
+    () => sessions.filter((session) => session && (session.sessionStatus === "completed" || session.status === "completed")),
     [sessions]
   );
 
   const studentsMentoredCount = useMemo(() => {
     const ids = new Set(
       sessions
-        .map((session) => session.studentId?.email || session.studentId?.name || "")
+        .map((session) => session?.studentId?.email || session?.studentId?.name || "")
         .filter(Boolean)
     );
     return ids.size;
@@ -1121,6 +1122,7 @@ export default function MentorDashboard() {
     () =>
       sessions.filter(
         (session) =>
+          session &&
           session.sessionStatus === "confirmed" &&
           (session.paymentStatus === "paid" || session.paymentStatus === "verified")
       ),
@@ -1131,12 +1133,12 @@ export default function MentorDashboard() {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return confirmedPaidSessions;
     return confirmedPaidSessions.filter((session) => {
-      const studentName = (session.studentId?.name || "").toLowerCase();
-      const studentEmail = (session.studentId?.email || "").toLowerCase();
-      const date = (session.date || "").toLowerCase();
-      const time = (session.time || "").toLowerCase();
-      const paymentStatus = (session.paymentStatus || "").toLowerCase();
-      const sessionStatus = (session.sessionStatus || "").toLowerCase();
+      const studentName = (session?.studentId?.name || "").toLowerCase();
+      const studentEmail = (session?.studentId?.email || "").toLowerCase();
+      const date = (session?.date || "").toLowerCase();
+      const time = (session?.time || "").toLowerCase();
+      const paymentStatus = (session?.paymentStatus || "").toLowerCase();
+      const sessionStatus = (session?.sessionStatus || "").toLowerCase();
       return (
         studentName.includes(query) ||
         studentEmail.includes(query) ||
@@ -1152,11 +1154,11 @@ export default function MentorDashboard() {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return bookings;
     return bookings.filter((booking) => {
-      const studentName = (booking.student?.name || "").toLowerCase();
-      const studentEmail = (booking.student?.email || "").toLowerCase();
-      const scheduledAt = new Date(booking.scheduledAt).toLocaleString().toLowerCase();
-      const status = (booking.status || "").toLowerCase();
-      const notes = (booking.notes || "").toLowerCase();
+      const studentName = (booking?.student?.name || "").toLowerCase();
+      const studentEmail = (booking?.student?.email || "").toLowerCase();
+      const scheduledAt = new Date(booking?.scheduledAt || "").toLocaleString().toLowerCase();
+      const status = (booking?.status || "").toLowerCase();
+      const notes = (booking?.notes || "").toLowerCase();
       return (
         studentName.includes(query) ||
         studentEmail.includes(query) ||
@@ -1170,21 +1172,21 @@ export default function MentorDashboard() {
   const filteredMessages = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return messages;
-    return messages.filter((msg) => msg.text.toLowerCase().includes(query));
+    return messages.filter((msg) => String(msg?.text || "").toLowerCase().includes(query));
   }, [messages, searchQuery]);
 
   const pendingLiveApprovals = useMemo(
-    () => liveSessions.filter((item) => item.approvalStatus === "pending").length,
+    () => liveSessions.filter((item) => item?.approvalStatus === "pending").length,
     [liveSessions]
   );
 
   const approvedLiveSessionsCount = useMemo(
-    () => liveSessions.filter((item) => item.approvalStatus === "approved").length,
+    () => liveSessions.filter((item) => item?.approvalStatus === "approved").length,
     [liveSessions]
   );
 
   const pendingSprintApprovals = useMemo(
-    () => sprints.filter((item) => item.approvalStatus === "pending").length,
+    () => sprints.filter((item) => item?.approvalStatus === "pending").length,
     [sprints]
   );
 
