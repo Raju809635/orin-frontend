@@ -4,7 +4,10 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Linking,
+  Modal,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -15,6 +18,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
@@ -25,7 +29,6 @@ import {
   ActionButton,
   CommunityHero,
   CommunitySection,
-  FilterTabs,
   StatPill,
   StatusBadge
 } from "@/components/community/ui";
@@ -45,21 +48,41 @@ type LibraryItem = {
   recommendationReason?: string;
   tags?: string[];
 };
+type LibraryResponse = {
+  journey?: {
+    currentStep?: string;
+    focusLabel?: string;
+    personalizationReason?: string;
+  };
+  institutionName?: string;
+  institutionResources?: LibraryItem[];
+  roadmapResources?: LibraryItem[];
+  domainResources?: LibraryItem[];
+  items?: LibraryItem[];
+};
 
-const TABS = ["All", "Recommended", "Trending", "Saved"] as const;
 const STORAGE_KEY = "community-library-saved-v1";
 const CACHE_KEY = "community-library-cache-v2";
+type LibraryDrawerSection = "roadmap" | "institution" | "domain" | "recommended" | "trending" | "saved" | "recent";
 
 export default function CommunityLibraryPage() {
   const { user } = useAuth();
   const { colors, isDark } = useAppTheme();
-  const [tab, setTab] = useState<(typeof TABS)[number]>("All");
+  const insets = useSafeAreaInsets();
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [items, setItems] = useState<LibraryItem[]>([]);
+  const [institutionItems, setInstitutionItems] = useState<LibraryItem[]>([]);
+  const [institutionName, setInstitutionName] = useState("");
+  const [roadmapItems, setRoadmapItems] = useState<LibraryItem[]>([]);
+  const [domainItems, setDomainItems] = useState<LibraryItem[]>([]);
+  const [journeyMeta, setJourneyMeta] = useState<LibraryResponse["journey"] | null>(null);
   const [selectedId, setSelectedId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [drawerSection, setDrawerSection] = useState<LibraryDrawerSection>("roadmap");
+  const [recentItemIds, setRecentItemIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
   const [uploadingDoc, setUploadingDoc] = useState(false);
@@ -78,17 +101,45 @@ export default function CommunityLibraryPage() {
       if (refresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const res = await api.get<LibraryItem[]>("/api/network/knowledge-library");
-      const nextItems = res.data || [];
+      const res = await api.get<LibraryItem[] | LibraryResponse>("/api/network/knowledge-library");
+      const payload = Array.isArray(res.data) ? { items: res.data } : (res.data || {});
+      const nextInstitutionItems = payload.institutionResources || [];
+      const nextRoadmapItems = payload.roadmapResources || payload.items || [];
+      const nextDomainItems = payload.domainResources || payload.items || [];
+      const nextItems = payload.items || nextRoadmapItems || [];
       setItems(nextItems);
-      setSelectedId((prev) => prev || nextItems[0]?.id || "");
-      AsyncStorage.setItem(CACHE_KEY, JSON.stringify(nextItems)).catch(() => undefined);
+      setInstitutionItems(nextInstitutionItems);
+      setInstitutionName(String(payload.institutionName || "").trim());
+      setRoadmapItems(nextRoadmapItems);
+      setDomainItems(nextDomainItems);
+      setJourneyMeta(payload.journey || null);
+      setSelectedId((prev) => prev || nextInstitutionItems[0]?.id || nextRoadmapItems[0]?.id || nextDomainItems[0]?.id || nextItems[0]?.id || "");
+      AsyncStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({
+          items: nextItems,
+          institutionName: String(payload.institutionName || "").trim(),
+          institutionResources: nextInstitutionItems,
+          roadmapResources: nextRoadmapItems,
+          domainResources: nextDomainItems,
+          journey: payload.journey || null
+        })
+      ).catch(() => undefined);
     } catch (e: any) {
       const cached = await AsyncStorage.getItem(CACHE_KEY).catch(() => null);
       if (cached) {
-        const parsed = JSON.parse(cached) as LibraryItem[];
-        setItems(parsed);
-        setSelectedId((prev) => prev || parsed[0]?.id || "");
+        const parsed = JSON.parse(cached) as LibraryResponse;
+        const cachedInstitutionItems = parsed.institutionResources || [];
+        const cachedRoadmapItems = parsed.roadmapResources || parsed.items || [];
+        const cachedDomainItems = parsed.domainResources || parsed.items || [];
+        const cachedItems = parsed.items || cachedRoadmapItems || [];
+        setItems(cachedItems);
+        setInstitutionItems(cachedInstitutionItems);
+        setInstitutionName(String(parsed.institutionName || "").trim());
+        setRoadmapItems(cachedRoadmapItems);
+        setDomainItems(cachedDomainItems);
+        setJourneyMeta(parsed.journey || null);
+        setSelectedId((prev) => prev || cachedInstitutionItems[0]?.id || cachedRoadmapItems[0]?.id || cachedDomainItems[0]?.id || cachedItems[0]?.id || "");
         setError("Showing last loaded library data.");
       } else {
         setError(getAppErrorMessage(e, "Failed to load library."));
@@ -143,8 +194,6 @@ export default function CommunityLibraryPage() {
     }
   }
 
-  const selectedItem = items.find((item) => item.id === selectedId) || null;
-
   const derived = useMemo(() => {
     const recommended = items.filter((item, index) => {
       if (item.recommended) return true;
@@ -157,25 +206,215 @@ export default function CommunityLibraryPage() {
     return { recommended, trending, savedOnly };
   }, [items, saved, user?.role]);
 
-  const filtered = useMemo(() => {
-    if (tab === "All") return items;
-    if (tab === "Recommended") return derived.recommended;
-    if (tab === "Trending") return derived.trending;
-    return derived.savedOnly;
-  }, [derived.recommended, derived.savedOnly, derived.trending, items, tab]);
+  const recentItems = useMemo(
+    () =>
+      recentItemIds
+        .map((id) => [...institutionItems, ...roadmapItems, ...domainItems, ...items].find((item) => item.id === id))
+        .filter(Boolean) as LibraryItem[],
+    [domainItems, institutionItems, items, recentItemIds, roadmapItems]
+  );
+
+  const visibleItems = useMemo(() => {
+    if (drawerSection === "institution") return institutionItems;
+    if (drawerSection === "domain") return domainItems;
+    if (drawerSection === "recommended") return derived.recommended;
+    if (drawerSection === "trending") return derived.trending;
+    if (drawerSection === "saved") return derived.savedOnly;
+    if (drawerSection === "recent") return recentItems;
+    return roadmapItems.length ? roadmapItems : items;
+  }, [derived.recommended, derived.savedOnly, derived.trending, domainItems, drawerSection, institutionItems, items, recentItems, roadmapItems]);
+
+  const activeSectionTitle = useMemo(() => {
+    if (drawerSection === "institution") return "Institution Resource Tracks";
+    if (drawerSection === "domain") return "Domain Resource Tracks";
+    if (drawerSection === "recommended") return "Recommended Resources";
+    if (drawerSection === "trending") return "Trending Resources";
+    if (drawerSection === "saved") return "Saved Resources";
+    if (drawerSection === "recent") return "Recent Library Activity";
+    return "Roadmap Resource Tracks";
+  }, [drawerSection]);
+
+  const activeSectionSubtitle = useMemo(() => {
+    if (drawerSection === "institution") return institutionName ? `Resources shared by your institution: ${institutionName}` : "Institution-specific learning resources.";
+    if (drawerSection === "domain") return "Explore resources by selected domain focus.";
+    if (drawerSection === "recommended") return "The most relevant picks for the learner right now.";
+    if (drawerSection === "trending") return "Popular items students are saving and opening.";
+    if (drawerSection === "saved") return "Your bookmarked learning resources.";
+    if (drawerSection === "recent") return "Return quickly to the resources you opened most recently.";
+    return journeyMeta?.personalizationReason || "Resources selected for your current roadmap step.";
+  }, [drawerSection, institutionName, journeyMeta?.personalizationReason]);
+
+  const activeSectionEmptyState = useMemo(() => {
+    if (drawerSection === "institution") return institutionName ? `No institution resources have been added for ${institutionName} yet.` : "Add your institution in profile to unlock institution resources.";
+    if (drawerSection === "domain") return "No domain resources yet. Change the domain focus or refresh the library.";
+    if (drawerSection === "recommended") return "No recommended resources right now. Try roadmap or domain view first.";
+    if (drawerSection === "trending") return "Nothing is trending yet. Once more learners save resources, they will appear here.";
+    if (drawerSection === "saved") return "You have not saved any resources yet.";
+    if (drawerSection === "recent") return "Open a resource and it will appear here for quick access.";
+    return "No roadmap resources available yet. Refresh to load a new roadmap-based set.";
+  }, [drawerSection, institutionName]);
+
+  const selectedItem = visibleItems.find((item) => item.id === selectedId) || visibleItems[0] || null;
+
+  useEffect(() => {
+    if (!visibleItems.length) {
+      setSelectedId("");
+      return;
+    }
+    if (!visibleItems.some((item) => item.id === selectedId)) {
+      setSelectedId(visibleItems[0]?.id || "");
+    }
+  }, [selectedId, visibleItems]);
+
+  const drawerItems = (
+    <View
+      style={[
+        styles.drawerPanel,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          paddingTop: Math.max(insets.top, 18),
+          paddingBottom: Math.max(insets.bottom, 18)
+        }
+      ]}
+    >
+      <View style={styles.drawerHeader}>
+        <View>
+          <Text style={[styles.drawerTitle, { color: colors.text }]}>Knowledge Library</Text>
+          <Text style={[styles.drawerSub, { color: colors.textMuted }]}>Roadmap, domain, saved, and recent learning tracks</Text>
+        </View>
+        <TouchableOpacity style={[styles.drawerCloseBtn, { borderColor: colors.border }]} onPress={() => setDrawerVisible(false)}>
+          <Ionicons name="close" size={18} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.drawerSection}>
+        <Text style={[styles.drawerSectionTitle, { color: colors.textMuted }]}>Browse</Text>
+        {[
+          { key: "roadmap", label: "Roadmap Based", meta: journeyMeta?.currentStep ? `Current step: ${journeyMeta.currentStep}` : "Resources for your active roadmap" },
+          { key: "institution", label: "Institution Resources", meta: institutionItems.length ? `${institutionItems.length} resource${institutionItems.length === 1 ? "" : "s"} from ${institutionName || "your institution"}` : institutionName ? `Resources from ${institutionName}` : "Institution-specific resources" },
+          { key: "domain", label: "Domain Based", meta: journeyMeta?.focusLabel || "Resources for your selected domain focus" },
+          { key: "recommended", label: "Recommended", meta: derived.recommended.length ? `${derived.recommended.length} personalized picks` : "Smart picks for the learner" },
+          { key: "trending", label: "Trending", meta: derived.trending.length ? `${derived.trending.slice(0, 6).length} top library items` : "Popular resources" },
+          { key: "saved", label: "Saved", meta: derived.savedOnly.length ? `${derived.savedOnly.length} saved item${derived.savedOnly.length === 1 ? "" : "s"}` : "Your bookmarks" },
+          { key: "recent", label: "Recent", meta: recentItems.length ? `${recentItems.length} recently opened resource${recentItems.length === 1 ? "" : "s"}` : "Recently opened resources" }
+        ].map((item: { key: LibraryDrawerSection; label: string; meta: string }) => {
+          const active = drawerSection === item.key;
+          return (
+            <TouchableOpacity
+              key={item.key}
+              style={[
+                styles.drawerModeRow,
+                { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+                active && {
+                  backgroundColor: item.key === "domain" || item.key === "trending" ? "#FFF7ED" : "#EEF4FF",
+                  borderColor: item.key === "domain" || item.key === "trending" ? "#C98A00" : "#4457FF"
+                }
+              ]}
+              onPress={() => {
+                setDrawerSection(item.key);
+                setDrawerVisible(false);
+              }}
+            >
+              <Ionicons
+                name={
+                  item.key === "institution"
+                    ? "school-outline"
+                    : item.key === "domain"
+                    ? "globe-outline"
+                    : item.key === "recommended"
+                      ? "sparkles-outline"
+                      : item.key === "trending"
+                        ? "trending-up-outline"
+                        : item.key === "saved"
+                          ? "bookmark-outline"
+                          : item.key === "recent"
+                            ? "time-outline"
+                            : "map-outline"
+                }
+                size={16}
+                color={active ? (item.key === "domain" || item.key === "trending" ? "#C98A00" : item.key === "institution" ? "#1F7A4C" : "#4457FF") : colors.textMuted}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.drawerModeTitle, { color: colors.text }]}>{item.label}</Text>
+                <Text style={[styles.drawerModeMeta, { color: colors.textMuted }]}>{item.meta}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <View style={[styles.drawerSection, styles.drawerHistorySection]}>
+        <Text style={[styles.drawerSectionTitle, { color: colors.textMuted }]}>
+          {drawerSection === "saved" ? "Saved resources" : drawerSection === "recent" ? "Recent resources" : "Quick picks"}
+        </Text>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {visibleItems.length ? (
+            visibleItems.slice(0, 10).map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.historyRow,
+                  { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+                  selectedId === item.id && { borderColor: colors.accent, backgroundColor: isDark ? colors.surface : "#F8FBFF" }
+                ]}
+                onPress={() => {
+                  setSelectedId(item.id);
+                  setRecentItemIds((prev) => [item.id, ...prev.filter((id) => id !== item.id)].slice(0, 12));
+                  setDrawerVisible(false);
+                }}
+              >
+                <Text style={[styles.historyTitle, { color: colors.text }]} numberOfLines={1}>{item.title}</Text>
+                <Text style={[styles.historyPreview, { color: colors.textMuted }]} numberOfLines={2}>
+                  {item.recommendationReason || item.description || "Guided resource ready to open"}
+                </Text>
+                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+                  {item.domain || item.type || "General"}
+                </Text>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={[styles.drawerEmptyCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.drawerEmptyTitle, { color: colors.text }]}>Nothing here yet</Text>
+              <Text style={[styles.drawerEmptyText, { color: colors.textMuted }]}>{activeSectionEmptyState}</Text>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </View>
+  );
 
   return (
-    <ScrollView
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
     >
+      <View style={[styles.headerBar, { backgroundColor: colors.background, borderBottomColor: colors.border, paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity style={[styles.headerIconBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => setDrawerVisible(true)}>
+          <Ionicons name="menu" size={18} color={colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{activeSectionTitle}</Text>
+          <Text style={[styles.headerSub, { color: colors.textMuted }]} numberOfLines={1}>{activeSectionSubtitle}</Text>
+        </View>
+        <TouchableOpacity style={[styles.headerIconBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => load(true)}>
+          <Ionicons name="refresh-outline" size={18} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={[styles.page, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 20) + 32 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+        keyboardShouldPersistTaps="handled"
+      >
       <CommunityHero
         eyebrow="Knowledge Library"
         title="Smart Learning Hub"
         subtitle="Discover guided resources, keep your best references saved, and move straight into roadmap or challenge actions."
         stats={[
-          { icon: "library", label: "Resources", value: String(items.length) },
+          { icon: "library", label: "Resources", value: String(visibleItems.length || items.length) },
           { icon: "bookmark", label: "Saved", value: String(Object.values(saved).filter(Boolean).length) },
           { icon: "trending-up", label: "Trending", value: String(derived.trending.slice(0, 3).length) }
         ]}
@@ -183,22 +422,14 @@ export default function CommunityLibraryPage() {
       />
 
       <CommunitySection
-        title="Discover"
-        subtitle="Switch quickly between everything, recommended picks, trending material, and saved learning blocks."
-        icon="compass"
-      >
-        <FilterTabs tabs={TABS.map((item) => ({ label: item, active: tab === item, onPress: () => setTab(item) }))} />
-      </CommunitySection>
-
-      <CommunitySection
         title="Learning Resources"
-        subtitle="Each card points the learner toward the next action instead of behaving like a static list."
+        subtitle={activeSectionSubtitle}
         icon="book"
       >
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
         {loading ? <ActivityIndicator size="large" color={colors.accent} /> : null}
-        {!loading && !filtered.length ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>Nothing in this tab yet. Save a resource or switch to another tab.</Text> : null}
-        {filtered.map((item, index) => {
+        {!loading && !visibleItems.length ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>{activeSectionEmptyState}</Text> : null}
+        {visibleItems.map((item, index) => {
           const categoryColor = getCategoryTone(item);
           const isSelected = selectedId === item.id;
           return (
@@ -210,7 +441,10 @@ export default function CommunityLibraryPage() {
                 { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border },
                 isSelected && [styles.resourceCardActive, { borderColor: colors.accent, backgroundColor: isDark ? colors.surface : "#F8FBFF" }]
               ]}
-              onPress={() => setSelectedId(item.id)}
+              onPress={() => {
+                setSelectedId(item.id);
+                setRecentItemIds((prev) => [item.id, ...prev.filter((id) => id !== item.id)].slice(0, 12));
+              }}
             >
               <View style={styles.cardTopRow}>
                 <View style={[styles.resourceIconWrap, { backgroundColor: categoryColor.soft }]}>
@@ -219,7 +453,7 @@ export default function CommunityLibraryPage() {
                 <View style={styles.cardTopBody}>
                   <View style={styles.inlineRow}>
                     <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
-                    {tab === "Trending" || index < 2 ? <StatusBadge label="Trending" tone="warning" /> : null}
+                    {drawerSection === "trending" || index < 2 ? <StatusBadge label="Trending" tone="warning" /> : null}
                   </View>
                   <Text numberOfLines={2} style={[styles.cardDescription, { color: colors.textMuted }]}>
                     {item.description || "A guided ORIN resource you can use in roadmap planning and practice."}
@@ -241,7 +475,7 @@ export default function CommunityLibraryPage() {
 
               <View style={styles.pillRow}>
                 <StatPill icon="bookmark" label={`${(item.saves || 0) + (saved[item.id] ? 1 : 0)} saves`} tone="#EEF2FF" />
-                <StatPill icon="flash" label={tab === "Recommended" ? "Recommended for you" : "Ready to use"} tone="#ECFDF3" />
+                <StatPill icon="flash" label={drawerSection === "recommended" ? "Recommended for you" : "Ready to use"} tone="#ECFDF3" />
               </View>
 
               <View style={styles.actionRow}>
@@ -252,7 +486,15 @@ export default function CommunityLibraryPage() {
                   onPress={() => setSaved((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
                   style={styles.flexAction}
                 />
-                <ActionButton label="Start Learning" icon="play" onPress={() => setSelectedId(item.id)} style={styles.flexAction} />
+                <ActionButton
+                  label="Start Learning"
+                  icon="play"
+                  onPress={() => {
+                    setSelectedId(item.id);
+                    setRecentItemIds((prev) => [item.id, ...prev.filter((id) => id !== item.id)].slice(0, 12));
+                  }}
+                  style={styles.flexAction}
+                />
               </View>
             </TouchableOpacity>
           );
@@ -386,7 +628,14 @@ export default function CommunityLibraryPage() {
           />
         </CommunitySection>
       ) : null}
+      <Modal visible={drawerVisible} transparent animationType="slide" onRequestClose={() => setDrawerVisible(false)}>
+        <View style={styles.drawerOverlay}>
+          <TouchableOpacity style={styles.drawerBackdrop} activeOpacity={1} onPress={() => setDrawerVisible(false)} />
+          {drawerItems}
+        </View>
+      </Modal>
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -427,6 +676,25 @@ function iconForType(type?: string) {
 }
 
 const styles = StyleSheet.create({
+  headerBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1
+  },
+  headerIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  headerCenter: { flex: 1, gap: 2 },
+  headerTitle: { fontSize: 18, fontWeight: "800" },
+  headerSub: { fontSize: 12, fontWeight: "600" },
   page: { padding: 16, backgroundColor: "#F4F7FB", gap: 14 },
   error: { color: "#B42318", fontWeight: "700" },
   emptyText: { color: "#667085", lineHeight: 20 },
@@ -504,5 +772,51 @@ const styles = StyleSheet.create({
   bannerPreview: { width: "100%", height: 140, borderRadius: 14, borderWidth: 1, borderColor: "#E4E7EC" },
   docRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   docText: { color: "#175CD3", fontWeight: "700" },
-  textArea: { minHeight: 92, textAlignVertical: "top" }
+  textArea: { minHeight: 92, textAlignVertical: "top" },
+  drawerOverlay: { flex: 1, flexDirection: "row", backgroundColor: "rgba(15, 23, 42, 0.28)" },
+  drawerBackdrop: { flex: 1 },
+  drawerPanel: {
+    width: "84%",
+    maxWidth: 360,
+    borderRightWidth: 1,
+    paddingHorizontal: 16,
+    gap: 14
+  },
+  drawerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  drawerTitle: { fontSize: 20, fontWeight: "800" },
+  drawerSub: { fontSize: 12, fontWeight: "600" },
+  drawerCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  drawerSection: { gap: 10 },
+  drawerHistorySection: { flex: 1 },
+  drawerSectionTitle: { fontSize: 12, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 },
+  drawerModeRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12
+  },
+  drawerModeTitle: { fontSize: 14, fontWeight: "800" },
+  drawerModeMeta: { marginTop: 2, fontSize: 12, lineHeight: 18 },
+  drawerEmptyCard: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 6 },
+  drawerEmptyTitle: { fontSize: 14, fontWeight: "800" },
+  drawerEmptyText: { fontSize: 13, lineHeight: 20 },
+  historyRow: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 4,
+    marginBottom: 10
+  },
+  historyTitle: { fontSize: 14, fontWeight: "800" },
+  historyPreview: { fontSize: 12, lineHeight: 18 },
+  historyMeta: { fontSize: 11, fontWeight: "600" }
 });

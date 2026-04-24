@@ -169,6 +169,7 @@ type InstitutionRoadmapItem = {
   title: string;
   description?: string;
   domain?: string;
+  className?: string;
   status?: string;
   weeks: Array<{ id: string; title: string; tasks?: string[] }>;
 };
@@ -438,6 +439,7 @@ export default function MentorDashboard() {
   const [certifications, setCertifications] = useState<CertificationItem[]>([]);
   const [institutionRoadmapTitle, setInstitutionRoadmapTitle] = useState("");
   const [institutionRoadmapDomain, setInstitutionRoadmapDomain] = useState("");
+  const [institutionRoadmapClassName, setInstitutionRoadmapClassName] = useState("");
   const [institutionRoadmapDescription, setInstitutionRoadmapDescription] = useState("");
   const [institutionRoadmapWeekOne, setInstitutionRoadmapWeekOne] = useState("");
   const [institutionRoadmapWeekTwo, setInstitutionRoadmapWeekTwo] = useState("");
@@ -617,11 +619,13 @@ export default function MentorDashboard() {
         title: institutionRoadmapTitle.trim(),
         description: institutionRoadmapDescription.trim(),
         domain: institutionRoadmapDomain.trim(),
+        className: institutionRoadmapClassName.trim(),
         weeks
       });
       setInstitutionRoadmapTitle("");
       setInstitutionRoadmapDescription("");
       setInstitutionRoadmapDomain("");
+      setInstitutionRoadmapClassName("");
       setInstitutionRoadmapWeekOne("");
       setInstitutionRoadmapWeekTwo("");
       setInstitutionRoadmapWeekThree("");
@@ -634,6 +638,7 @@ export default function MentorDashboard() {
     }
   }, [
     fetchDashboard,
+    institutionRoadmapClassName,
     institutionRoadmapDescription,
     institutionRoadmapDomain,
     institutionRoadmapTitle,
@@ -2362,6 +2367,7 @@ export default function MentorDashboard() {
             <Text style={[styles.title, { color: colors.text }]}>Institution Roadmaps</Text>
             <TextInput style={styles.input} placeholder="Roadmap title" value={institutionRoadmapTitle} onChangeText={setInstitutionRoadmapTitle} />
             <TextInput style={styles.input} placeholder="Domain (optional)" value={institutionRoadmapDomain} onChangeText={setInstitutionRoadmapDomain} />
+            <TextInput style={styles.input} placeholder="Class (optional: Class 10 / CSE-A)" value={institutionRoadmapClassName} onChangeText={setInstitutionRoadmapClassName} />
             <TextInput style={styles.input} placeholder="Roadmap description" value={institutionRoadmapDescription} onChangeText={setInstitutionRoadmapDescription} multiline />
             <TextInput style={styles.input} placeholder="Week 1 title" value={institutionRoadmapWeekOne} onChangeText={setInstitutionRoadmapWeekOne} />
             <TextInput style={styles.input} placeholder="Week 2 title" value={institutionRoadmapWeekTwo} onChangeText={setInstitutionRoadmapWeekTwo} />
@@ -2374,7 +2380,7 @@ export default function MentorDashboard() {
             ) : (
               institutionRoadmaps.slice(0, 5).map((item) => (
                 <Text key={item.id} style={styles.meta}>
-                  {item.title} | {item.weeks.length} weeks | {item.status || "published"}
+                  {item.title} | {item.className ? `${item.className} | ` : ""}{item.weeks.length} weeks | {item.status || "published"}
                 </Text>
               ))
             )}

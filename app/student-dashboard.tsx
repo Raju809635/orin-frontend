@@ -399,6 +399,15 @@ type LibraryItem = {
   type: string;
   title: string;
   description?: string;
+  institutionName?: string;
+};
+
+type KnowledgeLibraryResponse = {
+  institutionName?: string;
+  institutionResources?: LibraryItem[];
+  roadmapResources?: LibraryItem[];
+  domainResources?: LibraryItem[];
+  items?: LibraryItem[];
 };
 
 type ReputationSummary = {
@@ -503,6 +512,7 @@ export default function StudentDashboard() {
   const [mentorGroups, setMentorGroups] = useState<MentorGroupItem[]>([]);
   const [projectIdeas, setProjectIdeas] = useState<ProjectIdeasResponse | null>(null);
   const [knowledgeLibrary, setKnowledgeLibrary] = useState<LibraryItem[]>([]);
+  const [institutionKnowledgeLibrary, setInstitutionKnowledgeLibrary] = useState<LibraryItem[]>([]);
   const [reputationSummary, setReputationSummary] = useState<ReputationSummary | null>(null);
   const [activeNewsTab, setActiveNewsTab] = useState<NewsCategoryKey>("tech");
   const [newsByCategory, setNewsByCategory] = useState<Record<NewsCategoryKey, NewsArticle[]>>({
@@ -651,12 +661,21 @@ export default function StudentDashboard() {
     const [resumeRes, projectIdeasRes, knowledgeLibraryRes, reputationSummaryRes] = await Promise.allSettled([
       api.get<ResumeResponse>("/api/network/resume/generate"),
       api.get<ProjectIdeasResponse>("/api/network/project-ideas"),
-      api.get<LibraryItem[]>("/api/network/knowledge-library"),
+      api.get<KnowledgeLibraryResponse>("/api/network/knowledge-library"),
       api.get<ReputationSummary>("/api/network/reputation-summary")
     ]);
     setResumePreview(resumeRes.status === "fulfilled" ? resumeRes.value.data || null : null);
     setProjectIdeas(projectIdeasRes.status === "fulfilled" ? projectIdeasRes.value.data || null : null);
-    setKnowledgeLibrary(knowledgeLibraryRes.status === "fulfilled" ? knowledgeLibraryRes.value.data || [] : []);
+    setKnowledgeLibrary(
+      knowledgeLibraryRes.status === "fulfilled"
+        ? knowledgeLibraryRes.value.data?.items || knowledgeLibraryRes.value.data?.roadmapResources || []
+        : []
+    );
+    setInstitutionKnowledgeLibrary(
+      knowledgeLibraryRes.status === "fulfilled"
+        ? knowledgeLibraryRes.value.data?.institutionResources || []
+        : []
+    );
     setReputationSummary(reputationSummaryRes.status === "fulfilled" ? reputationSummaryRes.value.data || null : null);
   }, [markSectionFetched, shouldSkipSectionFetch]);
 
@@ -1765,7 +1784,7 @@ export default function StudentDashboard() {
                 </Text>
                 {dailyDashboard.dailyQuiz?.result ? (
                   <View style={[styles.dailyResultCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                    <Text style={[styles.dailyResultTitle, { color: colors.text }]}>Today's Quiz Completed</Text>
+                    <Text style={[styles.dailyResultTitle, { color: colors.text }]}>Today&apos;s Quiz Completed</Text>
                     <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>
                       Score: {dailyDashboard.dailyQuiz.result.score}/{dailyDashboard.dailyQuiz.result.totalQuestions}
                     </Text>
@@ -1983,6 +2002,12 @@ export default function StudentDashboard() {
               {certifications.length ? `${certifications.length} certificates earned` : "See institution-issued recognition"}
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/knowledge-library" as never)}>
+            <Text style={styles.institutionTileTitle}>Institution Resources</Text>
+            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+              {institutionKnowledgeLibrary.length ? `${institutionKnowledgeLibrary.length} resource${institutionKnowledgeLibrary.length === 1 ? "" : "s"} shared` : "School resources will appear here"}
+            </Text>
+          </TouchableOpacity>
           <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/challenges" as never)}>
             <Text style={styles.institutionTileTitle}>Institution Competitions</Text>
             <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
@@ -2191,6 +2216,21 @@ export default function StudentDashboard() {
             <View key={item.id} style={styles.historyCard}>
               <Text style={[styles.historyTitle, { color: colors.text }]}>{item.title}</Text>
               <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.type}</Text>
+              <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.description || ""}</Text>
+            </View>
+          ))
+        )}
+      </View>
+
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Institution Resources</Text>
+      <View style={styles.historyWrap}>
+        {institutionKnowledgeLibrary.length === 0 ? (
+          <Text style={[styles.empty, { color: colors.textMuted }]}>No institution resources available right now.</Text>
+        ) : (
+          institutionKnowledgeLibrary.slice(0, 6).map((item) => (
+            <View key={`institution-${item.id}`} style={styles.historyCard}>
+              <Text style={[styles.historyTitle, { color: colors.text }]}>{item.title}</Text>
+              <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.institutionName || studentInstitutionName || "Institution Resource"}</Text>
               <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.description || ""}</Text>
             </View>
           ))

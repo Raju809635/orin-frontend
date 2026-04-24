@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   RefreshControl,
   ScrollView,
@@ -15,17 +16,17 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const AI_GOLD = "#D4A017";
-const AI_GOLD_SOFT = "#FFF4CC";
-const AI_TEAL = "#0F766E";
-const AI_INDIGO = "#6D28D9";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { getDomainTree, getFallbackDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
+
+const AI_GOLD = "#D4A017";
+const AI_GOLD_SOFT = "#FFF4CC";
+const AI_TEAL = "#0F766E";
+const AI_INDIGO = "#6D28D9";
 
 type RoadmapStep = {
   id: string;
@@ -60,8 +61,9 @@ type InstitutionRoadmapItem = {
   title: string;
   description?: string;
   domain?: string;
+  className?: string;
   status?: string;
-  weeks: Array<{
+  weeks: {
     id: string;
     title: string;
     description?: string;
@@ -84,13 +86,15 @@ type InstitutionRoadmapItem = {
         certificateId?: string | null;
       };
     } | null;
-  }>;
+  }[];
   mentor?: { id?: string | null; name?: string };
 };
 
 const GENERATION_STAGES = ["Analyzing goal...", "Building steps...", "Optimizing path..."];
 const MISSION_XP = 20;
 const ROADMAP_REQUEST_TIMEOUT_MS = 12000;
+const ROADMAP_LEVELS = ["Starter", "Explorer", "Builder", "Pro", "Elite", "Legend"];
+type RoadmapDrawerSection = "ai" | "institution" | "completed" | "recent";
 
 const FALLBACK_DOMAIN_TREE = getFallbackDomainTree();
 
@@ -136,6 +140,9 @@ export default function AiCareerRoadmapPage() {
   const [institutionProofDrafts, setInstitutionProofDrafts] = useState<Record<string, { proofText: string; proofLink: string; proofImageUrl: string }>>({});
   const [uploadingInstitutionProofKey, setUploadingInstitutionProofKey] = useState<string | null>(null);
   const [submittingInstitutionProofKey, setSubmittingInstitutionProofKey] = useState<string | null>(null);
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [drawerSection, setDrawerSection] = useState<RoadmapDrawerSection>("ai");
+  const [recentInstitutionRoadmapIds, setRecentInstitutionRoadmapIds] = useState<string[]>([]);
   const initialLoadRef = useRef(false);
 
   useEffect(() => {
@@ -254,9 +261,29 @@ export default function AiCareerRoadmapPage() {
   const streakDays = completedCount ? Math.min(completedCount, 14) : 0;
   const currentLevelIndex = Math.min(Math.floor(totalXp / 100), 5);
   const nextLevelIndex = Math.min(currentLevelIndex + 1, 5);
-  const levels = ["Starter", "Explorer", "Builder", "Pro", "Elite", "Legend"];
   const socialCount = 12 + totalSteps * 14;
   const isMissionStarted = Boolean(currentMission?.startedAt);
+  const completedInstitutionRoadmaps = useMemo(
+    () =>
+      institutionRoadmaps.filter((roadmap) =>
+        (roadmap.weeks || []).length > 0 &&
+        roadmap.weeks.every((week) => week.submission?.status === "accepted")
+      ),
+    [institutionRoadmaps]
+  );
+  const recentInstitutionRoadmaps = useMemo(
+    () =>
+      recentInstitutionRoadmapIds
+        .map((id) => institutionRoadmaps.find((item) => item.id === id))
+        .filter(Boolean) as InstitutionRoadmapItem[],
+    [institutionRoadmaps, recentInstitutionRoadmapIds]
+  );
+  const activeDrawerTitle = useMemo(() => {
+    if (drawerSection === "institution") return "Institution Roadmaps";
+    if (drawerSection === "completed") return "Completed Roadmaps";
+    if (drawerSection === "recent") return "Recent Roadmap Activity";
+    return "AI Roadmaps";
+  }, [drawerSection]);
 
   useEffect(() => {
     if (!currentMission || !currentMission.startedAt) {
@@ -458,11 +485,11 @@ export default function AiCareerRoadmapPage() {
         type: "roadmap",
         title: `${customGoal.trim() || goalLabel || data.goal} Roadmap Completion`,
         domain: focus || subCategory || primaryCategory || "",
-        level: levels[currentLevelIndex],
+        level: ROADMAP_LEVELS[currentLevelIndex],
         referenceId: roadmapCertificateRef,
         metadata: {
           domain: focus || subCategory || primaryCategory || "",
-          level: levels[currentLevelIndex],
+          level: ROADMAP_LEVELS[currentLevelIndex],
           goal: customGoal.trim() || goalLabel || data.goal,
           totalSteps,
           completedSteps: totalSteps
@@ -480,7 +507,6 @@ export default function AiCareerRoadmapPage() {
     data,
     focus,
     goalLabel,
-    levels,
     primaryCategory,
     progressPct,
     roadmapCertificateRef,
@@ -488,12 +514,148 @@ export default function AiCareerRoadmapPage() {
     totalSteps
   ]);
 
+  const markInstitutionRoadmapRecent = useCallback((roadmapId: string) => {
+    setRecentInstitutionRoadmapIds((prev) => [roadmapId, ...prev.filter((id) => id !== roadmapId)].slice(0, 12));
+  }, []);
+
+  const drawerItems = (
+    <View
+      style={[
+        styles.drawerPanel,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          paddingTop: Math.max(insets.top, 18),
+          paddingBottom: Math.max(insets.bottom, 18)
+        }
+      ]}
+    >
+      <View style={styles.drawerHeader}>
+        <View>
+          <Text style={[styles.drawerTitle, { color: colors.text }]}>Career Roadmaps</Text>
+          <Text style={[styles.drawerSub, { color: colors.textMuted }]}>AI, institution, completed, and recent</Text>
+        </View>
+        <TouchableOpacity style={[styles.drawerCloseBtn, { borderColor: colors.border }]} onPress={() => setDrawerVisible(false)}>
+          <Ionicons name="close" size={18} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.drawerSection}>
+        <Text style={[styles.drawerSectionTitle, { color: colors.textMuted }]}>Browse</Text>
+        {([
+          { key: "ai", label: "AI Roadmaps", meta: currentMission?.title ? `Current mission: ${currentMission.title}` : "Generate and continue your AI roadmap" },
+          { key: "institution", label: "Institution Roadmaps", meta: institutionRoadmaps.length ? `${institutionRoadmaps.length} institution roadmap${institutionRoadmaps.length === 1 ? "" : "s"}` : "Institution mentor roadmaps" },
+          { key: "completed", label: "Completed", meta: `${completedCount} AI steps completed${completedInstitutionRoadmaps.length ? ` · ${completedInstitutionRoadmaps.length} institution roadmap${completedInstitutionRoadmaps.length === 1 ? "" : "s"}` : ""}` },
+          { key: "recent", label: "Recent", meta: recentInstitutionRoadmaps.length ? `${recentInstitutionRoadmaps.length} recently opened institution roadmap${recentInstitutionRoadmaps.length === 1 ? "" : "s"}` : "Your latest roadmap activity" }
+        ] as { key: RoadmapDrawerSection; label: string; meta: string }[]).map((item) => {
+          const active = drawerSection === item.key;
+          return (
+            <TouchableOpacity
+              key={item.key}
+              style={[
+                styles.drawerModeRow,
+                { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+                active && { backgroundColor: item.key === "institution" ? "#F4F3FF" : AI_GOLD_SOFT, borderColor: item.key === "institution" ? AI_INDIGO : AI_GOLD }
+              ]}
+              onPress={() => {
+                setDrawerSection(item.key);
+                setDrawerVisible(false);
+              }}
+            >
+              <Ionicons
+                name={item.key === "institution" ? "school-outline" : item.key === "completed" ? "checkmark-done-circle-outline" : item.key === "recent" ? "time-outline" : "map-outline"}
+                size={16}
+                color={active ? (item.key === "institution" ? AI_INDIGO : AI_GOLD) : colors.textMuted}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.drawerModeTitle, { color: colors.text }]}>{item.label}</Text>
+                <Text style={[styles.drawerModeMeta, { color: colors.textMuted }]}>{item.meta}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      <View style={[styles.drawerSection, styles.drawerHistorySection]}>
+        <Text style={[styles.drawerSectionTitle, { color: colors.textMuted }]}>
+          {drawerSection === "institution" ? "Institution list" : drawerSection === "completed" ? "Completed summary" : drawerSection === "recent" ? "Recent institution roadmaps" : "Roadmap summary"}
+        </Text>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {drawerSection === "institution" ? (
+            institutionRoadmaps.length ? institutionRoadmaps.map((roadmap) => (
+              <TouchableOpacity
+                key={roadmap.id}
+                style={[styles.historyRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+                onPress={() => {
+                  markInstitutionRoadmapRecent(roadmap.id);
+                  setDrawerVisible(false);
+                }}
+              >
+                <Text style={[styles.historyTitle, { color: colors.text }]} numberOfLines={1}>{roadmap.title}</Text>
+                <Text style={[styles.historyPreview, { color: colors.textMuted }]} numberOfLines={2}>
+                  {roadmap.className ? `${roadmap.className} · ` : ""}{roadmap.description || "Institution mentor guided roadmap"}
+                </Text>
+                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{roadmap.weeks.length} weeks</Text>
+              </TouchableOpacity>
+            )) : <Text style={[styles.drawerEmptyText, { color: colors.textMuted }]}>No institution roadmaps yet.</Text>
+          ) : drawerSection === "completed" ? (
+            <>
+              <View style={[styles.historyRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                <Text style={[styles.historyTitle, { color: colors.text }]}>AI Roadmap Progress</Text>
+                <Text style={[styles.historyPreview, { color: colors.textMuted }]}>
+                  {completedCount}/{totalSteps} steps completed · {progressPct}% progress
+                </Text>
+              </View>
+              {completedInstitutionRoadmaps.length ? completedInstitutionRoadmaps.map((roadmap) => (
+                <View key={roadmap.id} style={[styles.historyRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                  <Text style={[styles.historyTitle, { color: colors.text }]} numberOfLines={1}>{roadmap.title}</Text>
+                  <Text style={[styles.historyPreview, { color: colors.textMuted }]} numberOfLines={2}>Institution roadmap completed with all approved submissions.</Text>
+                </View>
+              )) : <Text style={[styles.drawerEmptyText, { color: colors.textMuted }]}>No completed institution roadmap yet.</Text>}
+            </>
+          ) : drawerSection === "recent" ? (
+            recentInstitutionRoadmaps.length ? recentInstitutionRoadmaps.map((roadmap) => (
+              <View key={roadmap.id} style={[styles.historyRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                <Text style={[styles.historyTitle, { color: colors.text }]} numberOfLines={1}>{roadmap.title}</Text>
+                <Text style={[styles.historyPreview, { color: colors.textMuted }]} numberOfLines={2}>
+                  {roadmap.weeks.find((week) => week.submission)?.title ? `Recent proof activity in ${roadmap.weeks.find((week) => week.submission)?.title}` : "Recently opened roadmap"}
+                </Text>
+              </View>
+            )) : <Text style={[styles.drawerEmptyText, { color: colors.textMuted }]}>No recent roadmap activity yet.</Text>
+          ) : (
+            <View style={[styles.historyRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.historyTitle, { color: colors.text }]}>AI Roadmap Summary</Text>
+              <Text style={[styles.historyPreview, { color: colors.textMuted }]} numberOfLines={2}>
+                {data?.goal || customGoal.trim() || goalLabel || "Generate a roadmap to begin"}
+              </Text>
+              <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{progressPct}% complete</Text>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </View>
+  );
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
     >
+      <View style={[styles.headerBar, { backgroundColor: colors.background, borderBottomColor: colors.border, paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity style={[styles.headerIconBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => setDrawerVisible(true)}>
+          <Ionicons name="menu" size={18} color={colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{activeDrawerTitle}</Text>
+          <Text style={[styles.headerSub, { color: colors.textMuted }]} numberOfLines={1}>
+            {drawerSection === "institution" ? "Mentor-led institution learning paths" : drawerSection === "completed" ? "Finished roadmap progress" : drawerSection === "recent" ? "Latest roadmap activity" : "Generate and grow with AI roadmaps"}
+          </Text>
+        </View>
+        <TouchableOpacity style={[styles.headerIconBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => load(true)}>
+          <Ionicons name="refresh-outline" size={18} color={colors.text} />
+        </TouchableOpacity>
+      </View>
       <ScrollView
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={[styles.page, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 20) + 32 }]}
@@ -515,17 +677,18 @@ export default function AiCareerRoadmapPage() {
         <View style={styles.heroProgressCard}>
           <View style={styles.heroProgressHeader}>
             <Text style={styles.heroProgressLabel}>
-              Level {currentLevelIndex + 1} - {levels[currentLevelIndex]}
+              Level {currentLevelIndex + 1} - {ROADMAP_LEVELS[currentLevelIndex]}
             </Text>
             <Text style={styles.heroProgressLabel}>{progressPct}% complete</Text>
           </View>
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${progressPct}%` }]} />
           </View>
-          <Text style={styles.heroProgressMeta}>Next rank: {nextTarget} XP to {levels[nextLevelIndex]}</Text>
+          <Text style={styles.heroProgressMeta}>Next rank: {nextTarget} XP to {ROADMAP_LEVELS[nextLevelIndex]}</Text>
         </View>
       </LinearGradient>
 
+      {drawerSection === "ai" ? (
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="map" size={16} color={AI_INDIGO} />
@@ -585,8 +748,9 @@ export default function AiCareerRoadmapPage() {
         <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_GOLD }]} onPress={() => load(true)}>
           <Text style={styles.primaryBtnText}>Generate Journey</Text>
         </TouchableOpacity>
-      </View>
+      </View>) : null}
 
+      {drawerSection === "ai" ? (
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="flash" size={16} color={AI_TEAL} />
@@ -595,7 +759,7 @@ export default function AiCareerRoadmapPage() {
         {currentMission ? (
           <LinearGradient colors={["#FFF9E8", "#FFF2CC"]} style={styles.todayCard}>
             <View style={styles.todayHeader}>
-              <Text style={styles.todayTag}>Today's Task</Text>
+              <Text style={styles.todayTag}>Today&apos;s Task</Text>
               <Text style={styles.todayXp}>+{MISSION_XP} XP</Text>
             </View>
             <Text style={styles.todayTitle}>{currentMission.title}</Text>
@@ -628,8 +792,9 @@ export default function AiCareerRoadmapPage() {
             </TouchableOpacity>
           </View>
         )}
-      </View>
+      </View>) : null}
 
+      {drawerSection === "ai" ? (
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="sparkles" size={16} color={AI_GOLD} />
@@ -644,9 +809,9 @@ export default function AiCareerRoadmapPage() {
           </View>
         ) : null}
         {!loading && !isGenerating && !data ? <Text style={styles.meta}>Roadmap unavailable.</Text> : null}
-      </View>
+      </View>) : null}
 
-      {data ? (
+      {data && drawerSection === "ai" ? (
         <>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
@@ -789,6 +954,7 @@ export default function AiCareerRoadmapPage() {
                 <View key={roadmap.id} style={styles.institutionCard}>
                   <Text style={styles.institutionTitle}>{roadmap.title}</Text>
                   <Text style={styles.meta}>{roadmap.description || "Institution mentor guided roadmap."}</Text>
+                  {roadmap.className ? <Text style={styles.meta}>Class: {roadmap.className}</Text> : null}
                   <Text style={styles.meta}>Mentor: {roadmap.mentor?.name || "Institution Mentor"}</Text>
                   {roadmap.weeks.slice(0, 4).map((week, weekIndex) => {
                     const draftKey = `${roadmap.id}::${week.id}`;
@@ -864,6 +1030,139 @@ export default function AiCareerRoadmapPage() {
         </>
       ) : null}
 
+      {drawerSection === "institution" ? (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="school" size={16} color={AI_INDIGO} />
+            <Text style={styles.sectionTitle}>Institution Roadmaps</Text>
+          </View>
+          {!institutionRoadmaps.length ? (
+            <Text style={styles.meta}>No institution roadmaps published for your institution yet.</Text>
+          ) : (
+            institutionRoadmaps.map((roadmap) => (
+              <View key={roadmap.id} style={styles.institutionCard}>
+                <Text style={styles.institutionTitle}>{roadmap.title}</Text>
+                <Text style={styles.meta}>{roadmap.description || "Institution mentor guided roadmap."}</Text>
+                {roadmap.className ? <Text style={styles.meta}>Class: {roadmap.className}</Text> : null}
+                <Text style={styles.meta}>Mentor: {roadmap.mentor?.name || "Institution Mentor"}</Text>
+                <TouchableOpacity style={[styles.secondaryBtn, { backgroundColor: "#F4F3FF" }]} onPress={() => markInstitutionRoadmapRecent(roadmap.id)}>
+                  <Text style={[styles.secondaryBtnText, { color: AI_INDIGO }]}>Open Roadmap</Text>
+                </TouchableOpacity>
+                {roadmap.weeks.slice(0, 4).map((week, weekIndex) => {
+                  const draftKey = `${roadmap.id}::${week.id}`;
+                  const draft = institutionProofDrafts[draftKey] || { proofText: "", proofLink: "", proofImageUrl: "" };
+                  const submission = week.submission || null;
+                  return (
+                    <View key={`${roadmap.id}-${week.id}`} style={styles.institutionWeekCard}>
+                      <Text style={styles.institutionWeekTitle}>Week {weekIndex + 1}: {week.title}</Text>
+                      {week.description ? <Text style={styles.meta}>{week.description}</Text> : null}
+                      {(week.tasks || []).slice(0, 3).map((task) => (
+                        <Text key={`${roadmap.id}-${week.id}-${task}`} style={styles.previewItem}>- {task}</Text>
+                      ))}
+                      {submission ? (
+                        <View style={styles.institutionSubmissionCard}>
+                          <Text style={styles.institutionSubmissionTitle}>
+                            Status: {submission.status === "accepted" ? "Approved" : submission.status === "rejected" ? "Needs Rework" : "Submitted"}
+                          </Text>
+                          {submission.submittedAt ? <Text style={styles.meta}>Submitted on {formatRoadmapDate(submission.submittedAt)}</Text> : null}
+                          {submission.mentorReview?.xpAwarded ? <Text style={styles.meta}>XP awarded: {submission.mentorReview.xpAwarded}</Text> : null}
+                          {submission.mentorReview?.notes ? <Text style={styles.meta}>Mentor note: {submission.mentorReview.notes}</Text> : null}
+                          {submission.mentorReview?.certificateId ? <Text style={styles.meta}>Certificate issued for this week.</Text> : null}
+                        </View>
+                      ) : null}
+                      {submission?.status !== "accepted" ? (
+                        <View style={styles.inlineProofCard}>
+                          <Text style={styles.inlineProofTitle}>Submit Week {weekIndex + 1} Proof</Text>
+                          <TextInput
+                            style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                            value={draft.proofText}
+                            onChangeText={(value) => updateInstitutionDraft(draftKey, { proofText: value })}
+                            placeholder="What did you complete in this week?"
+                            placeholderTextColor={colors.textMuted}
+                            multiline
+                          />
+                          <TextInput
+                            style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                            value={draft.proofLink}
+                            onChangeText={(value) => updateInstitutionDraft(draftKey, { proofLink: value })}
+                            placeholder="Project / GitHub / Drive / demo link (optional)"
+                            placeholderTextColor={colors.textMuted}
+                            autoCapitalize="none"
+                          />
+                          {draft.proofImageUrl ? <Image source={{ uri: draft.proofImageUrl }} style={styles.proofPreview} /> : null}
+                          <View style={styles.actionRow}>
+                            <TouchableOpacity
+                              style={[styles.secondaryOutlineBtn, { borderColor: AI_GOLD }]}
+                              onPress={() => uploadInstitutionProofImage(draftKey)}
+                              disabled={uploadingInstitutionProofKey === draftKey}
+                            >
+                              <Text style={[styles.secondaryOutlineBtnText, { color: AI_GOLD }]}>
+                                {uploadingInstitutionProofKey === draftKey ? "Uploading..." : draft.proofImageUrl ? "Change Screenshot" : "Upload Screenshot"}
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.primaryBtn, { backgroundColor: AI_TEAL }]}
+                              onPress={() => submitInstitutionRoadmapProof(roadmap.id, week.id)}
+                              disabled={submittingInstitutionProofKey === draftKey}
+                            >
+                              <Text style={styles.primaryBtnText}>
+                                {submittingInstitutionProofKey === draftKey ? "Submitting..." : submission ? "Resubmit Proof" : "Submit Proof"}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            ))
+          )}
+        </View>
+      ) : null}
+
+      {drawerSection === "completed" ? (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="checkmark-done-circle" size={16} color={AI_TEAL} />
+            <Text style={styles.sectionTitle}>Completed Roadmaps</Text>
+          </View>
+          <View style={styles.doneCard}>
+            <Text style={styles.doneTitle}>AI Roadmap</Text>
+            <Text style={styles.meta}>{completedCount}/{totalSteps} steps completed · {progressPct}% progress</Text>
+          </View>
+          {completedInstitutionRoadmaps.length ? completedInstitutionRoadmaps.map((roadmap) => (
+            <View key={roadmap.id} style={styles.institutionCard}>
+              <Text style={styles.institutionTitle}>{roadmap.title}</Text>
+              <Text style={styles.meta}>All weeks approved in this institution roadmap.</Text>
+            </View>
+          )) : <Text style={styles.meta}>No completed institution roadmaps yet.</Text>}
+        </View>
+      ) : null}
+
+      {drawerSection === "recent" ? (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="time" size={16} color={AI_GOLD} />
+            <Text style={styles.sectionTitle}>Recent Roadmap Activity</Text>
+          </View>
+          <View style={styles.doneCard}>
+            <Text style={styles.doneTitle}>AI Roadmap</Text>
+            <Text style={styles.meta}>{currentMission?.title ? `Current mission: ${currentMission.title}` : "Generate or continue your AI roadmap."}</Text>
+          </View>
+          {recentInstitutionRoadmaps.length ? recentInstitutionRoadmaps.map((roadmap) => (
+            <View key={roadmap.id} style={styles.institutionCard}>
+              <Text style={styles.institutionTitle}>{roadmap.title}</Text>
+              <Text style={styles.meta}>
+                {roadmap.weeks.find((week) => week.submission)?.title
+                  ? `Recent proof activity in ${roadmap.weeks.find((week) => week.submission)?.title}`
+                  : "Recently opened institution roadmap"}
+              </Text>
+            </View>
+          )) : <Text style={styles.meta}>No recent institution roadmap activity yet.</Text>}
+        </View>
+      ) : null}
+
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Ionicons name="flash" size={16} color={AI_TEAL} />
@@ -914,12 +1213,38 @@ export default function AiCareerRoadmapPage() {
         </View>
         <Text style={styles.meta}>Pair each milestone with one mini project, one proof upload, and one mentor session for better results.</Text>
       </View>
+
+      <Modal visible={drawerVisible} transparent animationType="slide" onRequestClose={() => setDrawerVisible(false)}>
+        <View style={styles.drawerOverlay}>
+          <TouchableOpacity style={styles.drawerBackdrop} activeOpacity={1} onPress={() => setDrawerVisible(false)} />
+          {drawerItems}
+        </View>
+      </Modal>
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
+  headerBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1
+  },
+  headerIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  headerCenter: { flex: 1, gap: 2 },
+  headerTitle: { fontSize: 18, fontWeight: "900" },
+  headerSub: { fontSize: 12, fontWeight: "600" },
   page: { padding: 16, backgroundColor: "#F3F6FB", gap: 12 },
   hero: { borderRadius: 24, padding: 18, gap: 12, shadowColor: "#0F5132", shadowOpacity: 0.18, shadowRadius: 16, elevation: 8 },
   heroTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -1079,7 +1404,65 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 4
   },
-  institutionSubmissionTitle: { color: "#0E6A42", fontWeight: "800" }
+  institutionSubmissionTitle: { color: "#0E6A42", fontWeight: "800" },
+  drawerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.24)",
+    flexDirection: "row"
+  },
+  drawerBackdrop: { flex: 1 },
+  drawerPanel: {
+    width: Math.min(340, 340),
+    maxWidth: "86%",
+    borderLeftWidth: 1,
+    gap: 14,
+    paddingHorizontal: 16
+  },
+  drawerHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  drawerTitle: { fontSize: 20, fontWeight: "900" },
+  drawerSub: { fontSize: 12, fontWeight: "600" },
+  drawerCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  drawerSection: { gap: 10 },
+  drawerHistorySection: { flex: 1 },
+  drawerSectionTitle: {
+    fontSize: 12,
+    fontWeight: "800",
+    textTransform: "uppercase",
+    letterSpacing: 0.6
+  },
+  drawerModeRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12
+  },
+  drawerModeTitle: { fontSize: 14, fontWeight: "800" },
+  drawerModeMeta: { fontSize: 12, lineHeight: 18, marginTop: 2 },
+  historyRow: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 4,
+    marginBottom: 10
+  },
+  historyTitle: { fontSize: 14, fontWeight: "800" },
+  historyPreview: { fontSize: 12, lineHeight: 18 },
+  historyMeta: { fontSize: 11, fontWeight: "700" },
+  drawerEmptyText: { fontSize: 13, lineHeight: 18 }
 });
 
 

@@ -1,13 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, KeyboardAvoidingView, Modal, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
-const AI_GOLD = "#D4A017";
-const AI_GOLD_SOFT = "#FFF4CC";
-const AI_TEAL = "#0F766E";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
@@ -15,6 +11,10 @@ import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
 import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
+
+const AI_GOLD = "#D4A017";
+const AI_GOLD_SOFT = "#FFF4CC";
+const AI_TEAL = "#0F766E";
 
 type ProjectTask = {
   id: string;
@@ -45,6 +45,8 @@ type ProjectIdea = {
 type ProjectIdeasResponse = {
   goal: string;
   ideas: ProjectIdea[];
+  roadmapIdeas?: ProjectIdea[];
+  domainIdeas?: ProjectIdea[];
   journey?: {
     currentStep?: string;
     readinessScore?: number;
@@ -62,6 +64,8 @@ type ProofDraft = {
 };
 
 const LEVEL_OPTIONS = ["Beginner", "Intermediate", "Advanced"];
+type ProjectIdeasMode = "roadmap" | "domain";
+type ProjectIdeasDrawerSection = "roadmap" | "domain" | "completed" | "recent";
 
 function buildProjectKey(title: string) {
   return String(title || "")
@@ -126,6 +130,10 @@ export default function AiProjectIdeasPage() {
   const [error, setError] = useState<string | null>(null);
   const [activeProject, setActiveProject] = useState<string | null>(null);
   const [proofDrafts, setProofDrafts] = useState<Record<string, ProofDraft>>({});
+  const [activeMode, setActiveMode] = useState<ProjectIdeasMode>("roadmap");
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [drawerSection, setDrawerSection] = useState<ProjectIdeasDrawerSection>("roadmap");
+  const [recentProjectKeys, setRecentProjectKeys] = useState<string[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -188,7 +196,9 @@ export default function AiProjectIdeasPage() {
           res.data
             ? {
                 ...res.data,
-                ideas: Array.isArray(res.data.ideas) ? res.data.ideas.map(normalizeProjectIdea) : []
+                ideas: Array.isArray(res.data.ideas) ? res.data.ideas.map(normalizeProjectIdea) : [],
+                roadmapIdeas: Array.isArray(res.data.roadmapIdeas) ? res.data.roadmapIdeas.map(normalizeProjectIdea) : [],
+                domainIdeas: Array.isArray(res.data.domainIdeas) ? res.data.domainIdeas.map(normalizeProjectIdea) : []
               }
             : null
         );
@@ -209,10 +219,11 @@ export default function AiProjectIdeasPage() {
   );
 
   useEffect(() => {
-    if (!data?.ideas?.length) return;
+    const allIdeas = [...(data?.roadmapIdeas || []), ...(data?.domainIdeas || []), ...(data?.ideas || [])];
+    if (!allIdeas.length) return;
     setProofDrafts((prev) => {
       const next = { ...prev };
-      data.ideas.forEach((idea) => {
+      allIdeas.forEach((idea) => {
         if (next[idea.projectKey]) return;
         next[idea.projectKey] = {
           note: idea.proofNote || "",
@@ -225,6 +236,15 @@ export default function AiProjectIdeasPage() {
       return next;
     });
   }, [data]);
+
+  useEffect(() => {
+    if (!data) return;
+    const hasRoadmapIdeas = Boolean((data.roadmapIdeas?.length || data.ideas?.length) && data.journey?.currentStep);
+    if (!hasRoadmapIdeas && activeMode === "roadmap") {
+      setActiveMode("domain");
+      setDrawerSection((prev) => (prev === "roadmap" ? "domain" : prev));
+    }
+  }, [activeMode, data]);
 
   const difficulty = useMemo(() => {
     if (level === "Beginner") return "Easy";
@@ -250,12 +270,84 @@ export default function AiProjectIdeasPage() {
     return "Research, notes, execution tracker";
   }, [primaryCategory, subCategory]);
 
+  const roadmapIdeas = useMemo(
+    () => (data?.roadmapIdeas?.length ? data.roadmapIdeas : data?.ideas || []).slice(0, 8),
+    [data]
+  );
+  const domainIdeas = useMemo(
+    () => (data?.domainIdeas?.length ? data.domainIdeas : data?.ideas || []).slice(0, 8),
+    [data]
+  );
+  const allIdeas = useMemo(() => {
+    const merged = [...roadmapIdeas, ...domainIdeas];
+    const seen = new Set<string>();
+    return merged.filter((idea) => {
+      if (seen.has(idea.projectKey)) return false;
+      seen.add(idea.projectKey);
+      return true;
+    });
+  }, [domainIdeas, roadmapIdeas]);
+  const completedIdeas = useMemo(
+    () => allIdeas.filter((idea) => idea.status === "completed" || idea.proofSubmitted),
+    [allIdeas]
+  );
+  const recentIdeas = useMemo(
+    () =>
+      recentProjectKeys
+        .map((key) => allIdeas.find((idea) => idea.projectKey === key))
+        .filter(Boolean) as ProjectIdea[],
+    [allIdeas, recentProjectKeys]
+  );
+  const visibleIdeas = useMemo(() => {
+    if (drawerSection === "completed") return completedIdeas;
+    if (drawerSection === "recent") return recentIdeas;
+    if (drawerSection === "domain") return domainIdeas;
+    return roadmapIdeas;
+  }, [completedIdeas, domainIdeas, drawerSection, recentIdeas, roadmapIdeas]);
+
+  const activeSectionTitle = useMemo(() => {
+    if (drawerSection === "completed") return "Completed Projects";
+    if (drawerSection === "recent") return "Recent Project Activity";
+    if (drawerSection === "domain") return "Projects For Your Selected Domain";
+    return "Projects For Your Current Roadmap Step";
+  }, [drawerSection]);
+
+  const activeSectionEmptyState = useMemo(() => {
+    if (drawerSection === "completed") {
+      return {
+        title: "No completed projects yet",
+        body: "Finish every task and submit proof to move your builds into the completed section."
+      };
+    }
+    if (drawerSection === "recent") {
+      return {
+        title: "No recent project activity",
+        body: "Open any project plan and it will start appearing here for quick return access."
+      };
+    }
+    if (drawerSection === "domain") {
+      return {
+        title: "No domain ideas yet",
+        body: "Adjust your domain filters or generate a fresh set of domain-based projects."
+      };
+    }
+    return {
+      title: "No roadmap projects yet",
+      body: "Refresh your roadmap ideas to get project suggestions based on your current step."
+    };
+  }, [drawerSection]);
+
   function patchIdea(projectKey: string, nextIdea: Partial<ProjectIdea>) {
+    const patchList = (ideas: ProjectIdea[] = []) =>
+      ideas.map((idea) => (idea.projectKey === projectKey ? normalizeProjectIdea({ ...idea, ...nextIdea }) : idea));
+
     setData((prev) =>
       prev
         ? {
             ...prev,
-            ideas: (prev.ideas || []).map((idea) => (idea.projectKey === projectKey ? normalizeProjectIdea({ ...idea, ...nextIdea }) : idea))
+            ideas: patchList(prev.ideas || []),
+            roadmapIdeas: patchList(prev.roadmapIdeas || []),
+            domainIdeas: patchList(prev.domainIdeas || [])
           }
         : prev
     );
@@ -264,6 +356,9 @@ export default function AiProjectIdeasPage() {
   async function openProject(idea: ProjectIdea) {
     const nextOpen = activeProject === idea.projectKey ? null : idea.projectKey;
     setActiveProject(nextOpen);
+    if (nextOpen) {
+      setRecentProjectKeys((prev) => [idea.projectKey, ...prev.filter((key) => key !== idea.projectKey)].slice(0, 12));
+    }
     if (nextOpen && idea.status === "not_started") {
       try {
         const { data: response } = await api.post(`/api/network/project-ideas/${encodeURIComponent(idea.projectKey)}/start`, {
@@ -336,12 +431,158 @@ export default function AiProjectIdeasPage() {
     }
   }
 
+  const drawerItems = (
+    <View
+      style={[
+        styles.drawerPanel,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.border,
+          paddingTop: Math.max(insets.top, 18),
+          paddingBottom: Math.max(insets.bottom, 18)
+        }
+      ]}
+    >
+      <View style={styles.drawerHeader}>
+        <View>
+          <Text style={[styles.drawerTitle, { color: colors.text }]}>Project Ideas</Text>
+          <Text style={[styles.drawerSub, { color: colors.textMuted }]}>Modes, history, and completed builds</Text>
+        </View>
+        <TouchableOpacity style={[styles.drawerCloseBtn, { borderColor: colors.border }]} onPress={() => setDrawerVisible(false)}>
+          <Ionicons name="close" size={18} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.drawerSection}>
+        <Text style={[styles.drawerSectionTitle, { color: colors.textMuted }]}>Browse</Text>
+        {([
+          { key: "roadmap", label: "Roadmap Based", meta: data?.journey?.currentStep ? `Current step: ${data.journey.currentStep}` : "Best next builds from your roadmap" },
+          { key: "domain", label: "Domain Based", meta: "Explore builds by selected domain and focus" },
+          { key: "completed", label: "Completed", meta: completedIdeas.length ? `${completedIdeas.length} project${completedIdeas.length === 1 ? "" : "s"} completed` : "Completed projects will appear here" },
+          { key: "recent", label: "Recent", meta: recentIdeas.length ? `${recentIdeas.length} recent project${recentIdeas.length === 1 ? "" : "s"}` : "Open projects to build history here" }
+        ] as { key: ProjectIdeasDrawerSection; label: string; meta: string }[]).map((item) => {
+          const active = drawerSection === item.key;
+          return (
+            <TouchableOpacity
+              key={item.key}
+              style={[
+                styles.drawerModeRow,
+                { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+                active && { backgroundColor: item.key === "domain" ? AI_GOLD_SOFT : "#F1FBF5", borderColor: item.key === "domain" ? AI_GOLD : AI_TEAL }
+              ]}
+              onPress={() => {
+                setDrawerSection(item.key);
+                if (item.key === "roadmap" || item.key === "domain") {
+                  setActiveMode(item.key);
+                }
+                setDrawerVisible(false);
+              }}
+            >
+              <Ionicons
+                name={item.key === "completed" ? "checkmark-done-circle-outline" : item.key === "recent" ? "time-outline" : item.key === "domain" ? "globe-outline" : "map-outline"}
+                size={16}
+                color={active ? (item.key === "domain" ? AI_GOLD : AI_TEAL) : colors.textMuted}
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.drawerModeTitle, { color: colors.text }]}>{item.label}</Text>
+                <Text style={[styles.drawerModeMeta, { color: colors.textMuted }]}>{item.meta}</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {drawerSection === "domain" ? (
+        <View style={styles.drawerSection}>
+          <Text style={[styles.drawerSectionTitle, { color: colors.textMuted }]}>Domain filters</Text>
+          <View style={styles.chips}>
+            {(domainTree?.primaryCategories || []).map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]}
+                onPress={() => setPrimaryCategory(item)}
+              >
+                <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+            value={customGoal}
+            onChangeText={setCustomGoal}
+            placeholder="Optional custom goal"
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+      ) : null}
+
+      <View style={[styles.drawerSection, styles.drawerHistorySection]}>
+        <Text style={[styles.drawerSectionTitle, { color: colors.textMuted }]}>
+          {drawerSection === "completed" ? "Completed builds" : drawerSection === "recent" ? "Recent builds" : "Quick picks"}
+        </Text>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {visibleIdeas.length ? (
+            visibleIdeas.map((idea) => (
+              <TouchableOpacity
+                key={idea.projectKey}
+                style={[
+                  styles.historyRow,
+                  { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+                  activeProject === idea.projectKey && {
+                    borderColor: drawerSection === "domain" ? AI_GOLD : AI_TEAL,
+                    backgroundColor: drawerSection === "domain" ? AI_GOLD_SOFT : "#F1FBF5"
+                  }
+                ]}
+                onPress={() => {
+                  setActiveProject(idea.projectKey);
+                  setDrawerVisible(false);
+                  setRecentProjectKeys((prev) => [idea.projectKey, ...prev.filter((key) => key !== idea.projectKey)].slice(0, 12));
+                }}
+              >
+                <Text style={[styles.historyTitle, { color: colors.text }]} numberOfLines={1}>{idea.title}</Text>
+                <Text style={[styles.historyPreview, { color: colors.textMuted }]} numberOfLines={2}>
+                  {idea.why || idea.stage || "Build plan available"}
+                </Text>
+                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+                  {idea.status === "completed" ? "Completed" : `${idea.completedTasks || 0}/${idea.totalTasks || idea.tasks.length} tasks done`}
+                </Text>
+              </TouchableOpacity>
+            ))
+          ) : (
+            <View style={[styles.drawerEmptyCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.drawerEmptyTitle, { color: colors.text }]}>{activeSectionEmptyState.title}</Text>
+              <Text style={[styles.drawerEmptyText, { color: colors.textMuted }]}>{activeSectionEmptyState.body}</Text>
+            </View>
+          )}
+        </ScrollView>
+      </View>
+    </View>
+  );
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
     >
+      <View style={[styles.headerBar, { backgroundColor: colors.background, borderBottomColor: colors.border, paddingTop: Math.max(insets.top, 12) }]}>
+        <TouchableOpacity style={[styles.headerIconBtn, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => setDrawerVisible(true)}>
+          <Ionicons name="menu" size={18} color={colors.text} />
+        </TouchableOpacity>
+        <View style={styles.headerCenter}>
+          <Text style={[styles.headerTitle, { color: colors.text }]} numberOfLines={1}>{activeSectionTitle}</Text>
+          <Text style={[styles.headerSub, { color: colors.textMuted }]} numberOfLines={1}>
+            {drawerSection === "roadmap" ? "Roadmap-guided build path" : drawerSection === "domain" ? "Domain exploration mode" : drawerSection === "completed" ? "Your finished builds" : "Recently opened builds"}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.headerIconBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+          onPress={() => load(true)}
+        >
+          <Ionicons name="refresh-outline" size={18} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+
       <ScrollView
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={[styles.page, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 20) + 32 }]}
@@ -353,38 +594,51 @@ export default function AiProjectIdeasPage() {
         <Text style={styles.heroSub}>Choose a project, execute it, and submit real proof before ORIN marks it complete.</Text>
       </LinearGradient>
 
+      {drawerSection === "domain" ? (
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Domain Setup</Text>
+          <Text style={[styles.label, { color: colors.text }]}>Domain</Text>
+          <View style={styles.chips}>
+            {(domainTree?.primaryCategories || []).map((item) => (
+              <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setPrimaryCategory(item)}>
+                <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={[styles.label, { color: colors.text }]}>Sub-domain</Text>
+          <View style={styles.chips}>
+            {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
+              <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setSubCategory(item)}>
+                <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={[styles.label, { color: colors.text }]}>Focus</Text>
+          <View style={styles.chips}>
+            {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
+              <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setFocus(item)}>
+                <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <Text style={[styles.label, { color: colors.text }]}>Custom Goal</Text>
+          <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={customGoal} onChangeText={setCustomGoal} placeholder="Example: AI Chatbot, UPSC Revision App, Legal Draft Helper" placeholderTextColor={colors.textMuted} />
+        </View>
+      ) : drawerSection === "roadmap" ? (
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.journeyCard}>
+            <Text style={styles.journeyLabel}>Roadmap Guided</Text>
+            <Text style={styles.journeyTitle}>Projects based on your current roadmap step</Text>
+            <Text style={styles.meta}>Domain selection is hidden here so ORIN can focus on your next realistic step.</Text>
+          </View>
+        </View>
+      ) : null}
+
+      {(drawerSection === "roadmap" || drawerSection === "domain") ? (
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Generate Ideas</Text>
-        <Text style={[styles.label, { color: colors.text }]}>Domain</Text>
-        <View style={styles.chips}>
-          {(domainTree?.primaryCategories || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setPrimaryCategory(item)}>
-              <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={[styles.label, { color: colors.text }]}>Sub-domain</Text>
-        <View style={styles.chips}>
-          {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setSubCategory(item)}>
-              <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={[styles.label, { color: colors.text }]}>Focus</Text>
-        <View style={styles.chips}>
-          {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setFocus(item)}>
-              <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Text style={[styles.label, { color: colors.text }]}>Custom Goal</Text>
-        <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={customGoal} onChangeText={setCustomGoal} placeholder="Example: AI Chatbot, UPSC Revision App, Legal Draft Helper" placeholderTextColor={colors.textMuted} />
-
         <Text style={[styles.label, { color: colors.text }]}>Skill Level</Text>
         <View style={styles.chips}>
           {LEVEL_OPTIONS.map((item) => (
@@ -395,16 +649,16 @@ export default function AiProjectIdeasPage() {
         </View>
 
         <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_GOLD }]} onPress={() => load(true)}>
-          <Text style={styles.primaryBtnText}>Generate Ideas</Text>
+          <Text style={styles.primaryBtnText}>{activeMode === "roadmap" ? "Refresh Roadmap Ideas" : "Generate Domain Ideas"}</Text>
         </TouchableOpacity>
-      </View>
+      </View>) : null}
 
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>Project Ideas</Text>
+        <Text style={[styles.sectionTitle, { color: colors.text }]}>{activeSectionTitle}</Text>
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
         {loading ? <ActivityIndicator size="large" color={AI_GOLD} /> : null}
         {!loading && !data ? <Text style={[styles.meta, { color: colors.textMuted }]}>No ideas available yet.</Text> : null}
-        {data?.journey ? (
+        {drawerSection === "roadmap" && data?.journey ? (
           <View style={styles.journeyCard}>
             <Text style={styles.journeyLabel}>Personalized Build Track</Text>
             <Text style={styles.journeyTitle}>{data.journey.personalizationReason || `Built for ${data.goal}`}</Text>
@@ -413,7 +667,19 @@ export default function AiProjectIdeasPage() {
           </View>
         ) : null}
 
-        {(data?.ideas || []).slice(0, 8).map((rawIdea, index) => {
+        {!loading && data && !visibleIdeas.length ? (
+          <View style={[styles.emptyStateCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons
+              name={drawerSection === "completed" ? "checkmark-done-circle-outline" : drawerSection === "recent" ? "time-outline" : drawerSection === "domain" ? "globe-outline" : "map-outline"}
+              size={22}
+              color={drawerSection === "domain" ? AI_GOLD : AI_TEAL}
+            />
+            <Text style={[styles.emptyStateTitle, { color: colors.text }]}>{activeSectionEmptyState.title}</Text>
+            <Text style={[styles.emptyStateText, { color: colors.textMuted }]}>{activeSectionEmptyState.body}</Text>
+          </View>
+        ) : null}
+
+        {visibleIdeas.map((rawIdea, index) => {
           const idea = normalizeProjectIdea(rawIdea);
           const completed = idea.completedTasks ?? idea.tasks.filter((task) => task.done).length;
           const progress = idea.progressPercent ?? (idea.totalTasks ? Math.round((completed / idea.totalTasks) * 100) : 0);
@@ -504,21 +770,25 @@ export default function AiProjectIdeasPage() {
         <TouchableOpacity
           style={styles.primaryBtn}
           onPress={async () => {
-            if (!data || !(data.ideas || []).length) {
+            if (!data || !visibleIdeas.length) {
               notify("Generate ideas first.");
               return;
             }
             await saveAiItem({
               type: "project_ideas",
-              title: `Project Ideas: ${primaryCategory}${subCategory ? ` > ${subCategory}` : ""}`,
+              title:
+                activeMode === "roadmap"
+                  ? `Project Ideas: ${data.journey?.currentStep || data.goal || "Roadmap"}`
+                  : `Project Ideas: ${primaryCategory}${subCategory ? ` > ${subCategory}` : ""}`,
               payload: {
+                mode: activeMode,
                 primaryCategory,
                 subCategory,
                 focus,
                 level,
                 difficulty,
                 suggestedStack,
-                ideas: data.ideas || []
+                ideas: visibleIdeas
               }
             });
             notify("Saved to Saved AI.");
@@ -527,6 +797,13 @@ export default function AiProjectIdeasPage() {
           <Text style={styles.primaryBtnText}>Save Build Mode</Text>
         </TouchableOpacity>
       </View>
+
+      <Modal visible={drawerVisible} transparent animationType="slide" onRequestClose={() => setDrawerVisible(false)}>
+        <View style={styles.drawerOverlay}>
+          <TouchableOpacity style={styles.drawerBackdrop} activeOpacity={1} onPress={() => setDrawerVisible(false)} />
+          {drawerItems}
+        </View>
+      </Modal>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -543,6 +820,25 @@ function emptyProofDraft(): ProofDraft {
 }
 
 const styles = StyleSheet.create({
+  headerBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1
+  },
+  headerIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  headerCenter: { flex: 1, gap: 2 },
+  headerTitle: { fontSize: 18, fontWeight: "800" },
+  headerSub: { fontSize: 12, fontWeight: "600" },
   page: { padding: 16, backgroundColor: "#F3F6FB", gap: 12 },
   hero: { borderRadius: 24, padding: 18, gap: 10 },
   heroTitle: { color: "#FFFFFF", fontSize: 28, fontWeight: "900" },
@@ -556,6 +852,11 @@ const styles = StyleSheet.create({
   chipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
   chipTextActive: { color: "#1F7A4C" },
   input: { borderWidth: 1, borderColor: "#D0D5DD", borderRadius: 12, backgroundColor: "#fff", paddingHorizontal: 12, paddingVertical: 12, color: "#344054" },
+  modeGrid: { gap: 10 },
+  modeCard: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 6 },
+  modeCardActive: { shadowColor: "#101828", shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 },
+  modeTitle: { fontWeight: "800", fontSize: 15 },
+  modeMeta: { lineHeight: 20 },
   journeyCard: { borderWidth: 1, borderColor: "#D9F2E4", borderRadius: 16, backgroundColor: "#F1FBF5", padding: 12, gap: 4 },
   journeyLabel: { color: "#1F7A4C", fontWeight: "800", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.6 },
   journeyTitle: { color: "#163A2A", fontWeight: "800", fontSize: 16 },
@@ -597,5 +898,60 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: "#fff", fontWeight: "800" },
   secondaryBtn: { alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: "#FFF3D9" },
   secondaryBtnText: { color: "#B54708", fontWeight: "800" },
-  disabledBtn: { opacity: 0.55 }
+  disabledBtn: { opacity: 0.55 },
+  drawerOverlay: { flex: 1, flexDirection: "row", backgroundColor: "rgba(15, 23, 42, 0.28)" },
+  drawerBackdrop: { flex: 1 },
+  drawerPanel: {
+    width: "84%",
+    maxWidth: 360,
+    borderRightWidth: 1,
+    paddingHorizontal: 16,
+    gap: 14
+  },
+  drawerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  drawerTitle: { fontSize: 20, fontWeight: "800" },
+  drawerSub: { fontSize: 12, fontWeight: "600" },
+  drawerCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  drawerSection: { gap: 10 },
+  drawerHistorySection: { flex: 1 },
+  drawerSectionTitle: { fontSize: 12, fontWeight: "800", textTransform: "uppercase", letterSpacing: 0.5 },
+  drawerModeRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12
+  },
+  drawerModeTitle: { fontSize: 14, fontWeight: "800" },
+  drawerModeMeta: { marginTop: 2, fontSize: 12, lineHeight: 18 },
+  drawerEmptyCard: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 6 },
+  drawerEmptyTitle: { fontSize: 14, fontWeight: "800" },
+  historyRow: {
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    gap: 4,
+    marginBottom: 10
+  },
+  historyTitle: { fontSize: 14, fontWeight: "800" },
+  historyPreview: { fontSize: 12, lineHeight: 18 },
+  historyMeta: { fontSize: 11, fontWeight: "600" },
+  drawerEmptyText: { fontSize: 13, lineHeight: 20 },
+  emptyStateCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    gap: 8,
+    alignItems: "flex-start"
+  },
+  emptyStateTitle: { fontSize: 16, fontWeight: "800" },
+  emptyStateText: { fontSize: 13, lineHeight: 20 }
 });
