@@ -1,5 +1,5 @@
 ﻿import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -33,7 +33,7 @@ export default function AiSkillGapPage() {
   const [customGoal, setCustomGoal] = useState("");
   const [skillsInput, setSkillsInput] = useState("");
   const [data, setData] = useState<SkillGapResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [analyzing, setAnalyzing] = useState(false);
   const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
@@ -88,6 +88,22 @@ export default function AiSkillGapPage() {
   const load = useCallback(
     async (refresh = false) => {
       try {
+        if (!customGoal.trim()) {
+          setError("Please add your goal here before running skill gap analysis.");
+          setData(null);
+          setLoading(false);
+          setRefreshing(false);
+          setAnalyzing(false);
+          return;
+        }
+        if (!enteredSkills.length) {
+          setError("Please add your current skills here before running skill gap analysis.");
+          setData(null);
+          setLoading(false);
+          setRefreshing(false);
+          setAnalyzing(false);
+          return;
+        }
         if (refresh) setRefreshing(true);
         else setLoading(true);
         setError(null);
@@ -110,13 +126,7 @@ export default function AiSkillGapPage() {
         setAnalyzing(false);
       }
     },
-    [primaryCategory, subCategory, focus, goalLabel, skillsInput]
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [load])
+    [customGoal, enteredSkills.length, primaryCategory, subCategory, focus, goalLabel, skillsInput]
   );
 
   const currentSkills = data?.currentSkills?.length ? data.currentSkills : enteredSkills;
@@ -188,6 +198,7 @@ export default function AiSkillGapPage() {
 
         <Text style={[styles.label, { color: colors.text }]}>Current Skills</Text>
         <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={skillsInput} onChangeText={setSkillsInput} placeholder="Python, SQL, Research Basics" placeholderTextColor={colors.textMuted} />
+        <Text style={[styles.meta, { color: colors.textMuted }]}>Add comma-separated skills so ORIN can compare what you know with what your goal needs.</Text>
 
         <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_GOLD }]} onPress={() => { setAnalyzing(true); load(true); }}>
           <Text style={styles.primaryBtnText}>{analyzing ? "Analyzing..." : "Analyze Skills"}</Text>
@@ -198,7 +209,7 @@ export default function AiSkillGapPage() {
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Visual Skill Report</Text>
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
         {loading ? <ActivityIndicator size="large" color={AI_GOLD} /> : null}
-        {!loading && !data ? <Text style={[styles.meta, { color: colors.textMuted }]}>No analysis available yet.</Text> : null}
+        {!loading && !data ? <Text style={[styles.meta, { color: colors.textMuted }]}>Add your goal and current skills above, then run analysis.</Text> : null}
         {data ? (
           <>
             <View style={styles.grid}>

@@ -154,9 +154,10 @@ export default function AiCareerRoadmapPage() {
     )[0] || ""
   );
   const [customGoal, setCustomGoal] = useState("");
+  const [skillsInput, setSkillsInput] = useState("");
   const [data, setData] = useState<CareerRoadmapResponse | null>(null);
   const [institutionRoadmaps, setInstitutionRoadmaps] = useState<InstitutionRoadmapItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationStage, setGenerationStage] = useState(0);
@@ -173,7 +174,6 @@ export default function AiCareerRoadmapPage() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [drawerSection, setDrawerSection] = useState<RoadmapDrawerSection>("ai");
   const [recentInstitutionRoadmapIds, setRecentInstitutionRoadmapIds] = useState<string[]>([]);
-  const initialLoadRef = useRef(false);
 
   useEffect(() => {
     const requestedSection = String(params.section || "").trim().toLowerCase();
@@ -231,11 +231,33 @@ export default function AiCareerRoadmapPage() {
     () => [primaryCategory, subCategory, focus].filter(Boolean).join(" > "),
     [primaryCategory, subCategory, focus]
   );
+  const enteredSkills = useMemo(
+    () => skillsInput.split(",").map((item) => item.trim()).filter(Boolean),
+    [skillsInput]
+  );
+  const resolvedGoal = useMemo(
+    () => customGoal.trim() || goalLabel,
+    [customGoal, goalLabel]
+  );
 
   const load = useCallback(
     async (refresh = false) => {
       let stageTimer: ReturnType<typeof setInterval> | null = null;
       try {
+        if (!customGoal.trim()) {
+          setError("Please add your goal here before generating a roadmap.");
+          setData(null);
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
+        if (!enteredSkills.length) {
+          setError("Please add your current skills here before generating a roadmap.");
+          setData(null);
+          setLoading(false);
+          setRefreshing(false);
+          return;
+        }
         if (refresh) {
           setRefreshing(true);
         } else {
@@ -254,7 +276,8 @@ export default function AiCareerRoadmapPage() {
               primaryCategory,
               subCategory,
               focus,
-              goal: customGoal.trim() || goalLabel
+              goal: resolvedGoal,
+              skills: skillsInput
             }
           }),
           new Promise<never>((_, reject) =>
@@ -280,14 +303,8 @@ export default function AiCareerRoadmapPage() {
         setRefreshing(false);
       }
     },
-    [primaryCategory, subCategory, focus, goalLabel, customGoal]
+    [customGoal, enteredSkills.length, primaryCategory, resolvedGoal, skillsInput, subCategory, focus]
   );
-
-  useEffect(() => {
-    if (!primaryCategory || initialLoadRef.current) return;
-    initialLoadRef.current = true;
-    load();
-  }, [primaryCategory, load]);
 
   const completedSteps = useMemo(
     () => (data?.steps || []).filter((step) => step.completed).map((step) => step.stepNumber),
@@ -781,7 +798,7 @@ export default function AiCareerRoadmapPage() {
           ))}
         </View>
 
-        <Text style={[styles.label, { color: colors.text }]}>Custom Goal (optional)</Text>
+        <Text style={[styles.label, { color: colors.text }]}>Custom Goal</Text>
         <TextInput
           style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
           value={customGoal}
@@ -789,6 +806,17 @@ export default function AiCareerRoadmapPage() {
           placeholder="Example: UPSC Mains, Backend Developer, Corporate Law"
           placeholderTextColor={colors.textMuted}
         />
+        <Text style={[styles.label, { color: colors.text }]}>Current Skills</Text>
+        <TextInput
+          style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+          value={skillsInput}
+          onChangeText={setSkillsInput}
+          placeholder="Example: Python, SQL, Basic Math"
+          placeholderTextColor={colors.textMuted}
+        />
+        <Text style={[styles.meta, { color: colors.textMuted }]}>
+          Add your real current skills so ORIN can suggest the next step after them.
+        </Text>
         <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_GOLD }]} onPress={() => load(true)}>
           <Text style={styles.primaryBtnText}>Generate Journey</Text>
         </TouchableOpacity>
@@ -804,7 +832,7 @@ export default function AiCareerRoadmapPage() {
           <View style={[styles.doneCard, { backgroundColor: isDark ? colors.surfaceAlt : "#F7FFF9", borderColor: colors.border }]}>
             <Text style={[styles.doneTitle, { color: colors.text }]}>Roadmap not loaded</Text>
             <Text style={[styles.meta, { color: colors.textMuted }]}>
-              {error || "Generate or refresh your roadmap to see the next mission here."}
+              {error || "Add your goal and current skills above, then generate your roadmap."}
             </Text>
             <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_TEAL }]} onPress={() => load(true)}>
               <Text style={styles.primaryBtnText}>Generate Journey</Text>
