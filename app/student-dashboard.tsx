@@ -457,7 +457,7 @@ export default function StudentDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const lastDashboardFetchAtRef = useRef(0);
   const lastNewsFetchAtRef = useRef(0);
   const sectionFetchAtRef = useRef<Record<string, number>>({});
