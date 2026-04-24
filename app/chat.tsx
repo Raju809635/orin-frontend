@@ -253,16 +253,22 @@ export default function ChatScreen() {
     const includeGroups = options?.includeGroups ?? true;
     try {
       setError(null);
-      const [conversationRes, groupsRes] = await Promise.all([
+      const [conversationRes, groupsRes] = await Promise.allSettled([
         api.get<Conversation[]>("/api/chat/conversations"),
         includeGroups
-          ? api.get<MentorGroup[]>("/api/network/mentor-groups").catch(() => ({ data: [] as MentorGroup[] }))
+          ? api.get<MentorGroup[]>("/api/network/mentor-groups")
           : Promise.resolve({ data: mentorGroups })
       ]);
 
-      const data = conversationRes.data || [];
-      setConversations(data);
-      setMentorGroups(groupsRes.data || []);
+      const nextConversations = conversationRes.status === "fulfilled" ? conversationRes.value.data || [] : [];
+      const nextGroups = groupsRes.status === "fulfilled" ? groupsRes.value.data || [] : mentorGroups;
+
+      setConversations(nextConversations);
+      setMentorGroups(nextGroups);
+
+      if (conversationRes.status === "rejected") {
+        setError(getAppErrorMessage(conversationRes.reason, "Failed to load chats."));
+      }
 
       if (!includeContacts) return;
 
