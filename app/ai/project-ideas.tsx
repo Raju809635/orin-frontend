@@ -15,6 +15,7 @@ import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
 const AI_GOLD = "#D4A017";
 const AI_GOLD_SOFT = "#FFF4CC";
 const AI_TEAL = "#0F766E";
+const AI_ROADMAP_SOFT = "#F1FBF5";
 
 type ProjectTask = {
   id: string;
@@ -67,6 +68,34 @@ const LEVEL_OPTIONS = ["Beginner", "Intermediate", "Advanced"];
 type ProjectIdeasMode = "roadmap" | "domain";
 type ProjectIdeasDrawerSection = "roadmap" | "domain" | "completed" | "recent";
 
+function getProjectDrawerTone(section: ProjectIdeasDrawerSection, isDark: boolean) {
+  if (section === "domain") {
+    return {
+      accent: AI_GOLD,
+      background: isDark ? "rgba(212,160,23,0.18)" : AI_GOLD_SOFT
+    };
+  }
+
+  if (section === "completed") {
+    return {
+      accent: "#1F7A4C",
+      background: isDark ? "rgba(31,122,76,0.18)" : "#ECFDF3"
+    };
+  }
+
+  if (section === "recent") {
+    return {
+      accent: "#0F766E",
+      background: isDark ? "rgba(15,118,110,0.18)" : "#E6F5F2"
+    };
+  }
+
+  return {
+    accent: AI_TEAL,
+    background: isDark ? "rgba(15,118,110,0.18)" : AI_ROADMAP_SOFT
+  };
+}
+
 function buildProjectKey(title: string) {
   return String(title || "")
     .toLowerCase()
@@ -116,7 +145,7 @@ function normalizeProjectIdea(idea: ProjectIdea): ProjectIdea {
 }
 
 export default function AiProjectIdeasPage() {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
   const [primaryCategory, setPrimaryCategory] = useState("");
@@ -257,6 +286,7 @@ export default function AiProjectIdeasPage() {
     if (difficulty === "Medium") return "#B54708";
     return "#B42318";
   }, [difficulty]);
+  const activeDrawerTone = useMemo(() => getProjectDrawerTone(drawerSection, isDark), [drawerSection, isDark]);
 
   const suggestedStack = useMemo(() => {
     if (primaryCategory === "Technology & AI") {
@@ -468,7 +498,7 @@ export default function AiProjectIdeasPage() {
               style={[
                 styles.drawerModeRow,
                 { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
-                active && { backgroundColor: item.key === "domain" ? AI_GOLD_SOFT : "#F1FBF5", borderColor: item.key === "domain" ? AI_GOLD : AI_TEAL }
+                active && { backgroundColor: getProjectDrawerTone(item.key, isDark).background, borderColor: getProjectDrawerTone(item.key, isDark).accent }
               ]}
               onPress={() => {
                 setDrawerSection(item.key);
@@ -499,7 +529,7 @@ export default function AiProjectIdeasPage() {
             {(domainTree?.primaryCategories || []).map((item) => (
               <TouchableOpacity
                 key={item}
-                style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]}
+                style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: isDark ? "rgba(212,160,23,0.18)" : AI_GOLD_SOFT, borderColor: AI_GOLD }]]}
                 onPress={() => setPrimaryCategory(item)}
               >
                 <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
@@ -529,8 +559,8 @@ export default function AiProjectIdeasPage() {
                   styles.historyRow,
                   { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
                   activeProject === idea.projectKey && {
-                    borderColor: drawerSection === "domain" ? AI_GOLD : AI_TEAL,
-                    backgroundColor: drawerSection === "domain" ? AI_GOLD_SOFT : "#F1FBF5"
+                    borderColor: activeDrawerTone.accent,
+                    backgroundColor: activeDrawerTone.background
                   }
                 ]}
                 onPress={() => {
@@ -609,7 +639,7 @@ export default function AiProjectIdeasPage() {
           <Text style={[styles.label, { color: colors.text }]}>Sub-domain</Text>
           <View style={styles.chips}>
             {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
-              <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setSubCategory(item)}>
+              <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: isDark ? "rgba(212,160,23,0.18)" : AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setSubCategory(item)}>
                 <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
               </TouchableOpacity>
             ))}
@@ -618,7 +648,7 @@ export default function AiProjectIdeasPage() {
           <Text style={[styles.label, { color: colors.text }]}>Focus</Text>
           <View style={styles.chips}>
             {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
-              <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setFocus(item)}>
+              <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: isDark ? "rgba(212,160,23,0.18)" : AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setFocus(item)}>
                 <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
               </TouchableOpacity>
             ))}
@@ -629,10 +659,10 @@ export default function AiProjectIdeasPage() {
         </View>
       ) : drawerSection === "roadmap" ? (
         <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-          <View style={styles.journeyCard}>
-            <Text style={styles.journeyLabel}>Roadmap Guided</Text>
-            <Text style={styles.journeyTitle}>Projects based on your current roadmap step</Text>
-            <Text style={styles.meta}>Domain selection is hidden here so ORIN can focus on your next realistic step.</Text>
+          <View style={[styles.journeyCard, { borderColor: isDark ? "rgba(15,118,110,0.32)" : "#D9F2E4", backgroundColor: isDark ? "rgba(15,118,110,0.14)" : AI_ROADMAP_SOFT }]}>
+            <Text style={[styles.journeyLabel, { color: AI_TEAL }]}>Roadmap Guided</Text>
+            <Text style={[styles.journeyTitle, { color: colors.text }]}>Projects based on your current roadmap step</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Domain selection is hidden here so ORIN can focus on your next realistic step.</Text>
           </View>
         </View>
       ) : null}
@@ -642,7 +672,7 @@ export default function AiProjectIdeasPage() {
         <Text style={[styles.label, { color: colors.text }]}>Skill Level</Text>
         <View style={styles.chips}>
           {LEVEL_OPTIONS.map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, level === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setLevel(item)}>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, level === item && [styles.chipActive, { backgroundColor: isDark ? "rgba(212,160,23,0.18)" : AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setLevel(item)}>
               <Text style={[styles.chipText, { color: colors.textMuted }, level === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
@@ -659,11 +689,11 @@ export default function AiProjectIdeasPage() {
         {loading ? <ActivityIndicator size="large" color={AI_GOLD} /> : null}
         {!loading && !data ? <Text style={[styles.meta, { color: colors.textMuted }]}>No ideas available yet.</Text> : null}
         {drawerSection === "roadmap" && data?.journey ? (
-          <View style={styles.journeyCard}>
-            <Text style={styles.journeyLabel}>Personalized Build Track</Text>
-            <Text style={styles.journeyTitle}>{data.journey.personalizationReason || `Built for ${data.goal}`}</Text>
-            <Text style={styles.meta}>{data.journey.currentStep ? `Current step: ${data.journey.currentStep}` : `Focus: ${data.journey.focusLabel || data.goal}`}</Text>
-            <Text style={styles.meta}>Readiness: {Math.max(0, Math.round(Number(data.journey.readinessScore || 0)))}%</Text>
+          <View style={[styles.journeyCard, { borderColor: isDark ? "rgba(15,118,110,0.32)" : "#D9F2E4", backgroundColor: isDark ? "rgba(15,118,110,0.14)" : AI_ROADMAP_SOFT }]}>
+            <Text style={[styles.journeyLabel, { color: AI_TEAL }]}>Personalized Build Track</Text>
+            <Text style={[styles.journeyTitle, { color: colors.text }]}>{data.journey.personalizationReason || `Built for ${data.goal}`}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>{data.journey.currentStep ? `Current step: ${data.journey.currentStep}` : `Focus: ${data.journey.focusLabel || data.goal}`}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Readiness: {Math.max(0, Math.round(Number(data.journey.readinessScore || 0)))}%</Text>
           </View>
         ) : null}
 
@@ -672,7 +702,7 @@ export default function AiProjectIdeasPage() {
             <Ionicons
               name={drawerSection === "completed" ? "checkmark-done-circle-outline" : drawerSection === "recent" ? "time-outline" : drawerSection === "domain" ? "globe-outline" : "map-outline"}
               size={22}
-              color={drawerSection === "domain" ? AI_GOLD : AI_TEAL}
+              color={activeDrawerTone.accent}
             />
             <Text style={[styles.emptyStateTitle, { color: colors.text }]}>{activeSectionEmptyState.title}</Text>
             <Text style={[styles.emptyStateText, { color: colors.textMuted }]}>{activeSectionEmptyState.body}</Text>
@@ -765,7 +795,7 @@ export default function AiProjectIdeasPage() {
         })}
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={styles.sectionTitle}>Actions</Text>
         <TouchableOpacity
           style={styles.primaryBtn}

@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { getAppErrorMessage } from "@/lib/appError";
 
 type Complaint = {
   _id: string;
@@ -51,7 +52,7 @@ export default function ComplaintsScreen() {
       const { data } = await api.get<Complaint[]>("/api/complaints/me");
       setComplaints(data);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load complaints.");
+      setError(getAppErrorMessage(e, "Failed to load complaints."));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -81,7 +82,7 @@ export default function ComplaintsScreen() {
       setDescription("");
       await loadComplaints(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to submit complaint.");
+      setError(getAppErrorMessage(e, "Failed to submit complaint."));
     } finally {
       setSubmitting(false);
     }
@@ -96,20 +97,22 @@ export default function ComplaintsScreen() {
   }
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+    >
       <Text style={styles.heading}>Raise Complaint</Text>
-      <Text style={styles.sub}>Share issues, blockers, or support needs with admin.</Text>
+      <Text style={styles.sub}>
+        Share support issues related to sessions, payments, mentor conduct, technical blockers, roadmap proofs, or
+        institution workflows.
+      </Text>
 
-      <TextInput
-        style={styles.input}
-        placeholder="Subject"
-        value={subject}
-        onChangeText={setSubject}
-      />
+      <TextInput style={styles.input} placeholder="Subject" value={subject} onChangeText={setSubject} />
 
       <TextInput
         style={[styles.input, styles.descriptionInput]}
-        placeholder="Describe your issue and what help you need"
+        placeholder="Describe the issue, the related screen or workflow, and the help you need"
         multiline
         value={description}
         onChangeText={setDescription}
@@ -163,7 +166,7 @@ export default function ComplaintsScreen() {
                 <Text style={styles.status}>{item.status}</Text>
               </View>
               <Text style={styles.meta}>
-                {item.category} • {item.priority} • {new Date(item.createdAt).toLocaleString()}
+                {item.category} | {item.priority} | {new Date(item.createdAt).toLocaleString()}
               </Text>
               <Text style={styles.body}>{item.description}</Text>
               {item.adminResponse ? (
@@ -184,7 +187,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F4F9F6", padding: 16 },
   centered: { alignItems: "center", justifyContent: "center", paddingVertical: 20 },
   heading: { fontSize: 24, fontWeight: "700", color: "#1E2B24" },
-  sub: { color: "#475467", marginTop: 4, marginBottom: 10 },
+  sub: { color: "#475467", marginTop: 4, marginBottom: 10, lineHeight: 20 },
   input: {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -238,5 +241,5 @@ const styles = StyleSheet.create({
   responseTitle: { fontWeight: "700", color: "#1E2B24" },
   responseText: { color: "#344054", marginTop: 4 },
   empty: { color: "#667085", textAlign: "center", marginTop: 12 },
-  error: { color: "#B42318", marginBottom: 8 }
+  error: { color: "#B42318", marginTop: 6 }
 });

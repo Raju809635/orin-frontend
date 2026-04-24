@@ -65,6 +65,41 @@ const STORAGE_KEY = "community-library-saved-v1";
 const CACHE_KEY = "community-library-cache-v2";
 type LibraryDrawerSection = "roadmap" | "institution" | "domain" | "recommended" | "trending" | "saved" | "recent";
 
+function getLibraryDrawerTone(section: LibraryDrawerSection, isDark: boolean) {
+  if (section === "institution") {
+    return {
+      accent: "#7A5AF8",
+      background: isDark ? "rgba(122,90,248,0.18)" : "#F4F3FF"
+    };
+  }
+
+  if (section === "domain" || section === "trending") {
+    return {
+      accent: "#C98A00",
+      background: isDark ? "rgba(201,138,0,0.18)" : "#FFF7ED"
+    };
+  }
+
+  if (section === "saved") {
+    return {
+      accent: "#B42318",
+      background: isDark ? "rgba(180,35,24,0.18)" : "#FEF3F2"
+    };
+  }
+
+  if (section === "recent") {
+    return {
+      accent: "#0F766E",
+      background: isDark ? "rgba(15,118,110,0.18)" : "#E6F5F2"
+    };
+  }
+
+  return {
+    accent: "#4457FF",
+    background: isDark ? "rgba(68,87,255,0.18)" : "#EEF4FF"
+  };
+}
+
 export default function CommunityLibraryPage() {
   const { user } = useAuth();
   const { colors, isDark } = useAppTheme();
@@ -253,6 +288,7 @@ export default function CommunityLibraryPage() {
     if (drawerSection === "recent") return "Open a resource and it will appear here for quick access.";
     return "No roadmap resources available yet. Refresh to load a new roadmap-based set.";
   }, [drawerSection, institutionName]);
+  const activeDrawerTone = useMemo(() => getLibraryDrawerTone(drawerSection, isDark), [drawerSection, isDark]);
 
   const selectedItem = visibleItems.find((item) => item.id === selectedId) || visibleItems[0] || null;
 
@@ -307,8 +343,8 @@ export default function CommunityLibraryPage() {
                 styles.drawerModeRow,
                 { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
                 active && {
-                  backgroundColor: item.key === "domain" || item.key === "trending" ? "#FFF7ED" : "#EEF4FF",
-                  borderColor: item.key === "domain" || item.key === "trending" ? "#C98A00" : "#4457FF"
+                  backgroundColor: getLibraryDrawerTone(item.key, isDark).background,
+                  borderColor: getLibraryDrawerTone(item.key, isDark).accent
                 }
               ]}
               onPress={() => {
@@ -333,7 +369,7 @@ export default function CommunityLibraryPage() {
                             : "map-outline"
                 }
                 size={16}
-                color={active ? (item.key === "domain" || item.key === "trending" ? "#C98A00" : item.key === "institution" ? "#1F7A4C" : "#4457FF") : colors.textMuted}
+                color={active ? getLibraryDrawerTone(item.key, isDark).accent : colors.textMuted}
               />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.drawerModeTitle, { color: colors.text }]}>{item.label}</Text>
@@ -356,7 +392,7 @@ export default function CommunityLibraryPage() {
                 style={[
                   styles.historyRow,
                   { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
-                  selectedId === item.id && { borderColor: colors.accent, backgroundColor: isDark ? colors.surface : "#F8FBFF" }
+                  selectedId === item.id && { borderColor: activeDrawerTone.accent, backgroundColor: activeDrawerTone.background }
                 ]}
                 onPress={() => {
                   setSelectedId(item.id);

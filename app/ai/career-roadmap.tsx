@@ -96,6 +96,34 @@ const ROADMAP_REQUEST_TIMEOUT_MS = 12000;
 const ROADMAP_LEVELS = ["Starter", "Explorer", "Builder", "Pro", "Elite", "Legend"];
 type RoadmapDrawerSection = "ai" | "institution" | "completed" | "recent";
 
+function getRoadmapDrawerTone(section: RoadmapDrawerSection, isDark: boolean) {
+  if (section === "institution") {
+    return {
+      accent: AI_INDIGO,
+      background: isDark ? "rgba(109,40,217,0.18)" : "#F4F3FF"
+    };
+  }
+
+  if (section === "completed") {
+    return {
+      accent: AI_TEAL,
+      background: isDark ? "rgba(15,118,110,0.18)" : "#E6F5F2"
+    };
+  }
+
+  if (section === "recent") {
+    return {
+      accent: AI_GOLD,
+      background: isDark ? "rgba(212,160,23,0.18)" : AI_GOLD_SOFT
+    };
+  }
+
+  return {
+    accent: AI_GOLD,
+    background: isDark ? "rgba(212,160,23,0.18)" : AI_GOLD_SOFT
+  };
+}
+
 const FALLBACK_DOMAIN_TREE = getFallbackDomainTree();
 
 function formatRoadmapDate(value?: string | null) {
@@ -555,7 +583,7 @@ export default function AiCareerRoadmapPage() {
               style={[
                 styles.drawerModeRow,
                 { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
-                active && { backgroundColor: item.key === "institution" ? "#F4F3FF" : AI_GOLD_SOFT, borderColor: item.key === "institution" ? AI_INDIGO : AI_GOLD }
+                active && { backgroundColor: getRoadmapDrawerTone(item.key, isDark).background, borderColor: getRoadmapDrawerTone(item.key, isDark).accent }
               ]}
               onPress={() => {
                 setDrawerSection(item.key);
@@ -795,7 +823,7 @@ export default function AiCareerRoadmapPage() {
       </View>) : null}
 
       {drawerSection === "ai" ? (
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="sparkles" size={16} color={AI_GOLD} />
           <Text style={styles.sectionTitle}>AI Generation</Text>
@@ -813,7 +841,7 @@ export default function AiCareerRoadmapPage() {
 
       {data && drawerSection === "ai" ? (
         <>
-          <View style={styles.section}>
+          <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="git-network" size={16} color={AI_INDIGO} />
               <Text style={styles.sectionTitle}>Journey Timeline</Text>
@@ -917,7 +945,7 @@ export default function AiCareerRoadmapPage() {
           </View>
 
           <View style={styles.splitRow}>
-            <View style={[styles.section, styles.halfSection]}>
+            <View style={[styles.section, styles.halfSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="stats-chart" size={16} color={AI_TEAL} />
                 <Text style={styles.sectionTitle}>Progress</Text>
@@ -929,7 +957,7 @@ export default function AiCareerRoadmapPage() {
               <Text style={styles.meta}>Streak: {streakDays} day{streakDays === 1 ? "" : "s"}</Text>
             </View>
 
-            <View style={[styles.section, styles.halfSection]}>
+            <View style={[styles.section, styles.halfSection, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="trending-up" size={16} color={AI_TEAL} />
                 <Text style={styles.sectionTitle}>Future Preview</Text>
@@ -942,7 +970,7 @@ export default function AiCareerRoadmapPage() {
             </View>
           </View>
 
-          <View style={styles.section}>
+          <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="school" size={16} color={AI_INDIGO} />
               <Text style={styles.sectionTitle}>Institution Roadmaps</Text>
@@ -1031,7 +1059,7 @@ export default function AiCareerRoadmapPage() {
       ) : null}
 
       {drawerSection === "institution" ? (
-        <View style={styles.section}>
+          <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.sectionHeader}>
             <Ionicons name="school" size={16} color={AI_INDIGO} />
             <Text style={styles.sectionTitle}>Institution Roadmaps</Text>
@@ -1045,7 +1073,7 @@ export default function AiCareerRoadmapPage() {
                 <Text style={styles.meta}>{roadmap.description || "Institution mentor guided roadmap."}</Text>
                 {roadmap.className ? <Text style={styles.meta}>Class: {roadmap.className}</Text> : null}
                 <Text style={styles.meta}>Mentor: {roadmap.mentor?.name || "Institution Mentor"}</Text>
-                <TouchableOpacity style={[styles.secondaryBtn, { backgroundColor: "#F4F3FF" }]} onPress={() => markInstitutionRoadmapRecent(roadmap.id)}>
+                <TouchableOpacity style={[styles.secondaryBtn, { backgroundColor: isDark ? "rgba(109,40,217,0.18)" : "#F4F3FF" }]} onPress={() => markInstitutionRoadmapRecent(roadmap.id)}>
                   <Text style={[styles.secondaryBtnText, { color: AI_INDIGO }]}>Open Roadmap</Text>
                 </TouchableOpacity>
                 {roadmap.weeks.slice(0, 4).map((week, weekIndex) => {
@@ -1122,7 +1150,7 @@ export default function AiCareerRoadmapPage() {
       ) : null}
 
       {drawerSection === "completed" ? (
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.sectionHeader}>
             <Ionicons name="checkmark-done-circle" size={16} color={AI_TEAL} />
             <Text style={styles.sectionTitle}>Completed Roadmaps</Text>
@@ -1141,7 +1169,7 @@ export default function AiCareerRoadmapPage() {
       ) : null}
 
       {drawerSection === "recent" ? (
-        <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.sectionHeader}>
             <Ionicons name="time" size={16} color={AI_GOLD} />
             <Text style={styles.sectionTitle}>Recent Roadmap Activity</Text>
@@ -1163,7 +1191,7 @@ export default function AiCareerRoadmapPage() {
         </View>
       ) : null}
 
-      <View style={styles.section}>
+        <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="flash" size={16} color={AI_TEAL} />
           <Text style={styles.sectionTitle}>Actions</Text>
@@ -1206,7 +1234,7 @@ export default function AiCareerRoadmapPage() {
         </View>
       </View>
 
-      <View style={styles.section}>
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="help-circle" size={16} color={AI_INDIGO} />
           <Text style={styles.sectionTitle}>Resources</Text>

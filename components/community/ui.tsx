@@ -102,7 +102,7 @@ export function CommunitySection({
 }
 
 export function FilterTabs({ tabs }: { tabs: TabProps[] }) {
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   return (
     <View style={styles.tabsRow}>
       {tabs.map((tab) => (
@@ -194,7 +194,7 @@ export function ActionButton({
       ? { backgroundColor: COMMUNITY_SUCCESS }
       : variant === "secondary"
         ? { backgroundColor: isDark ? colors.surfaceAlt : "#F8FAFC", borderColor: colors.border }
-        : { backgroundColor: COMMUNITY_GHOST };
+        : { backgroundColor: isDark ? "rgba(201,138,0,0.18)" : COMMUNITY_GHOST, borderColor: variant === "ghost" ? (isDark ? "#8A6110" : "#F9DBAF") : undefined };
   const dynamicTextStyle =
     variant === "primary"
       ? { color: colors.accentText }

@@ -29,12 +29,12 @@ function defaultRouteByRole(role: "student" | "mentor") {
 
 type AppTabKey = "home" | "mentorship" | "journey" | "ai" | "community";
 
-const TAB_BRAND_COLORS: Record<AppTabKey, { active: string; inactive: string }> = {
-  home: { active: "#22A06B", inactive: "#7A8A99" },
-  mentorship: { active: "#1D4ED8", inactive: "#6B7AA6" },
-  journey: { active: "#0F766E", inactive: "#6C8E87" },
-  ai: { active: "#D4A017", inactive: "#9A7B14" },
-  community: { active: "#C98A00", inactive: "#9A7A2A" }
+const TAB_BRAND_COLORS: Record<AppTabKey, { active: string; inactive: string; softLight: string; softDark: string; border: string }> = {
+  home: { active: "#22A06B", inactive: "#7A8A99", softLight: "#EAF6EF", softDark: "rgba(34,160,107,0.18)", border: "#22A06B" },
+  mentorship: { active: "#1D4ED8", inactive: "#6B7AA6", softLight: "#E8EEFF", softDark: "rgba(29,78,216,0.18)", border: "#1D4ED8" },
+  journey: { active: "#0F766E", inactive: "#6C8E87", softLight: "#E6F5F2", softDark: "rgba(15,118,110,0.18)", border: "#0F766E" },
+  ai: { active: "#D4A017", inactive: "#9A7B14", softLight: "#FFF4CC", softDark: "rgba(212,160,23,0.18)", border: "#D4A017" },
+  community: { active: "#C98A00", inactive: "#9A7A2A", softLight: "#FFF1D6", softDark: "rgba(201,138,0,0.18)", border: "#C98A00" }
 };
 
 function normalizeRouteParam(value: unknown) {
@@ -93,7 +93,7 @@ function RootDrawer() {
   const navigation = useNavigation();
   const pathname = usePathname();
   const globalParams = useGlobalSearchParams<Record<string, string | string[]>>();
-  const { colors } = useAppTheme();
+  const { colors, isDark } = useAppTheme();
   const { user, isAuthenticated, isBootstrapping, logout } = useAuth();
   const [isBackendReady, setIsBackendReady] = useState(false);
   const [isCheckingBackend, setIsCheckingBackend] = useState(true);
@@ -650,6 +650,7 @@ function RootDrawer() {
                 tab={tab}
                 active={active}
                 colors={colors}
+                isDark={isDark}
                 onPress={() => openBottomTab(tab)}
               />
             );
@@ -664,11 +665,13 @@ function AnimatedTabButton({
   tab,
   active,
   colors,
+  isDark,
   onPress
 }: {
   tab: { key: string; label: string; icon: string; path: string };
   active: boolean;
   colors: { accent: string; textMuted: string; accentSoft: string; surfaceAlt: string; border: string };
+  isDark: boolean;
   onPress: () => void;
 }) {
   const scale = useRef(new Animated.Value(active ? 1 : 0.96)).current;
@@ -699,8 +702,8 @@ function AnimatedTabButton({
       <Animated.View
         style={[
           styles.bottomNavItem,
-          isCenter && [styles.bottomNavItemCenter, { backgroundColor: colors.accentSoft, borderColor: colors.border }],
-          active && [styles.bottomNavItemActive, { backgroundColor: colors.surfaceAlt }],
+          isCenter && [styles.bottomNavItemCenter, { backgroundColor: isDark ? brand.softDark : brand.softLight, borderColor: brand.border }],
+          active && [styles.bottomNavItemActive, { backgroundColor: isDark ? brand.softDark : brand.softLight, borderColor: brand.border }],
           {
             transform: [{ scale }, { translateY: lift }]
           }
