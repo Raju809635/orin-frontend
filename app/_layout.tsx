@@ -565,7 +565,14 @@ function RootDrawer() {
     const tabKey = tab.key as AppTabKey;
     const fallbackPath = getDefaultTabPath(tabKey, user);
     const tabHistory = tabHistoryRef.current[tabKey];
-    const targetPath = tabHistory?.[tabHistory.length - 1] || fallbackPath;
+    const candidatePath = tabHistory?.[tabHistory.length - 1] || fallbackPath;
+    const candidateBasePath = String(candidatePath || "").split("?")[0];
+    const targetPath =
+      tabKey === "journey"
+        ? candidateBasePath.startsWith("/student-dashboard") || candidateBasePath.startsWith("/mentor-dashboard")
+          ? candidatePath
+          : fallbackPath
+        : candidatePath;
 
     if (trackedRoute === targetPath) return;
     router.replace(targetPath as never);

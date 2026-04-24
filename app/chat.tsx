@@ -266,7 +266,15 @@ export default function ChatScreen() {
 
       if (!includeContacts) return;
 
-      InteractionManager.runAfterInteractions(() => {
+      const runDeferred =
+        typeof InteractionManager?.runAfterInteractions === "function"
+          ? (task: () => void) => InteractionManager.runAfterInteractions(task)
+          : (task: () => void) => {
+              task();
+              return { cancel: () => undefined };
+            };
+
+      runDeferred(() => {
         Promise.allSettled([
           user?.role === "student"
             ? api.get<StudentSession[]>("/api/sessions/student/me")
