@@ -722,7 +722,6 @@ export default function MentorDashboard() {
       setCreatingInstitutionRoadmap(false);
     }
   }, [
-    fetchDashboard,
     institutionRoadmapClassName,
     institutionRoadmapDescription,
     institutionRoadmapDomain,
