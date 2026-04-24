@@ -51,6 +51,10 @@ function splitByUrls(text: string) {
   return out;
 }
 
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value.filter((item) => item != null) as T[] : [];
+}
+
 type FeedPost = {
   _id: string;
   content: string;
@@ -274,7 +278,7 @@ export default function NetworkScreen() {
     const cacheKey = "feed";
     if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
     const feedRes = await api.get<FeedPost[]>("/api/network/feed");
-    const nextPosts = feedRes.data || [];
+    const nextPosts = asArray<FeedPost>(feedRes.data);
     setPosts(nextPosts);
     const followMap: Record<string, boolean> = {};
     nextPosts.forEach((post) => {
@@ -289,7 +293,7 @@ export default function NetworkScreen() {
     const cacheKey = "institution";
     if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
     const feedRes = await api.get<FeedPost[]>("/api/network/feed/institution");
-    const nextPosts = feedRes.data || [];
+    const nextPosts = asArray<FeedPost>(feedRes.data);
     setPosts(nextPosts);
     const followMap: Record<string, boolean> = {};
     nextPosts.forEach((post) => {
@@ -308,9 +312,9 @@ export default function NetworkScreen() {
       api.get<ConnectionRow[]>("/api/network/connections?status=pending"),
       api.get<ConnectionRow[]>("/api/network/connections?status=accepted")
     ]);
-    const pendingRows = pendingRes.status === "fulfilled" ? pendingRes.value.data || [] : [];
-    const acceptedRows = acceptedRes.status === "fulfilled" ? acceptedRes.value.data || [] : [];
-    setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
+    const pendingRows = pendingRes.status === "fulfilled" ? asArray<ConnectionRow>(pendingRes.value.data) : [];
+    const acceptedRows = acceptedRes.status === "fulfilled" ? asArray<ConnectionRow>(acceptedRes.value.data) : [];
+    setSuggestions(suggestionsRes.status === "fulfilled" ? asArray<Suggestion>(suggestionsRes.value.data) : []);
     applyConnectionState(pendingRows, acceptedRows);
     markSectionFetched(cacheKey);
   }, [applyConnectionState, markSectionFetched, shouldSkipSectionFetch]);
@@ -322,8 +326,8 @@ export default function NetworkScreen() {
       api.get<ConnectionRow[]>("/api/network/connections?status=pending"),
       api.get<ConnectionRow[]>("/api/network/connections?status=accepted")
     ]);
-    const pendingRows = pendingRes.status === "fulfilled" ? pendingRes.value.data || [] : [];
-    const acceptedRows = acceptedRes.status === "fulfilled" ? acceptedRes.value.data || [] : [];
+    const pendingRows = pendingRes.status === "fulfilled" ? asArray<ConnectionRow>(pendingRes.value.data) : [];
+    const acceptedRows = acceptedRes.status === "fulfilled" ? asArray<ConnectionRow>(acceptedRes.value.data) : [];
     applyConnectionState(pendingRows, acceptedRows);
     markSectionFetched(cacheKey);
   }, [applyConnectionState, markSectionFetched, shouldSkipSectionFetch]);

@@ -105,6 +105,10 @@ type SessionItem = {
 };
 type BookingItem = { _id: string; status?: string; scheduledAt: string; mentor?: { name?: string; email?: string } };
 
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value.filter((item) => item != null) as T[] : [];
+}
+
 export default function MentorshipHubScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: MentorshipSectionId; search?: string }>();
@@ -139,13 +143,13 @@ export default function MentorshipHubScreen() {
         api.get<SessionItem[]>(isMentor ? "/api/sessions/mentor/me" : "/api/sessions/student/me"),
         api.get<BookingItem[]>("/api/bookings/my")
       ]);
-      setVerifiedMentors(verifiedRes.status === "fulfilled" ? verifiedRes.value.data || [] : []);
-      setMentorGroups(groupsRes.status === "fulfilled" ? groupsRes.value.data || [] : []);
-      setLiveSessions(liveRes.status === "fulfilled" ? liveRes.value.data || [] : []);
-      setSprints(sprintRes.status === "fulfilled" ? sprintRes.value.data || [] : []);
-      setSessionHistory(historyRes.status === "fulfilled" ? historyRes.value.data || [] : []);
-      setSessions(sessionsRes.status === "fulfilled" ? sessionsRes.value.data || [] : []);
-      setBookings(bookingsRes.status === "fulfilled" ? bookingsRes.value.data || [] : []);
+      setVerifiedMentors(verifiedRes.status === "fulfilled" ? asArray<VerifiedMentor>(verifiedRes.value.data) : []);
+      setMentorGroups(groupsRes.status === "fulfilled" ? asArray<MentorGroupItem>(groupsRes.value.data) : []);
+      setLiveSessions(liveRes.status === "fulfilled" ? asArray<LiveSessionItem>(liveRes.value.data) : []);
+      setSprints(sprintRes.status === "fulfilled" ? asArray<SprintItem>(sprintRes.value.data) : []);
+      setSessionHistory(historyRes.status === "fulfilled" ? asArray<SessionHistoryItem>(historyRes.value.data) : []);
+      setSessions(sessionsRes.status === "fulfilled" ? asArray<SessionItem>(sessionsRes.value.data) : []);
+      setBookings(bookingsRes.status === "fulfilled" ? asArray<BookingItem>(bookingsRes.value.data) : []);
       } catch (e: any) {
         setError(getAppErrorMessage(e, "Something went wrong. Please try again."));
     } finally {
