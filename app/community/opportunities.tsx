@@ -16,6 +16,7 @@ import {
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
 import { pickAndUploadProgramDocument } from "@/utils/programDocumentUpload";
 import { useAuth } from "@/context/AuthContext";
@@ -96,7 +97,7 @@ export default function CommunityOpportunitiesPage() {
       setItems(nextItems);
       setSelectedId((prev) => prev || nextItems[0]?._id || "");
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load opportunities.");
+      setError(getAppErrorMessage(e, "Failed to load opportunities."));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -128,7 +129,7 @@ export default function CommunityOpportunitiesPage() {
       if (!url) return;
       setSubmitForm((prev) => ({ ...prev, bannerImageUrl: url }));
     } catch (e: any) {
-      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload banner.");
+      handleAppError(e, { mode: "alert", title: "Upload failed", fallbackMessage: "Unable to upload banner." });
     } finally {
       setUploadingBanner(false);
     }
@@ -141,7 +142,7 @@ export default function CommunityOpportunitiesPage() {
       if (!uploaded?.url) return;
       setSubmitForm((prev) => ({ ...prev, supportingDocuments: [...prev.supportingDocuments, uploaded.url].slice(0, 4) }));
     } catch (e: any) {
-      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload document.");
+      handleAppError(e, { mode: "alert", title: "Upload failed", fallbackMessage: "Unable to upload document." });
     } finally {
       setUploadingDoc(false);
     }
@@ -523,7 +524,7 @@ export default function CommunityOpportunitiesPage() {
                 setDocInput("");
                 await load(true);
               } catch (e: any) {
-                Alert.alert("Failed", e?.response?.data?.message || "Unable to submit opportunity.");
+                handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit opportunity." });
               } finally {
                 setSubmitting(false);
               }

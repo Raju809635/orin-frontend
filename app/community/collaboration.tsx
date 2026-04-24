@@ -3,6 +3,7 @@ import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, Toucha
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { getAppErrorMessage } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 
@@ -25,7 +26,7 @@ export default function CommunityCollaborationPage() {
       const res = await api.get<MentorGroupItem[]>("/api/network/mentor-groups");
       setGroups(res.data || []);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load communities.");
+      setError(getAppErrorMessage(e, "Failed to load communities."));
     } finally {
       setLoading(false); setRefreshing(false);
     }

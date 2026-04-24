@@ -13,6 +13,8 @@ type AiModule = {
   description: string;
   icon: keyof typeof Ionicons.glyphMap;
   path: string;
+  iconColor: string;
+  iconBg: string;
   border: string;
   gradient: [string, string];
 };
@@ -38,6 +40,8 @@ export default function AiHubScreen() {
         : "Find best-fit mentors with match score and experience insights.",
       icon: "sparkles",
       path: "/ai/mentor-matching",
+      iconColor: "#D4A017",
+      iconBg: "#FFF7D6",
       border: "#A4BCFD",
       gradient: ["#FFFFFF", "#EEF4FF"]
     },
@@ -49,6 +53,8 @@ export default function AiHubScreen() {
         : "Identify missing skills and course suggestions for your goal.",
       icon: "analytics",
       path: "/ai/skill-gap",
+      iconColor: "#6D28D9",
+      iconBg: "#F3E8FF",
       border: "#C4B5FD",
       gradient: ["#FFFFFF", "#F4F3FF"]
     },
@@ -60,6 +66,8 @@ export default function AiHubScreen() {
         : "Get your step-by-step path and next milestones.",
       icon: "map",
       path: "/ai/career-roadmap",
+      iconColor: "#0F766E",
+      iconBg: "#DDF7F2",
       border: "#ABEFC6",
       gradient: ["#FFFFFF", "#ECFDF3"]
     },
@@ -71,6 +79,8 @@ export default function AiHubScreen() {
         : "Generate practical project ideas aligned to your career track.",
       icon: "bulb",
       path: "/ai/project-ideas",
+      iconColor: "#D97706",
+      iconBg: "#FFF1DA",
       border: "#F9DBAF",
       gradient: ["#FFFFFF", "#FFF7ED"]
     },
@@ -82,6 +92,8 @@ export default function AiHubScreen() {
         : "Create resume draft from profile and activity data.",
       icon: "document-text",
       path: "/ai/resume-builder",
+      iconColor: "#DC2626",
+      iconBg: "#FEE2E2",
       border: "#FDA29B",
       gradient: ["#FFFFFF", "#FEF3F2"]
     },
@@ -93,6 +105,8 @@ export default function AiHubScreen() {
         : "Open AI chat for personalized answers and guidance.",
       icon: "chatbubbles",
       path: "/ai/assistant",
+      iconColor: "#7C3AED",
+      iconBg: "#F3E8FF",
       border: "#D6BBFB",
       gradient: ["#FFFFFF", "#F9F5FF"]
     }
@@ -127,8 +141,8 @@ export default function AiHubScreen() {
               end={{ x: 1, y: 1 }}
               style={[styles.moduleCard, { borderColor: isDark ? colors.border : item.border }]}
             >
-              <View style={[styles.moduleIconWrap, { backgroundColor: colors.accentSoft }]}>
-                <Ionicons name={item.icon} size={20} color={colors.accent} />
+              <View style={[styles.moduleIconWrap, { backgroundColor: isDark ? colors.surfaceAlt : item.iconBg }]}>
+                <Ionicons name={item.icon} size={20} color={isDark ? colors.text : item.iconColor} />
               </View>
               <View style={styles.moduleTextWrap}>
                 <Text style={[styles.moduleTitle, { color: colors.text }]}>{item.label}</Text>

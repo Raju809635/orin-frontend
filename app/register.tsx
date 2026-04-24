@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,7 +8,7 @@ type Role = "student" | "mentor";
 
 export default function RegisterScreen() {
   const router = useRouter();
-  const { register } = useAuth();
+  const { register, login } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -38,6 +38,7 @@ export default function RegisterScreen() {
 
   async function handleRegister() {
     const normalizedPhone = phoneNumber.trim();
+    const normalizedEmail = email.trim().toLowerCase();
     if (role === "mentor" && normalizedPhone.length < 8) {
       setError("Phone number is required for mentor signup.");
       return;
@@ -48,7 +49,7 @@ export default function RegisterScreen() {
       setError(null);
       const response = await register({
         name: name.trim(),
-        email: email.trim().toLowerCase(),
+        email: normalizedEmail,
         password,
         role,
         phoneNumber: role === "mentor" ? normalizedPhone : ""
@@ -56,15 +57,17 @@ export default function RegisterScreen() {
       if (!response) {
         throw new Error("Registration failed");
       }
-      Alert.alert("Registration Successful", "Your account has been created. Please login to continue.", [
-        {
-          text: "Go to Login",
-          onPress: () => {
-            resetForm();
-            router.replace("/login" as never);
-          }
-        }
-      ]);
+
+      if (response.requiresEmailVerification) {
+        resetForm();
+        router.replace(`/verify-email?role=${role}` as never);
+        return;
+      }
+
+      // Auto-login so new users land directly on Home (Android requirement).
+      await login({ email: normalizedEmail, password });
+      resetForm();
+      // Root layout will redirect from auth screens -> the right home screen for the user.
     } catch (e: any) {
       const rawMessage = e?.response?.data?.message || e?.message || "Registration failed.";
       const message =

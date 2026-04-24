@@ -15,6 +15,7 @@ import {
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -98,7 +99,7 @@ export default function CommunityChallengesPage() {
       setSelectedId((prev) => prev || nextItems[0]?.id || "");
       setLeaderboard(lbRes.status === "fulfilled" ? lbRes.value.data || null : null);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load challenges.");
+      setError(getAppErrorMessage(e, "Failed to load challenges."));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -150,7 +151,7 @@ export default function CommunityChallengesPage() {
       Alert.alert("Joined", "You are now in the challenge. Complete the tasks below to keep momentum.");
       await load(true);
     } catch (e: any) {
-      Alert.alert("Failed", e?.response?.data?.message || "Unable to join challenge.");
+      handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to join challenge." });
     } finally {
       setJoining(false);
     }
@@ -181,7 +182,7 @@ export default function CommunityChallengesPage() {
       Alert.alert("Submitted", "Your proof has been submitted for mentor review.");
       await load(true);
     } catch (e: any) {
-      Alert.alert("Failed", e?.response?.data?.message || "Unable to submit proof.");
+      handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit proof." });
     } finally {
       setSubmittingProof(false);
     }
@@ -194,7 +195,7 @@ export default function CommunityChallengesPage() {
       if (!url) return;
       setSubmitForm((prev) => ({ ...prev, bannerImageUrl: url }));
     } catch (e: any) {
-      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload banner.");
+      handleAppError(e, { mode: "alert", title: "Upload failed", fallbackMessage: "Unable to upload banner." });
     } finally {
       setUploadingBanner(false);
     }
@@ -211,7 +212,7 @@ export default function CommunityChallengesPage() {
         return next;
       });
     } catch (e: any) {
-      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload proof image.");
+      handleAppError(e, { mode: "alert", title: "Upload failed", fallbackMessage: "Unable to upload proof image." });
     } finally {
       setUploadingProofFile(false);
     }
@@ -541,7 +542,7 @@ export default function CommunityChallengesPage() {
                 setSubmitForm({ title: "", domain: "", description: "", deadline: "", bannerImageUrl: "", participantLimit: "", proofInstructions: "" });
                 await load(true);
               } catch (e: any) {
-                Alert.alert("Failed", e?.response?.data?.message || "Unable to submit challenge.");
+                handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit challenge." });
               } finally {
                 setSubmitting(false);
               }

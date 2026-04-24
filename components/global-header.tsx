@@ -146,16 +146,31 @@ export default function GlobalHeader({
           />
         </View>
 
-        <TouchableOpacity style={[styles.messageButton, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/chat" as never)}>
-          <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.text} />
-          {messageUnreadCount > 0 ? (
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{messageUnreadCount > 99 ? "99+" : messageUnreadCount}</Text>
-            </View>
-          ) : notificationUnreadCount > 0 ? (
-            <View style={styles.dotBadge} />
-          ) : null}
-        </TouchableOpacity>
+        <View style={styles.actionsWrap}>
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => router.push("/notifications" as never)}
+          >
+            <Ionicons name="notifications-outline" size={22} color={colors.text} />
+            {notificationUnreadCount > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{notificationUnreadCount > 99 ? "99+" : notificationUnreadCount}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.iconButton, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => router.push("/chat" as never)}
+          >
+            <Ionicons name="chatbubble-ellipses-outline" size={22} color={colors.text} />
+            {messageUnreadCount > 0 ? (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{messageUnreadCount > 99 ? "99+" : messageUnreadCount}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
@@ -170,7 +185,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12
+    gap: 10
   },
   avatarTap: {
     borderRadius: 20,
@@ -209,7 +224,12 @@ const styles = StyleSheet.create({
     color: "#101828",
     fontSize: 14
   },
-  messageButton: {
+  actionsWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  iconButton: {
     width: 42,
     height: 42,
     borderRadius: 21,

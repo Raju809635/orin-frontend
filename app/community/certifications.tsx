@@ -17,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import {
@@ -127,7 +128,7 @@ export default function CommunityCertificationsPage() {
         return matched ? mapEarned(matched) : nextEarned[0] ? mapEarned(nextEarned[0]) : null;
       });
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load certifications.");
+      setError(getAppErrorMessage(e, "Failed to load certifications."));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -363,7 +364,7 @@ export default function CommunityCertificationsPage() {
                       Alert.alert("Requested", "Your request has been sent to admin for review.");
                       await load(true);
                     } catch (e: any) {
-                      Alert.alert("Failed", e?.response?.data?.message || "Unable to request certification.");
+                      handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to request certification." });
                     } finally {
                       setSubmittingId("");
                     }

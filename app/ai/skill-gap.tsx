@@ -1,8 +1,14 @@
 ﻿import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const AI_GOLD = "#D4A017";
+const AI_GOLD_SOFT = "#FFF4CC";
+const AI_INDIGO = "#5B4DFF";
+const AI_TEAL = "#0F766E";
 import { api } from "@/lib/api";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -19,6 +25,7 @@ type SkillGapResponse = {
 export default function AiSkillGapPage() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
   const [primaryCategory, setPrimaryCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
@@ -123,7 +130,17 @@ export default function AiSkillGapPage() {
   }, [data?.suggestions?.courses, selectedSkill]);
 
   return (
-    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.page, { backgroundColor: colors.background }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+    >
+      <ScrollView
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={[styles.page, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 20) + 32 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+        keyboardShouldPersistTaps="handled"
+      >
       <LinearGradient colors={["#304FFE", "#6C63FF", "#8E7CFF"]} style={styles.hero}>
         <Text style={styles.heroTitle}>Skill Dashboard</Text>
         <Text style={styles.heroSub}>Your personal readiness report for the next career jump.</Text>
@@ -142,8 +159,8 @@ export default function AiSkillGapPage() {
         <Text style={[styles.label, { color: colors.text }]}>Domain</Text>
         <View style={styles.chips}>
           {(domainTree?.primaryCategories || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setPrimaryCategory(item)}>
-              <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setPrimaryCategory(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -151,8 +168,8 @@ export default function AiSkillGapPage() {
         <Text style={[styles.label, { color: colors.text }]}>Sub-domain</Text>
         <View style={styles.chips}>
           {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setSubCategory(item)}>
-              <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setSubCategory(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -160,8 +177,8 @@ export default function AiSkillGapPage() {
         <Text style={[styles.label, { color: colors.text }]}>Focus</Text>
         <View style={styles.chips}>
           {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setFocus(item)}>
-              <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setFocus(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -172,7 +189,7 @@ export default function AiSkillGapPage() {
         <Text style={[styles.label, { color: colors.text }]}>Current Skills</Text>
         <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={skillsInput} onChangeText={setSkillsInput} placeholder="Python, SQL, Research Basics" placeholderTextColor={colors.textMuted} />
 
-        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => { setAnalyzing(true); load(true); }}>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_GOLD }]} onPress={() => { setAnalyzing(true); load(true); }}>
           <Text style={styles.primaryBtnText}>{analyzing ? "Analyzing..." : "Analyze Skills"}</Text>
         </TouchableOpacity>
       </View>
@@ -180,7 +197,7 @@ export default function AiSkillGapPage() {
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Visual Skill Report</Text>
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color={colors.accent} /> : null}
+        {loading ? <ActivityIndicator size="large" color={AI_GOLD} /> : null}
         {!loading && !data ? <Text style={[styles.meta, { color: colors.textMuted }]}>No analysis available yet.</Text> : null}
         {data ? (
           <>
@@ -219,7 +236,7 @@ export default function AiSkillGapPage() {
               </View>
               {(selectedSkillResources.length ? selectedSkillResources : data.suggestions?.courses || []).slice(0, 5).map((item, index) => (
                 <View key={`${item}-${index}`} style={styles.resourceRow}>
-                  <Ionicons name="school-outline" size={16} color="#5B4DFF" />
+                  <Ionicons name="school-outline" size={16} color={AI_INDIGO} />
                   <Text style={styles.resourceText}>{item}</Text>
                 </View>
               ))}
@@ -267,7 +284,8 @@ export default function AiSkillGapPage() {
           </TouchableOpacity>
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

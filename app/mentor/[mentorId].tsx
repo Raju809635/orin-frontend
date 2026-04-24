@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { notify } from "@/utils/notify";
 import { useAuth } from "@/context/AuthContext";
 import { submitManualPaymentWithPicker } from "@/utils/manualPaymentUpload";
@@ -129,7 +130,7 @@ export default function MentorProfileScreen() {
         return firstOpen?.iso || "";
       });
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Unable to load mentor profile.");
+      setError(getAppErrorMessage(e, "Unable to load mentor profile."));
     } finally {
       setIsLoading(false);
     }
@@ -204,12 +205,12 @@ export default function MentorProfileScreen() {
       Alert.alert("Session Confirmed", "Your payment is verified and session is confirmed.");
       loadMentor();
     } catch (e: any) {
-      const apiMessage =
-        e?.response?.data?.message ||
-        e?.description ||
-        "Payment or booking failed.";
+      const apiMessage = handleAppError(e, {
+        mode: "alert",
+        title: "Payment",
+        fallbackMessage: "Payment or booking failed."
+      });
       setError(apiMessage);
-      notify(apiMessage);
       const lowerMessage = String(apiMessage).toLowerCase();
       const lowerCode = String(e?.code || "").toLowerCase();
       const wasPaymentInterrupted =
@@ -233,7 +234,7 @@ export default function MentorProfileScreen() {
                   notify("Pending session deleted. Slot released.");
                   loadMentor();
                 } catch (cancelError: any) {
-                  setError(cancelError?.response?.data?.message || "Failed to delete pending session.");
+                  setError(getAppErrorMessage(cancelError, "Failed to delete pending session."));
                 }
               }
             },
@@ -268,7 +269,7 @@ export default function MentorProfileScreen() {
       notify("Payment submitted. Awaiting admin verification.");
       setTransactionReference("");
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to submit payment screenshot.");
+      setError(getAppErrorMessage(e, "Failed to submit payment screenshot."));
     } finally {
       setSubmittingProof(false);
     }

@@ -3,6 +3,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   ActivityIndicator,
   Image,
+  KeyboardAvoidingView,
+  Platform,
   RefreshControl,
   ScrollView,
   StyleSheet,
@@ -12,7 +14,14 @@ import {
   View
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const AI_GOLD = "#D4A017";
+const AI_GOLD_SOFT = "#FFF4CC";
+const AI_TEAL = "#0F766E";
+const AI_INDIGO = "#6D28D9";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { getDomainTree, getFallbackDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
@@ -46,6 +55,38 @@ type CareerRoadmapResponse = {
     lockHours?: number;
   };
 };
+type InstitutionRoadmapItem = {
+  id: string;
+  title: string;
+  description?: string;
+  domain?: string;
+  status?: string;
+  weeks: Array<{
+    id: string;
+    title: string;
+    description?: string;
+    tasks?: string[];
+    resources?: string[];
+    quizTitle?: string;
+    challengeTitle?: string;
+    xpReward?: number;
+    submission?: {
+      id: string;
+      status: "submitted" | "accepted" | "rejected";
+      proofText?: string;
+      proofLink?: string;
+      proofImageUrl?: string;
+      submittedAt?: string | null;
+      mentorReview?: {
+        reviewedAt?: string | null;
+        notes?: string;
+        xpAwarded?: number;
+        certificateId?: string | null;
+      };
+    } | null;
+  }>;
+  mentor?: { id?: string | null; name?: string };
+};
 
 const GENERATION_STAGES = ["Analyzing goal...", "Building steps...", "Optimizing path..."];
 const MISSION_XP = 20;
@@ -67,6 +108,7 @@ function formatRoadmapDate(value?: string | null) {
 
 export default function AiCareerRoadmapPage() {
   const { colors, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(FALLBACK_DOMAIN_TREE);
   const [primaryCategory, setPrimaryCategory] = useState(FALLBACK_DOMAIN_TREE.primaryCategories?.[0] || "");
   const [subCategory, setSubCategory] = useState((FALLBACK_DOMAIN_TREE.subCategoriesByPrimary?.[FALLBACK_DOMAIN_TREE.primaryCategories?.[0] || ""] || [])[0] || "");
@@ -79,6 +121,7 @@ export default function AiCareerRoadmapPage() {
   );
   const [customGoal, setCustomGoal] = useState("");
   const [data, setData] = useState<CareerRoadmapResponse | null>(null);
+  const [institutionRoadmaps, setInstitutionRoadmaps] = useState<InstitutionRoadmapItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -90,6 +133,9 @@ export default function AiCareerRoadmapPage() {
   const [proofImageUrl, setProofImageUrl] = useState("");
   const [uploadingProof, setUploadingProof] = useState(false);
   const [submittingProof, setSubmittingProof] = useState(false);
+  const [institutionProofDrafts, setInstitutionProofDrafts] = useState<Record<string, { proofText: string; proofLink: string; proofImageUrl: string }>>({});
+  const [uploadingInstitutionProofKey, setUploadingInstitutionProofKey] = useState<string | null>(null);
+  const [submittingInstitutionProofKey, setSubmittingInstitutionProofKey] = useState<string | null>(null);
   const initialLoadRef = useRef(false);
 
   useEffect(() => {
@@ -169,9 +215,15 @@ export default function AiCareerRoadmapPage() {
         if (stageTimer) clearInterval(stageTimer);
         await new Promise((resolve) => setTimeout(resolve, 900));
         setData(res.data || null);
+        try {
+          const institutionRes = await api.get<{ roadmaps: InstitutionRoadmapItem[] }>("/api/network/institution-roadmaps");
+          setInstitutionRoadmaps(institutionRes.data?.roadmaps || []);
+        } catch {
+          setInstitutionRoadmaps([]);
+        }
       } catch (e: any) {
         if (stageTimer) clearInterval(stageTimer);
-        setError(e?.response?.data?.message || e?.message || "Failed to load roadmap.");
+        setError(getAppErrorMessage(e, "Something went wrong. Please try again."));
       } finally {
         setIsGenerating(false);
         setLoading(false);
@@ -223,7 +275,7 @@ export default function AiCareerRoadmapPage() {
         notify("Mission started. Complete the work, then submit proof.");
         await load(true);
       } catch (e: any) {
-        notify(e?.response?.data?.message || "Unable to start mission.");
+        handleAppError(e, { fallbackMessage: "Unable to start this mission right now." });
       }
     },
     [load]
@@ -272,11 +324,90 @@ export default function AiCareerRoadmapPage() {
         notify("Proof screenshot added.");
       }
     } catch (e: any) {
-      notify(e?.response?.data?.message || "Unable to upload proof screenshot.");
+      handleAppError(e, { fallbackMessage: "Unable to upload proof screenshot right now." });
     } finally {
       setUploadingProof(false);
     }
   }, []);
+
+  const updateInstitutionDraft = useCallback((key: string, patch: Partial<{ proofText: string; proofLink: string; proofImageUrl: string }>) => {
+    setInstitutionProofDrafts((prev) => ({
+      ...prev,
+      [key]: {
+        proofText: prev[key]?.proofText || "",
+        proofLink: prev[key]?.proofLink || "",
+        proofImageUrl: prev[key]?.proofImageUrl || "",
+        ...patch
+      }
+    }));
+  }, []);
+
+  const uploadInstitutionProofImage = useCallback(async (draftKey: string) => {
+    let ImagePicker: any;
+    try {
+      ImagePicker = await import("expo-image-picker");
+    } catch {
+      notify("Image upload requires the latest Android build.");
+      return;
+    }
+
+    try {
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) return;
+    } catch {
+      // Continue and try picker launch directly.
+    }
+
+    try {
+      setUploadingInstitutionProofKey(draftKey);
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker?.MediaTypeOptions?.Images ?? ["images"],
+        quality: 0.85,
+        allowsEditing: true
+      } as any);
+
+      if (result?.canceled || !result?.assets?.length) return;
+      const asset = result.assets[0];
+      const formData = new FormData();
+      formData.append("file", {
+        uri: asset.uri,
+        name: asset.fileName || `institution-roadmap-proof-${Date.now()}.jpg`,
+        type: asset.mimeType || "image/jpeg"
+      } as any);
+
+      const { data: uploadRes } = await api.post<{ url: string }>("/api/uploads/image", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      if (uploadRes?.url) {
+        updateInstitutionDraft(draftKey, { proofImageUrl: uploadRes.url });
+        notify("Proof screenshot added.");
+      }
+    } catch (e: any) {
+      handleAppError(e, { fallbackMessage: "Unable to upload proof screenshot right now." });
+    } finally {
+      setUploadingInstitutionProofKey(null);
+    }
+  }, [updateInstitutionDraft]);
+
+  const submitInstitutionRoadmapProof = useCallback(async (roadmapId: string, weekId: string) => {
+    const draftKey = `${roadmapId}::${weekId}`;
+    const draft = institutionProofDrafts[draftKey] || { proofText: "", proofLink: "", proofImageUrl: "" };
+    try {
+      setSubmittingInstitutionProofKey(draftKey);
+      await api.post(`/api/network/institution-roadmaps/${encodeURIComponent(roadmapId)}/weeks/${encodeURIComponent(weekId)}/submissions`, {
+        proofText: draft.proofText,
+        proofLink: draft.proofLink,
+        proofImageUrl: draft.proofImageUrl
+      });
+      setInstitutionProofDrafts((prev) => ({ ...prev, [draftKey]: { proofText: "", proofLink: "", proofImageUrl: "" } }));
+      notify("Institution roadmap proof submitted.");
+      await load(true);
+    } catch (e: any) {
+      handleAppError(e, { fallbackMessage: "Unable to submit institution roadmap proof right now." });
+    } finally {
+      setSubmittingInstitutionProofKey(null);
+    }
+  }, [institutionProofDrafts, load]);
 
   const submitProof = useCallback(
     async (stepId: string) => {
@@ -293,7 +424,7 @@ export default function AiCareerRoadmapPage() {
         notify(`Proof submitted. +${MISSION_XP} XP`);
         await load(true);
       } catch (e: any) {
-        notify(e?.response?.data?.message || "Unable to submit proof.");
+        handleAppError(e, { fallbackMessage: "Unable to submit proof right now." });
       } finally {
         setSubmittingProof(false);
       }
@@ -339,7 +470,7 @@ export default function AiCareerRoadmapPage() {
       });
       notify(res.data?.created ? "Certificate generated and added to your achievements." : "Certificate already exists in your achievements.");
     } catch (e: any) {
-      notify(e?.response?.data?.message || "Unable to claim roadmap certificate.");
+      handleAppError(e, { fallbackMessage: "Unable to claim your roadmap certificate right now." });
     } finally {
       setClaimingCertificate(false);
     }
@@ -358,15 +489,21 @@ export default function AiCareerRoadmapPage() {
   ]);
 
   return (
-    <ScrollView
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
     >
-      <LinearGradient colors={["#0E6A42", "#1F7A4C", "#5CBF88"]} style={styles.hero}>
+      <ScrollView
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={[styles.page, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 20) + 32 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+        keyboardShouldPersistTaps="handled"
+      >
+      <LinearGradient colors={["#7C5A00", "#D4A017", "#F2C94C"]} style={styles.hero}>
         <View style={styles.heroTopRow}>
           <View style={styles.heroBadge}>
-            <Ionicons name="sparkles" size={14} color="#0E6A42" />
+            <Ionicons name="sparkles" size={14} color={AI_GOLD} />
             <Text style={styles.heroBadgeText}>AI Journey</Text>
           </View>
           <Text style={styles.heroMeta}>{totalXp} XP</Text>
@@ -391,7 +528,7 @@ export default function AiCareerRoadmapPage() {
 
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="map" size={16} color={colors.accent} />
+          <Ionicons name="map" size={16} color={AI_INDIGO} />
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Roadmap Setup</Text>
         </View>
         <Text style={[styles.meta, { color: colors.textMuted }]}>
@@ -403,10 +540,10 @@ export default function AiCareerRoadmapPage() {
           {(domainTree?.primaryCategories || []).map((item) => (
             <TouchableOpacity
               key={item}
-              style={[styles.chip, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
+              style={[styles.chip, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]}
               onPress={() => setPrimaryCategory(item)}
             >
-              <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
+              <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -416,10 +553,10 @@ export default function AiCareerRoadmapPage() {
           {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
             <TouchableOpacity
               key={item}
-              style={[styles.chip, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
+              style={[styles.chip, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]}
               onPress={() => setSubCategory(item)}
             >
-              <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
+              <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -429,10 +566,10 @@ export default function AiCareerRoadmapPage() {
           {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
             <TouchableOpacity
               key={item}
-              style={[styles.chip, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
+              style={[styles.chip, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]}
               onPress={() => setFocus(item)}
             >
-              <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
+              <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -445,14 +582,14 @@ export default function AiCareerRoadmapPage() {
           placeholder="Example: UPSC Mains, Backend Developer, Corporate Law"
           placeholderTextColor={colors.textMuted}
         />
-        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => load(true)}>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_GOLD }]} onPress={() => load(true)}>
           <Text style={styles.primaryBtnText}>Generate Journey</Text>
         </TouchableOpacity>
       </View>
 
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="flash" size={16} color={colors.accent} />
+          <Ionicons name="flash" size={16} color={AI_TEAL} />
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Today&apos;s Mission</Text>
         </View>
         {currentMission ? (
@@ -464,49 +601,15 @@ export default function AiCareerRoadmapPage() {
             <Text style={styles.todayTitle}>{currentMission.title}</Text>
             <Text style={[styles.meta, { color: colors.textMuted }]}>
               {isMissionStarted
-                ? "Submit at least one proof item to complete this mission and unlock the next week on schedule."
+                ? "Your active week is open below. Submit proof inside that week card to unlock the next week."
                 : "Start this mission first, then come back with a screenshot, proof link, or short proof note."}
             </Text>
             {!isMissionStarted ? (
-              <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => startMission(currentMission.id)}>
+              <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_TEAL }]} onPress={() => startMission(currentMission.id)}>
                 <Text style={styles.primaryBtnText}>Start Mission</Text>
               </TouchableOpacity>
             ) : (
-              <View style={styles.proofForm}>
-                <TextInput
-                  style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
-                  value={proofText}
-                  onChangeText={setProofText}
-                  placeholder="What did you complete? Add a short proof note"
-                  placeholderTextColor={colors.textMuted}
-                  multiline
-                />
-                <TextInput
-                  style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
-                  value={proofLink}
-                  onChangeText={setProofLink}
-                  placeholder="Project / GitHub / Drive / practice link (optional)"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                />
-                {proofImageUrl ? (
-                  <Image source={{ uri: proofImageUrl }} style={styles.proofPreview} />
-                ) : null}
-                <View style={styles.actionRow}>
-                  <TouchableOpacity style={[styles.secondaryOutlineBtn, { borderColor: colors.accent }]} onPress={uploadProofImage} disabled={uploadingProof}>
-                    <Text style={[styles.secondaryOutlineBtnText, { color: colors.accent }]}>
-                      {uploadingProof ? "Uploading..." : proofImageUrl ? "Change Screenshot" : "Upload Screenshot"}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.primaryBtn, { backgroundColor: colors.accent }]}
-                    onPress={() => submitProof(currentMission.id)}
-                    disabled={submittingProof}
-                  >
-                    <Text style={styles.primaryBtnText}>{submittingProof ? "Submitting..." : "Submit Proof"}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
+              <Text style={[styles.inlineHint, { color: colors.textMuted }]}>Open the active week in Journey Timeline below and submit your proof there.</Text>
             )}
           </LinearGradient>
         ) : lockedMission ? (
@@ -520,7 +623,7 @@ export default function AiCareerRoadmapPage() {
           <View style={[styles.doneCard, { backgroundColor: isDark ? colors.surfaceAlt : "#F7FFF9", borderColor: colors.border }]}>
             <Text style={[styles.doneTitle, { color: colors.text }]}>Journey completed</Text>
             <Text style={[styles.meta, { color: colors.textMuted }]}>You completed every mission in this roadmap. Refresh or choose a new goal to keep going.</Text>
-            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
+            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_TEAL }]} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
               <Text style={styles.primaryBtnText}>{claimingCertificate ? "Claiming..." : "Claim Certificate"}</Text>
             </TouchableOpacity>
           </View>
@@ -529,13 +632,13 @@ export default function AiCareerRoadmapPage() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="sparkles" size={16} color="#1F7A4C" />
+          <Ionicons name="sparkles" size={16} color={AI_GOLD} />
           <Text style={styles.sectionTitle}>AI Generation</Text>
         </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {!data && (loading || isGenerating) ? (
           <View style={styles.generateCard}>
-            <ActivityIndicator size="large" color="#1F7A4C" />
+            <ActivityIndicator size="large" color={AI_GOLD} />
             <Text style={styles.generateTitle}>Creating your roadmap...</Text>
             <Text style={styles.generateMeta}>{GENERATION_STAGES[generationStage]}</Text>
           </View>
@@ -547,7 +650,7 @@ export default function AiCareerRoadmapPage() {
         <>
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
-              <Ionicons name="git-network" size={16} color="#1F7A4C" />
+              <Ionicons name="git-network" size={16} color={AI_INDIGO} />
               <Text style={styles.sectionTitle}>Journey Timeline</Text>
             </View>
             <Text style={styles.resultTitle}>Generated for: {customGoal.trim() || goalLabel || data.goal}</Text>
@@ -584,7 +687,7 @@ export default function AiCareerRoadmapPage() {
                           : step.status === "locked"
                             ? `Locked until ${formatRoadmapDate(step.unlockedAt)}`
                             : step.startedAt
-                              ? "Mission in progress. Submit proof from Today's Mission to complete it."
+                              ? "Mission in progress. Submit proof inside this week card to complete it."
                               : "Start the mission, do the work, then submit proof to complete it."}
                       </Text>
                       <TouchableOpacity
@@ -605,6 +708,42 @@ export default function AiCareerRoadmapPage() {
                           {isCompleted ? "Completed" : step.status === "locked" ? "Locked" : step.startedAt ? "In Progress" : "Start Mission"}
                         </Text>
                       </TouchableOpacity>
+                      {isCurrent && step.startedAt && !isCompleted ? (
+                        <View style={styles.inlineProofCard}>
+                          <Text style={styles.inlineProofTitle}>Week {index + 1} Proof Submission</Text>
+                          <TextInput
+                            style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                            value={proofText}
+                            onChangeText={setProofText}
+                            placeholder="What did you complete? Add a short proof note"
+                            placeholderTextColor={colors.textMuted}
+                            multiline
+                          />
+                          <TextInput
+                            style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                            value={proofLink}
+                            onChangeText={setProofLink}
+                            placeholder="Project / GitHub / Drive / practice link (optional)"
+                            placeholderTextColor={colors.textMuted}
+                            autoCapitalize="none"
+                          />
+                          {proofImageUrl ? <Image source={{ uri: proofImageUrl }} style={styles.proofPreview} /> : null}
+                          <View style={styles.actionRow}>
+                            <TouchableOpacity style={[styles.secondaryOutlineBtn, { borderColor: AI_GOLD }]} onPress={uploadProofImage} disabled={uploadingProof}>
+                              <Text style={[styles.secondaryOutlineBtnText, { color: AI_GOLD }]}>
+                                {uploadingProof ? "Uploading..." : proofImageUrl ? "Change Screenshot" : "Upload Screenshot"}
+                              </Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.primaryBtn, { backgroundColor: AI_TEAL }]}
+                              onPress={() => submitProof(step.id)}
+                              disabled={submittingProof}
+                            >
+                              <Text style={styles.primaryBtnText}>{submittingProof ? "Submitting..." : "Submit Proof"}</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
                 );
@@ -615,7 +754,7 @@ export default function AiCareerRoadmapPage() {
           <View style={styles.splitRow}>
             <View style={[styles.section, styles.halfSection]}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="stats-chart" size={16} color="#1F7A4C" />
+                <Ionicons name="stats-chart" size={16} color={AI_TEAL} />
                 <Text style={styles.sectionTitle}>Progress</Text>
               </View>
               <Text style={styles.progressTitle}>Journey: {progressPct}% complete</Text>
@@ -627,7 +766,7 @@ export default function AiCareerRoadmapPage() {
 
             <View style={[styles.section, styles.halfSection]}>
               <View style={styles.sectionHeader}>
-                <Ionicons name="trending-up" size={16} color="#1F7A4C" />
+                <Ionicons name="trending-up" size={16} color={AI_TEAL} />
                 <Text style={styles.sectionTitle}>Future Preview</Text>
               </View>
               {futurePreview.map((item) => (
@@ -637,27 +776,112 @@ export default function AiCareerRoadmapPage() {
               ))}
             </View>
           </View>
+
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="school" size={16} color={AI_INDIGO} />
+              <Text style={styles.sectionTitle}>Institution Roadmaps</Text>
+            </View>
+            {!institutionRoadmaps.length ? (
+              <Text style={styles.meta}>No institution roadmaps published for your institution yet.</Text>
+            ) : (
+              institutionRoadmaps.map((roadmap) => (
+                <View key={roadmap.id} style={styles.institutionCard}>
+                  <Text style={styles.institutionTitle}>{roadmap.title}</Text>
+                  <Text style={styles.meta}>{roadmap.description || "Institution mentor guided roadmap."}</Text>
+                  <Text style={styles.meta}>Mentor: {roadmap.mentor?.name || "Institution Mentor"}</Text>
+                  {roadmap.weeks.slice(0, 4).map((week, weekIndex) => {
+                    const draftKey = `${roadmap.id}::${week.id}`;
+                    const draft = institutionProofDrafts[draftKey] || { proofText: "", proofLink: "", proofImageUrl: "" };
+                    const submission = week.submission || null;
+                    return (
+                      <View key={`${roadmap.id}-${week.id}`} style={styles.institutionWeekCard}>
+                        <Text style={styles.institutionWeekTitle}>Week {weekIndex + 1}: {week.title}</Text>
+                        {week.description ? <Text style={styles.meta}>{week.description}</Text> : null}
+                        {(week.tasks || []).slice(0, 3).map((task) => (
+                          <Text key={`${roadmap.id}-${week.id}-${task}`} style={styles.previewItem}>- {task}</Text>
+                        ))}
+                        {submission ? (
+                          <View style={styles.institutionSubmissionCard}>
+                            <Text style={styles.institutionSubmissionTitle}>
+                              Status: {submission.status === "accepted" ? "Approved" : submission.status === "rejected" ? "Needs Rework" : "Submitted"}
+                            </Text>
+                            {submission.submittedAt ? <Text style={styles.meta}>Submitted on {formatRoadmapDate(submission.submittedAt)}</Text> : null}
+                            {submission.mentorReview?.xpAwarded ? <Text style={styles.meta}>XP awarded: {submission.mentorReview.xpAwarded}</Text> : null}
+                            {submission.mentorReview?.notes ? <Text style={styles.meta}>Mentor note: {submission.mentorReview.notes}</Text> : null}
+                            {submission.mentorReview?.certificateId ? <Text style={styles.meta}>Certificate issued for this week.</Text> : null}
+                          </View>
+                        ) : null}
+                        {submission?.status !== "accepted" ? (
+                          <View style={styles.inlineProofCard}>
+                            <Text style={styles.inlineProofTitle}>Submit Week {weekIndex + 1} Proof</Text>
+                            <TextInput
+                              style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                              value={draft.proofText}
+                              onChangeText={(value) => updateInstitutionDraft(draftKey, { proofText: value })}
+                              placeholder="What did you complete in this week?"
+                              placeholderTextColor={colors.textMuted}
+                              multiline
+                            />
+                            <TextInput
+                              style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                              value={draft.proofLink}
+                              onChangeText={(value) => updateInstitutionDraft(draftKey, { proofLink: value })}
+                              placeholder="Project / GitHub / Drive / demo link (optional)"
+                              placeholderTextColor={colors.textMuted}
+                              autoCapitalize="none"
+                            />
+                            {draft.proofImageUrl ? <Image source={{ uri: draft.proofImageUrl }} style={styles.proofPreview} /> : null}
+                            <View style={styles.actionRow}>
+                              <TouchableOpacity
+                                style={[styles.secondaryOutlineBtn, { borderColor: AI_GOLD }]}
+                                onPress={() => uploadInstitutionProofImage(draftKey)}
+                                disabled={uploadingInstitutionProofKey === draftKey}
+                              >
+                                <Text style={[styles.secondaryOutlineBtnText, { color: AI_GOLD }]}>
+                                  {uploadingInstitutionProofKey === draftKey ? "Uploading..." : draft.proofImageUrl ? "Change Screenshot" : "Upload Screenshot"}
+                                </Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.primaryBtn, { backgroundColor: AI_TEAL }]}
+                                onPress={() => submitInstitutionRoadmapProof(roadmap.id, week.id)}
+                                disabled={submittingInstitutionProofKey === draftKey}
+                              >
+                                <Text style={styles.primaryBtnText}>
+                                  {submittingInstitutionProofKey === draftKey ? "Submitting..." : submission ? "Resubmit Proof" : "Submit Proof"}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+              ))
+            )}
+          </View>
         </>
       ) : null}
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="flash" size={16} color="#1F7A4C" />
+          <Ionicons name="flash" size={16} color={AI_TEAL} />
           <Text style={styles.sectionTitle}>Actions</Text>
         </View>
         <View style={styles.actionRow}>
-          <TouchableOpacity style={styles.primaryBtn} onPress={() => currentMission && startMission(currentMission.id)} disabled={!currentMission || Boolean(currentMission.startedAt)}>
+          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_TEAL }]} onPress={() => currentMission && startMission(currentMission.id)} disabled={!currentMission || Boolean(currentMission.startedAt)}>
             <Text style={styles.primaryBtnText}>
               {currentMission ? (currentMission.startedAt ? "Mission In Progress" : "Continue Journey") : "Journey Complete"}
             </Text>
           </TouchableOpacity>
           {progressPct === 100 ? (
-            <TouchableOpacity style={styles.secondaryOutlineBtn} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
-              <Text style={styles.secondaryOutlineBtnText}>{claimingCertificate ? "Claiming..." : "Claim Certificate"}</Text>
+            <TouchableOpacity style={[styles.secondaryOutlineBtn, { borderColor: AI_GOLD }]} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
+              <Text style={[styles.secondaryOutlineBtnText, { color: AI_GOLD }]}>{claimingCertificate ? "Claiming..." : "Claim Certificate"}</Text>
             </TouchableOpacity>
           ) : null}
           <TouchableOpacity
-            style={styles.secondaryOutlineBtn}
+            style={[styles.secondaryOutlineBtn, { borderColor: AI_GOLD }]}
             onPress={async () => {
               if (!data) {
                 notify("Generate roadmap first.");
@@ -678,19 +902,20 @@ export default function AiCareerRoadmapPage() {
               notify("Saved to Saved AI.");
             }}
           >
-            <Text style={styles.secondaryOutlineBtnText}>Save Roadmap</Text>
+            <Text style={[styles.secondaryOutlineBtnText, { color: AI_GOLD }]}>Save Roadmap</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="help-circle" size={16} color="#1F7A4C" />
+          <Ionicons name="help-circle" size={16} color={AI_INDIGO} />
           <Text style={styles.sectionTitle}>Resources</Text>
         </View>
         <Text style={styles.meta}>Pair each milestone with one mini project, one proof upload, and one mentor session for better results.</Text>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -783,8 +1008,19 @@ const styles = StyleSheet.create({
   progressFillLight: { height: "100%", borderRadius: 999, backgroundColor: "#1F7A4C" },
   previewItem: { color: "#344054", lineHeight: 22 },
   meta: { color: "#667085", lineHeight: 20 },
+  inlineHint: { fontWeight: "600" },
   error: { color: "#B42318" },
   proofForm: { gap: 10 },
+  inlineProofCard: {
+    marginTop: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#E6EAF0",
+    backgroundColor: "#FFFFFF",
+    padding: 12,
+    gap: 10
+  },
+  inlineProofTitle: { color: "#1E2B24", fontWeight: "800", fontSize: 14 },
   proofPreview: { width: "100%", height: 180, borderRadius: 14, backgroundColor: "#E5E7EB" },
   primaryBtn: {
     alignSelf: "flex-start",
@@ -816,7 +1052,34 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff"
   },
   secondaryOutlineBtnText: { color: "#1F7A4C", fontWeight: "800" },
-  actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 }
+  actionRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  institutionCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#E6EAF0",
+    backgroundColor: "#FCFCFD",
+    padding: 14,
+    gap: 8
+  },
+  institutionTitle: { color: "#101828", fontWeight: "800", fontSize: 16 },
+  institutionWeekCard: {
+    borderRadius: 12,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    padding: 10,
+    gap: 4
+  },
+  institutionWeekTitle: { color: "#1E2B24", fontWeight: "800" },
+  institutionSubmissionCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D6F5DD",
+    backgroundColor: "#F3FFF6",
+    padding: 10,
+    gap: 4
+  },
+  institutionSubmissionTitle: { color: "#0E6A42", fontWeight: "800" }
 });
 
 

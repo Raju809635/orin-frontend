@@ -15,6 +15,7 @@ import {
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
@@ -113,7 +114,7 @@ export default function SprintDetailPage() {
       const { data } = await api.get<{ sprint: SprintDetail }>(`/api/network/sprints/${sprintId}`);
       setSprint(data?.sprint || null);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load sprint.");
+      setError(getAppErrorMessage(e, "Failed to load sprint."));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -203,7 +204,12 @@ export default function SprintDetailPage() {
       notify("Sprint enrollment confirmed.");
       await load(true);
     } catch (e: any) {
-      Alert.alert("Sprint", e?.response?.data?.message || e?.description || "Enrollment not completed.");
+      const message = handleAppError(e, {
+        mode: "alert",
+        title: "Sprint",
+        fallbackMessage: "Enrollment not completed."
+      });
+      setError(message);
       await load(true);
     } finally {
       setBusy(false);

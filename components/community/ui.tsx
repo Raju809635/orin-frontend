@@ -12,6 +12,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useAppTheme } from "@/context/ThemeContext";
 
+const COMMUNITY_ACCENT = "#C98A00";
+const COMMUNITY_ACCENT_SOFT = "#FFF4CC";
+const COMMUNITY_SUCCESS = "#15803D";
+const COMMUNITY_INFO = "#1D4ED8";
+const COMMUNITY_GHOST = "#FFF7ED";
+
 type HeroProps = {
   eyebrow?: string;
   title: string;
@@ -85,7 +91,7 @@ export function CommunitySection({
     <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border, shadowColor: isDark ? "#000000" : "#101828" }, style]}>
       <View style={styles.sectionHeader}>
         <View style={styles.sectionTitleRow}>
-          {icon ? <Ionicons name={icon} size={18} color={colors.accent} /> : null}
+          {icon ? <Ionicons name={icon} size={18} color={COMMUNITY_ACCENT} /> : null}
           <Text style={[styles.sectionTitle, { color: colors.text }]}>{title}</Text>
         </View>
         {subtitle ? <Text style={[styles.sectionSubtitle, { color: colors.textMuted }]}>{subtitle}</Text> : null}
@@ -105,12 +111,12 @@ export function FilterTabs({ tabs }: { tabs: TabProps[] }) {
           style={[
             styles.tabChip,
             { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
-            tab.active && [styles.tabChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]
+            tab.active && [styles.tabChipActive, { backgroundColor: isDark ? colors.surfaceAlt : COMMUNITY_ACCENT_SOFT, borderColor: COMMUNITY_ACCENT }]
           ]}
           activeOpacity={0.9}
           onPress={tab.onPress}
         >
-          <Text style={[styles.tabChipText, { color: colors.textMuted }, tab.active && [styles.tabChipTextActive, { color: colors.accent }]]}>{tab.label}</Text>
+          <Text style={[styles.tabChipText, { color: colors.textMuted }, tab.active && [styles.tabChipTextActive, { color: COMMUNITY_ACCENT }]]}>{tab.label}</Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -149,7 +155,7 @@ export function StatPill({
   const { colors, isDark } = useAppTheme();
   return (
     <View style={[styles.pill, { backgroundColor: isDark ? colors.surfaceAlt : tone, borderColor: colors.border, borderWidth: isDark ? 1 : 0 }]}>
-      <Ionicons name={icon} size={14} color={colors.text} />
+      <Ionicons name={icon} size={14} color={COMMUNITY_ACCENT} />
       <Text style={[styles.pillText, { color: colors.text }, textStyle]}>{label}</Text>
     </View>
   );
@@ -182,19 +188,19 @@ export function ActionButton({
   const { colors, isDark } = useAppTheme();
   const buttonStyle =
     variant === "primary" ? styles.primaryButton : variant === "secondary" ? styles.secondaryButton : styles.ghostButton;
-  const iconColor = variant === "primary" ? colors.accentText : variant === "secondary" ? colors.text : colors.accent;
+  const iconColor = variant === "primary" ? colors.accentText : variant === "secondary" ? COMMUNITY_INFO : COMMUNITY_ACCENT;
   const dynamicButtonStyle =
     variant === "primary"
-      ? { backgroundColor: colors.accent }
+      ? { backgroundColor: COMMUNITY_SUCCESS }
       : variant === "secondary"
         ? { backgroundColor: isDark ? colors.surfaceAlt : "#F8FAFC", borderColor: colors.border }
-        : { backgroundColor: colors.accentSoft };
+        : { backgroundColor: COMMUNITY_GHOST };
   const dynamicTextStyle =
     variant === "primary"
       ? { color: colors.accentText }
       : variant === "secondary"
-        ? { color: colors.text }
-        : { color: colors.accent };
+        ? { color: COMMUNITY_INFO }
+        : { color: COMMUNITY_ACCENT };
 
   return (
     <TouchableOpacity

@@ -16,6 +16,7 @@ import {
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
 import { pickAndUploadProgramDocument } from "@/utils/programDocumentUpload";
 import { useAuth } from "@/context/AuthContext";
@@ -90,7 +91,7 @@ export default function CommunityLibraryPage() {
         setSelectedId((prev) => prev || parsed[0]?.id || "");
         setError("Showing last loaded library data.");
       } else {
-        setError(e?.response?.data?.message || "Failed to load library.");
+        setError(getAppErrorMessage(e, "Failed to load library."));
       }
     } finally {
       setLoading(false);
@@ -123,7 +124,7 @@ export default function CommunityLibraryPage() {
       if (!url) return;
       setSubmitForm((prev) => ({ ...prev, bannerImageUrl: url }));
     } catch (e: any) {
-      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload banner.");
+      handleAppError(e, { mode: "alert", title: "Upload failed", fallbackMessage: "Unable to upload banner." });
     } finally {
       setUploadingBanner(false);
     }
@@ -136,7 +137,7 @@ export default function CommunityLibraryPage() {
       if (!uploaded?.url) return;
       setSubmitForm((prev) => ({ ...prev, documentUrl: uploaded.url }));
     } catch (e: any) {
-      Alert.alert("Upload failed", e?.response?.data?.message || e?.message || "Unable to upload document.");
+      handleAppError(e, { mode: "alert", title: "Upload failed", fallbackMessage: "Unable to upload document." });
     } finally {
       setUploadingDoc(false);
     }
@@ -377,7 +378,7 @@ export default function CommunityLibraryPage() {
                 Alert.alert("Submitted", "Resource sent to admin for review.");
                 setSubmitForm({ domain: "", type: "other", title: "", description: "", url: "", bannerImageUrl: "", documentUrl: "" });
               } catch (e: any) {
-                Alert.alert("Failed", e?.response?.data?.message || "Unable to submit resource.");
+                handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit resource." });
               } finally {
                 setSubmitting(false);
               }

@@ -13,6 +13,8 @@ type CommunityModule = {
   description: string;
   icon: keyof typeof Ionicons.glyphMap;
   path: string;
+  iconColor: string;
+  iconBg: string;
   border: string;
   gradient: [string, string];
 };
@@ -38,6 +40,8 @@ export default function CommunityGrowthScreen() {
         : "Join ORIN collaboration initiatives and partnerships.",
       icon: "people",
       path: "/community/collaboration",
+      iconColor: "#7C3AED",
+      iconBg: "#F3E8FF",
       border: "#D6BBFB",
       gradient: ["#FFFFFF", "#F9F5FF"]
     },
@@ -49,6 +53,8 @@ export default function CommunityGrowthScreen() {
         : "Participate in monthly challenges and competitions.",
       icon: "trophy",
       path: "/community/challenges",
+      iconColor: "#C98A00",
+      iconBg: "#FFF4CC",
       border: "#F9DBAF",
       gradient: ["#FFFFFF", "#FFF7ED"]
     },
@@ -60,6 +66,8 @@ export default function CommunityGrowthScreen() {
         : "Explore ORIN certifications and level progression.",
       icon: "ribbon",
       path: "/community/certifications",
+      iconColor: "#1D4ED8",
+      iconBg: "#DBEAFE",
       border: "#A4BCFD",
       gradient: ["#FFFFFF", "#EEF4FF"]
     },
@@ -71,6 +79,8 @@ export default function CommunityGrowthScreen() {
         : "Discover internships and career opportunities.",
       icon: "briefcase",
       path: "/community/opportunities",
+      iconColor: "#15803D",
+      iconBg: "#DCFCE7",
       border: "#ABEFC6",
       gradient: ["#FFFFFF", "#ECFDF3"]
     },
@@ -82,6 +92,8 @@ export default function CommunityGrowthScreen() {
         : "Check rankings and top students in your college.",
       icon: "podium",
       path: "/community/leaderboard",
+      iconColor: "#B45309",
+      iconBg: "#FFEDD5",
       border: "#F9DBAF",
       gradient: ["#FFFFFF", "#FFF7ED"]
     },
@@ -93,6 +105,8 @@ export default function CommunityGrowthScreen() {
         : "Access resources, guides, and interview prep.",
       icon: "library",
       path: "/community/knowledge-library",
+      iconColor: "#0369A1",
+      iconBg: "#E0F2FE",
       border: "#B2DDFF",
       gradient: ["#FFFFFF", "#EFF8FF"]
     },
@@ -104,6 +118,8 @@ export default function CommunityGrowthScreen() {
         : "Track your score, tag, and percentile performance.",
       icon: "stats-chart",
       path: "/community/reputation",
+      iconColor: "#DC2626",
+      iconBg: "#FEE2E2",
       border: "#FDA29B",
       gradient: ["#FFFFFF", "#FEF3F2"]
     }
@@ -138,8 +154,8 @@ export default function CommunityGrowthScreen() {
               end={{ x: 1, y: 1 }}
               style={[styles.moduleCard, { borderColor: isDark ? colors.border : item.border }]}
             >
-              <View style={[styles.moduleIconWrap, { backgroundColor: colors.accentSoft }]}>
-                <Ionicons name={item.icon} size={20} color={colors.accent} />
+              <View style={[styles.moduleIconWrap, { backgroundColor: isDark ? colors.surfaceAlt : item.iconBg }]}>
+                <Ionicons name={item.icon} size={20} color={isDark ? colors.text : item.iconColor} />
               </View>
               <View style={styles.moduleTextWrap}>
                 <Text style={[styles.moduleTitle, { color: colors.text }]}>{item.label}</Text>

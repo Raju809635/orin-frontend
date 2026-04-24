@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 
 let RazorpayCheckout: any = null;
 if (Platform.OS !== "web") {
@@ -96,7 +97,7 @@ export default function StudentSessionsScreen() {
       setHistory(historyRes.status === "fulfilled" ? historyRes.value.data || [] : []);
       setSessions(sessionsRes.status === "fulfilled" ? sessionsRes.value.data || [] : []);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load sessions.");
+      setError(getAppErrorMessage(e, "Something went wrong. Please try again."));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -154,7 +155,11 @@ export default function StudentSessionsScreen() {
       Alert.alert("Confirmed", "Payment successful. Session confirmed.");
       loadData(true);
     } catch (e: any) {
-      Alert.alert("Payment not completed", e?.response?.data?.message || e?.description || "You can try again from Pending Payments.");
+      handleAppError(e, {
+        mode: "alert",
+        title: "Payment not completed",
+        fallbackMessage: "Payment failed. Please try again or use a different method."
+      });
       loadData(true);
     }
   }
@@ -174,7 +179,7 @@ export default function StudentSessionsScreen() {
               Alert.alert("Deleted", "Pending session deleted. Slot released.");
               loadData(true);
             } catch (e: any) {
-              Alert.alert("Failed", e?.response?.data?.message || "Failed to delete pending session.");
+              handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to delete this pending session right now." });
             }
           }
         }
@@ -193,7 +198,7 @@ export default function StudentSessionsScreen() {
       setNoteModal({ open: false, sessionId: "", note: "" });
       loadData(true);
     } catch (e: any) {
-      Alert.alert("Failed", e?.response?.data?.message || "Failed to update note.");
+      handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to save your note right now." });
     }
   }
 
@@ -206,7 +211,7 @@ export default function StudentSessionsScreen() {
       setReviewModal({ open: false, sessionId: "", rating: 5, review: "" });
       loadData(true);
     } catch (e: any) {
-      Alert.alert("Failed", e?.response?.data?.message || "Failed to submit rating.");
+      handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit your rating right now." });
     }
   }
 

@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  KeyboardAvoidingView,
   Platform,
   RefreshControl,
   ScrollView,
@@ -15,6 +16,11 @@ import {
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const AI_GOLD = "#D4A017";
+const AI_GOLD_SOFT = "#FFF4CC";
+const AI_TEAL = "#0F766E";
 import { api } from "@/lib/api";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
@@ -156,6 +162,7 @@ const EMPTY_OVERRIDES: ResumeOverrides = {
 
 export default function AiResumeBuilderPage() {
   const { colors, isDark } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateKey>("corporate");
   const [data, setData] = useState<ResumeResponse | null>(null);
   const [resumeInputs, setResumeInputs] = useState<ResumeOverrides>(EMPTY_OVERRIDES);
@@ -345,11 +352,17 @@ export default function AiResumeBuilderPage() {
   }, [data?.summary, plainText, resume, selectedTemplate]);
 
   return (
-    <ScrollView
-      style={{ backgroundColor: colors.background }}
-      contentContainerStyle={[styles.page, { backgroundColor: colors.background }]}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true, selectedTemplate, resumeInputs)} />}
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
     >
+      <ScrollView
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={[styles.page, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 20) + 32 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true, selectedTemplate, resumeInputs)} />}
+        keyboardShouldPersistTaps="handled"
+      >
       <View style={styles.hero}>
         <Text style={styles.pageTitle}>AI Resume Builder</Text>
         <Text style={styles.pageSub}>
@@ -359,7 +372,7 @@ export default function AiResumeBuilderPage() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="color-palette" size={18} color="#0F7B6C" />
+          <Ionicons name="color-palette" size={18} color={AI_GOLD} />
           <Text style={styles.sectionTitle}>Choose Template</Text>
         </View>
         <View style={styles.templateGrid}>
@@ -383,7 +396,7 @@ export default function AiResumeBuilderPage() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="sparkles" size={18} color="#0F7B6C" />
+          <Ionicons name="sparkles" size={18} color={AI_GOLD} />
           <Text style={styles.sectionTitle}>Resume Engine</Text>
         </View>
         <Text style={styles.meta}>Uses your live ORIN profile data, role-specific fields, and a structured summary.</Text>
@@ -414,7 +427,7 @@ export default function AiResumeBuilderPage() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="create-outline" size={18} color="#0F7B6C" />
+          <Ionicons name="create-outline" size={18} color={AI_TEAL} />
           <Text style={styles.sectionTitle}>Complete Missing Details</Text>
         </View>
         <Text style={styles.meta}>Fill only what is missing or weak. ORIN will blend this with the profile data and keep the resume to one page.</Text>
@@ -514,11 +527,11 @@ export default function AiResumeBuilderPage() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="eye" size={18} color="#0F7B6C" />
+          <Ionicons name="eye" size={18} color={AI_TEAL} />
           <Text style={styles.sectionTitle}>Resume Preview</Text>
         </View>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color="#0F7B6C" /> : null}
+        {loading ? <ActivityIndicator size="large" color={AI_GOLD} /> : null}
         {!loading && !resume ? <Text style={styles.meta}>Resume preview unavailable right now.</Text> : null}
 
         {resume ? (
@@ -643,13 +656,14 @@ export default function AiResumeBuilderPage() {
 
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
-          <Ionicons name="help-circle" size={18} color="#0F7B6C" />
+          <Ionicons name="help-circle" size={18} color={AI_GOLD} />
           <Text style={styles.sectionTitle}>Tips</Text>
         </View>
         <Text style={styles.meta}>Add measurable project outcomes, clean role titles, and a strong summary for the best result.</Text>
         <Text style={styles.meta}>Mentors can use this builder too. Their resume emphasizes expertise, mentoring impact, pricing credibility, and profile strength.</Text>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

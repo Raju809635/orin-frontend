@@ -20,6 +20,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
@@ -123,10 +124,11 @@ type PostLikeUser = {
   reactionType?: "like" | "love" | "care" | "haha" | "wow" | "sad" | "angry" | null;
 };
 
-type NetworkSectionId = "compose" | "feed" | "connections";
+type NetworkSectionId = "compose" | "feed" | "institution" | "connections";
 
 const networkSections: { id: NetworkSectionId; label: string }[] = [
   { id: "feed", label: "Home Feed" },
+  { id: "institution", label: "Institution Feed" },
   { id: "compose", label: "Post" },
   { id: "connections", label: "My Circle" }
 ];
@@ -161,6 +163,8 @@ export default function NetworkScreen() {
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const sectionFetchAtRef = useRef<Record<string, number>>({});
+  const feedScrollRef = useRef<ScrollView | null>(null);
+  const commentsScrollRef = useRef<ScrollView | null>(null);
   const [activeSection, setActiveSection] = useState<NetworkSectionId>("feed");
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [expandedPosts, setExpandedPosts] = useState<Record<string, boolean>>({});
@@ -207,10 +211,11 @@ export default function NetworkScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [hiddenPostIds, setHiddenPostIds] = useState<Record<string, boolean>>({});
+  const [connectionActionById, setConnectionActionById] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     const section = String(params.section || "");
-    if (section === "compose" || section === "feed" || section === "connections") {
+    if (section === "compose" || section === "feed" || section === "institution" || section === "connections") {
       setActiveSection(section);
     }
   }, [params.section]);
@@ -280,6 +285,21 @@ export default function NetworkScreen() {
     markSectionFetched(cacheKey);
   }, [markSectionFetched, shouldSkipSectionFetch]);
 
+  const loadInstitutionSection = useCallback(async (refresh = false, force = false) => {
+    const cacheKey = "institution";
+    if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
+    const feedRes = await api.get<FeedPost[]>("/api/network/feed/institution");
+    const nextPosts = feedRes.data || [];
+    setPosts(nextPosts);
+    const followMap: Record<string, boolean> = {};
+    nextPosts.forEach((post) => {
+      const authorId = String(post.authorId?._id || "");
+      if (authorId) followMap[authorId] = Boolean(post.authorId?.isFollowing);
+    });
+    setFollowingState((prev) => ({ ...followMap, ...prev }));
+    markSectionFetched(cacheKey);
+  }, [markSectionFetched, shouldSkipSectionFetch]);
+
   const loadComposeSection = useCallback(async (refresh = false, force = false) => {
     const cacheKey = "compose";
     if (shouldSkipSectionFetch(cacheKey, refresh, force)) return;
@@ -317,19 +337,21 @@ export default function NetworkScreen() {
 
         if (activeSection === "feed") {
           await loadFeedSection(refresh, force);
+        } else if (activeSection === "institution") {
+          await loadInstitutionSection(refresh, force);
         } else if (activeSection === "compose") {
           await loadComposeSection(refresh, force);
-        } else if (activeSection === "connections") {
+      } else if (activeSection === "connections") {
           await loadConnectionsSection(refresh, force);
         }
       } catch (e: any) {
-        setError(e?.response?.data?.message || "Failed to load network.");
+        setError(getAppErrorMessage(e, "Something went wrong. Please try again."));
       } finally {
         setLoading(false);
         setRefreshing(false);
       }
     },
-    [activeSection, loadComposeSection, loadConnectionsSection, loadFeedSection]
+    [activeSection, loadComposeSection, loadConnectionsSection, loadFeedSection, loadInstitutionSection]
   );
 
   useFocusEffect(
@@ -382,6 +404,21 @@ export default function NetworkScreen() {
       cancelled = true;
     };
   }, [suggestions, suggestionPhotoById]);
+
+  const pendingIncomingByUserId = React.useMemo(() => {
+    const next: Record<string, ConnectionRow> = {};
+    pendingIncoming.forEach((item) => {
+      const requesterId = String(item?.requesterId?._id || "");
+      if (requesterId) next[requesterId] = item;
+    });
+    return next;
+  }, [pendingIncoming]);
+
+  const ensureComposerVisible = useCallback(() => {
+    setTimeout(() => {
+      feedScrollRef.current?.scrollToEnd({ animated: true });
+    }, 180);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -529,9 +566,11 @@ export default function NetworkScreen() {
       setPostImageUrls([]);
       notify("Post published.");
       await loadFeedSection(true, true);
+      sectionFetchAtRef.current.institution = 0;
       setActiveSection("feed");
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to publish post.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to publish post." });
+      setError(message);
     } finally {
       setSubmitting(false);
     }
@@ -549,7 +588,8 @@ export default function NetworkScreen() {
       setPostImageUrls((prev) => [...prev, ...uploadedUrls].slice(0, 5));
       notify("Images added.");
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Failed to upload post image.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to upload post image." });
+      setError(message);
     } finally {
       setUploadingPostImage(false);
     }
@@ -573,8 +613,12 @@ export default function NetworkScreen() {
       await api.delete(`/api/network/feed/${postId}`);
       notify("Post deleted.");
       await loadFeedSection(true, true);
+      if (activeSection === "institution") {
+        await loadInstitutionSection(true, true);
+      }
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to delete post.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to delete post." });
+      setError(message);
     }
   }
 
@@ -592,8 +636,12 @@ export default function NetworkScreen() {
       setEditingPost(null);
       notify("Post updated.");
       await loadFeedSection(true, true);
+      if (activeSection === "institution") {
+        await loadInstitutionSection(true, true);
+      }
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update post.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to update post." });
+      setError(message);
     } finally {
       setSavingPostEdit(false);
     }
@@ -658,7 +706,7 @@ export default function NetworkScreen() {
       setPostOptionsFor(null);
     } catch (e: any) {
       setPosts(prevPosts);
-      setError(e?.response?.data?.message || `Failed to ${action} post.`);
+      handleAppError(e, { fallbackMessage: `Unable to ${action} this post right now.` });
     }
   }
 
@@ -697,7 +745,7 @@ export default function NetworkScreen() {
       setCommentDrafts((prev) => ({ ...prev, [postId]: "" }));
       await loadFeedSection(true, true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to comment.");
+      handleAppError(e, { fallbackMessage: "Unable to post your comment right now." });
     }
   }
 
@@ -708,8 +756,11 @@ export default function NetworkScreen() {
       setCommentsModal({ visible: true, postId, comments: data || [] });
       setEditingCommentId("");
       setEditingCommentText("");
+      requestAnimationFrame(() => {
+        setTimeout(() => commentsScrollRef.current?.scrollToEnd({ animated: false }), 80);
+      });
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load comments.");
+      handleAppError(e, { fallbackMessage: "Unable to load comments right now." });
     }
   }
 
@@ -906,7 +957,7 @@ export default function NetworkScreen() {
       setEditingCommentText("");
       await loadFeedSection(true, true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update comment.");
+      handleAppError(e, { fallbackMessage: "Unable to update this comment right now." });
     }
   }
 
@@ -921,17 +972,26 @@ export default function NetworkScreen() {
       }));
       await loadFeedSection(true, true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to delete comment.");
+      handleAppError(e, { fallbackMessage: "Unable to delete this comment right now." });
     }
   }
 
   async function connect(recipientId: string) {
+    if (connectionActionById[recipientId]) return;
+    setConnectionActionById((prev) => ({ ...prev, [recipientId]: true }));
+    setRequestedCircleIds((prev) => ({ ...prev, [recipientId]: true }));
     try {
-      await api.post("/api/network/connections/request", { recipientId });
-      setRequestedCircleIds((prev) => ({ ...prev, [recipientId]: true }));
-      notify("Request Sent");
+      const { data } = await api.post<{ message?: string }>("/api/network/connections/request", { recipientId });
+      notify(data?.message === "This user already requested to connect with you" ? "They already requested you. Accept it below." : "Request sent");
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to send connection request.");
+      setRequestedCircleIds((prev) => {
+        const next = { ...prev };
+        delete next[recipientId];
+        return next;
+      });
+      handleAppError(e, { fallbackMessage: "Unable to send the request right now." });
+    } finally {
+      setConnectionActionById((prev) => ({ ...prev, [recipientId]: false }));
     }
   }
 
@@ -941,22 +1001,36 @@ export default function NetworkScreen() {
       setFollowingState((prev) => ({ ...prev, [targetId]: Boolean(data?.following) }));
       notify(data?.following ? "Following" : "Unfollowed");
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update follow.");
+      handleAppError(e, { fallbackMessage: "Unable to update follow right now." });
     }
   }
 
   async function respondConnection(connectionId: string, action: "accept" | "reject") {
+    if (connectionActionById[connectionId]) return;
+    setConnectionActionById((prev) => ({ ...prev, [connectionId]: true }));
+    const existing = pendingIncoming.find((item) => item._id === connectionId);
+    const otherId = String(existing?.requesterId?._id || "");
+    setPendingIncoming((prev) => prev.filter((item) => item._id !== connectionId));
+    if (action === "accept" && existing && otherId) {
+      setCircleMemberIds((prev) => ({ ...prev, [otherId]: true }));
+      setCircleMembers((prev) => [
+        {
+          id: otherId,
+          name: existing?.requesterId?.name || "Connection",
+          role: existing?.requesterId?.role || "student",
+          profilePhotoUrl: existing?.requesterId?.profilePhotoUrl || ""
+        },
+        ...prev.filter((item) => item.id !== otherId)
+      ]);
+    }
     try {
       await api.post(`/api/network/connections/${connectionId}/respond`, { action });
-      if (action === "accept") {
-        const accepted = pendingIncoming.find((item) => item._id === connectionId);
-        const otherId = String(accepted?.requesterId?._id || "");
-        if (otherId) setCircleMemberIds((prev) => ({ ...prev, [otherId]: true }));
-      }
       notify(action === "accept" ? "In Your Circle" : `Request ${action}ed.`);
-      await loadData(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || `Failed to ${action} request.`);
+      await loadData(true, true);
+      handleAppError(e, { fallbackMessage: `Unable to ${action} this request right now.` });
+    } finally {
+      setConnectionActionById((prev) => ({ ...prev, [connectionId]: false }));
     }
   }
 
@@ -991,8 +1065,15 @@ export default function NetworkScreen() {
           searchPlaceholder="Search circle, posts, people"
         />
         <ScrollView
+          ref={feedScrollRef}
           style={{ backgroundColor: colors.background }}
-          contentContainerStyle={[styles.container, { backgroundColor: colors.background, paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
+          contentContainerStyle={[
+            styles.container,
+            {
+              backgroundColor: colors.background,
+              paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom + (activeSection === "compose" ? 180 : 0)
+            }
+          ]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true, true)} tintColor={colors.accent} />}
           keyboardShouldPersistTaps="handled"
         >
@@ -1046,6 +1127,7 @@ export default function NetworkScreen() {
               placeholderTextColor={colors.textMuted}
               value={postText}
               onChangeText={setPostText}
+              onFocus={ensureComposerVisible}
               multiline
             />
             <View style={styles.rowItem}>
@@ -1096,6 +1178,7 @@ export default function NetworkScreen() {
               filteredSuggestions.slice(0, 8).map((item) => {
                 const inCircle = Boolean(circleMemberIds[item.id]);
                 const requested = Boolean(requestedCircleIds[item.id]);
+                const incomingRequest = pendingIncomingByUserId[item.id];
                 const suggestionPhoto = item.profilePhotoUrl || suggestionPhotoById[item.id] || "";
                 return (
                   <View key={`discover-${item.id}`} style={styles.rowItem}>
@@ -1110,14 +1193,25 @@ export default function NetworkScreen() {
                       <Text style={[styles.rowTitle, { color: colors.text }]}>{item.name}</Text>
                       <Text style={[styles.meta, { color: colors.textMuted }]}>{item.reason}</Text>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => (!inCircle && !requested ? connect(item.id) : undefined)}
-                      disabled={inCircle || requested}
-                    >
-                      <Text style={styles.action}>
-                        {inCircle ? "\u2713 In Your Circle" : requested ? "Request Sent" : "+ Add to Circle"}
-                      </Text>
-                    </TouchableOpacity>
+                    {incomingRequest ? (
+                      <View style={styles.inlineActions}>
+                        <TouchableOpacity onPress={() => respondConnection(incomingRequest._id, "accept")} disabled={Boolean(connectionActionById[incomingRequest._id])}>
+                          <Text style={styles.action}>Accept</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity onPress={() => respondConnection(incomingRequest._id, "reject")} disabled={Boolean(connectionActionById[incomingRequest._id])}>
+                          <Text style={styles.actionDanger}>Reject</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity
+                        onPress={() => (!inCircle && !requested ? connect(item.id) : undefined)}
+                        disabled={inCircle || requested || Boolean(connectionActionById[item.id])}
+                      >
+                        <Text style={styles.action}>
+                          {inCircle ? "\u2713 In Your Circle" : requested ? "Request Sent" : "+ Add to Circle"}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 );
               })
@@ -1174,25 +1268,40 @@ export default function NetworkScreen() {
           </View>
         ) : null}
 
-        {activeSection === "feed" ? (
+        {activeSection === "feed" || activeSection === "institution" ? (
           <View style={styles.feedSection}>
-            <TouchableOpacity
-              activeOpacity={0.92}
-              style={[styles.startPostCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={() => setActiveSection("compose")}
-            >
-              <View style={[styles.startPostAvatar, { backgroundColor: colors.accentSoft }]}>
-                <Text style={styles.startPostAvatarText}>{user?.name?.charAt(0)?.toUpperCase() || "O"}</Text>
+            {activeSection === "feed" ? (
+              <TouchableOpacity
+                activeOpacity={0.92}
+                style={[styles.startPostCard, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={() => setActiveSection("compose")}
+              >
+                <View style={[styles.startPostAvatar, { backgroundColor: colors.accentSoft }]}>
+                  <Text style={styles.startPostAvatarText}>{user?.name?.charAt(0)?.toUpperCase() || "O"}</Text>
+                </View>
+                <View style={[styles.startPostInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                  <Text style={[styles.startPostPlaceholder, { color: colors.textMuted }]}>Start a post...</Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>Institution Feed</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  Posts here are only from students in your own institution.
+                </Text>
               </View>
-              <View style={[styles.startPostInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                <Text style={[styles.startPostPlaceholder, { color: colors.textMuted }]}>Start a post...</Text>
-              </View>
-            </TouchableOpacity>
+            )}
             {loading && filteredPosts.length === 0 ? (
-              <Text style={[styles.meta, { color: colors.textMuted }]}>Home feed is loading...</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>
+                {activeSection === "institution" ? "Institution feed is loading..." : "Home feed is loading..."}
+              </Text>
             ) : filteredPosts.filter((post) => !hiddenPostIds[post._id]).length === 0 ? (
               <Text style={[styles.meta, { color: colors.textMuted }]}>
-                {normalizedSearch ? "No posts match your search yet." : "No posts yet. Create the first one."}
+                {normalizedSearch
+                  ? "No posts match your search yet."
+                  : activeSection === "institution"
+                    ? "No posts from your institution yet."
+                    : "No posts yet. Create the first one."}
               </Text>
             ) : (
               filteredPosts.filter((post) => !hiddenPostIds[post._id]).map((post) => {
@@ -1483,7 +1592,7 @@ export default function NetworkScreen() {
           <KeyboardAvoidingView
             style={{ width: "100%", justifyContent: "flex-end" }}
             behavior={Platform.OS === "ios" ? "padding" : "height"}
-            keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+            keyboardVerticalOffset={Platform.OS === "ios" ? insets.top + 12 : 24}
           >
             <View style={[styles.commentsSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.commentsHeader}>
@@ -1492,7 +1601,12 @@ export default function NetworkScreen() {
                   <Ionicons name="close" size={20} color={colors.text} />
                 </TouchableOpacity>
               </View>
-              <ScrollView style={{ maxHeight: 360 }} keyboardShouldPersistTaps="handled">
+              <ScrollView
+                ref={commentsScrollRef}
+                style={{ maxHeight: 360 }}
+                keyboardShouldPersistTaps="handled"
+                onContentSizeChange={() => commentsScrollRef.current?.scrollToEnd({ animated: false })}
+              >
                 {commentsModal.comments.length === 0 ? (
                   <View style={styles.commentsEmptyState}>
                     <Text style={styles.commentsEmptyEmoji}>Comments</Text>
@@ -1588,6 +1702,7 @@ export default function NetworkScreen() {
                     placeholderTextColor={colors.textMuted}
                     value={commentDrafts[commentsModal.postId] || ""}
                     onChangeText={(text) => setCommentDrafts((prev) => ({ ...prev, [commentsModal.postId]: text }))}
+                    onFocus={() => setTimeout(() => commentsScrollRef.current?.scrollToEnd({ animated: true }), 160)}
                   />
                 <TouchableOpacity onPress={() => comment(commentsModal.postId)}>
                   <Text style={styles.action}>Send</Text>
@@ -1782,6 +1897,7 @@ const styles = StyleSheet.create({
   meta: { color: "#667085", marginTop: 6 },
   metaSmall: { color: "#667085", marginTop: 2, fontSize: 12 },
   rowItem: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 },
+  inlineActions: { flexDirection: "row", alignItems: "center", gap: 10 },
   rowTitle: { color: "#1E2B24", fontWeight: "700" },
   action: { color: "#175CD3", fontWeight: "700" },
   actionDanger: { color: "#B42318", fontWeight: "700" },

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
@@ -86,7 +87,7 @@ export default function PublicProfileScreen() {
         setData(res.data);
       } catch (e: any) {
         if (!mounted) return;
-        setError(e?.response?.data?.message || "Failed to load profile.");
+        setError(getAppErrorMessage(e, "Something went wrong. Please try again."));
       } finally {
         if (mounted) setLoading(false);
       }
@@ -156,7 +157,7 @@ export default function PublicProfileScreen() {
       await api.post(`/api/network/follow/${userId}`);
       await refreshProfile();
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update follow.");
+      handleAppError(e, { fallbackMessage: "Unable to update follow right now." });
     } finally {
       setUpdatingFollow(false);
     }
@@ -166,11 +167,23 @@ export default function PublicProfileScreen() {
     if (!userId || !data || String(viewer?.id || "") === String(userId)) return;
     try {
       setUpdatingConnection(true);
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              social: {
+                ...(prev.social || {}),
+                connectionStatus: "pending_outgoing"
+              }
+            }
+          : prev
+      );
       await api.post("/api/network/connections/request", { recipientId: userId });
       notify("Connection request sent.");
       await refreshProfile();
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to send request.");
+      await refreshProfile();
+      handleAppError(e, { fallbackMessage: "Unable to send the request right now." });
     } finally {
       setUpdatingConnection(false);
     }
@@ -180,11 +193,23 @@ export default function PublicProfileScreen() {
     if (!data?.social?.connectionId) return;
     try {
       setUpdatingConnection(true);
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              social: {
+                ...(prev.social || {}),
+                connectionStatus: action === "accept" ? "accepted" : "none"
+              }
+            }
+          : prev
+      );
       await api.post(`/api/network/connections/${data.social.connectionId}/respond`, { action });
       notify(`Request ${action}ed.`);
       await refreshProfile();
     } catch (e: any) {
-      setError(e?.response?.data?.message || `Failed to ${action} request.`);
+      await refreshProfile();
+      handleAppError(e, { fallbackMessage: `Unable to ${action} this request right now.` });
     } finally {
       setUpdatingConnection(false);
     }
@@ -199,7 +224,7 @@ export default function PublicProfileScreen() {
       notify(`Endorsed ${normalizedSkill}`);
       await refreshProfile();
     } catch (e: any) {
-      notify(e?.response?.data?.message || "Unable to endorse skill right now.");
+      handleAppError(e, { fallbackMessage: "Unable to endorse skill right now." });
     } finally {
       setEndorsingSkill(null);
     }

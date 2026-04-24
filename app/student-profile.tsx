@@ -65,6 +65,7 @@ type StudentProfile = {
   institutionType: string;
   institutionDistrict: string;
   institutionSource: string;
+  className: string;
   skills: string[];
   careerGoals: string;
   profileCompleteness: number;
@@ -91,6 +92,7 @@ const emptyProfile: StudentProfile = {
   institutionType: "",
   institutionDistrict: "",
   institutionSource: "",
+  className: "",
   skills: [],
   careerGoals: "",
   profileCompleteness: 0,
@@ -194,6 +196,7 @@ export default function StudentProfileScreen() {
           institutionType: profileData.institutionType || "",
           institutionDistrict: profileData.institutionDistrict || "",
           institutionSource: profileData.institutionSource || "",
+          className: profileData.className || "",
           skills: Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : [],
           careerGoals: profileData.careerGoals || "",
           profileCompleteness: Number(profileData.profileCompleteness || 0),
@@ -347,6 +350,7 @@ export default function StudentProfileScreen() {
         institutionType: String(profile.institutionType || "").trim(),
         institutionDistrict: String(profile.institutionDistrict || "").trim(),
         institutionSource: String(profile.institutionSource || "").trim(),
+        className: String(profile.className || "").trim(),
         collegeName: String(profile.institutionName || profile.collegeName || institutionQuery || "").trim(),
         state: String(profile.state || "").trim(),
         skills: parseCommaSeparated(skillsDraft),
@@ -380,6 +384,7 @@ export default function StudentProfileScreen() {
         institutionSource: typeof profileData.institutionSource === "string"
           ? profileData.institutionSource
           : payload.institutionSource,
+        className: typeof profileData.className === "string" ? profileData.className : payload.className,
         collegeName: typeof profileData.collegeName === "string" ? profileData.collegeName : payload.collegeName,
         state: typeof profileData.state === "string" ? profileData.state : payload.state,
         skills: Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : payload.skills,
@@ -658,6 +663,18 @@ export default function StudentProfileScreen() {
 
       <Text style={[styles.label, { color: colors.text }]}>State</Text>
       <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholder="State" autoCapitalize="words" placeholderTextColor={colors.textMuted} value={profile.state} onChangeText={(state) => setProfile((prev) => ({ ...prev, state }))} />
+
+      <Text style={[styles.label, { color: colors.text }]}>Class (Optional)</Text>
+      <TextInput
+        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+        placeholder="Example: Class 10, Grade 12, Section A"
+        placeholderTextColor={colors.textMuted}
+        value={profile.className}
+        onChangeText={(className) => setProfile((prev) => ({ ...prev, className }))}
+      />
+      <Text style={[styles.helperText, { color: colors.textMuted }]}>
+        Add class only if it matters for your school workflow. It stays optional.
+      </Text>
 
       <Text style={[styles.label, { color: colors.text }]}>About</Text>
       <TextInput style={[styles.input, styles.multiline, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textMuted} multiline value={profile.about} onChangeText={(about) => setProfile((prev) => ({ ...prev, about }))} />

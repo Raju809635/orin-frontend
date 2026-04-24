@@ -29,6 +29,14 @@ function defaultRouteByRole(role: "student" | "mentor") {
 
 type AppTabKey = "home" | "mentorship" | "journey" | "ai" | "community";
 
+const TAB_BRAND_COLORS: Record<AppTabKey, { active: string; inactive: string }> = {
+  home: { active: "#22A06B", inactive: "#7A8A99" },
+  mentorship: { active: "#1D4ED8", inactive: "#6B7AA6" },
+  journey: { active: "#0F766E", inactive: "#6C8E87" },
+  ai: { active: "#D4A017", inactive: "#9A7B14" },
+  community: { active: "#C98A00", inactive: "#9A7A2A" }
+};
+
 function normalizeRouteParam(value: unknown) {
   if (Array.isArray(value)) {
     return value.length ? String(value[0] || "").trim() : "";
@@ -665,6 +673,7 @@ function AnimatedTabButton({
 }) {
   const scale = useRef(new Animated.Value(active ? 1 : 0.96)).current;
   const lift = useRef(new Animated.Value(active ? -2 : 0)).current;
+  const brand = TAB_BRAND_COLORS[(tab.key as AppTabKey) || "home"] || TAB_BRAND_COLORS.home;
 
   useEffect(() => {
     Animated.parallel([
@@ -697,8 +706,8 @@ function AnimatedTabButton({
           }
         ]}
       >
-        <Ionicons name={tab.icon as any} size={isCenter ? 22 : 20} color={active ? colors.accent : colors.textMuted} />
-        <Text style={[styles.bottomNavLabel, { color: colors.textMuted }, active && [styles.bottomNavLabelActive, { color: colors.accent }]]}>{tab.label}</Text>
+        <Ionicons name={tab.icon as any} size={isCenter ? 22 : 20} color={active ? brand.active : brand.inactive} />
+        <Text style={[styles.bottomNavLabel, { color: active ? brand.active : brand.inactive }, active && styles.bottomNavLabelActive]}>{tab.label}</Text>
       </Animated.View>
     </TouchableOpacity>
   );

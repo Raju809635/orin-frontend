@@ -1,6 +1,7 @@
 import axios from "axios";
 import Constants from "expo-constants";
 import { Platform } from "react-native";
+import { annotateAppError } from "@/lib/appError";
 
 function getApiBaseUrl() {
   const extraApiUrl = (Constants.expoConfig?.extra as any)?.apiBaseUrl as string | undefined;
@@ -56,17 +57,21 @@ api.interceptors.response.use(
       !error?.response || RETRYABLE_STATUS.has(status);
 
     if (!isSafeGet || !isRetryableFailure) {
-      return Promise.reject(error);
+      return Promise.reject(annotateAppError(error));
     }
 
     const retryCount = Number(originalRequest._networkRetryCount || 0);
     if (retryCount >= 1) {
-      return Promise.reject(error);
+      return Promise.reject(annotateAppError(error));
     }
 
     originalRequest._networkRetryCount = retryCount + 1;
     await new Promise((resolve) => setTimeout(resolve, 1200));
-    return api.request(originalRequest);
+    try {
+      return await api.request(originalRequest);
+    } catch (retryError) {
+      return Promise.reject(annotateAppError(retryError));
+    }
   }
 );
 

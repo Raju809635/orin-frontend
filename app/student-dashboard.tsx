@@ -21,6 +21,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
@@ -236,6 +237,13 @@ type CareerRoadmapResponse = {
   goal: string;
   steps: Array<{ stepNumber: number; title: string; completed: boolean }>;
 };
+type InstitutionRoadmapItem = {
+  id: string;
+  title: string;
+  domain?: string;
+  status?: string;
+  weeks: Array<{ id: string; title: string }>;
+};
 
 type OpportunityItem = {
   _id: string;
@@ -398,6 +406,11 @@ type ReputationSummary = {
   levelTag: string;
   topPercent: number;
 };
+type StudentProfileLite = {
+  institutionName?: string;
+  collegeName?: string;
+  className?: string;
+};
 
 type NewsCategoryKey = "tech" | "edtech" | "exams" | "scholarships" | "opportunities";
 type NewsArticle = {
@@ -476,6 +489,9 @@ export default function StudentDashboard() {
   const [roadmap, setRoadmap] = useState<CareerRoadmapResponse | null>(null);
   const [opportunities, setOpportunities] = useState<OpportunityItem[]>([]);
   const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
+  const [institutionRoadmaps, setInstitutionRoadmaps] = useState<InstitutionRoadmapItem[]>([]);
+  const [studentInstitutionName, setStudentInstitutionName] = useState("");
+  const [studentClassName, setStudentClassName] = useState("");
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
   const [sprints, setSprints] = useState<SprintItem[]>([]);
   const [togglingLiveInterestId, setTogglingLiveInterestId] = useState<string | null>(null);
@@ -582,14 +598,18 @@ export default function StudentDashboard() {
       opportunitiesRes,
       leaderboardRes,
       skillGapRes,
-      verifiedMentorsRes
+      verifiedMentorsRes,
+      institutionRoadmapsRes,
+      studentProfileRes
     ] = await Promise.allSettled([
       api.get<{ recommendations: MentorMatch[] }>("/api/network/mentor-matches"),
       api.get<CareerRoadmapResponse>("/api/network/career-roadmap"),
       api.get<OpportunityItem[]>("/api/network/opportunities"),
       api.get<LeaderboardResponse>("/api/network/leaderboard"),
       api.get<SkillGapResponse>("/api/network/skill-gap"),
-      api.get<VerifiedMentor[]>("/api/network/verified-mentors")
+      api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
+      api.get<{ roadmaps: InstitutionRoadmapItem[] }>("/api/network/institution-roadmaps"),
+      api.get<{ profile?: StudentProfileLite }>("/api/profiles/student/me")
     ]);
     setMentorMatches(mentorMatchesRes.status === "fulfilled" ? mentorMatchesRes.value.data?.recommendations || [] : []);
     setRoadmap(roadmapRes.status === "fulfilled" ? roadmapRes.value.data || null : null);
@@ -597,6 +617,17 @@ export default function StudentDashboard() {
     setLeaderboard(leaderboardRes.status === "fulfilled" ? leaderboardRes.value.data || null : null);
     setSkillGap(skillGapRes.status === "fulfilled" ? skillGapRes.value.data || null : null);
     setVerifiedMentors(verifiedMentorsRes.status === "fulfilled" ? verifiedMentorsRes.value.data || [] : []);
+    setInstitutionRoadmaps(institutionRoadmapsRes.status === "fulfilled" ? institutionRoadmapsRes.value.data?.roadmaps || [] : []);
+    setStudentInstitutionName(
+      studentProfileRes.status === "fulfilled"
+        ? String(studentProfileRes.value.data?.profile?.institutionName || studentProfileRes.value.data?.profile?.collegeName || "").trim()
+        : ""
+    );
+    setStudentClassName(
+      studentProfileRes.status === "fulfilled"
+        ? String(studentProfileRes.value.data?.profile?.className || "").trim()
+        : ""
+    );
   }, [markSectionFetched, shouldSkipSectionFetch]);
 
   const loadGrowthCommunitySection = useCallback(async (refresh = false, force = false) => {
@@ -676,7 +707,7 @@ export default function StudentDashboard() {
         if (growthSubSection === "resources") void loadGrowthResourcesSection(refresh, force);
       }
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load dashboard data.");
+      setError(getAppErrorMessage(e, "Failed to load dashboard data."));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -1018,7 +1049,8 @@ export default function StudentDashboard() {
       setTransactionRefBySession((prev) => ({ ...prev, [session._id]: "" }));
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to submit payment proof.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to submit payment proof." });
+      setError(message);
     } finally {
       setSubmittingBySession((prev) => ({ ...prev, [session._id]: false }));
     }
@@ -1060,12 +1092,12 @@ export default function StudentDashboard() {
       notify("Payment successful. Session confirmed.");
       await fetchDashboard(true, true);
     } catch (e: any) {
-      const message =
-        e?.response?.data?.message ||
-        e?.description ||
-        "Payment not completed. You can try again from Pending Payments.";
+      const message = handleAppError(e, {
+        mode: "alert",
+        title: "Payment",
+        fallbackMessage: "Payment not completed. You can try again from Pending Payments."
+      });
       setError(message);
-      notify(message);
       await fetchDashboard(true, true);
     } finally {
       setSubmittingBySession((prev) => ({ ...prev, [session._id]: false }));
@@ -1089,7 +1121,8 @@ export default function StudentDashboard() {
               notify("Pending session deleted. Slot released.");
               await fetchDashboard(true);
             } catch (e: any) {
-              setError(e?.response?.data?.message || "Failed to delete pending session.");
+              const message = handleAppError(e, { fallbackMessage: "Failed to delete pending session." });
+              setError(message);
             } finally {
               setSubmittingBySession((prev) => ({ ...prev, [session._id]: false }));
             }
@@ -1166,7 +1199,7 @@ export default function StudentDashboard() {
       slideAnim.setValue(0);
       setQuizVisible(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Failed to load daily quiz.");
+      setError(getAppErrorMessage(e, "Failed to load daily quiz."));
     } finally {
       setQuizLoading(false);
     }
@@ -1254,7 +1287,8 @@ export default function StudentDashboard() {
       notify("Quiz completed.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to submit quiz.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to submit quiz." });
+      setError(message);
     } finally {
       setSubmittingQuiz(false);
     }
@@ -1268,7 +1302,8 @@ export default function StudentDashboard() {
       notify("Session note saved.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to save session note.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to save session note." });
+      setError(message);
     }
   }
 
@@ -1282,7 +1317,8 @@ export default function StudentDashboard() {
       notify("Review submitted.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to submit review.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to submit review." });
+      setError(message);
     }
   }
 
@@ -1293,7 +1329,8 @@ export default function StudentDashboard() {
       notify("Challenge joined.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to join challenge.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to join challenge." });
+      setError(message);
     }
   }
 
@@ -1304,7 +1341,8 @@ export default function StudentDashboard() {
       notify("Group joined.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to join group.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to join group." });
+      setError(message);
     }
   }
 
@@ -1326,7 +1364,8 @@ export default function StudentDashboard() {
       );
       notify(data?.message || "Interest updated.");
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update interest.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to update interest." });
+      setError(message);
     } finally {
       setTogglingLiveInterestId(null);
     }
@@ -1382,7 +1421,12 @@ export default function StudentDashboard() {
       notify("Live session booked successfully.");
       await fetchDashboard(true);
     } catch (e: any) {
-      Alert.alert("Live session", e?.response?.data?.message || e?.description || "Payment not completed.");
+      const message = handleAppError(e, {
+        mode: "alert",
+        title: "Live session",
+        fallbackMessage: "Payment failed. Please try again or use a different method."
+      });
+      setError(message);
       await fetchDashboard(true);
     }
   }
@@ -1416,7 +1460,12 @@ export default function StudentDashboard() {
       notify("Live session booked successfully.");
       await fetchDashboard(true);
     } catch (e: any) {
-      Alert.alert("Live session", e?.response?.data?.message || e?.description || "Payment not completed.");
+      const message = handleAppError(e, {
+        mode: "alert",
+        title: "Live session",
+        fallbackMessage: "Payment failed. Please try again or use a different method."
+      });
+      setError(message);
       await fetchDashboard(true);
     }
   }
@@ -1894,6 +1943,54 @@ export default function StudentDashboard() {
 
       <Text style={[styles.groupTitle, { color: colors.text }]}>Career Progress</Text>
       <Text style={[styles.groupNote, { color: colors.textMuted }]}>Roadmaps, opportunities, and live sessions to accelerate your journey.</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>My Institution</Text>
+      <View style={[styles.institutionHubCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.institutionHubHeader}>
+          <View style={styles.institutionHubBadge}>
+            <Text style={styles.institutionHubBadgeText}>Institution</Text>
+          </View>
+          <Text style={[styles.institutionHubTitle, { color: colors.text }]}>{studentInstitutionName || "Add your institution in profile"}</Text>
+          <Text style={[styles.institutionHubMeta, { color: colors.textMuted }]}>
+            {studentClassName ? `Class: ${studentClassName}` : "Class is optional and can be added later in profile."}
+          </Text>
+        </View>
+        <View style={styles.institutionTileGrid}>
+          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/network?section=institution" as never)}>
+            <Text style={styles.institutionTileTitle}>Institution Feed</Text>
+            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>Posts only from your institution</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/leaderboard" as never)}>
+            <Text style={styles.institutionTileTitle}>Institution Leaderboard</Text>
+            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+              {leaderboard?.collegeTop?.length ? `${leaderboard.collegeTop.length} active ranks visible` : "Track your institution rank"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => setGrowthSubSection("ai")}>
+            <Text style={styles.institutionTileTitle}>Institution Mentors</Text>
+            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+              {verifiedMentors.length ? `${verifiedMentors.length} mentors in guidance pool` : "Mentor list grows as school network expands"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/ai/career-roadmap" as never)}>
+            <Text style={styles.institutionTileTitle}>Institution Roadmaps</Text>
+            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+              {institutionRoadmaps.length ? `${institutionRoadmaps.length} roadmap${institutionRoadmaps.length === 1 ? "" : "s"} available` : "Open mentor-guided roadmaps"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/certifications" as never)}>
+            <Text style={styles.institutionTileTitle}>Institution Certificates</Text>
+            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+              {certifications.length ? `${certifications.length} certificates earned` : "See institution-issued recognition"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/challenges" as never)}>
+            <Text style={styles.institutionTileTitle}>Institution Competitions</Text>
+            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+              {challenges.length ? `${challenges.length} active challenge${challenges.length === 1 ? "" : "s"}` : "School competitions will appear here"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
       <Text style={[styles.sectionHeader, { color: colors.text }]}>AI Career Roadmap</Text>
       <View style={styles.roadmapCard}>
         {!roadmap ? (
@@ -2837,6 +2934,39 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 10
   },
+  institutionHubCard: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D6E4FF",
+    borderRadius: 16,
+    padding: 14,
+    gap: 12,
+    marginBottom: 12
+  },
+  institutionHubHeader: { gap: 4 },
+  institutionHubBadge: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "#EEF4FF"
+  },
+  institutionHubBadgeText: { color: "#1849A9", fontWeight: "800", fontSize: 12 },
+  institutionHubTitle: { color: "#0F172A", fontWeight: "800", fontSize: 18 },
+  institutionHubMeta: { color: "#667085", fontWeight: "600" },
+  institutionTileGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  institutionTile: {
+    width: "48%",
+    minHeight: 96,
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E4E7EC",
+    borderRadius: 12,
+    padding: 12,
+    gap: 6
+  },
+  institutionTileTitle: { color: "#163A2A", fontWeight: "800", fontSize: 14 },
+  institutionTileMeta: { color: "#667085", fontWeight: "600", fontSize: 12, lineHeight: 18 },
   roadmapGoal: { color: "#1849A9", fontWeight: "800", marginBottom: 8 },
   roadmapStep: { color: "#344054", marginBottom: 4, fontWeight: "600" },
   opportunityWrap: { gap: 9, marginBottom: 10 },

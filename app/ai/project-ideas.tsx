@@ -1,23 +1,47 @@
-﻿import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+const AI_GOLD = "#D4A017";
+const AI_GOLD_SOFT = "#FFF4CC";
+const AI_TEAL = "#0F766E";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { getDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
+import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
+
+type ProjectTask = {
+  id: string;
+  title: string;
+  done: boolean;
+};
 
 type ProjectIdea = {
   title: string;
+  projectKey: string;
   level?: string;
   tags?: string[];
   recommended?: boolean;
   why?: string;
   stage?: string;
+  tasks: ProjectTask[];
+  status?: "not_started" | "active" | "completed";
+  proofRequired?: boolean;
+  proofSubmitted?: boolean;
+  proofNote?: string;
+  proofLink?: string;
+  proofImageUrl?: string;
+  progressPercent?: number;
+  completedTasks?: number;
+  totalTasks?: number;
 };
+
 type ProjectIdeasResponse = {
   goal: string;
   ideas: ProjectIdea[];
@@ -28,13 +52,68 @@ type ProjectIdeasResponse = {
     personalizationReason?: string;
   };
 };
-type ProjectMissionState = { tasks: { id: string; title: string; done: boolean }[] };
+
+type ProofDraft = {
+  note: string;
+  link: string;
+  imageUrl: string;
+  uploading: boolean;
+  submitting: boolean;
+};
 
 const LEVEL_OPTIONS = ["Beginner", "Intermediate", "Advanced"];
-const STORAGE_PREFIX = "orin:project-build:";
+
+function buildProjectKey(title: string) {
+  return String(title || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function buildFallbackTasks(title: string): ProjectTask[] {
+  const taskBase = buildProjectKey(title) || "project";
+  return [
+    { id: `${taskBase}-problem`, title: "Define the problem + target user", done: false },
+    { id: `${taskBase}-plan`, title: "Sketch the flow + feature list", done: false },
+    { id: `${taskBase}-build`, title: "Build the core MVP", done: false },
+    { id: `${taskBase}-test`, title: "Test and improve the result", done: false },
+    { id: `${taskBase}-share`, title: "Share a demo or proof link", done: false }
+  ];
+}
+
+function normalizeProjectIdea(idea: ProjectIdea): ProjectIdea {
+  const title = String(idea?.title || "Project Idea").trim() || "Project Idea";
+  const tasks = Array.isArray(idea?.tasks) && idea.tasks.length ? idea.tasks : buildFallbackTasks(title);
+  const completedTasks = typeof idea?.completedTasks === "number" ? idea.completedTasks : tasks.filter((task) => task.done).length;
+  const totalTasks = typeof idea?.totalTasks === "number" && idea.totalTasks > 0 ? idea.totalTasks : tasks.length;
+
+  return {
+    ...idea,
+    title,
+    projectKey: String(idea?.projectKey || "").trim() || buildProjectKey(title),
+    tasks,
+    completedTasks,
+    totalTasks,
+    progressPercent:
+      typeof idea?.progressPercent === "number"
+        ? idea.progressPercent
+        : totalTasks
+          ? Math.round((completedTasks / totalTasks) * 100)
+          : 0,
+    status:
+      idea?.status ||
+      (completedTasks >= totalTasks && totalTasks > 0
+        ? "completed"
+        : completedTasks > 0
+          ? "active"
+          : "not_started")
+  };
+}
 
 export default function AiProjectIdeasPage() {
   const { colors } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(null);
   const [primaryCategory, setPrimaryCategory] = useState("");
   const [subCategory, setSubCategory] = useState("");
@@ -46,7 +125,7 @@ export default function AiProjectIdeasPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeProject, setActiveProject] = useState<string | null>(null);
-  const [missions, setMissions] = useState<Record<string, ProjectMissionState>>({});
+  const [proofDrafts, setProofDrafts] = useState<Record<string, ProofDraft>>({});
 
   useEffect(() => {
     let mounted = true;
@@ -105,9 +184,16 @@ export default function AiProjectIdeasPage() {
             goal: goalLabel
           }
         });
-        setData(res.data || null);
+        setData(
+          res.data
+            ? {
+                ...res.data,
+                ideas: Array.isArray(res.data.ideas) ? res.data.ideas.map(normalizeProjectIdea) : []
+              }
+            : null
+        );
       } catch (e: any) {
-        setError(e?.response?.data?.message || "Failed to load project ideas.");
+        setError(getAppErrorMessage(e, "Something went wrong. Please try again."));
       } finally {
         setLoading(false);
         setRefreshing(false);
@@ -123,22 +209,21 @@ export default function AiProjectIdeasPage() {
   );
 
   useEffect(() => {
-    const ideas = data?.ideas || [];
-    if (!ideas.length) return;
-    let mounted = true;
-    (async () => {
-      const pairs = await Promise.all(
-        ideas.map(async (idea) => {
-          const raw = await AsyncStorage.getItem(`${STORAGE_PREFIX}${idea.title.toLowerCase()}`);
-          return [idea.title, raw ? (JSON.parse(raw) as ProjectMissionState) : buildMissionTemplate(idea.title)] as const;
-        })
-      );
-      if (!mounted) return;
-      setMissions(Object.fromEntries(pairs));
-    })();
-    return () => {
-      mounted = false;
-    };
+    if (!data?.ideas?.length) return;
+    setProofDrafts((prev) => {
+      const next = { ...prev };
+      data.ideas.forEach((idea) => {
+        if (next[idea.projectKey]) return;
+        next[idea.projectKey] = {
+          note: idea.proofNote || "",
+          link: idea.proofLink || "",
+          imageUrl: idea.proofImageUrl || "",
+          uploading: false,
+          submitting: false
+        };
+      });
+      return next;
+    });
   }, [data]);
 
   const difficulty = useMemo(() => {
@@ -165,26 +250,107 @@ export default function AiProjectIdeasPage() {
     return "Research, notes, execution tracker";
   }, [primaryCategory, subCategory]);
 
-  const toggleTask = useCallback(async (title: string, taskId: string) => {
-    const current = missions[title] || buildMissionTemplate(title);
-    const next: ProjectMissionState = {
-      tasks: current.tasks.map((task) => (task.id === taskId ? { ...task, done: !task.done } : task))
-    };
-    setMissions((prev) => ({ ...prev, [title]: next }));
-    await AsyncStorage.setItem(`${STORAGE_PREFIX}${title.toLowerCase()}`, JSON.stringify(next));
-    const completedCount = next.tasks.filter((task) => task.done).length;
-    if (completedCount === next.tasks.length) {
-      notify("Project completed. +50 XP and certificate unlocked.");
-    } else {
-      notify("Task updated. Streak +1");
+  function patchIdea(projectKey: string, nextIdea: Partial<ProjectIdea>) {
+    setData((prev) =>
+      prev
+        ? {
+            ...prev,
+            ideas: (prev.ideas || []).map((idea) => (idea.projectKey === projectKey ? normalizeProjectIdea({ ...idea, ...nextIdea }) : idea))
+          }
+        : prev
+    );
+  }
+
+  async function openProject(idea: ProjectIdea) {
+    const nextOpen = activeProject === idea.projectKey ? null : idea.projectKey;
+    setActiveProject(nextOpen);
+    if (nextOpen && idea.status === "not_started") {
+      try {
+        const { data: response } = await api.post(`/api/network/project-ideas/${encodeURIComponent(idea.projectKey)}/start`, {
+          title: idea.title
+        });
+        patchIdea(idea.projectKey, response?.project || { status: "active" });
+      } catch (e: any) {
+        handleAppError(e, { fallbackMessage: "Unable to start this project right now." });
+      }
     }
-  }, [missions]);
+  }
+
+  async function toggleTask(idea: ProjectIdea, taskId: string) {
+    try {
+      const { data: response } = await api.post(`/api/network/project-ideas/${encodeURIComponent(idea.projectKey)}/task`, {
+        title: idea.title,
+        taskId
+      });
+      patchIdea(idea.projectKey, response?.project || {});
+      notify("Task updated.");
+    } catch (e: any) {
+      handleAppError(e, { fallbackMessage: "Unable to update this task right now." });
+    }
+  }
+
+  async function uploadProofImage(idea: ProjectIdea) {
+    try {
+      setProofDrafts((prev) => ({
+        ...prev,
+        [idea.projectKey]: { ...(prev[idea.projectKey] || emptyProofDraft()), uploading: true }
+      }));
+      const imageUrl = await pickAndUploadPostImage();
+      if (!imageUrl) return;
+      setProofDrafts((prev) => ({
+        ...prev,
+        [idea.projectKey]: { ...(prev[idea.projectKey] || emptyProofDraft()), imageUrl, uploading: false }
+      }));
+      notify("Proof screenshot added.");
+    } catch (e: any) {
+      setProofDrafts((prev) => ({
+        ...prev,
+        [idea.projectKey]: { ...(prev[idea.projectKey] || emptyProofDraft()), uploading: false }
+      }));
+      handleAppError(e, { fallbackMessage: "Unable to upload proof screenshot right now." });
+    }
+  }
+
+  async function submitProof(idea: ProjectIdea) {
+    const draft = proofDrafts[idea.projectKey] || emptyProofDraft();
+    try {
+      setProofDrafts((prev) => ({
+        ...prev,
+        [idea.projectKey]: { ...draft, submitting: true }
+      }));
+      const { data: response } = await api.post(`/api/network/project-ideas/${encodeURIComponent(idea.projectKey)}/submit-proof`, {
+        title: idea.title,
+        proofNote: draft.note,
+        proofLink: draft.link,
+        proofImageUrl: draft.imageUrl
+      });
+      patchIdea(idea.projectKey, response?.project || { status: "completed", proofSubmitted: true });
+      notify("Project proof submitted. Great work.");
+    } catch (e: any) {
+      handleAppError(e, { fallbackMessage: "Unable to submit project proof right now." });
+    } finally {
+      setProofDrafts((prev) => ({
+        ...prev,
+        [idea.projectKey]: { ...(prev[idea.projectKey] || draft), submitting: false }
+      }));
+    }
+  }
 
   return (
-    <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.page, { backgroundColor: colors.background }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}>
-      <LinearGradient colors={["#0E6A42", "#1F7A4C", "#7AD39D"]} style={styles.hero}>
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
+    >
+      <ScrollView
+        style={{ backgroundColor: colors.background }}
+        contentContainerStyle={[styles.page, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 20) + 32 }]}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => load(true)} />}
+        keyboardShouldPersistTaps="handled"
+      >
+      <LinearGradient colors={["#7C5A00", "#D4A017", "#F2C94C"]} style={styles.hero}>
         <Text style={styles.heroTitle}>Build Mode</Text>
-        <Text style={styles.heroSub}>Choose a project and turn it into a real execution system.</Text>
+        <Text style={styles.heroSub}>Choose a project, execute it, and submit real proof before ORIN marks it complete.</Text>
       </LinearGradient>
 
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -192,8 +358,8 @@ export default function AiProjectIdeasPage() {
         <Text style={[styles.label, { color: colors.text }]}>Domain</Text>
         <View style={styles.chips}>
           {(domainTree?.primaryCategories || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setPrimaryCategory(item)}>
-              <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, primaryCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setPrimaryCategory(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, primaryCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -201,8 +367,8 @@ export default function AiProjectIdeasPage() {
         <Text style={[styles.label, { color: colors.text }]}>Sub-domain</Text>
         <View style={styles.chips}>
           {(domainTree?.subCategoriesByPrimary?.[primaryCategory] || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setSubCategory(item)}>
-              <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, subCategory === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setSubCategory(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, subCategory === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -210,8 +376,8 @@ export default function AiProjectIdeasPage() {
         <Text style={[styles.label, { color: colors.text }]}>Focus</Text>
         <View style={styles.chips}>
           {(domainTree?.focusByPrimarySub?.[`${primaryCategory}::${subCategory}`] || []).map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setFocus(item)}>
-              <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, focus === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setFocus(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, focus === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
@@ -222,13 +388,13 @@ export default function AiProjectIdeasPage() {
         <Text style={[styles.label, { color: colors.text }]}>Skill Level</Text>
         <View style={styles.chips}>
           {LEVEL_OPTIONS.map((item) => (
-            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, level === item && [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]} onPress={() => setLevel(item)}>
-              <Text style={[styles.chipText, { color: colors.textMuted }, level === item && [styles.chipTextActive, { color: colors.accent }]]}>{item}</Text>
+            <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, level === item && [styles.chipActive, { backgroundColor: AI_GOLD_SOFT, borderColor: AI_GOLD }]]} onPress={() => setLevel(item)}>
+              <Text style={[styles.chipText, { color: colors.textMuted }, level === item && [styles.chipTextActive, { color: AI_GOLD }]]}>{item}</Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => load(true)}>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_GOLD }]} onPress={() => load(true)}>
           <Text style={styles.primaryBtnText}>Generate Ideas</Text>
         </TouchableOpacity>
       </View>
@@ -236,27 +402,27 @@ export default function AiProjectIdeasPage() {
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.sectionTitle, { color: colors.text }]}>Project Ideas</Text>
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
-        {loading ? <ActivityIndicator size="large" color={colors.accent} /> : null}
+        {loading ? <ActivityIndicator size="large" color={AI_GOLD} /> : null}
         {!loading && !data ? <Text style={[styles.meta, { color: colors.textMuted }]}>No ideas available yet.</Text> : null}
         {data?.journey ? (
           <View style={styles.journeyCard}>
             <Text style={styles.journeyLabel}>Personalized Build Track</Text>
             <Text style={styles.journeyTitle}>{data.journey.personalizationReason || `Built for ${data.goal}`}</Text>
-            <Text style={styles.meta}>
-              {data.journey.currentStep
-                ? `Current step: ${data.journey.currentStep}`
-                : `Focus: ${data.journey.focusLabel || data.goal}`}
-            </Text>
+            <Text style={styles.meta}>{data.journey.currentStep ? `Current step: ${data.journey.currentStep}` : `Focus: ${data.journey.focusLabel || data.goal}`}</Text>
             <Text style={styles.meta}>Readiness: {Math.max(0, Math.round(Number(data.journey.readinessScore || 0)))}%</Text>
           </View>
         ) : null}
-        {(data?.ideas || []).slice(0, 8).map((idea, index) => {
-          const mission = missions[idea.title] || buildMissionTemplate(idea.title);
-          const completed = mission.tasks.filter((task) => task.done).length;
-          const progress = mission.tasks.length ? Math.round((completed / mission.tasks.length) * 100) : 0;
-          const isOpen = activeProject === idea.title;
+
+        {(data?.ideas || []).slice(0, 8).map((rawIdea, index) => {
+          const idea = normalizeProjectIdea(rawIdea);
+          const completed = idea.completedTasks ?? idea.tasks.filter((task) => task.done).length;
+          const progress = idea.progressPercent ?? (idea.totalTasks ? Math.round((completed / idea.totalTasks) * 100) : 0);
+          const isOpen = activeProject === idea.projectKey;
+          const allTasksDone = idea.tasks.every((task) => task.done);
+          const proofDraft = proofDrafts[idea.projectKey] || emptyProofDraft();
+
           return (
-            <View key={`${idea.title}-${index}`} style={styles.projectCard}>
+            <View key={`${idea.projectKey}-${index}`} style={styles.projectCard}>
               <View style={styles.projectTop}>
                 <Text style={styles.projectTitle}>{idea.title}</Text>
                 <Text style={[styles.difficultyBadge, { color: difficultyColor }]}>{difficulty}</Text>
@@ -264,6 +430,7 @@ export default function AiProjectIdeasPage() {
               <View style={styles.metaRow}>
                 {idea.recommended ? <Text style={styles.recommendedPill}>Recommended</Text> : null}
                 {idea.stage ? <Text style={styles.stagePill}>{idea.stage}</Text> : null}
+                {idea.proofSubmitted ? <Text style={styles.successPill}>Proof Submitted</Text> : null}
               </View>
               <Text style={styles.meta}>Learn: {suggestedStack}</Text>
               {idea.why ? <Text style={styles.whyText}>{idea.why}</Text> : null}
@@ -271,14 +438,15 @@ export default function AiProjectIdeasPage() {
               {!!idea.tags?.length ? (
                 <View style={styles.tagRow}>
                   {idea.tags.map((tag) => (
-                    <Text key={`${idea.title}-${tag}`} style={styles.tagPill}>
+                    <Text key={`${idea.projectKey}-${tag}`} style={styles.tagPill}>
                       {tag}
                     </Text>
                   ))}
                 </View>
               ) : null}
-              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setActiveProject((prev) => (prev === idea.title ? null : idea.title))}>
-                <Text style={styles.secondaryBtnText}>{isOpen ? "Hide Build Plan" : "Start Project"}</Text>
+
+              <TouchableOpacity style={styles.secondaryBtn} onPress={() => openProject(idea)}>
+                <Text style={styles.secondaryBtnText}>{isOpen ? "Hide Build Plan" : idea.status === "not_started" ? "Start Project" : "Continue Project"}</Text>
               </TouchableOpacity>
 
               {isOpen ? (
@@ -290,13 +458,40 @@ export default function AiProjectIdeasPage() {
                   <View style={styles.progressTrack}>
                     <View style={[styles.progressFill, { width: `${progress}%` }]} />
                   </View>
-                  {mission.tasks.map((task) => (
-                    <TouchableOpacity key={task.id} style={styles.taskRow} onPress={() => toggleTask(idea.title, task.id)}>
+
+                  {idea.tasks.map((task) => (
+                    <TouchableOpacity key={task.id} style={styles.taskRow} onPress={() => toggleTask(idea, task.id)}>
                       <Ionicons name={task.done ? "checkmark-circle" : "ellipse-outline"} size={20} color={task.done ? "#1F7A4C" : "#98A2B3"} />
                       <Text style={[styles.taskText, task.done && styles.taskTextDone]}>{task.title}</Text>
                     </TouchableOpacity>
                   ))}
-                  {progress === 100 ? <Text style={styles.completeText}>Project completed. +50 XP and certificate unlocked.</Text> : null}
+
+                  <View style={styles.proofBox}>
+                    <Text style={styles.buildTitle}>Project Proof</Text>
+                    <Text style={styles.meta}>Submit screenshots, a demo link, or a short note before ORIN marks this project complete.</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="What did you build?"
+                      value={proofDraft.note}
+                      onChangeText={(text) => setProofDrafts((prev) => ({ ...prev, [idea.projectKey]: { ...proofDraft, note: text } }))}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Demo / GitHub / deployed link"
+                      autoCapitalize="none"
+                      value={proofDraft.link}
+                      onChangeText={(text) => setProofDrafts((prev) => ({ ...prev, [idea.projectKey]: { ...proofDraft, link: text } }))}
+                    />
+                    <TouchableOpacity style={styles.uploadBtn} onPress={() => uploadProofImage(idea)} disabled={proofDraft.uploading}>
+                      <Text style={styles.uploadBtnText}>{proofDraft.uploading ? "Uploading..." : proofDraft.imageUrl ? "Change Proof Screenshot" : "Upload Proof Screenshot"}</Text>
+                    </TouchableOpacity>
+                    {proofDraft.imageUrl ? <Image source={{ uri: proofDraft.imageUrl }} style={styles.proofImage} /> : null}
+                    <TouchableOpacity style={[styles.primaryBtn, !allTasksDone && styles.disabledBtn]} onPress={() => submitProof(idea)} disabled={!allTasksDone || proofDraft.submitting}>
+                      <Text style={styles.primaryBtnText}>{proofDraft.submitting ? "Submitting..." : "Submit Project Proof"}</Text>
+                    </TouchableOpacity>
+                    {!allTasksDone ? <Text style={styles.meta}>Complete every task first, then submit proof.</Text> : null}
+                    {idea.status === "completed" ? <Text style={styles.completeText}>Project completed with proof. This now strengthens opportunities and recommendations.</Text> : null}
+                  </View>
                 </View>
               ) : null}
             </View>
@@ -323,8 +518,7 @@ export default function AiProjectIdeasPage() {
                 level,
                 difficulty,
                 suggestedStack,
-                ideas: data.ideas || [],
-                missions
+                ideas: data.ideas || []
               }
             });
             notify("Saved to Saved AI.");
@@ -333,21 +527,19 @@ export default function AiProjectIdeasPage() {
           <Text style={styles.primaryBtnText}>Save Build Mode</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
-function buildMissionTemplate(title: string): ProjectMissionState {
-  const taskBase = title.toLowerCase();
-  const tasks = [
-    { id: `${taskBase}-problem`, title: "Define the problem + target user", done: false },
-    { id: `${taskBase}-plan`, title: "Sketch the flow + features list", done: false },
-    { id: `${taskBase}-setup`, title: "Setup project structure", done: false },
-    { id: `${taskBase}-core`, title: "Build the core feature (MVP)", done: false },
-    { id: `${taskBase}-polish`, title: "Add one improvement (UI/UX/data)", done: false },
-    { id: `${taskBase}-deploy`, title: "Test, deploy, and share demo", done: false }
-  ];
-  return { tasks };
+function emptyProofDraft(): ProofDraft {
+  return {
+    note: "",
+    link: "",
+    imageUrl: "",
+    uploading: false,
+    submitting: false
+  };
 }
 
 const styles = StyleSheet.create({
@@ -374,6 +566,7 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   recommendedPill: { alignSelf: "flex-start", backgroundColor: "#EEF2FF", color: "#4457FF", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, fontWeight: "800", fontSize: 12 },
   stagePill: { alignSelf: "flex-start", backgroundColor: "#FFF7ED", color: "#B54708", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, fontWeight: "800", fontSize: 12 },
+  successPill: { alignSelf: "flex-start", backgroundColor: "#ECFDF3", color: "#027A48", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, fontWeight: "800", fontSize: 12 },
   whyText: { color: "#344054", fontWeight: "600", lineHeight: 20 },
   tagRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tagPill: { alignSelf: "flex-start", backgroundColor: "#F2F4F7", color: "#475467", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, fontWeight: "700", fontSize: 12 },
@@ -386,12 +579,23 @@ const styles = StyleSheet.create({
   taskRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 2 },
   taskText: { color: "#344054", flex: 1 },
   taskTextDone: { color: "#667085", textDecorationLine: "line-through" },
+  proofBox: { marginTop: 6, gap: 8, borderTopWidth: 1, borderTopColor: "#E4E7EC", paddingTop: 10 },
+  uploadBtn: {
+    borderWidth: 1,
+    borderColor: "#175CD3",
+    backgroundColor: "#EFF8FF",
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: "center"
+  },
+  uploadBtnText: { color: "#175CD3", fontWeight: "800" },
+  proofImage: { width: "100%", height: 160, borderRadius: 12, borderWidth: 1, borderColor: "#D0D5DD" },
   completeText: { color: "#1F7A4C", fontWeight: "800" },
   meta: { color: "#667085", lineHeight: 20 },
   error: { color: "#B42318" },
   primaryBtn: { alignSelf: "flex-start", backgroundColor: "#1F7A4C", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11 },
   primaryBtnText: { color: "#fff", fontWeight: "800" },
   secondaryBtn: { alignSelf: "flex-start", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, backgroundColor: "#FFF3D9" },
-  secondaryBtnText: { color: "#B54708", fontWeight: "800" }
+  secondaryBtnText: { color: "#B54708", fontWeight: "800" },
+  disabledBtn: { opacity: 0.55 }
 });
-

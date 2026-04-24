@@ -13,6 +13,7 @@ import {
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
@@ -162,6 +163,37 @@ type LiveSessionItem = {
   approvalStatus?: "pending" | "approved" | "rejected";
   adminReviewNote?: string;
   mentor?: { id?: string | null; name?: string };
+};
+type InstitutionRoadmapItem = {
+  id: string;
+  title: string;
+  description?: string;
+  domain?: string;
+  status?: string;
+  weeks: Array<{ id: string; title: string; tasks?: string[] }>;
+};
+type InstitutionRoadmapSubmissionItem = {
+  id: string;
+  roadmapId?: string;
+  roadmapTitle: string;
+  weekId: string;
+  weekTitle: string;
+  status: "submitted" | "accepted" | "rejected";
+  proofText?: string;
+  proofLink?: string;
+  proofImageUrl?: string;
+  submittedAt?: string;
+  student?: {
+    id?: string | null;
+    name?: string;
+    email?: string;
+  };
+  mentorReview?: {
+    reviewedAt?: string | null;
+    notes?: string;
+    xpAwarded?: number;
+    certificateId?: string | null;
+  };
 };
 
 type SprintScheduleItem = {
@@ -397,12 +429,23 @@ export default function MentorDashboard() {
   const [verifiedMentors, setVerifiedMentors] = useState<VerifiedMentor[]>([]);
   const [challenges, setChallenges] = useState<ChallengeItem[]>([]);
   const [mentorGroups, setMentorGroups] = useState<MentorGroupItem[]>([]);
+  const [institutionRoadmaps, setInstitutionRoadmaps] = useState<InstitutionRoadmapItem[]>([]);
   const [reputationSummary, setReputationSummary] = useState<ReputationSummary | null>(null);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
   const [sprints, setSprints] = useState<SprintItem[]>([]);
   const [paidLiveBookings, setPaidLiveBookings] = useState<MentorLiveSessionBookingRecord[]>([]);
   const [paidSprintEnrollments, setPaidSprintEnrollments] = useState<MentorSprintEnrollmentRecord[]>([]);
   const [certifications, setCertifications] = useState<CertificationItem[]>([]);
+  const [institutionRoadmapTitle, setInstitutionRoadmapTitle] = useState("");
+  const [institutionRoadmapDomain, setInstitutionRoadmapDomain] = useState("");
+  const [institutionRoadmapDescription, setInstitutionRoadmapDescription] = useState("");
+  const [institutionRoadmapWeekOne, setInstitutionRoadmapWeekOne] = useState("");
+  const [institutionRoadmapWeekTwo, setInstitutionRoadmapWeekTwo] = useState("");
+  const [institutionRoadmapWeekThree, setInstitutionRoadmapWeekThree] = useState("");
+  const [creatingInstitutionRoadmap, setCreatingInstitutionRoadmap] = useState(false);
+  const [institutionRoadmapSubmissions, setInstitutionRoadmapSubmissions] = useState<InstitutionRoadmapSubmissionItem[]>([]);
+  const [institutionReviewDrafts, setInstitutionReviewDrafts] = useState<Record<string, { xpAwarded: string; notes: string; issueCertificate: boolean }>>({});
+  const [reviewingInstitutionSubmissionId, setReviewingInstitutionSubmissionId] = useState<string | null>(null);
   const [mentorNews, setMentorNews] = useState<NewsArticle[]>([]);
   const [mentorNewsLoading, setMentorNewsLoading] = useState(false);
   const [liveTitle, setLiveTitle] = useState("");
@@ -553,6 +596,83 @@ export default function MentorDashboard() {
       setMentorGrowthSection(growth as MentorGrowthSectionId);
     }
   }, [params.section, params.growth]);
+
+  const createInstitutionRoadmap = useCallback(async () => {
+    const weeks = [institutionRoadmapWeekOne, institutionRoadmapWeekTwo, institutionRoadmapWeekThree]
+      .map((title, index) => ({
+        id: `week-${index + 1}`,
+        title: String(title || "").trim(),
+        tasks: [`Complete ${String(title || `week ${index + 1}`).trim()} tasks`, "Submit proof to mentor", "Review linked resources"]
+      }))
+      .filter((item) => item.title);
+
+    if (!institutionRoadmapTitle.trim() || !weeks.length) {
+      notify("Add a roadmap title and at least one week.");
+      return;
+    }
+
+    try {
+      setCreatingInstitutionRoadmap(true);
+      await api.post("/api/network/institution-roadmaps", {
+        title: institutionRoadmapTitle.trim(),
+        description: institutionRoadmapDescription.trim(),
+        domain: institutionRoadmapDomain.trim(),
+        weeks
+      });
+      setInstitutionRoadmapTitle("");
+      setInstitutionRoadmapDescription("");
+      setInstitutionRoadmapDomain("");
+      setInstitutionRoadmapWeekOne("");
+      setInstitutionRoadmapWeekTwo("");
+      setInstitutionRoadmapWeekThree("");
+      notify("Institution roadmap created.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      handleAppError(e, { fallbackMessage: "Unable to create institution roadmap right now." });
+    } finally {
+      setCreatingInstitutionRoadmap(false);
+    }
+  }, [
+    fetchDashboard,
+    institutionRoadmapDescription,
+    institutionRoadmapDomain,
+    institutionRoadmapTitle,
+    institutionRoadmapWeekOne,
+    institutionRoadmapWeekThree,
+    institutionRoadmapWeekTwo
+  ]);
+
+  const updateInstitutionReviewDraft = useCallback((submissionId: string, patch: Partial<{ xpAwarded: string; notes: string; issueCertificate: boolean }>) => {
+    setInstitutionReviewDrafts((prev) => ({
+      ...prev,
+      [submissionId]: {
+        xpAwarded: prev[submissionId]?.xpAwarded || "",
+        notes: prev[submissionId]?.notes || "",
+        issueCertificate: prev[submissionId]?.issueCertificate || false,
+        ...patch
+      }
+    }));
+  }, []);
+
+  const reviewInstitutionSubmission = useCallback(async (submissionId: string, status: "accepted" | "rejected") => {
+    const draft = institutionReviewDrafts[submissionId] || { xpAwarded: "", notes: "", issueCertificate: false };
+    try {
+      setReviewingInstitutionSubmissionId(submissionId);
+      await api.patch(`/api/network/institution-roadmaps/submissions/${encodeURIComponent(submissionId)}/review`, {
+        status,
+        xpAwarded: status === "accepted" ? Number(draft.xpAwarded || 0) : 0,
+        notes: draft.notes,
+        issueCertificate: status === "accepted" ? draft.issueCertificate : false
+      });
+      notify(status === "accepted" ? "Submission approved." : "Submission sent back for rework.");
+      await fetchDashboard(true);
+    } catch (e: any) {
+      handleAppError(e, { fallbackMessage: "Unable to review institution roadmap submission right now." });
+    } finally {
+      setReviewingInstitutionSubmissionId(null);
+    }
+  }, [fetchDashboard, institutionReviewDrafts]);
+
   const mentorBanners = [
     {
       key: "mentor-banner-ops",
@@ -594,6 +714,8 @@ export default function MentorDashboard() {
         verifiedRes,
         challengeRes,
         groupRes,
+        institutionRoadmapsRes,
+        institutionRoadmapSubmissionsRes,
         reputationRes,
         liveSessionRes,
         sprintRes,
@@ -609,6 +731,8 @@ export default function MentorDashboard() {
         api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
         api.get<ChallengeItem[]>("/api/network/challenges"),
         api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
+        api.get<{ roadmaps: InstitutionRoadmapItem[] }>("/api/network/institution-roadmaps"),
+        api.get<InstitutionRoadmapSubmissionItem[]>("/api/network/institution-roadmaps/submissions/mentor"),
         api.get<ReputationSummary>("/api/network/reputation-summary"),
         api.get<LiveSessionItem[]>("/api/network/live-sessions"),
         api.get<SprintItem[]>("/api/network/sprints"),
@@ -663,6 +787,8 @@ export default function MentorDashboard() {
       setVerifiedMentors(verifiedRes.status === "fulfilled" ? verifiedRes.value.data || [] : []);
       setChallenges(challengeRes.status === "fulfilled" ? challengeRes.value.data || [] : []);
       setMentorGroups(groupRes.status === "fulfilled" ? groupRes.value.data || [] : []);
+      setInstitutionRoadmaps(institutionRoadmapsRes.status === "fulfilled" ? institutionRoadmapsRes.value.data?.roadmaps || [] : []);
+      setInstitutionRoadmapSubmissions(institutionRoadmapSubmissionsRes.status === "fulfilled" ? institutionRoadmapSubmissionsRes.value.data || [] : []);
       setReputationSummary(reputationRes.status === "fulfilled" ? reputationRes.value.data || null : null);
       setLiveSessions(liveSessionRes.status === "fulfilled" ? liveSessionRes.value.data || [] : []);
       setSprints(sprintRes.status === "fulfilled" ? sprintRes.value.data || [] : []);
@@ -670,7 +796,7 @@ export default function MentorDashboard() {
       setPaidLiveBookings(livePaidRes.status === "fulfilled" ? livePaidRes.value.data || [] : []);
       setPaidSprintEnrollments(sprintPaidRes.status === "fulfilled" ? sprintPaidRes.value.data || [] : []);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load mentor dashboard.");
+      setError(getAppErrorMessage(e, "Failed to load mentor dashboard."));
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -895,7 +1021,8 @@ export default function MentorDashboard() {
       notify(availabilityMode === "date" ? "Date availability slot added." : "Weekly availability slot added.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to add availability slot.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to add availability slot." });
+      setError(message);
     } finally {
       setCreatingSlot(false);
     }
@@ -909,7 +1036,8 @@ export default function MentorDashboard() {
       notify("Date blocked successfully.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to block date.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to block date." });
+      setError(message);
     } finally {
       setBlockingDate(false);
     }
@@ -935,7 +1063,8 @@ export default function MentorDashboard() {
       notify("Profile & pricing updated.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to save mentor profile.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to save mentor profile." });
+      setError(message);
     } finally {
       setSavingProfile(false);
     }
@@ -950,7 +1079,8 @@ export default function MentorDashboard() {
       setPayoutQrCodeUrl(uploadedUrl);
       notify("Payout QR uploaded.");
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Failed to upload payout QR.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to upload payout QR." });
+      setError(message);
     } finally {
       setUploadingPayoutQr(false);
     }
@@ -963,7 +1093,8 @@ export default function MentorDashboard() {
       notify(`Booking ${status}.`);
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update booking status.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to update booking status." });
+      setError(message);
     }
   }
 
@@ -981,7 +1112,8 @@ export default function MentorDashboard() {
       notify("Meeting link updated.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update meeting link.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to update meeting link." });
+      setError(message);
     }
   }
 
@@ -994,7 +1126,8 @@ export default function MentorDashboard() {
       notify("Jitsi link generated.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to generate Jitsi link.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to generate Jitsi link." });
+      setError(message);
     }
   }
 
@@ -1008,7 +1141,8 @@ export default function MentorDashboard() {
       notify(provider === "jitsi" ? "Live session Jitsi link generated." : meetingLink ? "Live session link saved." : "Live session link cleared.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update live session link.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to update live session link." });
+      setError(message);
     }
   }
 
@@ -1022,7 +1156,8 @@ export default function MentorDashboard() {
       notify(provider === "jitsi" ? "Sprint Jitsi link generated." : meetingLink ? "Sprint link saved." : "Sprint link cleared.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update sprint link.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to update sprint link." });
+      setError(message);
     }
   }
 
@@ -1033,7 +1168,8 @@ export default function MentorDashboard() {
       notify("Session marked as completed.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to mark session completed.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to mark session completed." });
+      setError(message);
     }
   }
 
@@ -1044,7 +1180,8 @@ export default function MentorDashboard() {
       notify("Payout confirmed.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to confirm payout.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to confirm payout." });
+      setError(message);
     }
   }
 
@@ -1056,7 +1193,8 @@ export default function MentorDashboard() {
       notify("Payout issue reported to admin.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to report payout issue.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to report payout issue." });
+      setError(message);
     }
   }
 
@@ -1067,7 +1205,8 @@ export default function MentorDashboard() {
       notify("Sprint payout confirmed.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to confirm sprint payout.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to confirm sprint payout." });
+      setError(message);
     }
   }
 
@@ -1079,7 +1218,8 @@ export default function MentorDashboard() {
       notify("Sprint payout issue reported to admin.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to report sprint payout issue.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to report sprint payout issue." });
+      setError(message);
     }
   }
 
@@ -1096,7 +1236,8 @@ export default function MentorDashboard() {
       notify("Message sent to admin.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to send message to admin.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to send message to admin." });
+      setError(message);
     } finally {
       setSendingMessage(false);
     }
@@ -1148,7 +1289,8 @@ export default function MentorDashboard() {
       notify("Live session submitted for admin approval.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to create live session.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to create live session." });
+      setError(message);
     } finally {
       setCreatingLiveSession(false);
     }
@@ -1163,7 +1305,8 @@ export default function MentorDashboard() {
       setLivePosterImageUrl(uploadedUrl);
       notify("Poster uploaded.");
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Failed to upload poster.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to upload poster." });
+      setError(message);
     } finally {
       setUploadingLivePoster(false);
     }
@@ -1178,7 +1321,8 @@ export default function MentorDashboard() {
       setSprintPosterImageUrl(uploadedUrl);
       notify("Sprint poster uploaded.");
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Failed to upload sprint poster.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to upload sprint poster." });
+      setError(message);
     } finally {
       setUploadingSprintPoster(false);
     }
@@ -1200,7 +1344,8 @@ export default function MentorDashboard() {
       );
       notify("Sprint curriculum uploaded.");
     } catch (e: any) {
-      setError(e?.response?.data?.message || e?.message || "Failed to upload curriculum.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to upload curriculum." });
+      setError(message);
     } finally {
       setUploadingSprintDocument(false);
     }
@@ -1266,7 +1411,8 @@ export default function MentorDashboard() {
       notify("Sprint submitted for admin approval.");
       await fetchDashboard(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to create sprint.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to create sprint." });
+      setError(message);
     } finally {
       setCreatingSprint(false);
     }
@@ -2209,6 +2355,98 @@ export default function MentorDashboard() {
                     {group.name} | {group.membersCount || 0} students | {group.schedule || "Weekly"}
                   </Text>
                 ))
+            )}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={[styles.title, { color: colors.text }]}>Institution Roadmaps</Text>
+            <TextInput style={styles.input} placeholder="Roadmap title" value={institutionRoadmapTitle} onChangeText={setInstitutionRoadmapTitle} />
+            <TextInput style={styles.input} placeholder="Domain (optional)" value={institutionRoadmapDomain} onChangeText={setInstitutionRoadmapDomain} />
+            <TextInput style={styles.input} placeholder="Roadmap description" value={institutionRoadmapDescription} onChangeText={setInstitutionRoadmapDescription} multiline />
+            <TextInput style={styles.input} placeholder="Week 1 title" value={institutionRoadmapWeekOne} onChangeText={setInstitutionRoadmapWeekOne} />
+            <TextInput style={styles.input} placeholder="Week 2 title" value={institutionRoadmapWeekTwo} onChangeText={setInstitutionRoadmapWeekTwo} />
+            <TextInput style={styles.input} placeholder="Week 3 title" value={institutionRoadmapWeekThree} onChangeText={setInstitutionRoadmapWeekThree} />
+            <TouchableOpacity style={styles.actionBtn} onPress={createInstitutionRoadmap} disabled={creatingInstitutionRoadmap}>
+              <Text style={styles.actionText}>{creatingInstitutionRoadmap ? "Creating..." : "Create Institution Roadmap"}</Text>
+            </TouchableOpacity>
+            {institutionRoadmaps.length === 0 ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No institution roadmaps created yet.</Text>
+            ) : (
+              institutionRoadmaps.slice(0, 5).map((item) => (
+                <Text key={item.id} style={styles.meta}>
+                  {item.title} | {item.weeks.length} weeks | {item.status || "published"}
+                </Text>
+              ))
+            )}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={[styles.title, { color: colors.text }]}>Institution Roadmap Reviews</Text>
+            {institutionRoadmapSubmissions.length === 0 ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No student submissions yet.</Text>
+            ) : (
+              institutionRoadmapSubmissions.slice(0, 8).map((item) => {
+                const reviewDraft = institutionReviewDrafts[item.id] || {
+                  xpAwarded: String(item.mentorReview?.xpAwarded || ""),
+                  notes: item.mentorReview?.notes || "",
+                  issueCertificate: Boolean(item.mentorReview?.certificateId)
+                };
+                return (
+                  <View key={item.id} style={styles.liveSessionCard}>
+                    <Text style={[styles.liveSessionTitle, { color: colors.text }]}>{item.roadmapTitle}</Text>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>
+                      {item.weekTitle} | {item.student?.name || "Student"} {item.student?.email ? `| ${item.student.email}` : ""}
+                    </Text>
+                    <Text style={[styles.meta, { color: colors.textMuted }]}>Status: {item.status}</Text>
+                    {item.proofText ? <Text style={[styles.meta, { color: colors.textMuted }]}>Proof: {item.proofText}</Text> : null}
+                    {item.proofLink ? <Text style={[styles.meta, { color: colors.textMuted }]}>Link: {item.proofLink}</Text> : null}
+                    {item.proofImageUrl ? <Image source={{ uri: item.proofImageUrl }} style={styles.livePosterPreview} /> : null}
+                    <TextInput
+                      style={styles.input}
+                      placeholder="XP to award"
+                      keyboardType="numeric"
+                      value={reviewDraft.xpAwarded}
+                      onChangeText={(value) => updateInstitutionReviewDraft(item.id, { xpAwarded: value })}
+                    />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Mentor review note"
+                      value={reviewDraft.notes}
+                      onChangeText={(value) => updateInstitutionReviewDraft(item.id, { notes: value })}
+                      multiline
+                    />
+                    <TouchableOpacity
+                      style={[styles.dayChip, reviewDraft.issueCertificate && styles.dayChipActive]}
+                      onPress={() => updateInstitutionReviewDraft(item.id, { issueCertificate: !reviewDraft.issueCertificate })}
+                    >
+                      <Text style={[styles.dayChipText, reviewDraft.issueCertificate && styles.dayChipTextActive]}>
+                        {reviewDraft.issueCertificate ? "Certificate: Yes" : "Issue Certificate"}
+                      </Text>
+                    </TouchableOpacity>
+                    <View style={styles.actions}>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.approveButton]}
+                        onPress={() => reviewInstitutionSubmission(item.id, "accepted")}
+                        disabled={reviewingInstitutionSubmissionId === item.id}
+                      >
+                        <Text style={styles.actionText}>{reviewingInstitutionSubmissionId === item.id ? "Saving..." : "Approve + XP"}</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.actionButton, styles.rejectButton]}
+                        onPress={() => reviewInstitutionSubmission(item.id, "rejected")}
+                        disabled={reviewingInstitutionSubmissionId === item.id}
+                      >
+                        <Text style={styles.actionText}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                    {item.mentorReview?.reviewedAt ? (
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
+                        Reviewed: {new Date(item.mentorReview.reviewedAt).toLocaleString("en-IN")}
+                      </Text>
+                    ) : null}
+                  </View>
+                );
+              })
             )}
           </View>
 

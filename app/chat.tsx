@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  InteractionManager,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,6 +17,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import GlobalHeader from "@/components/global-header";
@@ -217,14 +219,6 @@ export default function ChatScreen() {
     return next;
   }, [circleContacts, confirmedMentors, conversations]);
 
-  useEffect(() => {
-    if (!filteredConversations.length || activeUserId) return;
-    const stillVisible = filteredConversations.some((item) => item.counterpartId === activeUserId);
-    if (!stillVisible) {
-      setActiveUserId(filteredConversations[0].counterpartId);
-    }
-  }, [activeUserId, filteredConversations]);
-
   const lastOutgoingMessageId = useMemo(() => {
     const lastMine = [...messages].reverse().find((item) => item.sender === user?.id);
     return lastMine?._id || "";
@@ -253,72 +247,81 @@ export default function ChatScreen() {
     }
   }, [requestedTab]);
 
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (options?: { includeContacts?: boolean; includeGroups?: boolean }) => {
+    const includeContacts = options?.includeContacts ?? true;
+    const includeGroups = options?.includeGroups ?? true;
     try {
       setError(null);
-      const [conversationRes, sessionsRes, groupsRes] = await Promise.all([
+      const [conversationRes, groupsRes] = await Promise.all([
         api.get<Conversation[]>("/api/chat/conversations"),
-        user?.role === "student"
-          ? api.get<StudentSession[]>("/api/sessions/student/me")
-          : Promise.resolve({ data: [] as StudentSession[] }),
-        api.get<MentorGroup[]>("/api/network/mentor-groups").catch(() => ({ data: [] as MentorGroup[] }))
+        includeGroups
+          ? api.get<MentorGroup[]>("/api/network/mentor-groups").catch(() => ({ data: [] as MentorGroup[] }))
+          : Promise.resolve({ data: mentorGroups })
       ]);
 
       const data = conversationRes.data || [];
       setConversations(data);
       setMentorGroups(groupsRes.data || []);
 
-      if (user?.role === "student") {
-        const mentorMap = new Map<string, CounterpartUser>();
-        (sessionsRes.data || []).forEach((session) => {
-          const mentor = session.mentorId;
-          if (!mentor?._id) return;
-          const isConfirmedSession = session.sessionStatus === "confirmed";
-          const isPaid = session.paymentStatus === "paid" || session.paymentStatus === "verified";
-          if (!isConfirmedSession || !isPaid) return;
-          mentorMap.set(mentor._id, {
-            _id: mentor._id,
-            name: mentor.name || "Mentor",
-            email: mentor.email || "",
-            role: "mentor",
-            status: "approved",
-            profilePhotoUrl: mentor.profilePhotoUrl || ""
-          });
+      if (!includeContacts) return;
+
+      InteractionManager.runAfterInteractions(() => {
+        Promise.allSettled([
+          user?.role === "student"
+            ? api.get<StudentSession[]>("/api/sessions/student/me")
+            : Promise.resolve({ data: [] as StudentSession[] }),
+          api.get<ConnectionRow[]>("/api/network/connections?status=accepted")
+        ]).then(([sessionsResult, connectionsResult]) => {
+          if (sessionsResult.status === "fulfilled" && user?.role === "student") {
+            const mentorMap = new Map<string, CounterpartUser>();
+            (sessionsResult.value.data || []).forEach((session) => {
+              const mentor = session.mentorId;
+              if (!mentor?._id) return;
+              const isConfirmedSession = session.sessionStatus === "confirmed";
+              const isPaid = session.paymentStatus === "paid" || session.paymentStatus === "verified";
+              if (!isConfirmedSession || !isPaid) return;
+              mentorMap.set(mentor._id, {
+                _id: mentor._id,
+                name: mentor.name || "Mentor",
+                email: mentor.email || "",
+                role: "mentor",
+                status: "approved",
+                profilePhotoUrl: mentor.profilePhotoUrl || ""
+              });
+            });
+            setConfirmedMentors(Array.from(mentorMap.values()));
+          } else if (user?.role !== "student") {
+            setConfirmedMentors([]);
+          }
+
+          if (connectionsResult.status === "fulfilled") {
+            const me = String(user?.id || "");
+            const nextCircle = (connectionsResult.value.data || [])
+              .map((item) => {
+                const requesterId = String(item?.requesterId?._id || "");
+                const recipientId = String(item?.recipientId?._id || "");
+                const other = requesterId === me ? item?.recipientId : recipientId === me ? item?.requesterId : null;
+                if (!other?._id || String(other.role || "").toLowerCase() === "mentor") return null;
+                return {
+                  _id: other._id,
+                  name: other.name || "Connection",
+                  email: "",
+                  role: (other.role || "student") as CounterpartUser["role"],
+                  status: "approved" as const,
+                  profilePhotoUrl: other.profilePhotoUrl || ""
+                };
+              })
+              .filter((item): item is CounterpartUser => Boolean(item));
+            setCircleContacts(nextCircle);
+          }
         });
-        setConfirmedMentors(Array.from(mentorMap.values()));
-      } else {
-        setConfirmedMentors([]);
-      }
-
-      const acceptedConnectionsRes = await api.get<ConnectionRow[]>("/api/network/connections?status=accepted");
-      const me = String(user?.id || "");
-      const nextCircle = (acceptedConnectionsRes.data || [])
-        .map((item) => {
-          const requesterId = String(item?.requesterId?._id || "");
-          const recipientId = String(item?.recipientId?._id || "");
-          const other = requesterId === me ? item?.recipientId : recipientId === me ? item?.requesterId : null;
-          if (!other?._id || String(other.role || "").toLowerCase() === "mentor") return null;
-          return {
-            _id: other._id,
-            name: other.name || "Connection",
-            email: "",
-            role: (other.role || "student") as CounterpartUser["role"],
-            status: "approved" as const,
-            profilePhotoUrl: other.profilePhotoUrl || ""
-          };
-        })
-        .filter((item): item is CounterpartUser => Boolean(item));
-      setCircleContacts(nextCircle);
-
-      if (!activeUserId && data.length > 0) {
-        setActiveUserId(data[0].counterpartId);
-      }
+      });
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load chats.");
+      setError(getAppErrorMessage(e, "Failed to load chats."));
     } finally {
       setLoading(false);
     }
-  }, [activeUserId, user?.role]);
+  }, [mentorGroups, user?.id, user?.role]);
 
   const loadThread = useCallback(async () => {
     if (!activeUserId) {
@@ -356,7 +359,13 @@ export default function ChatScreen() {
       setActiveUser(counterpart);
       setActiveTyping(Boolean(typingRes.data?.isTyping));
       setMessages(data.messages || []);
-      await api.patch(`/api/chat/messages/${activeUserId}/read`);
+
+      const hasUnreadIncoming =
+        Boolean(activeConversation?.unreadCount) ||
+        (data.messages || []).some((item) => item.sender === activeUserId && !item.readAt);
+      if (hasUnreadIncoming) {
+        await api.patch(`/api/chat/messages/${activeUserId}/read`);
+      }
     } catch (e: any) {
       if (knownUser) {
         setMessages([]);
@@ -364,14 +373,14 @@ export default function ChatScreen() {
         setError(null);
         return;
       }
-      setError(e?.response?.data?.message || "Failed to load messages.");
+      setError(getAppErrorMessage(e, "Failed to load messages."));
     }
-  }, [activeUserId, contactLookup]);
+  }, [activeConversation?.unreadCount, activeUserId, contactLookup]);
 
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      loadConversations();
+      loadConversations({ includeContacts: true, includeGroups: true });
     }, [loadConversations])
   );
 
@@ -403,23 +412,21 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!activeUserId) return;
     const interval = setInterval(() => {
-      loadConversations();
+      loadConversations({ includeContacts: false, includeGroups: activeTab === "Mentor Groups" });
       loadThread();
-    }, 5000);
+    }, 8000);
     return () => clearInterval(interval);
-  }, [activeUserId, loadConversations, loadThread]);
+  }, [activeTab, activeUserId, loadConversations, loadThread]);
 
   useEffect(() => {
     let cancelled = false;
     const missingIds = Array.from(
       new Set(
         [
-          ...circleContacts.filter((item) => !item.profilePhotoUrl).map((item) => String(item._id || "").trim()),
-          ...conversations.filter((item) => !item.counterpart.profilePhotoUrl).map((item) => String(item.counterpartId || "").trim()),
-          activeUser && !activeUser.profilePhotoUrl ? String(activeUser._id || "").trim() : ""
+          ...circleContacts.filter((item) => !item.profilePhotoUrl).map((item) => String(item._id || "").trim())
         ].filter((id) => id && !profilePhotoById[id])
       )
-    ).slice(0, 18);
+    ).slice(0, 6);
 
     if (missingIds.length === 0) return;
 
@@ -453,7 +460,7 @@ export default function ChatScreen() {
     return () => {
       cancelled = true;
     };
-  }, [activeUser, circleContacts, conversations, profilePhotoById]);
+  }, [circleContacts, profilePhotoById]);
 
   useEffect(() => {
     return () => {
@@ -522,7 +529,8 @@ export default function ChatScreen() {
       await loadThread();
       await loadConversations();
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to send message.");
+      const message = handleAppError(e, { fallbackMessage: "Failed to send message." });
+      setError(message);
     } finally {
       setSending(false);
     }
@@ -577,7 +585,7 @@ export default function ChatScreen() {
       await api.delete(`/api/chat/messages/item/${message._id}`);
       await loadThread();
     } catch (e: any) {
-      Alert.alert("Delete failed", e?.response?.data?.message || "Could not delete this message.");
+      handleAppError(e, { mode: "alert", title: "Delete failed", fallbackMessage: "Could not delete this message." });
     }
   }
 
@@ -830,7 +838,7 @@ export default function ChatScreen() {
                               await api.post(`/api/network/mentor-groups/${group.id}/join`);
                               loadConversations();
                             } catch (e: any) {
-                              Alert.alert("Request failed", e?.response?.data?.message || "Unable to send join request.");
+                              handleAppError(e, { mode: "alert", title: "Request failed", fallbackMessage: "Unable to send join request." });
                             }
                           }}
                         >

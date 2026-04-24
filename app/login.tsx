@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { ActivityIndicator, Alert, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,15 +33,8 @@ export default function LoginScreen() {
       setIsSubmitting(true);
       setError(null);
       await login({ email: email.trim().toLowerCase(), password });
-      Alert.alert("Login Successful", "Welcome back to ORIN.", [
-        {
-          text: "Continue",
-          onPress: () => {
-            resetForm();
-            router.replace("/" as never);
-          }
-        }
-      ]);
+      // Avoid alert-driven navigation races on Android. Root layout will redirect to the correct Home route.
+      resetForm();
     } catch (e: any) {
       const message = e?.response?.data?.message || "Login failed. Please check your credentials.";
       setError(message);

@@ -1,8 +1,9 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Dimensions,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -19,6 +20,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { sharePost } from "@/utils/sharePost";
 import { sanitizeDisplayText } from "@/utils/textSanitize";
@@ -109,6 +111,7 @@ export default function PostsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const insets = useSafeAreaInsets();
+  const scrollRef = useRef<ScrollView | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [openCommentFor, setOpenCommentFor] = useState<Record<string, boolean>>({});
@@ -130,6 +133,23 @@ export default function PostsScreen() {
     comments: []
   });
   const [loadingComments, setLoadingComments] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const hasOpenCommentComposer = useMemo(() => Object.values(openCommentFor).some(Boolean), [openCommentFor]);
+
+  React.useEffect(() => {
+    const onShow = (e: any) => {
+      const height = Number(e?.endCoordinates?.height || 0);
+      setKeyboardHeight(height > 0 ? height : 0);
+    };
+    const onHide = () => setKeyboardHeight(0);
+
+    const showSub = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", onShow);
+    const hideSub = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", onHide);
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
 
   const loadPosts = useCallback(async (refresh = false) => {
     try {
@@ -146,7 +166,7 @@ export default function PostsScreen() {
         if (status === 404 || message.toLowerCase().includes("route not found")) {
           const fallback = await api.get<Post[]>("/api/network/feed");
           data = (fallback.data || []).filter((post) => post?.postType || post?.content);
-          setError("Public feed route not deployed yet. Showing latest feed.");
+          setError("Public posts are still syncing. Showing the latest feed instead.");
         } else {
           throw e;
         }
@@ -159,7 +179,7 @@ export default function PostsScreen() {
       });
       setFollowingState((prev) => ({ ...followMap, ...prev }));
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load public posts.");
+      setError(getAppErrorMessage(e, "Something went wrong. Please try again."));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -227,7 +247,7 @@ export default function PostsScreen() {
       setReactionMenuFor(null);
     } catch (e: any) {
       setPosts(prevPosts);
-      setError(e?.response?.data?.message || `Failed to ${action} post.`);
+      handleAppError(e, { fallbackMessage: `Unable to ${action} this post right now.` });
     }
   }
 
@@ -239,7 +259,7 @@ export default function PostsScreen() {
       setCommentDrafts((prev) => ({ ...prev, [postId]: "" }));
       await loadPosts(true);
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to comment.");
+      handleAppError(e, { fallbackMessage: "Unable to post your comment right now." });
     }
   }
 
@@ -250,7 +270,7 @@ export default function PostsScreen() {
       const { data } = await api.get<PostComment[]>(`/api/network/feed/${postId}/comments`);
       setCommentsModal({ visible: true, postId, comments: data || [] });
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load comments.");
+      handleAppError(e, { fallbackMessage: "Unable to load comments right now." });
     } finally {
       setLoadingComments(false);
     }
@@ -261,7 +281,7 @@ export default function PostsScreen() {
       const { data } = await api.post<{ following: boolean }>(`/api/network/follow/${targetId}`);
       setFollowingState((prev) => ({ ...prev, [targetId]: Boolean(data?.following) }));
     } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to update follow.");
+      handleAppError(e, { fallbackMessage: "Unable to update follow right now." });
     }
   }
 
@@ -282,7 +302,16 @@ export default function PostsScreen() {
     <>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}>
         <ScrollView
-          contentContainerStyle={[styles.container, { paddingBottom: FEED_BOTTOM_NAV_SPACE + insets.bottom }]}
+          ref={scrollRef}
+          contentContainerStyle={[
+            styles.container,
+            {
+              paddingBottom:
+                FEED_BOTTOM_NAV_SPACE +
+                insets.bottom +
+                (hasOpenCommentComposer ? Math.max(0, keyboardHeight - insets.bottom) + 24 : 0)
+            }
+          ]}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadPosts(true)} />}
           keyboardShouldPersistTaps="handled"
         >
@@ -430,7 +459,13 @@ export default function PostsScreen() {
                     style={styles.actionBtn}
                     onPress={() => {
                       setReactionMenuFor(null);
-                      setOpenCommentFor((prev) => ({ ...prev, [post._id]: !prev[post._id] }));
+                      setOpenCommentFor((prev) => {
+                        const nextOpen = !prev[post._id];
+                        if (nextOpen) {
+                          setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 180);
+                        }
+                        return { ...prev, [post._id]: nextOpen };
+                      });
                     }}
                   >
                     <Ionicons name="chatbubble-outline" size={16} color="#475467" />
@@ -462,6 +497,7 @@ export default function PostsScreen() {
                       placeholder="Add comment..."
                       value={commentDrafts[post._id] || ""}
                       onChangeText={(text) => setCommentDrafts((prev) => ({ ...prev, [post._id]: text }))}
+                      onFocus={() => setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 180)}
                     />
                     <TouchableOpacity onPress={() => comment(post._id)}>
                       <Text style={styles.action}>Post</Text>

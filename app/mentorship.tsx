@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
+import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GlobalHeader from "@/components/global-header";
@@ -145,8 +146,8 @@ export default function MentorshipHubScreen() {
       setSessionHistory(historyRes.status === "fulfilled" ? historyRes.value.data || [] : []);
       setSessions(sessionsRes.status === "fulfilled" ? sessionsRes.value.data || [] : []);
       setBookings(bookingsRes.status === "fulfilled" ? bookingsRes.value.data || [] : []);
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Failed to load mentorship modules.");
+      } catch (e: any) {
+        setError(getAppErrorMessage(e, "Something went wrong. Please try again."));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -252,7 +253,7 @@ export default function MentorshipHubScreen() {
           )
         );
       } catch (e: any) {
-        setError(e?.response?.data?.message || "Failed to update interest.");
+        handleAppError(e, { fallbackMessage: "Unable to update interest right now." });
       } finally {
         setTogglingInterestId(null);
       }
@@ -329,7 +330,11 @@ export default function MentorshipHubScreen() {
         });
         await loadData(true);
       } catch (e: any) {
-        Alert.alert("Live session", e?.response?.data?.message || e?.description || "Payment not completed.");
+        handleAppError(e, {
+          mode: "alert",
+          title: "Live session",
+          fallbackMessage: "Payment failed. Please try again or use a different method."
+        });
         await loadData(true);
       }
     },
@@ -401,7 +406,11 @@ export default function MentorshipHubScreen() {
         });
         await loadData(true);
       } catch (e: any) {
-        Alert.alert("Sprint", e?.response?.data?.message || e?.description || "Enrollment not completed.");
+        handleAppError(e, {
+          mode: "alert",
+          title: "Sprint",
+          fallbackMessage: "Payment failed. Please try again or use a different method."
+        });
         await loadData(true);
       }
     },

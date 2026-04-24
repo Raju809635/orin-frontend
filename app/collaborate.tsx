@@ -10,6 +10,7 @@ import {
   View
 } from "react-native";
 import { api } from "@/lib/api";
+import { handleAppError } from "@/lib/appError";
 
 type CollaborateType = "leader" | "founder" | "mentor";
 type ApplicationStatus = "pending" | "approved" | "rejected";
@@ -87,7 +88,7 @@ export default function CollaborateScreen() {
       setExpectations("");
       await fetchStatus(email.trim().toLowerCase());
     } catch (error: any) {
-      Alert.alert("Unable to submit", error?.response?.data?.message || "Please try again.");
+      handleAppError(error, { mode: "alert", title: "Unable to submit", fallbackMessage: "Please try again." });
     } finally {
       setSubmitting(false);
     }
@@ -107,7 +108,7 @@ export default function CollaborateScreen() {
       });
       setApplications(response.data || []);
     } catch (error: any) {
-      Alert.alert("Unable to fetch", error?.response?.data?.message || "Please try again.");
+      handleAppError(error, { mode: "alert", title: "Unable to fetch", fallbackMessage: "Please try again." });
     } finally {
       setChecking(false);
     }
