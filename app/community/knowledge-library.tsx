@@ -16,7 +16,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
@@ -104,6 +104,7 @@ export default function CommunityLibraryPage() {
   const { user } = useAuth();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ section?: string }>();
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [institutionItems, setInstitutionItems] = useState<LibraryItem[]>([]);
@@ -130,6 +131,25 @@ export default function CommunityLibraryPage() {
     bannerImageUrl: "",
     documentUrl: ""
   });
+
+  useEffect(() => {
+    const requestedSection = String(params.section || "").trim().toLowerCase();
+    if (requestedSection === "institution") {
+      setDrawerSection("institution");
+    } else if (requestedSection === "domain") {
+      setDrawerSection("domain");
+    } else if (requestedSection === "saved") {
+      setDrawerSection("saved");
+    } else if (requestedSection === "recent") {
+      setDrawerSection("recent");
+    } else if (requestedSection === "trending") {
+      setDrawerSection("trending");
+    } else if (requestedSection === "recommended") {
+      setDrawerSection("recommended");
+    } else if (requestedSection === "roadmap") {
+      setDrawerSection("roadmap");
+    }
+  }, [params.section]);
 
   const load = useCallback(async (refresh = false) => {
     try {

@@ -501,6 +501,7 @@ export default function StudentDashboard() {
   const [institutionRoadmaps, setInstitutionRoadmaps] = useState<InstitutionRoadmapItem[]>([]);
   const [studentInstitutionName, setStudentInstitutionName] = useState("");
   const [studentClassName, setStudentClassName] = useState("");
+  const [institutionExpanded, setInstitutionExpanded] = useState(false);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
   const [sprints, setSprints] = useState<SprintItem[]>([]);
   const [togglingLiveInterestId, setTogglingLiveInterestId] = useState<string | null>(null);
@@ -1641,59 +1642,67 @@ export default function StudentDashboard() {
         ))}
       </ScrollView>
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>My Institution</Text>
       <View style={[styles.institutionHubCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <View style={styles.institutionHubHeader}>
-          <View style={styles.institutionHubBadge}>
-            <Text style={styles.institutionHubBadgeText}>Institution</Text>
+        <TouchableOpacity activeOpacity={0.92} style={styles.institutionHubHeaderRow} onPress={() => setInstitutionExpanded((prev) => !prev)}>
+          <View style={styles.institutionHubHeader}>
+            <View style={[styles.institutionHubBadge, { backgroundColor: isDark ? "rgba(99,102,241,0.18)" : "#EEF2FF" }]}>
+              <Text style={[styles.institutionHubBadgeText, { color: isDark ? "#C7D2FE" : "#1849A9" }]}>Institution</Text>
+            </View>
+            <Text style={[styles.institutionHubTitle, { color: colors.text }]}>My Institution</Text>
+            <Text style={[styles.institutionHubMeta, { color: colors.textMuted }]}>
+              {studentInstitutionName
+                ? `${studentInstitutionName}${studentClassName ? ` - Class ${studentClassName}` : ""}`
+                : "Add your institution in profile to unlock school-specific feeds, resources, and roadmaps."}
+            </Text>
           </View>
-          <Text style={[styles.institutionHubTitle, { color: colors.text }]}>{studentInstitutionName || "Add your institution in profile"}</Text>
-          <Text style={[styles.institutionHubMeta, { color: colors.textMuted }]}>
-            {studentClassName ? `Class: ${studentClassName}` : "Class is optional and can be added later in profile."}
-          </Text>
-        </View>
-        <View style={styles.institutionTileGrid}>
-          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/network?section=institution" as never)}>
-            <Text style={styles.institutionTileTitle}>Institution Feed</Text>
-            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>Posts only from your institution</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/leaderboard" as never)}>
-            <Text style={styles.institutionTileTitle}>Institution Leaderboard</Text>
-            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-              {leaderboard?.collegeTop?.length ? `${leaderboard.collegeTop.length} active ranks visible` : "Track your institution rank"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => setGrowthSubSection("ai")}>
-            <Text style={styles.institutionTileTitle}>Institution Mentors</Text>
-            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-              {verifiedMentors.length ? `${verifiedMentors.length} mentors in guidance pool` : "Mentor list grows as school network expands"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/ai/career-roadmap" as never)}>
-            <Text style={styles.institutionTileTitle}>Institution Roadmaps</Text>
-            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-              {institutionRoadmaps.length ? `${institutionRoadmaps.length} roadmap${institutionRoadmaps.length === 1 ? "" : "s"} available` : "Open mentor-guided roadmaps"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/certifications" as never)}>
-            <Text style={styles.institutionTileTitle}>Institution Certificates</Text>
-            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-              {certifications.length ? `${certifications.length} certificates earned` : "See institution-issued recognition"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/knowledge-library" as never)}>
-            <Text style={styles.institutionTileTitle}>Institution Resources</Text>
-            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-              {institutionKnowledgeLibrary.length ? `${institutionKnowledgeLibrary.length} resource${institutionKnowledgeLibrary.length === 1 ? "" : "s"} shared` : "School resources will appear here"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/challenges" as never)}>
-            <Text style={styles.institutionTileTitle}>Institution Competitions</Text>
-            <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-              {challenges.length ? `${challenges.length} active challenge${challenges.length === 1 ? "" : "s"}` : "School competitions will appear here"}
-            </Text>
-          </TouchableOpacity>
-        </View>
+          <View style={[styles.institutionExpandBtn, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name={institutionExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} />
+          </View>
+        </TouchableOpacity>
+        {institutionExpanded ? (
+          <View style={styles.institutionTileGrid}>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/network?section=institution" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#86EFAC" : "#163A2A" }]}>Institution Feed</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>Posts only from your institution</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/leaderboard" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#93C5FD" : "#163A2A" }]}>Institution Leaderboard</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {leaderboard?.collegeTop?.length ? `${leaderboard.collegeTop.length} active ranks visible` : "Track your institution rank"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/mentorship?section=interaction" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#C4B5FD" : "#163A2A" }]}>Institution Mentors</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {verifiedMentors.length ? `${verifiedMentors.length} mentors in guidance pool` : "Mentor list grows as school network expands"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/ai/career-roadmap?section=institution" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#FDE68A" : "#163A2A" }]}>Institution Roadmaps</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {institutionRoadmaps.length ? `${institutionRoadmaps.length} roadmap${institutionRoadmaps.length === 1 ? "" : "s"} available` : "Open mentor-guided roadmaps"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/certifications" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#F9A8D4" : "#163A2A" }]}>Institution Certificates</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {certifications.length ? `${certifications.length} certificates earned` : "See institution-issued recognition"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/knowledge-library?section=institution" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#F0ABFC" : "#163A2A" }]}>Institution Resources</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {institutionKnowledgeLibrary.length ? `${institutionKnowledgeLibrary.length} resource${institutionKnowledgeLibrary.length === 1 ? "" : "s"} shared` : "School resources will appear here"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/challenges" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#FDBA74" : "#163A2A" }]}>Institution Competitions</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {challenges.length ? `${challenges.length} active challenge${challenges.length === 1 ? "" : "s"}` : "School competitions will appear here"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.sectionHeaderRow}>
@@ -2984,6 +2993,12 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 12
   },
+  institutionHubHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
   institutionHubHeader: { gap: 4 },
   institutionHubBadge: {
     alignSelf: "flex-start",
@@ -2992,9 +3007,17 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: "#EEF4FF"
   },
-  institutionHubBadgeText: { color: "#1849A9", fontWeight: "800", fontSize: 12 },
-  institutionHubTitle: { color: "#0F172A", fontWeight: "800", fontSize: 18 },
-  institutionHubMeta: { color: "#667085", fontWeight: "600" },
+  institutionHubBadgeText: { fontWeight: "800", fontSize: 12 },
+  institutionHubTitle: { fontWeight: "800", fontSize: 18 },
+  institutionHubMeta: { fontWeight: "600" },
+  institutionExpandBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
   institutionTileGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   institutionTile: {
     width: "48%",
@@ -3006,8 +3029,8 @@ const styles = StyleSheet.create({
     padding: 12,
     gap: 6
   },
-  institutionTileTitle: { color: "#163A2A", fontWeight: "800", fontSize: 14 },
-  institutionTileMeta: { color: "#667085", fontWeight: "600", fontSize: 12, lineHeight: 18 },
+  institutionTileTitle: { fontWeight: "800", fontSize: 14 },
+  institutionTileMeta: { fontWeight: "600", fontSize: 12, lineHeight: 18 },
   roadmapGoal: { color: "#1849A9", fontWeight: "800", marginBottom: 8 },
   roadmapStep: { color: "#344054", marginBottom: 4, fontWeight: "600" },
   opportunityWrap: { gap: 9, marginBottom: 10 },

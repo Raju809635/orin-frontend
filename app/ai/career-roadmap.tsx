@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View
 } from "react-native";
+import { useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
@@ -141,6 +142,7 @@ function formatRoadmapDate(value?: string | null) {
 export default function AiCareerRoadmapPage() {
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ section?: string }>();
   const [domainTree, setDomainTree] = useState<DomainTreeResponse | null>(FALLBACK_DOMAIN_TREE);
   const [primaryCategory, setPrimaryCategory] = useState(FALLBACK_DOMAIN_TREE.primaryCategories?.[0] || "");
   const [subCategory, setSubCategory] = useState((FALLBACK_DOMAIN_TREE.subCategoriesByPrimary?.[FALLBACK_DOMAIN_TREE.primaryCategories?.[0] || ""] || [])[0] || "");
@@ -172,6 +174,19 @@ export default function AiCareerRoadmapPage() {
   const [drawerSection, setDrawerSection] = useState<RoadmapDrawerSection>("ai");
   const [recentInstitutionRoadmapIds, setRecentInstitutionRoadmapIds] = useState<string[]>([]);
   const initialLoadRef = useRef(false);
+
+  useEffect(() => {
+    const requestedSection = String(params.section || "").trim().toLowerCase();
+    if (requestedSection === "institution") {
+      setDrawerSection("institution");
+    } else if (requestedSection === "completed") {
+      setDrawerSection("completed");
+    } else if (requestedSection === "recent") {
+      setDrawerSection("recent");
+    } else if (requestedSection === "ai") {
+      setDrawerSection("ai");
+    }
+  }, [params.section]);
 
   useEffect(() => {
     let mounted = true;
@@ -280,6 +295,7 @@ export default function AiCareerRoadmapPage() {
   );
   const completedCount = completedSteps.length;
   const totalSteps = data?.steps.length || 0;
+  const hasRoadmapData = totalSteps > 0;
   const progressPct = Number(data?.progress?.progressPercent || (totalSteps ? Math.round((completedCount / totalSteps) * 100) : 0));
   const totalXp = completedCount * MISSION_XP;
   const currentMission = data?.steps.find((step) => step.status === "active") || null;
@@ -784,7 +800,17 @@ export default function AiCareerRoadmapPage() {
           <Ionicons name="flash" size={16} color={AI_TEAL} />
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Today&apos;s Mission</Text>
         </View>
-        {currentMission ? (
+        {!hasRoadmapData ? (
+          <View style={[styles.doneCard, { backgroundColor: isDark ? colors.surfaceAlt : "#F7FFF9", borderColor: colors.border }]}>
+            <Text style={[styles.doneTitle, { color: colors.text }]}>Roadmap not loaded</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
+              {error || "Generate or refresh your roadmap to see the next mission here."}
+            </Text>
+            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_TEAL }]} onPress={() => load(true)}>
+              <Text style={styles.primaryBtnText}>Generate Journey</Text>
+            </TouchableOpacity>
+          </View>
+        ) : currentMission ? (
           <LinearGradient colors={["#FFF9E8", "#FFF2CC"]} style={styles.todayCard}>
             <View style={styles.todayHeader}>
               <Text style={styles.todayTag}>Today&apos;s Task</Text>
@@ -1197,12 +1223,24 @@ export default function AiCareerRoadmapPage() {
           <Text style={styles.sectionTitle}>Actions</Text>
         </View>
         <View style={styles.actionRow}>
-          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_TEAL }]} onPress={() => currentMission && startMission(currentMission.id)} disabled={!currentMission || Boolean(currentMission.startedAt)}>
+          <TouchableOpacity
+            style={[styles.primaryBtn, { backgroundColor: AI_TEAL }]}
+            onPress={() => {
+              if (!hasRoadmapData) {
+                load(true);
+                return;
+              }
+              if (currentMission && !currentMission.startedAt) {
+                startMission(currentMission.id);
+              }
+            }}
+            disabled={hasRoadmapData ? (!currentMission || Boolean(currentMission.startedAt)) : false}
+          >
             <Text style={styles.primaryBtnText}>
-              {currentMission ? (currentMission.startedAt ? "Mission In Progress" : "Continue Journey") : "Journey Complete"}
+              {!hasRoadmapData ? "Generate Journey" : currentMission ? (currentMission.startedAt ? "Mission In Progress" : "Continue Journey") : "Journey Complete"}
             </Text>
           </TouchableOpacity>
-          {progressPct === 100 ? (
+          {hasRoadmapData && progressPct === 100 ? (
             <TouchableOpacity style={[styles.secondaryOutlineBtn, { borderColor: AI_GOLD }]} onPress={claimRoadmapCertificate} disabled={claimingCertificate}>
               <Text style={[styles.secondaryOutlineBtnText, { color: AI_GOLD }]}>{claimingCertificate ? "Claiming..." : "Claim Certificate"}</Text>
             </TouchableOpacity>

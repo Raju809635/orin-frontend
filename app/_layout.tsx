@@ -30,11 +30,11 @@ function defaultRouteByRole(role: "student" | "mentor") {
 type AppTabKey = "home" | "mentorship" | "journey" | "ai" | "community";
 
 const TAB_BRAND_COLORS: Record<AppTabKey, { active: string; inactive: string; softLight: string; softDark: string; border: string }> = {
-  home: { active: "#22A06B", inactive: "#7A8A99", softLight: "#EAF6EF", softDark: "rgba(34,160,107,0.18)", border: "#22A06B" },
-  mentorship: { active: "#1D4ED8", inactive: "#6B7AA6", softLight: "#E8EEFF", softDark: "rgba(29,78,216,0.18)", border: "#1D4ED8" },
-  journey: { active: "#0F766E", inactive: "#6C8E87", softLight: "#E6F5F2", softDark: "rgba(15,118,110,0.18)", border: "#0F766E" },
-  ai: { active: "#D4A017", inactive: "#9A7B14", softLight: "#FFF4CC", softDark: "rgba(212,160,23,0.18)", border: "#D4A017" },
-  community: { active: "#C98A00", inactive: "#9A7A2A", softLight: "#FFF1D6", softDark: "rgba(201,138,0,0.18)", border: "#C98A00" }
+  home: { active: "#22C55E", inactive: "#86EFAC", softLight: "#EAFBF1", softDark: "rgba(34,197,94,0.20)", border: "#22C55E" },
+  mentorship: { active: "#3B82F6", inactive: "#93C5FD", softLight: "#EAF2FF", softDark: "rgba(59,130,246,0.20)", border: "#3B82F6" },
+  journey: { active: "#14B8A6", inactive: "#7DD3C7", softLight: "#E6FAF8", softDark: "rgba(20,184,166,0.20)", border: "#14B8A6" },
+  ai: { active: "#FACC15", inactive: "#FDE68A", softLight: "#FFF7CC", softDark: "rgba(250,204,21,0.20)", border: "#FACC15" },
+  community: { active: "#FB923C", inactive: "#FDBA74", softLight: "#FFF0E4", softDark: "rgba(251,146,60,0.20)", border: "#FB923C" }
 };
 
 function normalizeRouteParam(value: unknown) {

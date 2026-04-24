@@ -176,6 +176,7 @@ export default function ChatScreen() {
 
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingActiveRef = useRef(false);
+  const hasLoadedOnceRef = useRef(false);
 
   const activeConversation = useMemo(
     () => conversations.find((item) => item.counterpartId === activeUserId) || null,
@@ -379,7 +380,9 @@ export default function ChatScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      setLoading(true);
+      if (!hasLoadedOnceRef.current) {
+        setLoading(true);
+      }
       loadConversations({ includeContacts: true, includeGroups: true });
     }, [loadConversations])
   );
@@ -408,6 +411,12 @@ export default function ChatScreen() {
       cancelled = true;
     };
   }, [activeUserId]);
+
+  useEffect(() => {
+    if (!loading) {
+      hasLoadedOnceRef.current = true;
+    }
+  }, [loading]);
 
   useEffect(() => {
     if (!activeUserId) return;

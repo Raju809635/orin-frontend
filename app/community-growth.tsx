@@ -15,8 +15,10 @@ type CommunityModule = {
   path: string;
   iconColor: string;
   iconBg: string;
+  darkIconBg: string;
   border: string;
   gradient: [string, string];
+  darkGradient: [string, string];
 };
 
 export default function CommunityGrowthScreen() {
@@ -42,8 +44,10 @@ export default function CommunityGrowthScreen() {
       path: "/community/collaboration",
       iconColor: "#7C3AED",
       iconBg: "#F3E8FF",
+      darkIconBg: "rgba(124,58,237,0.18)",
       border: "#D6BBFB",
-      gradient: ["#FFFFFF", "#F9F5FF"]
+      gradient: ["#FFFFFF", "#F9F5FF"],
+      darkGradient: ["#22182F", "#111827"]
     },
     {
       id: "challenges",
@@ -55,8 +59,10 @@ export default function CommunityGrowthScreen() {
       path: "/community/challenges",
       iconColor: "#C98A00",
       iconBg: "#FFF4CC",
+      darkIconBg: "rgba(201,138,0,0.18)",
       border: "#F9DBAF",
-      gradient: ["#FFFFFF", "#FFF7ED"]
+      gradient: ["#FFFFFF", "#FFF7ED"],
+      darkGradient: ["#2A2212", "#161B22"]
     },
     {
       id: "certifications",
@@ -68,8 +74,10 @@ export default function CommunityGrowthScreen() {
       path: "/community/certifications",
       iconColor: "#1D4ED8",
       iconBg: "#DBEAFE",
+      darkIconBg: "rgba(29,78,216,0.18)",
       border: "#A4BCFD",
-      gradient: ["#FFFFFF", "#EEF4FF"]
+      gradient: ["#FFFFFF", "#EEF4FF"],
+      darkGradient: ["#18233A", "#101827"]
     },
     {
       id: "opportunities",
@@ -81,8 +89,10 @@ export default function CommunityGrowthScreen() {
       path: "/community/opportunities",
       iconColor: "#15803D",
       iconBg: "#DCFCE7",
+      darkIconBg: "rgba(21,128,61,0.18)",
       border: "#ABEFC6",
-      gradient: ["#FFFFFF", "#ECFDF3"]
+      gradient: ["#FFFFFF", "#ECFDF3"],
+      darkGradient: ["#16291E", "#111A18"]
     },
     {
       id: "leaderboard",
@@ -94,8 +104,10 @@ export default function CommunityGrowthScreen() {
       path: "/community/leaderboard",
       iconColor: "#B45309",
       iconBg: "#FFEDD5",
+      darkIconBg: "rgba(180,83,9,0.18)",
       border: "#F9DBAF",
-      gradient: ["#FFFFFF", "#FFF7ED"]
+      gradient: ["#FFFFFF", "#FFF7ED"],
+      darkGradient: ["#2A1E15", "#161B22"]
     },
     {
       id: "library",
@@ -107,8 +119,10 @@ export default function CommunityGrowthScreen() {
       path: "/community/knowledge-library",
       iconColor: "#0369A1",
       iconBg: "#E0F2FE",
+      darkIconBg: "rgba(3,105,161,0.18)",
       border: "#B2DDFF",
-      gradient: ["#FFFFFF", "#EFF8FF"]
+      gradient: ["#FFFFFF", "#EFF8FF"],
+      darkGradient: ["#132634", "#101827"]
     },
     {
       id: "reputation",
@@ -120,8 +134,10 @@ export default function CommunityGrowthScreen() {
       path: "/community/reputation",
       iconColor: "#DC2626",
       iconBg: "#FEE2E2",
+      darkIconBg: "rgba(220,38,38,0.18)",
       border: "#FDA29B",
-      gradient: ["#FFFFFF", "#FEF3F2"]
+      gradient: ["#FFFFFF", "#FEF3F2"],
+      darkGradient: ["#2D171A", "#161B22"]
     }
   ];
 
@@ -149,13 +165,13 @@ export default function CommunityGrowthScreen() {
         {filteredModules.map((item) => (
           <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={() => router.push(item.path as never)}>
             <LinearGradient
-              colors={isDark ? [colors.surface, colors.surfaceAlt] : item.gradient}
+              colors={isDark ? item.darkGradient : item.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[styles.moduleCard, { borderColor: isDark ? colors.border : item.border }]}
+              style={[styles.moduleCard, { borderColor: isDark ? item.iconColor : item.border, shadowColor: item.iconColor, shadowOpacity: isDark ? 0.18 : 0.08 }]}
             >
-              <View style={[styles.moduleIconWrap, { backgroundColor: isDark ? colors.surfaceAlt : item.iconBg }]}>
-                <Ionicons name={item.icon} size={20} color={isDark ? colors.text : item.iconColor} />
+              <View style={[styles.moduleIconWrap, { backgroundColor: isDark ? item.darkIconBg : item.iconBg, borderColor: isDark ? `${item.iconColor}55` : "transparent" }]}>
+                <Ionicons name={item.icon} size={20} color={item.iconColor} />
               </View>
               <View style={styles.moduleTextWrap}>
                 <Text style={[styles.moduleTitle, { color: colors.text }]}>{item.label}</Text>
@@ -193,6 +209,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
+    borderWidth: 1,
     backgroundColor: "rgba(255,255,255,0.95)",
     alignItems: "center",
     justifyContent: "center"

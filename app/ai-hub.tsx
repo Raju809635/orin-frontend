@@ -15,8 +15,10 @@ type AiModule = {
   path: string;
   iconColor: string;
   iconBg: string;
+  darkIconBg: string;
   border: string;
   gradient: [string, string];
+  darkGradient: [string, string];
 };
 
 export default function AiHubScreen() {
@@ -42,8 +44,10 @@ export default function AiHubScreen() {
       path: "/ai/mentor-matching",
       iconColor: "#D4A017",
       iconBg: "#FFF7D6",
+      darkIconBg: "rgba(212,160,23,0.16)",
       border: "#A4BCFD",
-      gradient: ["#FFFFFF", "#EEF4FF"]
+      gradient: ["#FFFFFF", "#EEF4FF"],
+      darkGradient: ["#1C2333", "#101827"]
     },
     {
       id: "skill_gap",
@@ -55,8 +59,10 @@ export default function AiHubScreen() {
       path: "/ai/skill-gap",
       iconColor: "#6D28D9",
       iconBg: "#F3E8FF",
+      darkIconBg: "rgba(109,40,217,0.18)",
       border: "#C4B5FD",
-      gradient: ["#FFFFFF", "#F4F3FF"]
+      gradient: ["#FFFFFF", "#F4F3FF"],
+      darkGradient: ["#20192F", "#111827"]
     },
     {
       id: "roadmap",
@@ -68,8 +74,10 @@ export default function AiHubScreen() {
       path: "/ai/career-roadmap",
       iconColor: "#0F766E",
       iconBg: "#DDF7F2",
+      darkIconBg: "rgba(15,118,110,0.18)",
       border: "#ABEFC6",
-      gradient: ["#FFFFFF", "#ECFDF3"]
+      gradient: ["#FFFFFF", "#ECFDF3"],
+      darkGradient: ["#14292A", "#0F1E24"]
     },
     {
       id: "project_ideas",
@@ -81,8 +89,10 @@ export default function AiHubScreen() {
       path: "/ai/project-ideas",
       iconColor: "#D97706",
       iconBg: "#FFF1DA",
+      darkIconBg: "rgba(217,119,6,0.18)",
       border: "#F9DBAF",
-      gradient: ["#FFFFFF", "#FFF7ED"]
+      gradient: ["#FFFFFF", "#FFF7ED"],
+      darkGradient: ["#2B1F14", "#161B22"]
     },
     {
       id: "resume_builder",
@@ -94,8 +104,10 @@ export default function AiHubScreen() {
       path: "/ai/resume-builder",
       iconColor: "#DC2626",
       iconBg: "#FEE2E2",
+      darkIconBg: "rgba(220,38,38,0.18)",
       border: "#FDA29B",
-      gradient: ["#FFFFFF", "#FEF3F2"]
+      gradient: ["#FFFFFF", "#FEF3F2"],
+      darkGradient: ["#2D171A", "#161B22"]
     },
     {
       id: "assistant",
@@ -107,8 +119,10 @@ export default function AiHubScreen() {
       path: "/ai/assistant",
       iconColor: "#7C3AED",
       iconBg: "#F3E8FF",
+      darkIconBg: "rgba(124,58,237,0.18)",
       border: "#D6BBFB",
-      gradient: ["#FFFFFF", "#F9F5FF"]
+      gradient: ["#FFFFFF", "#F9F5FF"],
+      darkGradient: ["#22182F", "#111827"]
     }
   ];
 
@@ -136,13 +150,13 @@ export default function AiHubScreen() {
         {filteredModules.map((item) => (
           <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={() => router.push(item.path as never)}>
             <LinearGradient
-              colors={isDark ? [colors.surface, colors.surfaceAlt] : item.gradient}
+              colors={isDark ? item.darkGradient : item.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[styles.moduleCard, { borderColor: isDark ? colors.border : item.border }]}
+              style={[styles.moduleCard, { borderColor: isDark ? item.iconColor : item.border, shadowColor: item.iconColor, shadowOpacity: isDark ? 0.18 : 0.08 }]}
             >
-              <View style={[styles.moduleIconWrap, { backgroundColor: isDark ? colors.surfaceAlt : item.iconBg }]}>
-                <Ionicons name={item.icon} size={20} color={isDark ? colors.text : item.iconColor} />
+              <View style={[styles.moduleIconWrap, { backgroundColor: isDark ? item.darkIconBg : item.iconBg, borderColor: isDark ? `${item.iconColor}55` : "transparent" }]}>
+                <Ionicons name={item.icon} size={20} color={item.iconColor} />
               </View>
               <View style={styles.moduleTextWrap}>
                 <Text style={[styles.moduleTitle, { color: colors.text }]}>{item.label}</Text>
@@ -180,6 +194,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 12,
+    borderWidth: 1,
     backgroundColor: "rgba(255,255,255,0.95)",
     alignItems: "center",
     justifyContent: "center"
