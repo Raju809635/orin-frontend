@@ -565,8 +565,8 @@ function RootDrawer() {
     const tabKey = tab.key as AppTabKey;
     const fallbackPath = getDefaultTabPath(tabKey, user);
     if (tabKey === "journey") {
-      if (trackedRoute === fallbackPath) return;
-      router.replace(fallbackPath as never);
+      tabHistoryRef.current.journey = [fallbackPath];
+      router.push(fallbackPath as never);
       return;
     }
     const tabHistory = tabHistoryRef.current[tabKey];
