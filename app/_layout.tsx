@@ -566,6 +566,10 @@ function RootDrawer() {
     const fallbackPath = getDefaultTabPath(tabKey, user);
     if (tabKey === "journey") {
       tabHistoryRef.current.journey = [fallbackPath];
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.location.assign(fallbackPath);
+        return;
+      }
       router.push(fallbackPath as never);
       return;
     }
