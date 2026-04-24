@@ -33,6 +33,8 @@ type ChallengeItem = {
   title: string;
   domain?: string;
   mentor?: { id?: string | null; name?: string } | null;
+  scope?: "global" | "institution" | "class";
+  className?: string;
   description?: string;
   bannerImageUrl?: string;
   proofInstructions?: string;
@@ -49,7 +51,7 @@ type ChallengeItem = {
   challengeState?: string;
   xpHint?: number;
 };
-type LeaderboardResponse = { globalTop?: Array<{ rank: number; name: string; score: number }> };
+type LeaderboardResponse = { globalTop?: { rank: number; name: string; score: number }[] };
 
 const STORAGE_KEY = "community-challenge-progress-v1";
 const DEFAULT_TASKS = [
@@ -72,6 +74,8 @@ export default function CommunityChallengesPage() {
   const [submitForm, setSubmitForm] = useState({
     title: "",
     domain: "",
+    className: "",
+    scope: "institution" as "global" | "institution" | "class",
     description: "",
     deadline: "",
     bannerImageUrl: "",
@@ -126,6 +130,10 @@ export default function CommunityChallengesPage() {
   );
 
   const activeChallenges = items.filter((item) => item.isActive !== false);
+  const mentorChallenges = useMemo(
+    () => items.filter((item) => String(item.mentor?.id || "") === String(user?.id || "")),
+    [items, user?.id]
+  );
   const selected = items.find((item) => item.id === selectedId) || activeChallenges[0] || items[0] || null;
   const selectedTasks = selected ? progressMap[selected.id] || {} : {};
   const completedTasks = DEFAULT_TASKS.filter((task) => selectedTasks[task.id]).length;
@@ -501,12 +509,31 @@ export default function CommunityChallengesPage() {
 
       {user?.role === "mentor" ? (
         <CommunitySection
-          title="Propose a Challenge"
-          subtitle="Mentors can submit stronger challenge ideas while keeping the same admin review workflow."
+          title="Create Competitions"
+          subtitle="Create global, institution, or class competitions here instead of using the mentor dashboard as a full editor."
           icon="add-circle"
         >
+          <View style={styles.tagRow}>
+            {(["institution", "class", "global"] as const).map((scope) => {
+              const active = submitForm.scope === scope;
+              return (
+                <TouchableOpacity
+                  key={`challenge-scope-${scope}`}
+                  style={[styles.dayChip, active && styles.dayChipActive]}
+                  onPress={() => setSubmitForm((prev) => ({ ...prev, scope, className: scope === "class" ? prev.className : "" }))}
+                >
+                  <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>
+                    {scope === "institution" ? "My Institution" : scope === "class" ? "Specific Class" : "Global"}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
           <TextInput style={styles.input} placeholder="Challenge title" value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />
           <TextInput style={styles.input} placeholder="Domain (optional)" value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
+          {submitForm.scope === "class" ? (
+            <TextInput style={styles.input} placeholder="Class / Section" value={submitForm.className} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, className: text }))} />
+          ) : null}
           <View style={styles.uploadRow}>
             <TouchableOpacity style={styles.uploadBtn} onPress={uploadBanner} disabled={uploadingBanner}>
               <Text style={styles.uploadBtnText}>{uploadingBanner ? "Uploading..." : submitForm.bannerImageUrl ? "Change Banner" : "Upload Banner"}</Text>
@@ -535,6 +562,8 @@ export default function CommunityChallengesPage() {
                 await api.post("/api/network/challenges/submit", {
                   title: submitForm.title.trim(),
                   domain: submitForm.domain.trim(),
+                  className: submitForm.scope === "class" ? submitForm.className.trim() : "",
+                  scope: submitForm.scope,
                   description: submitForm.description.trim(),
                   deadline: submitForm.deadline.trim().replace(" ", "T"),
                   bannerImageUrl: submitForm.bannerImageUrl.trim(),
@@ -542,7 +571,7 @@ export default function CommunityChallengesPage() {
                   proofInstructions: submitForm.proofInstructions.trim()
                 });
                 Alert.alert("Submitted", "Challenge idea sent to admin for review.");
-                setSubmitForm({ title: "", domain: "", description: "", deadline: "", bannerImageUrl: "", participantLimit: "", proofInstructions: "" });
+                setSubmitForm({ title: "", domain: "", className: "", scope: "institution", description: "", deadline: "", bannerImageUrl: "", participantLimit: "", proofInstructions: "" });
                 await load(true);
               } catch (e: any) {
                 handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit challenge." });
@@ -551,6 +580,17 @@ export default function CommunityChallengesPage() {
               }
             }}
           />
+          {mentorChallenges.length ? mentorChallenges.slice(0, 6).map((item) => (
+            <View key={item.id} style={styles.challengeCard}>
+              <Text style={styles.challengeTitle}>{item.title}</Text>
+              <Text style={styles.challengeDescription}>
+                {(item.scope || "global").toUpperCase()}{item.className ? ` · ${item.className}` : ""}{item.domain ? ` · ${item.domain}` : ""}
+              </Text>
+              <Text style={styles.challengeMeta}>Status: {item.approvalStatus || "pending"} · {item.participantsCount || 0} participants</Text>
+            </View>
+          )) : (
+            <Text style={styles.emptyText}>No mentor competitions created yet.</Text>
+          )}
         </CommunitySection>
       ) : null}
     </ScrollView>
@@ -575,6 +615,17 @@ const styles = StyleSheet.create({
   page: { padding: 16, backgroundColor: "#F4F7FB", gap: 14 },
   error: { color: "#B42318", fontWeight: "700" },
   emptyText: { color: "#667085", lineHeight: 20 },
+  dayChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 14,
+    paddingVertical: 10
+  },
+  dayChipActive: { borderColor: "#F97316", backgroundColor: "#FFF7ED" },
+  dayChipText: { color: "#667085", fontWeight: "700" },
+  dayChipTextActive: { color: "#F97316" },
   heroChallengeCard: {
     borderRadius: 18,
     padding: 14,

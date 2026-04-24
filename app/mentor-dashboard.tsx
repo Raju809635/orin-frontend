@@ -129,15 +129,6 @@ type ChallengeItem = {
   participantsCount?: number;
 };
 
-type MentorGroupItem = {
-  id: string;
-  name: string;
-  domain?: string;
-  schedule?: string;
-  membersCount?: number;
-  mentor?: { id?: string | null; name?: string };
-};
-
 type ReputationSummary = {
   score: number;
   levelTag: string;
@@ -174,7 +165,7 @@ type InstitutionRoadmapItem = {
   domain?: string;
   className?: string;
   status?: string;
-  weeks: Array<{ id: string; title: string; tasks?: string[] }>;
+  weeks: { id: string; title: string; tasks?: string[] }[];
 };
 type InstitutionRoadmapSubmissionItem = {
   id: string;
@@ -314,12 +305,6 @@ type MentorSprintPayoutResponse = {
   enrollments: SprintPayoutEnrollment[];
 };
 
-type CertificationItem = {
-  id: string;
-  title: string;
-  level?: string;
-};
-
 type ManagedKnowledgeResource = {
   id: string;
   title: string;
@@ -446,7 +431,7 @@ export default function MentorDashboard() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: string; growth?: string }>();
   const { user, logout } = useAuth();
-  const { colors, isDark } = useAppTheme();
+  const { colors } = useAppTheme();
   const scrollViewRef = useRef<ScrollView | null>(null);
   const [activeSection, setActiveSection] = useState<SectionId>("overview");
   const [mentorGrowthSection, setMentorGrowthSection] = useState<MentorGrowthSectionId>("reputation");
@@ -485,54 +470,14 @@ export default function MentorDashboard() {
   const [challenges, setChallenges] = useState<ChallengeItem[]>([]);
   const [mentorResources, setMentorResources] = useState<ManagedKnowledgeResource[]>([]);
   const [mentorCertificateTemplates, setMentorCertificateTemplates] = useState<MentorCertificateTemplateItem[]>([]);
-  const [mentorGroups, setMentorGroups] = useState<MentorGroupItem[]>([]);
   const [institutionRoadmaps, setInstitutionRoadmaps] = useState<InstitutionRoadmapItem[]>([]);
   const [reputationSummary, setReputationSummary] = useState<ReputationSummary | null>(null);
   const [liveSessions, setLiveSessions] = useState<LiveSessionItem[]>([]);
   const [sprints, setSprints] = useState<SprintItem[]>([]);
   const [paidLiveBookings, setPaidLiveBookings] = useState<MentorLiveSessionBookingRecord[]>([]);
   const [paidSprintEnrollments, setPaidSprintEnrollments] = useState<MentorSprintEnrollmentRecord[]>([]);
-  const [certifications, setCertifications] = useState<CertificationItem[]>([]);
-  const [institutionRoadmapTitle, setInstitutionRoadmapTitle] = useState("");
-  const [institutionRoadmapDomain, setInstitutionRoadmapDomain] = useState("");
-  const [institutionRoadmapClassName, setInstitutionRoadmapClassName] = useState("");
-  const [institutionRoadmapDescription, setInstitutionRoadmapDescription] = useState("");
-  const [institutionRoadmapWeekOne, setInstitutionRoadmapWeekOne] = useState("");
-  const [institutionRoadmapWeekTwo, setInstitutionRoadmapWeekTwo] = useState("");
-  const [institutionRoadmapWeekThree, setInstitutionRoadmapWeekThree] = useState("");
-  const [creatingInstitutionRoadmap, setCreatingInstitutionRoadmap] = useState(false);
-  const [resourceScope, setResourceScope] = useState<"global" | "institution" | "class">("institution");
-  const [resourceTitle, setResourceTitle] = useState("");
-  const [resourceDomain, setResourceDomain] = useState("");
-  const [resourceClassName, setResourceClassName] = useState("");
-  const [resourceDescription, setResourceDescription] = useState("");
-  const [resourceUrl, setResourceUrl] = useState("");
-  const [resourceDocumentUrl, setResourceDocumentUrl] = useState("");
-  const [resourceBannerImageUrl, setResourceBannerImageUrl] = useState("");
-  const [submittingResource, setSubmittingResource] = useState(false);
-  const [challengeScope, setChallengeScope] = useState<"global" | "institution" | "class">("institution");
-  const [challengeTitle, setChallengeTitle] = useState("");
-  const [challengeDomain, setChallengeDomain] = useState("");
-  const [challengeClassName, setChallengeClassName] = useState("");
-  const [challengeDescription, setChallengeDescription] = useState("");
-  const [challengeDeadline, setChallengeDeadline] = useState(nextDates(14)[0]);
-  const [challengeBannerImageUrl, setChallengeBannerImageUrl] = useState("");
-  const [challengeParticipantLimit, setChallengeParticipantLimit] = useState("100");
-  const [challengeProofInstructions, setChallengeProofInstructions] = useState("");
-  const [submittingChallenge, setSubmittingChallenge] = useState(false);
-  const [templateScope, setTemplateScope] = useState<"global" | "institution" | "class">("institution");
-  const [templateTitle, setTemplateTitle] = useState("");
-  const [templateClassName, setTemplateClassName] = useState("");
-  const [templateType, setTemplateType] = useState("manual");
-  const [templateXpReward, setTemplateXpReward] = useState("0");
-  const [templateDescription, setTemplateDescription] = useState("");
-  const [submittingTemplate, setSubmittingTemplate] = useState(false);
   const [institutionRoadmapSubmissions, setInstitutionRoadmapSubmissions] = useState<InstitutionRoadmapSubmissionItem[]>([]);
-  const [institutionReviewDrafts, setInstitutionReviewDrafts] = useState<Record<string, { xpAwarded: string; notes: string; issueCertificate: boolean }>>({});
-  const [reviewingInstitutionSubmissionId, setReviewingInstitutionSubmissionId] = useState<string | null>(null);
   const [resourceSubmissions, setResourceSubmissions] = useState<KnowledgeResourceSubmissionItem[]>([]);
-  const [resourceReviewDrafts, setResourceReviewDrafts] = useState<Record<string, { xpAwarded: string; notes: string; issueCertificate: boolean }>>({});
-  const [reviewingResourceSubmissionId, setReviewingResourceSubmissionId] = useState<string | null>(null);
   const [mentorNews, setMentorNews] = useState<NewsArticle[]>([]);
   const [mentorNewsLoading, setMentorNewsLoading] = useState(false);
   const [liveTitle, setLiveTitle] = useState("");
@@ -684,242 +629,6 @@ export default function MentorDashboard() {
     }
   }, [params.section, params.growth]);
 
-  const createInstitutionRoadmap = useCallback(async () => {
-    const weeks = [institutionRoadmapWeekOne, institutionRoadmapWeekTwo, institutionRoadmapWeekThree]
-      .map((title, index) => ({
-        id: `week-${index + 1}`,
-        title: String(title || "").trim(),
-        tasks: [`Complete ${String(title || `week ${index + 1}`).trim()} tasks`, "Submit proof to mentor", "Review linked resources"]
-      }))
-      .filter((item) => item.title);
-
-    if (!institutionRoadmapTitle.trim() || !weeks.length) {
-      notify("Add a roadmap title and at least one week.");
-      return;
-    }
-
-    try {
-      setCreatingInstitutionRoadmap(true);
-      await api.post("/api/network/institution-roadmaps", {
-        title: institutionRoadmapTitle.trim(),
-        description: institutionRoadmapDescription.trim(),
-        domain: institutionRoadmapDomain.trim(),
-        className: institutionRoadmapClassName.trim(),
-        weeks
-      });
-      setInstitutionRoadmapTitle("");
-      setInstitutionRoadmapDescription("");
-      setInstitutionRoadmapDomain("");
-      setInstitutionRoadmapClassName("");
-      setInstitutionRoadmapWeekOne("");
-      setInstitutionRoadmapWeekTwo("");
-      setInstitutionRoadmapWeekThree("");
-      notify("Institution roadmap created.");
-      await fetchDashboard(true);
-    } catch (e: any) {
-      handleAppError(e, { fallbackMessage: "Unable to create institution roadmap right now." });
-    } finally {
-      setCreatingInstitutionRoadmap(false);
-    }
-  }, [
-    institutionRoadmapClassName,
-    institutionRoadmapDescription,
-    institutionRoadmapDomain,
-    institutionRoadmapTitle,
-    institutionRoadmapWeekOne,
-    institutionRoadmapWeekThree,
-    institutionRoadmapWeekTwo
-  ]);
-
-  const submitMentorResource = useCallback(async () => {
-    if (!resourceTitle.trim()) {
-      notify("Add a resource title first.");
-      return;
-    }
-    try {
-      setSubmittingResource(true);
-      await api.post("/api/network/knowledge-library/submit", {
-        title: resourceTitle.trim(),
-        domain: resourceDomain.trim(),
-        className: resourceScope === "class" ? resourceClassName.trim() : "",
-        description: resourceDescription.trim(),
-        url: resourceUrl.trim(),
-        documentUrl: resourceDocumentUrl.trim(),
-        bannerImageUrl: resourceBannerImageUrl.trim(),
-        scope: resourceScope,
-        type: "other"
-      });
-      setResourceTitle("");
-      setResourceDomain("");
-      setResourceClassName("");
-      setResourceDescription("");
-      setResourceUrl("");
-      setResourceDocumentUrl("");
-      setResourceBannerImageUrl("");
-      notify("Resource submitted for review.");
-      await fetchDashboard(true);
-    } catch (e: any) {
-      handleAppError(e, { fallbackMessage: "Unable to submit mentor resource right now." });
-    } finally {
-      setSubmittingResource(false);
-    }
-  }, [resourceBannerImageUrl, resourceClassName, resourceDescription, resourceDocumentUrl, resourceDomain, resourceScope, resourceTitle, resourceUrl]);
-
-  const submitMentorChallenge = useCallback(async () => {
-    if (!challengeTitle.trim() || !challengeDeadline) {
-      notify("Add a competition title and deadline.");
-      return;
-    }
-    try {
-      setSubmittingChallenge(true);
-      await api.post("/api/network/challenges/submit", {
-        title: challengeTitle.trim(),
-        domain: challengeDomain.trim(),
-        className: challengeScope === "class" ? challengeClassName.trim() : "",
-        description: challengeDescription.trim(),
-        deadline: challengeDeadline,
-        bannerImageUrl: challengeBannerImageUrl.trim(),
-        participantLimit: Number(challengeParticipantLimit || 0),
-        proofInstructions: challengeProofInstructions.trim(),
-        scope: challengeScope
-      });
-      setChallengeTitle("");
-      setChallengeDomain("");
-      setChallengeClassName("");
-      setChallengeDescription("");
-      setChallengeBannerImageUrl("");
-      setChallengeParticipantLimit("100");
-      setChallengeProofInstructions("");
-      notify("Competition submitted for review.");
-      await fetchDashboard(true);
-    } catch (e: any) {
-      handleAppError(e, { fallbackMessage: "Unable to submit competition right now." });
-    } finally {
-      setSubmittingChallenge(false);
-    }
-  }, [challengeBannerImageUrl, challengeClassName, challengeDeadline, challengeDescription, challengeDomain, challengeParticipantLimit, challengeProofInstructions, challengeScope, challengeTitle]);
-
-  const saveMentorCertificateTemplate = useCallback(async () => {
-    if (!templateTitle.trim()) {
-      notify("Add a certificate template title.");
-      return;
-    }
-    try {
-      setSubmittingTemplate(true);
-      await api.post("/api/network/certificate-templates/mentor", {
-        title: templateTitle.trim(),
-        className: templateScope === "class" ? templateClassName.trim() : "",
-        description: templateDescription.trim(),
-        xpReward: Number(templateXpReward || 0),
-        certificateType: templateType,
-        scope: templateScope
-      });
-      setTemplateTitle("");
-      setTemplateClassName("");
-      setTemplateDescription("");
-      setTemplateXpReward("0");
-      setTemplateType("manual");
-      notify("Certificate template saved.");
-      await fetchDashboard(true);
-    } catch (e: any) {
-      handleAppError(e, { fallbackMessage: "Unable to save certificate template right now." });
-    } finally {
-      setSubmittingTemplate(false);
-    }
-  }, [templateClassName, templateDescription, templateScope, templateTitle, templateType, templateXpReward]);
-
-  const uploadMentorResourceBanner = useCallback(async () => {
-    try {
-      const url = await pickAndUploadPostImage();
-      if (!url) return;
-      setResourceBannerImageUrl(url);
-    } catch (e: any) {
-      handleAppError(e, { fallbackMessage: "Unable to upload resource banner." });
-    }
-  }, []);
-
-  const uploadMentorResourceDocument = useCallback(async () => {
-    try {
-      const uploaded = await pickAndUploadProgramDocument();
-      if (!uploaded?.url) return;
-      setResourceDocumentUrl(uploaded.url);
-    } catch (e: any) {
-      handleAppError(e, { fallbackMessage: "Unable to upload resource document." });
-    }
-  }, []);
-
-  const uploadMentorChallengeBanner = useCallback(async () => {
-    try {
-      const url = await pickAndUploadPostImage();
-      if (!url) return;
-      setChallengeBannerImageUrl(url);
-    } catch (e: any) {
-      handleAppError(e, { fallbackMessage: "Unable to upload competition banner." });
-    }
-  }, []);
-
-  const updateInstitutionReviewDraft = useCallback((submissionId: string, patch: Partial<{ xpAwarded: string; notes: string; issueCertificate: boolean }>) => {
-    setInstitutionReviewDrafts((prev) => ({
-      ...prev,
-      [submissionId]: {
-        xpAwarded: prev[submissionId]?.xpAwarded || "",
-        notes: prev[submissionId]?.notes || "",
-        issueCertificate: prev[submissionId]?.issueCertificate || false,
-        ...patch
-      }
-    }));
-  }, []);
-
-  const reviewInstitutionSubmission = useCallback(async (submissionId: string, status: "accepted" | "rejected") => {
-    const draft = institutionReviewDrafts[submissionId] || { xpAwarded: "", notes: "", issueCertificate: false };
-    try {
-      setReviewingInstitutionSubmissionId(submissionId);
-      await api.patch(`/api/network/institution-roadmaps/submissions/${encodeURIComponent(submissionId)}/review`, {
-        status,
-        xpAwarded: status === "accepted" ? Number(draft.xpAwarded || 0) : 0,
-        notes: draft.notes,
-        issueCertificate: status === "accepted" ? draft.issueCertificate : false
-      });
-      notify(status === "accepted" ? "Submission approved." : "Submission sent back for rework.");
-      await fetchDashboard(true);
-    } catch (e: any) {
-      handleAppError(e, { fallbackMessage: "Unable to review institution roadmap submission right now." });
-    } finally {
-      setReviewingInstitutionSubmissionId(null);
-    }
-  }, [institutionReviewDrafts]);
-
-  const updateResourceReviewDraft = useCallback((submissionId: string, patch: Partial<{ xpAwarded: string; notes: string; issueCertificate: boolean }>) => {
-    setResourceReviewDrafts((prev) => ({
-      ...prev,
-      [submissionId]: {
-        xpAwarded: prev[submissionId]?.xpAwarded || "",
-        notes: prev[submissionId]?.notes || "",
-        issueCertificate: prev[submissionId]?.issueCertificate || false,
-        ...patch
-      }
-    }));
-  }, []);
-
-  const reviewResourceSubmission = useCallback(async (submissionId: string, status: "accepted" | "rejected") => {
-    const draft = resourceReviewDrafts[submissionId] || { xpAwarded: "", notes: "", issueCertificate: false };
-    try {
-      setReviewingResourceSubmissionId(submissionId);
-      await api.patch(`/api/network/knowledge-library/submissions/${encodeURIComponent(submissionId)}/review`, {
-        status,
-        xpAwarded: status === "accepted" ? Number(draft.xpAwarded || 0) : 0,
-        notes: draft.notes,
-        issueCertificate: status === "accepted" ? draft.issueCertificate : false
-      });
-      notify(status === "accepted" ? "Resource work approved." : "Resource work sent back for updates.");
-      await fetchDashboard(true);
-    } catch (e: any) {
-      handleAppError(e, { fallbackMessage: "Unable to review resource submission right now." });
-    } finally {
-      setReviewingResourceSubmissionId(null);
-    }
-  }, [resourceReviewDrafts]);
-
   const mentorBanners = [
     {
       key: "mentor-banner-ops",
@@ -963,13 +672,11 @@ export default function MentorDashboard() {
         resourceRes,
         resourceSubmissionRes,
         certificateTemplateRes,
-        groupRes,
         institutionRoadmapsRes,
         institutionRoadmapSubmissionsRes,
         reputationRes,
         liveSessionRes,
         sprintRes,
-        certificationsRes,
         livePaidRes,
         sprintPaidRes
       ] = await Promise.allSettled([
@@ -983,13 +690,11 @@ export default function MentorDashboard() {
         api.get<ManagedKnowledgeResource[]>("/api/network/knowledge-library/mine"),
         api.get<KnowledgeResourceSubmissionItem[]>("/api/network/knowledge-library/submissions/mentor"),
         api.get<MentorCertificateTemplateItem[]>("/api/network/certificate-templates/mentor"),
-        api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
         api.get<{ roadmaps: InstitutionRoadmapItem[] }>("/api/network/institution-roadmaps"),
         api.get<InstitutionRoadmapSubmissionItem[]>("/api/network/institution-roadmaps/submissions/mentor"),
         api.get<ReputationSummary>("/api/network/reputation-summary"),
         api.get<LiveSessionItem[]>("/api/network/live-sessions"),
         api.get<SprintItem[]>("/api/network/sprints"),
-        api.get<CertificationItem[]>("/api/network/certifications"),
         api.get<MentorLiveSessionBookingRecord[]>("/api/network/live-sessions/bookings/mentor"),
         api.get<MentorSprintEnrollmentRecord[]>("/api/network/sprints/enrollments/mentor")
       ]);
@@ -1010,7 +715,7 @@ export default function MentorDashboard() {
         const availabilityRes = await api.get<{
           weeklySlots: AvailabilitySlot[];
           dateSlots?: AvailabilitySlot[];
-          blockedDates?: Array<{ blockedDate?: string }>;
+          blockedDates?: { blockedDate?: string }[];
         }>(
           `/api/availability/mentor/${user.id}`
         );
@@ -1041,13 +746,11 @@ export default function MentorDashboard() {
       setMentorResources(resourceRes.status === "fulfilled" ? asArray<ManagedKnowledgeResource>(resourceRes.value.data) : []);
       setResourceSubmissions(resourceSubmissionRes.status === "fulfilled" ? asArray<KnowledgeResourceSubmissionItem>(resourceSubmissionRes.value.data) : []);
       setMentorCertificateTemplates(certificateTemplateRes.status === "fulfilled" ? asArray<MentorCertificateTemplateItem>(certificateTemplateRes.value.data) : []);
-      setMentorGroups(groupRes.status === "fulfilled" ? asArray<MentorGroupItem>(groupRes.value.data) : []);
       setInstitutionRoadmaps(institutionRoadmapsRes.status === "fulfilled" ? asArray<InstitutionRoadmapItem>(institutionRoadmapsRes.value.data?.roadmaps) : []);
       setInstitutionRoadmapSubmissions(institutionRoadmapSubmissionsRes.status === "fulfilled" ? asArray<InstitutionRoadmapSubmissionItem>(institutionRoadmapSubmissionsRes.value.data) : []);
       setReputationSummary(reputationRes.status === "fulfilled" ? reputationRes.value.data || null : null);
       setLiveSessions(liveSessionRes.status === "fulfilled" ? asArray<LiveSessionItem>(liveSessionRes.value.data) : []);
       setSprints(sprintRes.status === "fulfilled" ? asArray<SprintItem>(sprintRes.value.data) : []);
-      setCertifications(certificationsRes.status === "fulfilled" ? asArray<CertificationItem>(certificationsRes.value.data) : []);
       setPaidLiveBookings(livePaidRes.status === "fulfilled" ? asArray<MentorLiveSessionBookingRecord>(livePaidRes.value.data) : []);
       setPaidSprintEnrollments(sprintPaidRes.status === "fulfilled" ? asArray<MentorSprintEnrollmentRecord>(sprintPaidRes.value.data) : []);
     } catch (e: any) {
@@ -1250,20 +953,6 @@ export default function MentorDashboard() {
     () => ({ backgroundColor: colors.surface, borderColor: colors.border }),
     [colors.border, colors.surface]
   );
-  const themedInputStyle = {
-    backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF",
-    borderColor: colors.border,
-    color: colors.text
-  };
-  const themedChipStyle = useMemo(
-    () => ({ borderColor: colors.border, backgroundColor: colors.surfaceAlt }),
-    [colors.border, colors.surfaceAlt]
-  );
-  const themedChipActiveStyle = useMemo(
-    () => ({ borderColor: colors.accent, backgroundColor: colors.accentSoft }),
-    [colors.accent, colors.accentSoft]
-  );
-
   function canSetMeetingLink(session: Session) {
     const start = session.scheduledStart ? new Date(session.scheduledStart).getTime() : NaN;
     if (!Number.isFinite(start)) return true;
@@ -2600,313 +2289,33 @@ export default function MentorDashboard() {
           {mentorGrowthSection === "community" ? (
             <>
           <View style={[styles.card, themedCardStyle]}>
-            <Text style={[styles.title, { color: colors.text }]}>Institution Resources</Text>
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Resource title" placeholderTextColor={colors.textMuted} value={resourceTitle} onChangeText={setResourceTitle} />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} value={resourceDomain} onChangeText={setResourceDomain} />
-            <View style={styles.chipRow}>
-              {(["institution", "class", "global"] as const).map((scope) => {
-                const active = resourceScope === scope;
-                return (
-                  <TouchableOpacity key={`resource-scope-${scope}`} style={[styles.dayChip, themedChipStyle, active && themedChipActiveStyle]} onPress={() => setResourceScope(scope)}>
-                    <Text style={[styles.dayChipText, { color: active ? colors.accent : colors.text }, active && styles.dayChipTextActive]}>
-                      {scope === "institution" ? "My Institution" : scope === "class" ? "Specific Class" : "Global"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            {resourceScope === "class" ? (
-              <TextInput style={[styles.input, themedInputStyle]} placeholder="Class / Section" placeholderTextColor={colors.textMuted} value={resourceClassName} onChangeText={setResourceClassName} />
-            ) : null}
-            <TextInput style={[styles.input, styles.textAreaInput, themedInputStyle]} placeholder="Short description" placeholderTextColor={colors.textMuted} value={resourceDescription} onChangeText={setResourceDescription} multiline />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="External link (optional)" placeholderTextColor={colors.textMuted} value={resourceUrl} onChangeText={setResourceUrl} autoCapitalize="none" />
+            <Text style={[styles.title, { color: colors.text }]}>Community Control Shortcuts</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Mentor creation and review now lives in the existing AI and Community pages, not inside the dashboard itself.</Text>
             <View style={styles.actions}>
-              <TouchableOpacity style={styles.actionBtn} onPress={uploadMentorResourceBanner}>
-                <Text style={styles.actionText}>{resourceBannerImageUrl ? "Change Banner" : "Upload Banner"}</Text>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/community/knowledge-library" as never)}>
+                <Text style={styles.actionText}>Open Resource Management</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.actionBtn} onPress={uploadMentorResourceDocument}>
-                <Text style={styles.actionText}>{resourceDocumentUrl ? "Replace Document" : "Upload Document"}</Text>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/community/challenges" as never)}>
+                <Text style={styles.actionText}>Open Competitions</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/community/certifications" as never)}>
+                <Text style={styles.actionText}>Open Certificates</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.actionBtn} onPress={() => router.push("/ai/career-roadmap" as never)}>
+                <Text style={styles.actionText}>Open Roadmaps</Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.actionBtn} onPress={submitMentorResource} disabled={submittingResource}>
-              <Text style={styles.actionText}>{submittingResource ? "Submitting..." : "Submit Resource"}</Text>
-            </TouchableOpacity>
-            {mentorResources.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.textMuted }]}>No mentor resources submitted yet.</Text>
-            ) : (
-              mentorResources.slice(0, 5).map((item) => (
-                <Text key={item.id} style={[styles.meta, { color: colors.textMuted }]}>
-                  {item.title} | {item.scope || "global"}{item.className ? ` | ${item.className}` : ""} | {item.approvalStatus || "pending"}
-                </Text>
-              ))
-            )}
+            <Text style={[styles.meta, { color: colors.textMuted }]}>
+              Resources waiting review: {resourceSubmissions.length} · Institution roadmap reviews: {institutionRoadmapSubmissions.length}
+            </Text>
           </View>
 
           <View style={[styles.card, themedCardStyle]}>
-            <Text style={[styles.title, { color: colors.text }]}>Resource Reviews</Text>
-            {resourceSubmissions.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.textMuted }]}>No student resource submissions yet.</Text>
-            ) : (
-              resourceSubmissions.slice(0, 8).map((item) => {
-                const reviewDraft = resourceReviewDrafts[item.id] || {
-                  xpAwarded: String(item.mentorReview?.xpAwarded || ""),
-                  notes: item.mentorReview?.notes || "",
-                  issueCertificate: Boolean(item.mentorReview?.certificateId)
-                };
-                return (
-                  <View key={item.id} style={[styles.liveSessionCard, themedCardStyle]}>
-                    <Text style={[styles.liveSessionTitle, { color: colors.text }]}>{item.resourceTitle}</Text>
-                    <Text style={[styles.meta, { color: colors.textMuted }]}>
-                      {item.student?.name || "Student"} {item.student?.email ? `| ${item.student.email}` : ""}
-                    </Text>
-                    <Text style={[styles.meta, { color: colors.textMuted }]}>
-                      {(item.scope || "global").toUpperCase()}{item.className ? ` | ${item.className}` : ""}{item.resourceDomain ? ` | ${item.resourceDomain}` : ""}
-                    </Text>
-                    <Text style={[styles.meta, { color: colors.textMuted }]}>Status: {item.status}</Text>
-                    {item.proofText ? <Text style={[styles.meta, { color: colors.textMuted }]}>Proof: {item.proofText}</Text> : null}
-                    {item.proofLink ? <Text style={[styles.meta, { color: colors.textMuted }]}>Link: {item.proofLink}</Text> : null}
-                    {(item.proofFiles || []).length ? (
-                      <Text style={[styles.meta, { color: colors.textMuted }]}>Files: {(item.proofFiles || []).length}</Text>
-                    ) : null}
-                    <TextInput
-                      style={[styles.input, themedInputStyle]}
-                      placeholder="XP to award"
-                      placeholderTextColor={colors.textMuted}
-                      keyboardType="numeric"
-                      value={reviewDraft.xpAwarded}
-                      onChangeText={(value) => updateResourceReviewDraft(item.id, { xpAwarded: value })}
-                    />
-                    <TextInput
-                      style={[styles.input, themedInputStyle]}
-                      placeholder="Mentor review note"
-                      placeholderTextColor={colors.textMuted}
-                      value={reviewDraft.notes}
-                      onChangeText={(value) => updateResourceReviewDraft(item.id, { notes: value })}
-                      multiline
-                    />
-                    <TouchableOpacity
-                      style={[styles.dayChip, themedChipStyle, reviewDraft.issueCertificate && themedChipActiveStyle]}
-                      onPress={() => updateResourceReviewDraft(item.id, { issueCertificate: !reviewDraft.issueCertificate })}
-                    >
-                      <Text style={[styles.dayChipText, { color: reviewDraft.issueCertificate ? colors.accent : colors.text }]}>
-                        {reviewDraft.issueCertificate ? "Certificate: Yes" : "Issue Certificate"}
-                      </Text>
-                    </TouchableOpacity>
-                    <View style={styles.actions}>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.approveButton]}
-                        onPress={() => reviewResourceSubmission(item.id, "accepted")}
-                        disabled={reviewingResourceSubmissionId === item.id}
-                      >
-                        <Text style={styles.actionText}>{reviewingResourceSubmissionId === item.id ? "Saving..." : "Approve + XP"}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.rejectButton]}
-                        onPress={() => reviewResourceSubmission(item.id, "rejected")}
-                        disabled={reviewingResourceSubmissionId === item.id}
-                      >
-                        <Text style={styles.actionText}>Reject</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })
-            )}
-          </View>
-
-          <View style={[styles.card, themedCardStyle]}>
-            <Text style={[styles.title, { color: colors.text }]}>Community Challenges</Text>
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Competition title" placeholderTextColor={colors.textMuted} value={challengeTitle} onChangeText={setChallengeTitle} />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} value={challengeDomain} onChangeText={setChallengeDomain} />
-            <View style={styles.chipRow}>
-              {(["institution", "class", "global"] as const).map((scope) => {
-                const active = challengeScope === scope;
-                return (
-                  <TouchableOpacity key={`challenge-scope-${scope}`} style={[styles.dayChip, themedChipStyle, active && themedChipActiveStyle]} onPress={() => setChallengeScope(scope)}>
-                    <Text style={[styles.dayChipText, { color: active ? colors.accent : colors.text }, active && styles.dayChipTextActive]}>
-                      {scope === "institution" ? "My Institution" : scope === "class" ? "Specific Class" : "Global"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            {challengeScope === "class" ? (
-              <TextInput style={[styles.input, themedInputStyle]} placeholder="Class / Section" placeholderTextColor={colors.textMuted} value={challengeClassName} onChangeText={setChallengeClassName} />
-            ) : null}
-            <TextInput style={[styles.input, styles.textAreaInput, themedInputStyle]} placeholder="Competition description" placeholderTextColor={colors.textMuted} value={challengeDescription} onChangeText={setChallengeDescription} multiline />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Deadline (YYYY-MM-DD)" placeholderTextColor={colors.textMuted} value={challengeDeadline} onChangeText={setChallengeDeadline} />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Participant limit" placeholderTextColor={colors.textMuted} value={challengeParticipantLimit} onChangeText={setChallengeParticipantLimit} keyboardType="numeric" />
-            <TextInput style={[styles.input, styles.textAreaInput, themedInputStyle]} placeholder="Proof instructions" placeholderTextColor={colors.textMuted} value={challengeProofInstructions} onChangeText={setChallengeProofInstructions} multiline />
-            <TouchableOpacity style={styles.actionBtn} onPress={uploadMentorChallengeBanner}>
-              <Text style={styles.actionText}>{challengeBannerImageUrl ? "Change Banner" : "Upload Banner"}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.actionBtn} onPress={submitMentorChallenge} disabled={submittingChallenge}>
-              <Text style={styles.actionText}>{submittingChallenge ? "Submitting..." : "Submit Competition"}</Text>
-            </TouchableOpacity>
-            {challenges.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.textMuted }]}>No active challenges.</Text>
-            ) : (
-              challenges.slice(0, 5).map((item) => (
-                <Text key={item.id} style={[styles.meta, { color: colors.textMuted }]}>
-                  {item.title} | {item.scope || "global"}{item.className ? ` | ${item.className}` : ""} | {item.participantsCount || 0} participants
-                </Text>
-              ))
-            )}
-          </View>
-
-          <View style={[styles.card, themedCardStyle]}>
-            <Text style={[styles.title, { color: colors.text }]}>Mentor Groups</Text>
-            {mentorGroups.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.textMuted }]}>No mentor groups available.</Text>
-            ) : (
-              mentorGroups
-                .filter((group) => String(group.mentor?.id || "") === String(user.id))
-                .slice(0, 5)
-                .map((group) => (
-                  <Text key={group.id} style={[styles.meta, { color: colors.textMuted }]}>
-                    {group.name} | {group.membersCount || 0} students | {group.schedule || "Weekly"}
-                  </Text>
-                ))
-            )}
-          </View>
-
-          <View style={[styles.card, themedCardStyle]}>
-            <Text style={[styles.title, { color: colors.text }]}>Institution Roadmaps</Text>
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Roadmap title" placeholderTextColor={colors.textMuted} value={institutionRoadmapTitle} onChangeText={setInstitutionRoadmapTitle} />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} value={institutionRoadmapDomain} onChangeText={setInstitutionRoadmapDomain} />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Class (optional: Class 10 / CSE-A)" placeholderTextColor={colors.textMuted} value={institutionRoadmapClassName} onChangeText={setInstitutionRoadmapClassName} />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Roadmap description" placeholderTextColor={colors.textMuted} value={institutionRoadmapDescription} onChangeText={setInstitutionRoadmapDescription} multiline />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Week 1 title" placeholderTextColor={colors.textMuted} value={institutionRoadmapWeekOne} onChangeText={setInstitutionRoadmapWeekOne} />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Week 2 title" placeholderTextColor={colors.textMuted} value={institutionRoadmapWeekTwo} onChangeText={setInstitutionRoadmapWeekTwo} />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Week 3 title" placeholderTextColor={colors.textMuted} value={institutionRoadmapWeekThree} onChangeText={setInstitutionRoadmapWeekThree} />
-            <TouchableOpacity style={styles.actionBtn} onPress={createInstitutionRoadmap} disabled={creatingInstitutionRoadmap}>
-              <Text style={styles.actionText}>{creatingInstitutionRoadmap ? "Creating..." : "Create Institution Roadmap"}</Text>
-            </TouchableOpacity>
-            {institutionRoadmaps.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.textMuted }]}>No institution roadmaps created yet.</Text>
-            ) : (
-              institutionRoadmaps.slice(0, 5).map((item) => (
-                <Text key={item.id} style={[styles.meta, { color: colors.textMuted }]}>
-                  {item.title} | {item.className ? `${item.className} | ` : ""}{item.weeks.length} weeks | {item.status || "published"}
-                </Text>
-              ))
-            )}
-          </View>
-
-          <View style={[styles.card, themedCardStyle]}>
-            <Text style={[styles.title, { color: colors.text }]}>Institution Roadmap Reviews</Text>
-            {institutionRoadmapSubmissions.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.textMuted }]}>No student submissions yet.</Text>
-            ) : (
-              institutionRoadmapSubmissions.slice(0, 8).map((item) => {
-                const reviewDraft = institutionReviewDrafts[item.id] || {
-                  xpAwarded: String(item.mentorReview?.xpAwarded || ""),
-                  notes: item.mentorReview?.notes || "",
-                  issueCertificate: Boolean(item.mentorReview?.certificateId)
-                };
-                return (
-                  <View key={item.id} style={[styles.liveSessionCard, themedCardStyle]}>
-                    <Text style={[styles.liveSessionTitle, { color: colors.text }]}>{item.roadmapTitle}</Text>
-                    <Text style={[styles.meta, { color: colors.textMuted }]}>
-                      {item.weekTitle} | {item.student?.name || "Student"} {item.student?.email ? `| ${item.student.email}` : ""}
-                    </Text>
-                    <Text style={[styles.meta, { color: colors.textMuted }]}>Status: {item.status}</Text>
-                    {item.proofText ? <Text style={[styles.meta, { color: colors.textMuted }]}>Proof: {item.proofText}</Text> : null}
-                    {item.proofLink ? <Text style={[styles.meta, { color: colors.textMuted }]}>Link: {item.proofLink}</Text> : null}
-                    {item.proofImageUrl ? <Image source={{ uri: item.proofImageUrl }} style={styles.livePosterPreview} /> : null}
-                    <TextInput
-                      style={[styles.input, themedInputStyle]}
-                      placeholder="XP to award"
-                      placeholderTextColor={colors.textMuted}
-                      keyboardType="numeric"
-                      value={reviewDraft.xpAwarded}
-                      onChangeText={(value) => updateInstitutionReviewDraft(item.id, { xpAwarded: value })}
-                    />
-                    <TextInput
-                      style={[styles.input, themedInputStyle]}
-                      placeholder="Mentor review note"
-                      placeholderTextColor={colors.textMuted}
-                      value={reviewDraft.notes}
-                      onChangeText={(value) => updateInstitutionReviewDraft(item.id, { notes: value })}
-                      multiline
-                    />
-                    <TouchableOpacity
-                      style={[styles.dayChip, themedChipStyle, reviewDraft.issueCertificate && themedChipActiveStyle]}
-                      onPress={() => updateInstitutionReviewDraft(item.id, { issueCertificate: !reviewDraft.issueCertificate })}
-                    >
-                      <Text style={[styles.dayChipText, { color: reviewDraft.issueCertificate ? colors.accent : colors.text }, reviewDraft.issueCertificate && styles.dayChipTextActive]}>
-                        {reviewDraft.issueCertificate ? "Certificate: Yes" : "Issue Certificate"}
-                      </Text>
-                    </TouchableOpacity>
-                    <View style={styles.actions}>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.approveButton]}
-                        onPress={() => reviewInstitutionSubmission(item.id, "accepted")}
-                        disabled={reviewingInstitutionSubmissionId === item.id}
-                      >
-                        <Text style={styles.actionText}>{reviewingInstitutionSubmissionId === item.id ? "Saving..." : "Approve + XP"}</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.actionButton, styles.rejectButton]}
-                        onPress={() => reviewInstitutionSubmission(item.id, "rejected")}
-                        disabled={reviewingInstitutionSubmissionId === item.id}
-                      >
-                        <Text style={styles.actionText}>Reject</Text>
-                      </TouchableOpacity>
-                    </View>
-                    {item.mentorReview?.reviewedAt ? (
-                      <Text style={[styles.meta, { color: colors.textMuted }]}>
-                        Reviewed: {new Date(item.mentorReview.reviewedAt).toLocaleString("en-IN")}
-                      </Text>
-                    ) : null}
-                  </View>
-                );
-              })
-            )}
-          </View>
-
-          <View style={[styles.card, themedCardStyle]}>
-            <Text style={[styles.title, { color: colors.text }]}>ORIN Certifications</Text>
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Template title" placeholderTextColor={colors.textMuted} value={templateTitle} onChangeText={setTemplateTitle} />
-            <View style={styles.chipRow}>
-              {(["institution", "class", "global"] as const).map((scope) => {
-                const active = templateScope === scope;
-                return (
-                  <TouchableOpacity key={`template-scope-${scope}`} style={[styles.dayChip, themedChipStyle, active && themedChipActiveStyle]} onPress={() => setTemplateScope(scope)}>
-                    <Text style={[styles.dayChipText, { color: active ? colors.accent : colors.text }, active && styles.dayChipTextActive]}>
-                      {scope === "institution" ? "My Institution" : scope === "class" ? "Specific Class" : "Global"}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            {templateScope === "class" ? (
-              <TextInput style={[styles.input, themedInputStyle]} placeholder="Class / Section" placeholderTextColor={colors.textMuted} value={templateClassName} onChangeText={setTemplateClassName} />
-            ) : null}
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="Certificate type (manual, roadmap, challenge)" placeholderTextColor={colors.textMuted} value={templateType} onChangeText={setTemplateType} />
-            <TextInput style={[styles.input, themedInputStyle]} placeholder="XP reward" placeholderTextColor={colors.textMuted} value={templateXpReward} onChangeText={setTemplateXpReward} keyboardType="numeric" />
-            <TextInput style={[styles.input, styles.textAreaInput, themedInputStyle]} placeholder="Template description" placeholderTextColor={colors.textMuted} value={templateDescription} onChangeText={setTemplateDescription} multiline />
-            <TouchableOpacity style={styles.actionBtn} onPress={saveMentorCertificateTemplate} disabled={submittingTemplate}>
-              <Text style={styles.actionText}>{submittingTemplate ? "Saving..." : "Save Certificate Template"}</Text>
-            </TouchableOpacity>
-            {certifications.length === 0 ? (
-              <Text style={[styles.empty, { color: colors.textMuted }]}>No certifications listed yet.</Text>
-            ) : (
-              certifications.slice(0, 5).map((item) => (
-                <Text key={item.id} style={[styles.meta, { color: colors.textMuted }]}>
-                  {item.title} ({item.level || "Level"})
-                </Text>
-              ))
-            )}
-            {mentorCertificateTemplates.length ? (
-              mentorCertificateTemplates.slice(0, 5).map((item) => (
-                <Text key={item.id} style={[styles.meta, { color: colors.textMuted }]}>
-                  Template: {item.title} | {item.scope || "global"}{item.className ? ` | ${item.className}` : ""} | {item.certificateType || "manual"}
-                </Text>
-              ))
-            ) : (
-              <Text style={[styles.empty, { color: colors.textMuted }]}>No mentor certificate templates yet.</Text>
-            )}
+            <Text style={[styles.title, { color: colors.text }]}>Quick Snapshot</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Resources you created: {mentorResources.length}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Competitions created: {challenges.filter((item) => String(item.mentor?.id || "") === String(user.id)).length}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Institution roadmaps: {institutionRoadmaps.length}</Text>
+            <Text style={[styles.meta, { color: colors.textMuted }]}>Certificate templates: {mentorCertificateTemplates.length}</Text>
           </View>
             </>
           ) : null}

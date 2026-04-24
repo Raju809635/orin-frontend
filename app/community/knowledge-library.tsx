@@ -75,6 +75,39 @@ type LibraryResponse = {
   domainResources?: LibraryItem[];
   items?: LibraryItem[];
 };
+type ManagedKnowledgeResource = {
+  id: string;
+  title: string;
+  domain?: string;
+  scope?: "global" | "institution" | "class";
+  institutionName?: string;
+  className?: string;
+  approvalStatus?: string;
+};
+type KnowledgeResourceSubmissionItem = {
+  id: string;
+  resourceTitle: string;
+  resourceDomain?: string;
+  scope?: "global" | "institution" | "class";
+  institutionName?: string;
+  className?: string;
+  status: "submitted" | "reviewed" | "accepted" | "rejected";
+  proofText?: string;
+  proofLink?: string;
+  proofFiles?: string[];
+  submittedAt?: string;
+  student?: {
+    id?: string | null;
+    name?: string;
+    email?: string;
+  };
+  mentorReview?: {
+    reviewedAt?: string | null;
+    notes?: string;
+    xpAwarded?: number;
+    certificateId?: string | null;
+  };
+};
 
 const STORAGE_KEY = "community-library-saved-v1";
 const CACHE_KEY = "community-library-cache-v2";
@@ -122,6 +155,8 @@ export default function CommunityLibraryPage() {
   const params = useLocalSearchParams<{ section?: string }>();
   const [saved, setSaved] = useState<Record<string, boolean>>({});
   const [items, setItems] = useState<LibraryItem[]>([]);
+  const [mentorItems, setMentorItems] = useState<ManagedKnowledgeResource[]>([]);
+  const [mentorSubmissions, setMentorSubmissions] = useState<KnowledgeResourceSubmissionItem[]>([]);
   const [institutionItems, setInstitutionItems] = useState<LibraryItem[]>([]);
   const [institutionName, setInstitutionName] = useState("");
   const [roadmapItems, setRoadmapItems] = useState<LibraryItem[]>([]);
@@ -148,9 +183,13 @@ export default function CommunityLibraryPage() {
     title: "",
     description: "",
     url: "",
+    className: "",
+    scope: "institution" as "global" | "institution" | "class",
     bannerImageUrl: "",
     documentUrl: ""
   });
+  const [resourceReviewDrafts, setResourceReviewDrafts] = useState<Record<string, { xpAwarded: string; notes: string; issueCertificate: boolean }>>({});
+  const [reviewingSubmissionId, setReviewingSubmissionId] = useState<string | null>(null);
 
   useEffect(() => {
     const requestedSection = String(params.section || "").trim().toLowerCase();
@@ -176,13 +215,22 @@ export default function CommunityLibraryPage() {
       if (refresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const res = await api.get<LibraryItem[] | LibraryResponse>("/api/network/knowledge-library");
-      const payload = Array.isArray(res.data) ? { items: res.data } : (res.data || {});
+      const [libraryRes, mentorMineRes, mentorSubmissionsRes] = await Promise.allSettled([
+        api.get<LibraryItem[] | LibraryResponse>("/api/network/knowledge-library"),
+        user?.role === "mentor" ? api.get<ManagedKnowledgeResource[]>("/api/network/knowledge-library/mine") : Promise.resolve({ data: [] as ManagedKnowledgeResource[] }),
+        user?.role === "mentor" ? api.get<KnowledgeResourceSubmissionItem[]>("/api/network/knowledge-library/submissions/mentor") : Promise.resolve({ data: [] as KnowledgeResourceSubmissionItem[] })
+      ]);
+      const libraryPayload = libraryRes.status === "fulfilled" ? libraryRes.value.data : [];
+      const payload = Array.isArray(libraryPayload) ? { items: libraryPayload } : (libraryPayload || {});
       const nextInstitutionItems = payload.institutionResources || [];
       const nextRoadmapItems = payload.roadmapResources || payload.items || [];
       const nextDomainItems = payload.domainResources || payload.items || [];
       const nextItems = payload.items || nextRoadmapItems || [];
+      const nextMentorItems = mentorMineRes.status === "fulfilled" ? mentorMineRes.value.data || [] : [];
+      const nextMentorSubmissions = mentorSubmissionsRes.status === "fulfilled" ? mentorSubmissionsRes.value.data || [] : [];
       setItems(nextItems);
+      setMentorItems(nextMentorItems);
+      setMentorSubmissions(nextMentorSubmissions);
       setInstitutionItems(nextInstitutionItems);
       setInstitutionName(String(payload.institutionName || "").trim());
       setRoadmapItems(nextRoadmapItems);
@@ -223,7 +271,38 @@ export default function CommunityLibraryPage() {
       setLoading(false);
       setRefreshing(false);
     }
+  }, [user?.role]);
+
+  const updateResourceReviewDraft = useCallback((submissionId: string, patch: Partial<{ xpAwarded: string; notes: string; issueCertificate: boolean }>) => {
+    setResourceReviewDrafts((prev) => ({
+      ...prev,
+      [submissionId]: {
+        xpAwarded: prev[submissionId]?.xpAwarded || "",
+        notes: prev[submissionId]?.notes || "",
+        issueCertificate: prev[submissionId]?.issueCertificate || false,
+        ...patch
+      }
+    }));
   }, []);
+
+  const reviewResourceSubmission = useCallback(async (submissionId: string, status: "accepted" | "rejected") => {
+    const draft = resourceReviewDrafts[submissionId] || { xpAwarded: "", notes: "", issueCertificate: false };
+    try {
+      setReviewingSubmissionId(submissionId);
+      await api.patch(`/api/network/knowledge-library/submissions/${encodeURIComponent(submissionId)}/review`, {
+        status,
+        xpAwarded: status === "accepted" ? Number(draft.xpAwarded || 0) : 0,
+        notes: draft.notes,
+        issueCertificate: status === "accepted" ? draft.issueCertificate : false
+      });
+      Alert.alert("Saved", status === "accepted" ? "Resource work approved." : "Resource work sent back for updates.");
+      await load(true);
+    } catch (e: any) {
+      handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to review resource submission." });
+    } finally {
+      setReviewingSubmissionId(null);
+    }
+  }, [load, resourceReviewDrafts]);
 
   useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY)
@@ -755,10 +834,159 @@ export default function CommunityLibraryPage() {
         </CommunitySection>
       ) : null}
 
-      {user?.role === "mentor" || user?.role === "student" ? (
+      {user?.role === "mentor" ? (
+        <>
+          <CommunitySection
+            title="Manage Library Resources"
+            subtitle="Create institution or class resources here, then review the student work tied to your resources."
+            icon="construct"
+          >
+            <View style={styles.chips}>
+              {(["institution", "class", "global"] as const).map((scope) => {
+                const active = submitForm.scope === scope;
+                return (
+                  <TouchableOpacity
+                    key={`resource-scope-${scope}`}
+                    style={[
+                      styles.chip,
+                      { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border },
+                      active && [styles.chipActive, { backgroundColor: "#EEF2FF", borderColor: colors.accent }]
+                    ]}
+                    onPress={() => setSubmitForm((prev) => ({ ...prev, scope, className: scope === "class" ? prev.className : "" }))}
+                  >
+                    <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>
+                      {scope === "institution" ? "My Institution" : scope === "class" ? "Specific Class" : "Global"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
+            {submitForm.scope === "class" ? (
+              <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Class / Section" placeholderTextColor={colors.textMuted} value={submitForm.className} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, className: text }))} />
+            ) : null}
+            <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Type (roadmap, interview_questions, coding_resource, career_guide, other)" placeholderTextColor={colors.textMuted} value={submitForm.type} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, type: text }))} />
+            <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Title" placeholderTextColor={colors.textMuted} value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />
+            <TextInput style={[styles.input, styles.textArea, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Short description" placeholderTextColor={colors.textMuted} value={submitForm.description} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, description: text }))} multiline />
+            <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="URL (optional)" placeholderTextColor={colors.textMuted} value={submitForm.url} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, url: text }))} />
+            <View style={styles.uploadRow}>
+              <TouchableOpacity style={styles.uploadBtn} onPress={uploadBanner} disabled={uploadingBanner}>
+                <Text style={styles.uploadBtnText}>{uploadingBanner ? "Uploading..." : submitForm.bannerImageUrl ? "Change Banner" : "Upload Banner"}</Text>
+              </TouchableOpacity>
+              {submitForm.bannerImageUrl ? <Image source={{ uri: submitForm.bannerImageUrl }} style={styles.bannerPreview} /> : null}
+            </View>
+            <View style={styles.uploadRow}>
+              <TouchableOpacity style={styles.uploadBtnAlt} onPress={uploadDocument} disabled={uploadingDoc}>
+                <Text style={styles.uploadBtnText}>{uploadingDoc ? "Uploading..." : submitForm.documentUrl ? "Replace Document" : "Upload Document"}</Text>
+              </TouchableOpacity>
+              {submitForm.documentUrl ? (
+                <TouchableOpacity style={styles.docRow} onPress={() => openExternalLink(submitForm.documentUrl, "Document link missing")}>
+                  <Ionicons name="document-text-outline" size={18} color="#175CD3" />
+                  <Text style={styles.docText}>Open uploaded document</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <ActionButton
+              label={submitting ? "Submitting..." : "Submit for Review"}
+              icon="send"
+              disabled={submitting}
+              onPress={async () => {
+                try {
+                  if (!submitForm.title.trim()) {
+                    Alert.alert("Title required", "Please enter a title for the resource.");
+                    return;
+                  }
+                  setSubmitting(true);
+                  await api.post("/api/network/knowledge-library/submit", {
+                    domain: submitForm.domain.trim(),
+                    type: submitForm.type.trim() || "other",
+                    title: submitForm.title.trim(),
+                    description: submitForm.description.trim(),
+                    url: submitForm.url.trim(),
+                    className: submitForm.scope === "class" ? submitForm.className.trim() : "",
+                    scope: submitForm.scope,
+                    bannerImageUrl: submitForm.bannerImageUrl.trim(),
+                    documentUrl: submitForm.documentUrl.trim()
+                  });
+                  Alert.alert("Submitted", "Resource sent to admin for review.");
+                  setSubmitForm({ domain: "", type: "other", title: "", description: "", url: "", className: "", scope: "institution", bannerImageUrl: "", documentUrl: "" });
+                  await load(true);
+                } catch (e: any) {
+                  handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit resource." });
+                } finally {
+                  setSubmitting(false);
+                }
+              }}
+            />
+            {mentorItems.length ? mentorItems.slice(0, 6).map((item) => (
+              <View key={item.id} style={[styles.detailCard, { backgroundColor: isDark ? colors.surfaceAlt : "#FBFBFF", borderColor: colors.border }]}>
+                <Text style={[styles.detailTitle, { color: colors.text }]}>{item.title}</Text>
+                <Text style={[styles.detailMeta, { color: colors.textMuted }]}>
+                  {(item.scope || "global").toUpperCase()}{item.className ? ` · ${item.className}` : ""}{item.domain ? ` · ${item.domain}` : ""}
+                </Text>
+                <Text style={[styles.detailMeta, { color: colors.textMuted }]}>Status: {item.approvalStatus || "pending"}</Text>
+              </View>
+            )) : (
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>No mentor resources submitted yet.</Text>
+            )}
+          </CommunitySection>
+
+          <CommunitySection
+            title="Review Student Work"
+            subtitle="Students submit proof to the mentor who uploaded the resource, and you review it here."
+            icon="checkmark-done-circle"
+          >
+            {!mentorSubmissions.length ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No student resource submissions yet.</Text> : null}
+            {mentorSubmissions.slice(0, 10).map((item) => {
+              const reviewDraft = resourceReviewDrafts[item.id] || {
+                xpAwarded: String(item.mentorReview?.xpAwarded || ""),
+                notes: item.mentorReview?.notes || "",
+                issueCertificate: Boolean(item.mentorReview?.certificateId)
+              };
+              return (
+                <View key={item.id} style={[styles.detailCard, { backgroundColor: isDark ? colors.surfaceAlt : "#FBFBFF", borderColor: colors.border }]}>
+                  <Text style={[styles.detailTitle, { color: colors.text }]}>{item.resourceTitle}</Text>
+                  <Text style={[styles.detailMeta, { color: colors.textMuted }]}>{item.student?.name || "Student"}{item.student?.email ? ` · ${item.student.email}` : ""}</Text>
+                  <Text style={[styles.detailMeta, { color: colors.textMuted }]}>{(item.scope || "global").toUpperCase()}{item.className ? ` · ${item.className}` : ""}{item.resourceDomain ? ` · ${item.resourceDomain}` : ""}</Text>
+                  {item.proofText ? <Text style={[styles.detailText, { color: colors.text }]}>{item.proofText}</Text> : null}
+                  {item.proofLink ? <Text style={[styles.detailMeta, { color: colors.textMuted }]}>{item.proofLink}</Text> : null}
+                  <TextInput
+                    style={[styles.input, { backgroundColor: isDark ? colors.surface : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                    placeholder="XP to award"
+                    placeholderTextColor={colors.textMuted}
+                    keyboardType="numeric"
+                    value={reviewDraft.xpAwarded}
+                    onChangeText={(value) => updateResourceReviewDraft(item.id, { xpAwarded: value })}
+                  />
+                  <TextInput
+                    style={[styles.input, styles.textArea, { backgroundColor: isDark ? colors.surface : "#FFFFFF", borderColor: colors.border, color: colors.text }]}
+                    placeholder="Mentor review note"
+                    placeholderTextColor={colors.textMuted}
+                    value={reviewDraft.notes}
+                    onChangeText={(value) => updateResourceReviewDraft(item.id, { notes: value })}
+                    multiline
+                  />
+                  <TouchableOpacity
+                    style={[styles.uploadBtnAlt, reviewDraft.issueCertificate && { borderColor: colors.accent, backgroundColor: isDark ? colors.surface : "#EEF2FF" }]}
+                    onPress={() => updateResourceReviewDraft(item.id, { issueCertificate: !reviewDraft.issueCertificate })}
+                  >
+                    <Text style={styles.uploadBtnText}>{reviewDraft.issueCertificate ? "Certificate: Yes" : "Issue Certificate"}</Text>
+                  </TouchableOpacity>
+                  <View style={styles.actionRow}>
+                    <ActionButton label={reviewingSubmissionId === item.id ? "Saving..." : "Approve + XP"} icon="checkmark" onPress={() => reviewResourceSubmission(item.id, "accepted")} disabled={reviewingSubmissionId === item.id} style={styles.flexAction} />
+                    <ActionButton label="Reject" icon="close" variant="ghost" onPress={() => reviewResourceSubmission(item.id, "rejected")} disabled={reviewingSubmissionId === item.id} style={styles.flexAction} />
+                  </View>
+                </View>
+              );
+            })}
+          </CommunitySection>
+        </>
+      ) : null}
+
+      {user?.role === "student" ? (
         <CommunitySection
           title="Contribute to the Library"
-          subtitle="Mentors and students can submit resources. Admin approval is required before publishing."
+          subtitle="Students can still suggest useful resources. Admin approval is required before publishing."
           icon="add-circle"
         >
           <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
@@ -800,11 +1028,13 @@ export default function CommunityLibraryPage() {
                   title: submitForm.title.trim(),
                   description: submitForm.description.trim(),
                   url: submitForm.url.trim(),
+                  className: "",
+                  scope: "institution",
                   bannerImageUrl: submitForm.bannerImageUrl.trim(),
                   documentUrl: submitForm.documentUrl.trim()
                 });
                 Alert.alert("Submitted", "Resource sent to admin for review.");
-                setSubmitForm({ domain: "", type: "other", title: "", description: "", url: "", bannerImageUrl: "", documentUrl: "" });
+                setSubmitForm({ domain: "", type: "other", title: "", description: "", url: "", className: "", scope: "institution", bannerImageUrl: "", documentUrl: "" });
               } catch (e: any) {
                 handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit resource." });
               } finally {

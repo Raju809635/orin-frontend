@@ -86,6 +86,17 @@ type SelectedCertificate = {
   certificateUrl?: string;
   metadata?: EarnedCert["metadata"];
 };
+type MentorCertificateTemplateItem = {
+  id: string;
+  title: string;
+  templateKey: string;
+  certificateType?: string;
+  xpReward?: number;
+  scope?: "global" | "institution" | "class";
+  institutionName?: string;
+  className?: string;
+  isActive?: boolean;
+};
 
 export default function CommunityCertificationsPage() {
   const router = useRouter();
@@ -94,12 +105,20 @@ export default function CommunityCertificationsPage() {
   const [tracks, setTracks] = useState<TrackItem[]>([]);
   const [earned, setEarned] = useState<EarnedCert[]>([]);
   const [requests, setRequests] = useState<MyRequest[]>([]);
+  const [mentorTemplates, setMentorTemplates] = useState<MentorCertificateTemplateItem[]>([]);
   const [selected, setSelected] = useState<SelectedCertificate | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [requestNoteById, setRequestNoteById] = useState<Record<string, string>>({});
   const [submittingId, setSubmittingId] = useState("");
+  const [templateScope, setTemplateScope] = useState<"global" | "institution" | "class">("institution");
+  const [templateTitle, setTemplateTitle] = useState("");
+  const [templateClassName, setTemplateClassName] = useState("");
+  const [templateType, setTemplateType] = useState("manual");
+  const [templateXpReward, setTemplateXpReward] = useState("0");
+  const [templateDescription, setTemplateDescription] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -107,19 +126,22 @@ export default function CommunityCertificationsPage() {
       else setLoading(true);
       setError(null);
 
-      const [tracksRes, earnedRes, reqRes] = await Promise.allSettled([
+      const [tracksRes, earnedRes, reqRes, templateRes] = await Promise.allSettled([
         api.get<TrackItem[]>("/api/network/certification-tracks"),
         api.get<EarnedCert[]>("/api/network/certifications"),
-        api.get<MyRequest[]>("/api/network/certification-requests/me")
+        api.get<MyRequest[]>("/api/network/certification-requests/me"),
+        user?.role === "mentor" ? api.get<MentorCertificateTemplateItem[]>("/api/network/certificate-templates/mentor") : Promise.resolve({ data: [] as MentorCertificateTemplateItem[] })
       ]);
 
       const nextTracks = tracksRes.status === "fulfilled" ? tracksRes.value.data || [] : [];
       const nextEarned = earnedRes.status === "fulfilled" ? earnedRes.value.data || [] : [];
       const nextRequests = reqRes.status === "fulfilled" ? reqRes.value.data || [] : [];
+      const nextTemplates = templateRes.status === "fulfilled" ? templateRes.value.data || [] : [];
 
       setTracks(nextTracks);
       setEarned(nextEarned);
       setRequests(nextRequests);
+      setMentorTemplates(nextTemplates);
       setSelected((prev) => {
         const currentId = prev?.id || prev?.certificateId;
         const matched = currentId
@@ -133,7 +155,7 @@ export default function CommunityCertificationsPage() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [user?.role]);
 
   useFocusEffect(
     useCallback(() => {
@@ -376,6 +398,118 @@ export default function CommunityCertificationsPage() {
         ))}
       </CommunitySection>
 
+      {user?.role === "mentor" ? (
+        <CommunitySection
+          title="Mentor Certificate Templates"
+          subtitle="Keep institution and class certificate templates in the existing certifications area instead of the mentor dashboard."
+          icon="ribbon"
+        >
+          <View style={styles.pillRow}>
+            {(["institution", "class", "global"] as const).map((scope) => {
+              const active = templateScope === scope;
+              return (
+                <TouchableOpacity
+                  key={`template-scope-${scope}`}
+                  style={[styles.scopeChip, { borderColor: active ? "#6D63FF" : colors.border, backgroundColor: active ? "#EEF2FF" : colors.surfaceAlt }]}
+                  onPress={() => {
+                    setTemplateScope(scope);
+                    if (scope !== "class") setTemplateClassName("");
+                  }}
+                >
+                  <Text style={[styles.scopeChipText, { color: active ? "#6D63FF" : colors.textMuted }]}>
+                    {scope === "institution" ? "My Institution" : scope === "class" ? "Specific Class" : "Global"}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+            placeholder="Template title"
+            placeholderTextColor={colors.textMuted}
+            value={templateTitle}
+            onChangeText={setTemplateTitle}
+          />
+          {templateScope === "class" ? (
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+              placeholder="Class / Section"
+              placeholderTextColor={colors.textMuted}
+              value={templateClassName}
+              onChangeText={setTemplateClassName}
+            />
+          ) : null}
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+            placeholder="Certificate type (manual, roadmap, challenge)"
+            placeholderTextColor={colors.textMuted}
+            value={templateType}
+            onChangeText={setTemplateType}
+          />
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+            placeholder="XP reward"
+            placeholderTextColor={colors.textMuted}
+            keyboardType="numeric"
+            value={templateXpReward}
+            onChangeText={setTemplateXpReward}
+          />
+          <TextInput
+            style={[styles.input, styles.textArea, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+            placeholder="Template description"
+            placeholderTextColor={colors.textMuted}
+            value={templateDescription}
+            onChangeText={setTemplateDescription}
+            multiline
+          />
+          <ActionButton
+            label={savingTemplate ? "Saving..." : "Save Template"}
+            icon="save"
+            disabled={savingTemplate}
+            onPress={async () => {
+              try {
+                if (!templateTitle.trim()) {
+                  Alert.alert("Title required", "Please add a template title.");
+                  return;
+                }
+                setSavingTemplate(true);
+                await api.post("/api/network/certificate-templates/mentor", {
+                  title: templateTitle.trim(),
+                  className: templateScope === "class" ? templateClassName.trim() : "",
+                  description: templateDescription.trim(),
+                  xpReward: Number(templateXpReward || 0),
+                  certificateType: templateType.trim() || "manual",
+                  scope: templateScope
+                });
+                Alert.alert("Saved", "Certificate template saved.");
+                setTemplateTitle("");
+                setTemplateClassName("");
+                setTemplateType("manual");
+                setTemplateXpReward("0");
+                setTemplateDescription("");
+                await load(true);
+              } catch (e: any) {
+                handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to save certificate template." });
+              } finally {
+                setSavingTemplate(false);
+              }
+            }}
+          />
+          {!mentorTemplates.length ? <Text style={[styles.emptyText, { color: colors.textMuted }]}>No mentor certificate templates yet.</Text> : null}
+          {mentorTemplates.slice(0, 8).map((item) => (
+            <View key={item.id} style={[styles.trackCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <View style={styles.cardHeaderRow}>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{item.title}</Text>
+                <StatusBadge label={item.certificateType || "manual"} tone="primary" />
+              </View>
+              <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
+                {(item.scope || "global").toUpperCase()}{item.className ? ` · ${item.className}` : ""} · {item.xpReward || 0} XP
+              </Text>
+            </View>
+          ))}
+        </CommunitySection>
+      ) : null}
+
       <CommunitySection
         title="Request Status"
         subtitle="Simple status tags keep the workflow easy to understand."
@@ -504,6 +638,13 @@ const styles = StyleSheet.create({
   pillRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   emptyText: { color: "#667085", lineHeight: 20 },
   error: { color: "#B42318", fontWeight: "700" },
+  scopeChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10
+  },
+  scopeChipText: { fontWeight: "700" },
   achievementCard: {
     borderRadius: 18,
     borderWidth: 1,
@@ -598,6 +739,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 12,
     paddingVertical: 11
-  }
+  },
+  textArea: { minHeight: 96, textAlignVertical: "top" }
 });
 

@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { getDomainTree, getFallbackDomainTree, type DomainTreeResponse } from "@/lib/domainTree";
+import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
@@ -90,6 +91,26 @@ type InstitutionRoadmapItem = {
   }[];
   mentor?: { id?: string | null; name?: string };
 };
+type InstitutionRoadmapSubmissionItem = {
+  id: string;
+  roadmapTitle: string;
+  weekTitle: string;
+  status: "submitted" | "accepted" | "rejected";
+  proofText?: string;
+  proofLink?: string;
+  proofImageUrl?: string;
+  student?: {
+    id?: string | null;
+    name?: string;
+    email?: string;
+  };
+  mentorReview?: {
+    reviewedAt?: string | null;
+    notes?: string;
+    xpAwarded?: number;
+    certificateId?: string | null;
+  };
+};
 
 const GENERATION_STAGES = ["Analyzing goal...", "Building steps...", "Optimizing path..."];
 const MISSION_XP = 20;
@@ -140,6 +161,7 @@ function formatRoadmapDate(value?: string | null) {
 }
 
 export default function AiCareerRoadmapPage() {
+  const { user } = useAuth();
   const { colors, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ section?: string }>();
@@ -174,6 +196,17 @@ export default function AiCareerRoadmapPage() {
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [drawerSection, setDrawerSection] = useState<RoadmapDrawerSection>("ai");
   const [recentInstitutionRoadmapIds, setRecentInstitutionRoadmapIds] = useState<string[]>([]);
+  const [institutionRoadmapTitle, setInstitutionRoadmapTitle] = useState("");
+  const [institutionRoadmapDomain, setInstitutionRoadmapDomain] = useState("");
+  const [institutionRoadmapClassName, setInstitutionRoadmapClassName] = useState("");
+  const [institutionRoadmapDescription, setInstitutionRoadmapDescription] = useState("");
+  const [institutionRoadmapWeekOne, setInstitutionRoadmapWeekOne] = useState("");
+  const [institutionRoadmapWeekTwo, setInstitutionRoadmapWeekTwo] = useState("");
+  const [institutionRoadmapWeekThree, setInstitutionRoadmapWeekThree] = useState("");
+  const [creatingInstitutionRoadmap, setCreatingInstitutionRoadmap] = useState(false);
+  const [mentorInstitutionSubmissions, setMentorInstitutionSubmissions] = useState<InstitutionRoadmapSubmissionItem[]>([]);
+  const [institutionReviewDrafts, setInstitutionReviewDrafts] = useState<Record<string, { xpAwarded: string; notes: string; issueCertificate: boolean }>>({});
+  const [reviewingInstitutionSubmissionId, setReviewingInstitutionSubmissionId] = useState<string | null>(null);
 
   useEffect(() => {
     const requestedSection = String(params.section || "").trim().toLowerCase();
@@ -244,6 +277,19 @@ export default function AiCareerRoadmapPage() {
     async (refresh = false) => {
       let stageTimer: ReturnType<typeof setInterval> | null = null;
       try {
+        if (user?.role === "mentor") {
+          if (refresh) setRefreshing(true);
+          else setLoading(true);
+          setError(null);
+          const [institutionRes, submissionsRes] = await Promise.allSettled([
+            api.get<{ roadmaps: InstitutionRoadmapItem[] }>("/api/network/institution-roadmaps"),
+            api.get<InstitutionRoadmapSubmissionItem[]>("/api/network/institution-roadmaps/submissions/mentor")
+          ]);
+          setInstitutionRoadmaps(institutionRes.status === "fulfilled" ? institutionRes.value.data?.roadmaps || [] : []);
+          setMentorInstitutionSubmissions(submissionsRes.status === "fulfilled" ? submissionsRes.value.data || [] : []);
+          setData(null);
+          return;
+        }
         if (!customGoal.trim()) {
           setError("Please add your goal here before generating a roadmap.");
           setData(null);
@@ -303,7 +349,7 @@ export default function AiCareerRoadmapPage() {
         setRefreshing(false);
       }
     },
-    [customGoal, enteredSkills.length, primaryCategory, resolvedGoal, skillsInput, subCategory, focus]
+    [customGoal, enteredSkills.length, focus, primaryCategory, resolvedGoal, skillsInput, subCategory, user?.role]
   );
 
   const completedSteps = useMemo(
@@ -345,6 +391,14 @@ export default function AiCareerRoadmapPage() {
     if (drawerSection === "recent") return "Recent Roadmap Activity";
     return "AI Roadmaps";
   }, [drawerSection]);
+  const isMentorView = user?.role === "mentor";
+  const studentAiVisible = drawerSection === "ai" && !isMentorView;
+
+  useEffect(() => {
+    if (user?.role === "mentor") {
+      load();
+    }
+  }, [load, user?.role]);
 
   useEffect(() => {
     if (!currentMission || !currentMission.startedAt) {
@@ -579,6 +633,76 @@ export default function AiCareerRoadmapPage() {
     setRecentInstitutionRoadmapIds((prev) => [roadmapId, ...prev.filter((id) => id !== roadmapId)].slice(0, 12));
   }, []);
 
+  const createInstitutionRoadmap = useCallback(async () => {
+    const weeks = [institutionRoadmapWeekOne, institutionRoadmapWeekTwo, institutionRoadmapWeekThree]
+      .map((title, index) => ({
+        id: `week-${index + 1}`,
+        title: String(title || "").trim(),
+        tasks: [`Complete ${String(title || `week ${index + 1}`).trim()} tasks`, "Submit proof to mentor", "Review linked resources"]
+      }))
+      .filter((item) => item.title);
+
+    if (!institutionRoadmapTitle.trim() || !weeks.length) {
+      notify("Add a roadmap title and at least one week.");
+      return;
+    }
+
+    try {
+      setCreatingInstitutionRoadmap(true);
+      await api.post("/api/network/institution-roadmaps", {
+        title: institutionRoadmapTitle.trim(),
+        description: institutionRoadmapDescription.trim(),
+        domain: institutionRoadmapDomain.trim(),
+        className: institutionRoadmapClassName.trim(),
+        weeks
+      });
+      setInstitutionRoadmapTitle("");
+      setInstitutionRoadmapDescription("");
+      setInstitutionRoadmapDomain("");
+      setInstitutionRoadmapClassName("");
+      setInstitutionRoadmapWeekOne("");
+      setInstitutionRoadmapWeekTwo("");
+      setInstitutionRoadmapWeekThree("");
+      notify("Institution roadmap created.");
+      await load(true);
+    } catch (e: any) {
+      handleAppError(e, { fallbackMessage: "Unable to create institution roadmap right now." });
+    } finally {
+      setCreatingInstitutionRoadmap(false);
+    }
+  }, [institutionRoadmapClassName, institutionRoadmapDescription, institutionRoadmapDomain, institutionRoadmapTitle, institutionRoadmapWeekOne, institutionRoadmapWeekThree, institutionRoadmapWeekTwo, load]);
+
+  const updateInstitutionReviewDraft = useCallback((submissionId: string, patch: Partial<{ xpAwarded: string; notes: string; issueCertificate: boolean }>) => {
+    setInstitutionReviewDrafts((prev) => ({
+      ...prev,
+      [submissionId]: {
+        xpAwarded: prev[submissionId]?.xpAwarded || "",
+        notes: prev[submissionId]?.notes || "",
+        issueCertificate: prev[submissionId]?.issueCertificate || false,
+        ...patch
+      }
+    }));
+  }, []);
+
+  const reviewInstitutionSubmission = useCallback(async (submissionId: string, status: "accepted" | "rejected") => {
+    const draft = institutionReviewDrafts[submissionId] || { xpAwarded: "", notes: "", issueCertificate: false };
+    try {
+      setReviewingInstitutionSubmissionId(submissionId);
+      await api.patch(`/api/network/institution-roadmaps/submissions/${encodeURIComponent(submissionId)}/review`, {
+        status,
+        xpAwarded: status === "accepted" ? Number(draft.xpAwarded || 0) : 0,
+        notes: draft.notes,
+        issueCertificate: status === "accepted" ? draft.issueCertificate : false
+      });
+      notify(status === "accepted" ? "Submission approved." : "Submission sent back for rework.");
+      await load(true);
+    } catch (e: any) {
+      handleAppError(e, { fallbackMessage: "Unable to review institution roadmap submission right now." });
+    } finally {
+      setReviewingInstitutionSubmissionId(null);
+    }
+  }, [institutionReviewDrafts, load]);
+
   const drawerItems = (
     <View
       style={[
@@ -749,7 +873,65 @@ export default function AiCareerRoadmapPage() {
         </View>
       </LinearGradient>
 
-      {drawerSection === "ai" ? (
+      {isMentorView ? (
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="build" size={16} color={AI_INDIGO} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Mentor Roadmap Control</Text>
+        </View>
+        <Text style={[styles.meta, { color: colors.textMuted }]}>Create institution or class roadmaps here. Students will consume them on the same roadmap page and submit proof back to you.</Text>
+        <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapTitle} onChangeText={setInstitutionRoadmapTitle} placeholder="Roadmap title" placeholderTextColor={colors.textMuted} />
+        <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapDomain} onChangeText={setInstitutionRoadmapDomain} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} />
+        <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapClassName} onChangeText={setInstitutionRoadmapClassName} placeholder="Class / Section (optional)" placeholderTextColor={colors.textMuted} />
+        <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapDescription} onChangeText={setInstitutionRoadmapDescription} placeholder="Roadmap description" placeholderTextColor={colors.textMuted} multiline />
+        <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapWeekOne} onChangeText={setInstitutionRoadmapWeekOne} placeholder="Week 1 title" placeholderTextColor={colors.textMuted} />
+        <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapWeekTwo} onChangeText={setInstitutionRoadmapWeekTwo} placeholder="Week 2 title" placeholderTextColor={colors.textMuted} />
+        <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapWeekThree} onChangeText={setInstitutionRoadmapWeekThree} placeholder="Week 3 title" placeholderTextColor={colors.textMuted} />
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_INDIGO }]} onPress={createInstitutionRoadmap} disabled={creatingInstitutionRoadmap}>
+          <Text style={styles.primaryBtnText}>{creatingInstitutionRoadmap ? "Creating..." : "Create Institution Roadmap"}</Text>
+        </TouchableOpacity>
+      </View>
+      ) : null}
+
+      {isMentorView ? (
+      <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.sectionHeader}>
+          <Ionicons name="checkmark-done-circle" size={16} color={AI_TEAL} />
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Roadmap Reviews</Text>
+        </View>
+        {!mentorInstitutionSubmissions.length ? <Text style={[styles.meta, { color: colors.textMuted }]}>No student roadmap submissions yet.</Text> : null}
+        {mentorInstitutionSubmissions.slice(0, 10).map((item) => {
+          const reviewDraft = institutionReviewDrafts[item.id] || {
+            xpAwarded: String(item.mentorReview?.xpAwarded || ""),
+            notes: item.mentorReview?.notes || "",
+            issueCertificate: Boolean(item.mentorReview?.certificateId)
+          };
+          return (
+            <View key={item.id} style={styles.institutionWeekCard}>
+              <Text style={styles.institutionWeekTitle}>{item.roadmapTitle}</Text>
+              <Text style={styles.meta}>{item.weekTitle} · {item.student?.name || "Student"}{item.student?.email ? ` · ${item.student.email}` : ""}</Text>
+              {item.proofText ? <Text style={styles.meta}>{item.proofText}</Text> : null}
+              {item.proofLink ? <Text style={styles.meta}>{item.proofLink}</Text> : null}
+              <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={reviewDraft.xpAwarded} onChangeText={(value) => updateInstitutionReviewDraft(item.id, { xpAwarded: value })} placeholder="XP to award" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
+              <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={reviewDraft.notes} onChangeText={(value) => updateInstitutionReviewDraft(item.id, { notes: value })} placeholder="Mentor review note" placeholderTextColor={colors.textMuted} multiline />
+              <TouchableOpacity style={[styles.secondaryBtn, { backgroundColor: reviewDraft.issueCertificate ? (isDark ? "rgba(109,40,217,0.18)" : "#F4F3FF") : (isDark ? colors.surfaceAlt : "#F9FAFB") }]} onPress={() => updateInstitutionReviewDraft(item.id, { issueCertificate: !reviewDraft.issueCertificate })}>
+                <Text style={[styles.secondaryBtnText, { color: reviewDraft.issueCertificate ? AI_INDIGO : colors.textMuted }]}>{reviewDraft.issueCertificate ? "Certificate: Yes" : "Issue Certificate"}</Text>
+              </TouchableOpacity>
+              <View style={styles.actionRow}>
+                <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_TEAL, flex: 1 }]} onPress={() => reviewInstitutionSubmission(item.id, "accepted")} disabled={reviewingInstitutionSubmissionId === item.id}>
+                  <Text style={styles.primaryBtnText}>{reviewingInstitutionSubmissionId === item.id ? "Saving..." : "Approve + XP"}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.secondaryOutlineBtn, { borderColor: colors.border, flex: 1 }]} onPress={() => reviewInstitutionSubmission(item.id, "rejected")} disabled={reviewingInstitutionSubmissionId === item.id}>
+                  <Text style={[styles.secondaryOutlineBtnText, { color: colors.text }]}>Reject</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          );
+        })}
+      </View>
+      ) : null}
+
+      {studentAiVisible ? (
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="map" size={16} color={AI_INDIGO} />
@@ -822,7 +1004,7 @@ export default function AiCareerRoadmapPage() {
         </TouchableOpacity>
       </View>) : null}
 
-      {drawerSection === "ai" ? (
+      {studentAiVisible ? (
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="flash" size={16} color={AI_TEAL} />
@@ -876,7 +1058,7 @@ export default function AiCareerRoadmapPage() {
         )}
       </View>) : null}
 
-      {drawerSection === "ai" ? (
+      {studentAiVisible ? (
       <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="sparkles" size={16} color={AI_GOLD} />
@@ -893,7 +1075,7 @@ export default function AiCareerRoadmapPage() {
         {!loading && !isGenerating && !data ? <Text style={styles.meta}>Roadmap unavailable.</Text> : null}
       </View>) : null}
 
-      {data && drawerSection === "ai" ? (
+      {data && studentAiVisible ? (
         <>
           <View style={[styles.section, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.sectionHeader}>
