@@ -438,6 +438,10 @@ function nextDates(days = 14) {
   return out;
 }
 
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
 export default function MentorDashboard() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: string; growth?: string }>();
@@ -998,7 +1002,7 @@ export default function MentorDashboard() {
       let adminMessages: AdminChatMessage[] = [];
       try {
         const chatRes = await api.get<{ messages: AdminChatMessage[] }>("/api/chat/messages/admin");
-        adminMessages = chatRes.data.messages || [];
+        adminMessages = asArray<AdminChatMessage>(chatRes.data.messages);
       } catch {
         adminMessages = [];
       }
@@ -1011,17 +1015,17 @@ export default function MentorDashboard() {
         }>(
           `/api/availability/mentor/${user.id}`
         );
-        setAvailabilitySlots(availabilityRes.data.weeklySlots || []);
-        setDateSpecificSlots(availabilityRes.data.dateSlots || []);
+        setAvailabilitySlots(asArray<AvailabilitySlot>(availabilityRes.data.weeklySlots));
+        setDateSpecificSlots(asArray<AvailabilitySlot>(availabilityRes.data.dateSlots));
         setBlockedDateList(
-          (availabilityRes.data.blockedDates || [])
+          asArray<{ blockedDate?: string }>(availabilityRes.data.blockedDates)
             .map((item) => item?.blockedDate || "")
             .filter(Boolean)
         );
       }
 
-      setBookings(bookingRes.value.data || []);
-      setSessions(sessionRes.value.data || []);
+      setBookings(asArray<Booking>(bookingRes.value.data));
+      setSessions(asArray<Session>(sessionRes.value.data));
       setMessages(adminMessages);
       setSessionPrice(String(Number(profileRes.value.data?.profile?.sessionPrice || 0) || 499));
       setMentorTitle(profileRes.value.data?.profile?.title || "");
@@ -1030,23 +1034,23 @@ export default function MentorDashboard() {
       setPayoutPhoneNumber(profileRes.value.data?.profile?.payoutPhoneNumber || profileRes.value.data?.profile?.phoneNumber || "");
       setMentorProfileSummary(profileRes.value.data?.profile || null);
       setMentorPayoutSummary(payoutRes.status === "fulfilled" ? payoutRes.value.data?.summary || null : null);
-      setMentorPayoutSessions(payoutRes.status === "fulfilled" ? payoutRes.value.data?.sessions || [] : []);
+      setMentorPayoutSessions(payoutRes.status === "fulfilled" ? asArray<MentorPayoutSessionRecord>(payoutRes.value.data?.sessions) : []);
       setMentorSprintPayoutSummary(sprintPayoutRes.status === "fulfilled" ? sprintPayoutRes.value.data?.summary || null : null);
-      setMentorSprintPayouts(sprintPayoutRes.status === "fulfilled" ? sprintPayoutRes.value.data?.enrollments || [] : []);
-      setVerifiedMentors(verifiedRes.status === "fulfilled" ? verifiedRes.value.data || [] : []);
-      setChallenges(challengeRes.status === "fulfilled" ? challengeRes.value.data || [] : []);
-      setMentorResources(resourceRes.status === "fulfilled" ? resourceRes.value.data || [] : []);
-      setResourceSubmissions(resourceSubmissionRes.status === "fulfilled" ? resourceSubmissionRes.value.data || [] : []);
-      setMentorCertificateTemplates(certificateTemplateRes.status === "fulfilled" ? certificateTemplateRes.value.data || [] : []);
-      setMentorGroups(groupRes.status === "fulfilled" ? groupRes.value.data || [] : []);
-      setInstitutionRoadmaps(institutionRoadmapsRes.status === "fulfilled" ? institutionRoadmapsRes.value.data?.roadmaps || [] : []);
-      setInstitutionRoadmapSubmissions(institutionRoadmapSubmissionsRes.status === "fulfilled" ? institutionRoadmapSubmissionsRes.value.data || [] : []);
+      setMentorSprintPayouts(sprintPayoutRes.status === "fulfilled" ? asArray<MentorSprintEnrollmentRecord>(sprintPayoutRes.value.data?.enrollments) : []);
+      setVerifiedMentors(verifiedRes.status === "fulfilled" ? asArray<VerifiedMentor>(verifiedRes.value.data) : []);
+      setChallenges(challengeRes.status === "fulfilled" ? asArray<ChallengeItem>(challengeRes.value.data) : []);
+      setMentorResources(resourceRes.status === "fulfilled" ? asArray<ManagedKnowledgeResource>(resourceRes.value.data) : []);
+      setResourceSubmissions(resourceSubmissionRes.status === "fulfilled" ? asArray<KnowledgeResourceSubmissionItem>(resourceSubmissionRes.value.data) : []);
+      setMentorCertificateTemplates(certificateTemplateRes.status === "fulfilled" ? asArray<MentorCertificateTemplateItem>(certificateTemplateRes.value.data) : []);
+      setMentorGroups(groupRes.status === "fulfilled" ? asArray<MentorGroupItem>(groupRes.value.data) : []);
+      setInstitutionRoadmaps(institutionRoadmapsRes.status === "fulfilled" ? asArray<InstitutionRoadmapItem>(institutionRoadmapsRes.value.data?.roadmaps) : []);
+      setInstitutionRoadmapSubmissions(institutionRoadmapSubmissionsRes.status === "fulfilled" ? asArray<InstitutionRoadmapSubmissionItem>(institutionRoadmapSubmissionsRes.value.data) : []);
       setReputationSummary(reputationRes.status === "fulfilled" ? reputationRes.value.data || null : null);
-      setLiveSessions(liveSessionRes.status === "fulfilled" ? liveSessionRes.value.data || [] : []);
-      setSprints(sprintRes.status === "fulfilled" ? sprintRes.value.data || [] : []);
-      setCertifications(certificationsRes.status === "fulfilled" ? certificationsRes.value.data || [] : []);
-      setPaidLiveBookings(livePaidRes.status === "fulfilled" ? livePaidRes.value.data || [] : []);
-      setPaidSprintEnrollments(sprintPaidRes.status === "fulfilled" ? sprintPaidRes.value.data || [] : []);
+      setLiveSessions(liveSessionRes.status === "fulfilled" ? asArray<LiveSessionItem>(liveSessionRes.value.data) : []);
+      setSprints(sprintRes.status === "fulfilled" ? asArray<SprintItem>(sprintRes.value.data) : []);
+      setCertifications(certificationsRes.status === "fulfilled" ? asArray<CertificationItem>(certificationsRes.value.data) : []);
+      setPaidLiveBookings(livePaidRes.status === "fulfilled" ? asArray<MentorLiveSessionBookingRecord>(livePaidRes.value.data) : []);
+      setPaidSprintEnrollments(sprintPaidRes.status === "fulfilled" ? asArray<MentorSprintEnrollmentRecord>(sprintPaidRes.value.data) : []);
     } catch (e: any) {
       setError(getAppErrorMessage(e, "Failed to load mentor dashboard."));
     } finally {
