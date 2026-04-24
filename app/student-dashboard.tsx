@@ -448,6 +448,10 @@ const newsTabs: { key: NewsCategoryKey; label: string }[] = [
   { key: "opportunities", label: "Opportunities" }
 ];
 
+function asArray<T>(value: unknown): T[] {
+  return Array.isArray(value) ? (value as T[]) : [];
+}
+
 export default function StudentDashboard() {
   const params = useLocalSearchParams<{ section?: string; openQuiz?: string }>();
   const router = useRouter();
@@ -571,8 +575,8 @@ export default function StudentDashboard() {
       api.get<LiveSessionItem[]>("/api/network/live-sessions"),
       api.get<SprintItem[]>("/api/network/sprints")
     ]);
-    setLiveSessions(liveSessionsRes.status === "fulfilled" ? liveSessionsRes.value.data || [] : []);
-    setSprints(sprintsRes.status === "fulfilled" ? sprintsRes.value.data || [] : []);
+    setLiveSessions(liveSessionsRes.status === "fulfilled" ? asArray<LiveSessionItem>(liveSessionsRes.value.data) : []);
+    setSprints(sprintsRes.status === "fulfilled" ? asArray<SprintItem>(sprintsRes.value.data) : []);
   }, [markSectionFetched, shouldSkipSectionFetch]);
 
   const loadSessionsSection = useCallback(async (refresh = false, force = false) => {
@@ -582,7 +586,7 @@ export default function StudentDashboard() {
     const [sessionHistoryRes] = await Promise.allSettled([
       api.get<SessionHistoryItem[]>("/api/network/session-history")
     ]);
-    setSessionHistory(sessionHistoryRes.status === "fulfilled" ? sessionHistoryRes.value.data || [] : []);
+    setSessionHistory(sessionHistoryRes.status === "fulfilled" ? asArray<SessionHistoryItem>(sessionHistoryRes.value.data) : []);
   }, [markSectionFetched, shouldSkipSectionFetch]);
 
   const loadNetworkSection = useCallback(async (refresh = false, force = false) => {
@@ -595,8 +599,8 @@ export default function StudentDashboard() {
         ? api.get<SmartSuggestion[]>("/api/network/suggestions")
         : Promise.resolve({ data: [] as SmartSuggestion[] })
     ]);
-    setNetworkFeed(feedRes.status === "fulfilled" ? feedRes.value.data || [] : []);
-    setSuggestions(suggestionsRes.status === "fulfilled" ? suggestionsRes.value.data || [] : []);
+    setNetworkFeed(feedRes.status === "fulfilled" ? asArray<NetworkPost>(feedRes.value.data) : []);
+    setSuggestions(suggestionsRes.status === "fulfilled" ? asArray<SmartSuggestion>(suggestionsRes.value.data) : []);
   }, [markSectionFetched, shouldSkipSectionFetch]);
 
   const loadGrowthAiSection = useCallback(async (refresh = false, force = false) => {
@@ -624,11 +628,15 @@ export default function StudentDashboard() {
     ]);
     setMentorMatches(mentorMatchesRes.status === "fulfilled" ? mentorMatchesRes.value.data?.recommendations || [] : []);
     setRoadmap(roadmapRes.status === "fulfilled" ? roadmapRes.value.data || null : null);
-    setOpportunities(opportunitiesRes.status === "fulfilled" ? opportunitiesRes.value.data || [] : []);
+    setOpportunities(opportunitiesRes.status === "fulfilled" ? asArray<OpportunityItem>(opportunitiesRes.value.data) : []);
     setLeaderboard(leaderboardRes.status === "fulfilled" ? leaderboardRes.value.data || null : null);
     setSkillGap(skillGapRes.status === "fulfilled" ? skillGapRes.value.data || null : null);
-    setVerifiedMentors(verifiedMentorsRes.status === "fulfilled" ? verifiedMentorsRes.value.data || [] : []);
-    setInstitutionRoadmaps(institutionRoadmapsRes.status === "fulfilled" ? institutionRoadmapsRes.value.data?.roadmaps || [] : []);
+    setVerifiedMentors(verifiedMentorsRes.status === "fulfilled" ? asArray<VerifiedMentor>(verifiedMentorsRes.value.data) : []);
+    setInstitutionRoadmaps(
+      institutionRoadmapsRes.status === "fulfilled"
+        ? asArray<InstitutionRoadmapItem>(institutionRoadmapsRes.value.data?.roadmaps)
+        : []
+    );
     setStudentInstitutionName(
       studentProfileRes.status === "fulfilled"
         ? String(studentProfileRes.value.data?.profile?.institutionName || studentProfileRes.value.data?.profile?.collegeName || "").trim()
@@ -650,9 +658,9 @@ export default function StudentDashboard() {
       api.get<CertificationItem[]>("/api/network/certifications"),
       api.get<MentorGroupItem[]>("/api/network/mentor-groups")
     ]);
-    setChallenges(challengesRes.status === "fulfilled" ? challengesRes.value.data || [] : []);
-    setCertifications(certificationsRes.status === "fulfilled" ? certificationsRes.value.data || [] : []);
-    setMentorGroups(mentorGroupsRes.status === "fulfilled" ? mentorGroupsRes.value.data || [] : []);
+    setChallenges(challengesRes.status === "fulfilled" ? asArray<ChallengeItem>(challengesRes.value.data) : []);
+    setCertifications(certificationsRes.status === "fulfilled" ? asArray<CertificationItem>(certificationsRes.value.data) : []);
+    setMentorGroups(mentorGroupsRes.status === "fulfilled" ? asArray<MentorGroupItem>(mentorGroupsRes.value.data) : []);
   }, [markSectionFetched, shouldSkipSectionFetch]);
 
   const loadGrowthResourcesSection = useCallback(async (refresh = false, force = false) => {
@@ -669,12 +677,12 @@ export default function StudentDashboard() {
     setProjectIdeas(projectIdeasRes.status === "fulfilled" ? projectIdeasRes.value.data || null : null);
     setKnowledgeLibrary(
       knowledgeLibraryRes.status === "fulfilled"
-        ? knowledgeLibraryRes.value.data?.items || knowledgeLibraryRes.value.data?.roadmapResources || []
+        ? asArray<LibraryItem>(knowledgeLibraryRes.value.data?.items || knowledgeLibraryRes.value.data?.roadmapResources)
         : []
     );
     setInstitutionKnowledgeLibrary(
       knowledgeLibraryRes.status === "fulfilled"
-        ? knowledgeLibraryRes.value.data?.institutionResources || []
+        ? asArray<LibraryItem>(knowledgeLibraryRes.value.data?.institutionResources)
         : []
     );
     setReputationSummary(reputationSummaryRes.status === "fulfilled" ? reputationSummaryRes.value.data || null : null);
@@ -705,8 +713,8 @@ export default function StudentDashboard() {
           : Promise.resolve({ data: null as DailyDashboard | null })
       ]);
 
-      setBookings(bookingsRes.status === "fulfilled" ? bookingsRes.value.data || [] : []);
-      setSessions(sessionsRes.status === "fulfilled" ? sessionsRes.value.data || [] : []);
+      setBookings(bookingsRes.status === "fulfilled" ? asArray<Booking>(bookingsRes.value.data) : []);
+      setSessions(sessionsRes.status === "fulfilled" ? asArray<Session>(sessionsRes.value.data) : []);
       setProfilePhotoUrl(profileRes.status === "fulfilled" ? profileRes.value.data?.profile?.profilePhotoUrl || "" : "");
       setDailyDashboard(dailyRes.status === "fulfilled" ? dailyRes.value.data || null : null);
       const hardFailures = [bookingsRes, sessionsRes].filter((item) => item.status !== "fulfilled").length;
