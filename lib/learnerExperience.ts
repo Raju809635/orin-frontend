@@ -1,4 +1,5 @@
 export type LearnerStage = "kid" | "highschool" | "after12";
+export const LEARNER_ONBOARDING_PENDING_KEY = "orin-learner-onboarding-pending";
 
 export function normalizeLearnerStage(value: unknown): LearnerStage {
   const stage = String(value || "").trim().toLowerCase();

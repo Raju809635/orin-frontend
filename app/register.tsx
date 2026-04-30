@@ -1,8 +1,10 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useState } from "react";
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
+import { LEARNER_ONBOARDING_PENDING_KEY } from "@/lib/learnerExperience";
 
 type Role = "student" | "mentor";
 
@@ -67,7 +69,12 @@ export default function RegisterScreen() {
       // Auto-login so new users land directly on Home (Android requirement).
       await login({ email: normalizedEmail, password });
       resetForm();
-      router.replace((role === "student" ? "/learner-onboarding" : "/mentor-dashboard?section=overview") as never);
+      if (role === "student") {
+        await AsyncStorage.setItem(LEARNER_ONBOARDING_PENDING_KEY, "1");
+        router.replace("/learner-onboarding?new=1" as never);
+      } else {
+        router.replace("/mentor-dashboard?section=overview" as never);
+      }
     } catch (e: any) {
       const rawMessage = e?.response?.data?.message || e?.message || "Registration failed.";
       const message =

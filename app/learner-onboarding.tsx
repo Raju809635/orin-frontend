@@ -1,3 +1,4 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
@@ -7,8 +8,7 @@ import { handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useLearner } from "@/context/LearnerContext";
 import { useAppTheme } from "@/context/ThemeContext";
-import { normalizeLearnerStage, type LearnerStage } from "@/lib/learnerExperience";
-import { notify } from "@/utils/notify";
+import { LEARNER_ONBOARDING_PENDING_KEY, normalizeLearnerStage, type LearnerStage } from "@/lib/learnerExperience";
 
 const STAGES: { value: LearnerStage; title: string; body: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   {
@@ -54,11 +54,6 @@ export default function LearnerOnboardingScreen() {
       return;
     }
 
-    if (isSchoolStage && !institutionName.trim()) {
-      notify("Please add your school or institution to continue.");
-      return;
-    }
-
     try {
       setIsSubmitting(true);
       const normalizedStage = normalizeLearnerStage(stage);
@@ -69,6 +64,7 @@ export default function LearnerOnboardingScreen() {
         institutionType: isSchoolStage ? "School" : "",
         className: className.trim()
       });
+      await AsyncStorage.removeItem(LEARNER_ONBOARDING_PENDING_KEY);
       await refresh();
       router.replace("/student-dashboard?section=overview" as never);
     } catch (error) {
@@ -79,6 +75,7 @@ export default function LearnerOnboardingScreen() {
   }
 
   function handleSkip() {
+    void AsyncStorage.removeItem(LEARNER_ONBOARDING_PENDING_KEY);
     router.replace("/student-dashboard?section=overview" as never);
   }
 
@@ -135,6 +132,9 @@ export default function LearnerOnboardingScreen() {
               value={className}
               onChangeText={setClassName}
             />
+            <Text style={[styles.helper, { color: colors.textMuted }]}>
+              You can continue without this and add school/class later from profile.
+            </Text>
           </View>
         ) : null}
 
