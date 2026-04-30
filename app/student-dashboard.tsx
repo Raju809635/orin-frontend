@@ -23,6 +23,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
+import { useLearner } from "@/context/LearnerContext";
+import { isKidStage } from "@/lib/learnerExperience";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { submitManualPaymentWithPicker } from "@/utils/manualPaymentUpload";
@@ -436,12 +438,6 @@ type NewsArticle = {
 type StudentSectionId = "overview" | "growth" | "sessions" | "network";
 type GrowthSubSectionId = "ai" | "community" | "resources";
 
-const growthSubSections: { id: GrowthSubSectionId; label: string }[] = [
-  { id: "ai", label: "AI & Planning" },
-  { id: "community", label: "Community" },
-  { id: "resources", label: "Resources" }
-];
-
 const newsTabs: { key: NewsCategoryKey; label: string }[] = [
   { key: "tech", label: "Tech" },
   { key: "edtech", label: "EdTech" },
@@ -459,7 +455,18 @@ export default function StudentDashboard() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user, logout } = useAuth();
+  const { learnerStage } = useLearner();
   const { colors, isDark } = useAppTheme();
+  const isKid = isKidStage(learnerStage);
+  const isHighSchool = learnerStage === "highschool";
+  const growthSubSections = useMemo<{ id: GrowthSubSectionId; label: string }[]>(
+    () => [
+      { id: "ai", label: isKid ? "Learning Tools" : isHighSchool ? "Study & Planning" : "AI & Planning" },
+      { id: "community", label: isKid ? "School Life" : isHighSchool ? "School Community" : "Community" },
+      { id: "resources", label: isKid ? "Resources & Creativity" : "Resources" }
+    ],
+    [isHighSchool, isKid]
+  );
   const lastDashboardFetchAtRef = useRef(0);
   const lastNewsFetchAtRef = useRef(0);
   const sectionFetchAtRef = useRef<Record<string, number>>({});
@@ -529,6 +536,12 @@ export default function StudentDashboard() {
     scholarships: [],
     opportunities: []
   });
+  const institutionFeedLabel = isKid ? "School Feed" : "Institution Feed";
+  const institutionLeaderboardLabel = isKid ? "Star Board" : "Institution Leaderboard";
+  const institutionRoadmapsLabel = isKid ? "Activities" : "Institution Roadmaps";
+  const institutionCertificatesLabel = isKid ? "Star Rewards" : "Institution Certificates";
+  const institutionResourcesLabel = isKid ? "Class Resources" : "Institution Resources";
+  const institutionCompetitionsLabel = isKid ? "Fun Challenges" : "Institution Competitions";
   const [newsLoading, setNewsLoading] = useState(false);
   const [newsLanguage, setNewsLanguage] = useState<NewsLanguageCode>("en");
   const [activeSection, setActiveSection] = useState<StudentSectionId>("overview");
@@ -1553,8 +1566,14 @@ export default function StudentDashboard() {
 
       <View style={[styles.heroBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.heroEyebrow, { color: colors.accent }]}>Student Space</Text>
-        <Text style={[styles.heroTitle, { color: colors.text }]}>Unlock Your Mentorship Journey</Text>
-        <Text style={[styles.heroSubTitle, { color: colors.textMuted }]}>Explore mentors, track sessions, and grow faster with ORIN.</Text>
+        <Text style={[styles.heroTitle, { color: colors.text }]}>{isKid ? "Grow With Your School" : isHighSchool ? "Build Your School Journey" : "Unlock Your Mentorship Journey"}</Text>
+        <Text style={[styles.heroSubTitle, { color: colors.textMuted }]}>
+          {isKid
+            ? "Follow school activities, collect stars, and learn with teacher guidance."
+            : isHighSchool
+              ? "Track school growth, resources, and guided study progress with ORIN."
+              : "Explore mentors, track sessions, and grow faster with ORIN."}
+        </Text>
       </View>
 
       {activeSection !== "overview" ? (
@@ -1662,7 +1681,9 @@ export default function StudentDashboard() {
             <Text style={[styles.institutionHubMeta, { color: colors.textMuted }]}>
               {studentInstitutionName
                 ? `${studentInstitutionName}${studentClassName ? ` - Class ${studentClassName}` : ""}`
-                : "Add your institution in profile to unlock school-specific feeds, resources, and roadmaps."}
+                : isKid || isHighSchool
+                  ? "Join your school in profile to unlock feed, activities, resources, and competitions."
+                  : "Add your institution in profile to unlock school-specific feeds, resources, and roadmaps."}
             </Text>
           </View>
           <View style={[styles.institutionExpandBtn, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
@@ -1672,43 +1693,63 @@ export default function StudentDashboard() {
         {institutionExpanded ? (
           <View style={styles.institutionTileGrid}>
             <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/network?section=institution" as never)}>
-              <Text style={[styles.institutionTileTitle, { color: isDark ? "#86EFAC" : "#163A2A" }]}>Institution Feed</Text>
-              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>Posts only from your institution</Text>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#86EFAC" : "#163A2A" }]}>{institutionFeedLabel}</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>{isKid ? "Teacher and school posts only" : "Posts only from your institution"}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/leaderboard" as never)}>
-              <Text style={[styles.institutionTileTitle, { color: isDark ? "#93C5FD" : "#163A2A" }]}>Institution Leaderboard</Text>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#93C5FD" : "#163A2A" }]}>{institutionLeaderboardLabel}</Text>
               <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-                {leaderboard?.collegeTop?.length ? `${leaderboard.collegeTop.length} active ranks visible` : "Track your institution rank"}
+                {leaderboard?.collegeTop?.length
+                  ? `${leaderboard.collegeTop.length} active ${isKid ? "star" : "rank"}${leaderboard.collegeTop.length === 1 ? "" : "s"} visible`
+                  : isKid
+                    ? "Track stars and class participation"
+                    : "Track your institution rank"}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/mentorship?section=interaction" as never)}>
               <Text style={[styles.institutionTileTitle, { color: isDark ? "#C4B5FD" : "#163A2A" }]}>Institution Mentors</Text>
               <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-                {verifiedMentors.length ? `${verifiedMentors.length} mentors in guidance pool` : "Mentor list grows as school network expands"}
+                {verifiedMentors.length ? `${verifiedMentors.length} mentors in guidance pool` : isKid ? "Teacher list grows as school network expands" : "Mentor list grows as school network expands"}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/ai/career-roadmap?section=institution" as never)}>
-              <Text style={[styles.institutionTileTitle, { color: isDark ? "#FDE68A" : "#163A2A" }]}>Institution Roadmaps</Text>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#FDE68A" : "#163A2A" }]}>{institutionRoadmapsLabel}</Text>
               <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-                {institutionRoadmaps.length ? `${institutionRoadmaps.length} roadmap${institutionRoadmaps.length === 1 ? "" : "s"} available` : "Open mentor-guided roadmaps"}
+                {institutionRoadmaps.length
+                  ? `${institutionRoadmaps.length} ${isKid ? "activity" : "roadmap"}${institutionRoadmaps.length === 1 ? "" : "s"} available`
+                  : isKid
+                    ? "Open mentor-guided school activities"
+                    : "Open mentor-guided roadmaps"}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/certifications" as never)}>
-              <Text style={[styles.institutionTileTitle, { color: isDark ? "#F9A8D4" : "#163A2A" }]}>Institution Certificates</Text>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#F9A8D4" : "#163A2A" }]}>{institutionCertificatesLabel}</Text>
               <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-                {certifications.length ? `${certifications.length} certificates earned` : "See institution-issued recognition"}
+                {certifications.length
+                  ? `${certifications.length} ${isKid ? "reward" : "certificate"}${certifications.length === 1 ? "" : "s"} earned`
+                  : isKid
+                    ? "See school rewards and recognition"
+                    : "See institution-issued recognition"}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/knowledge-library?section=institution" as never)}>
-              <Text style={[styles.institutionTileTitle, { color: isDark ? "#F0ABFC" : "#163A2A" }]}>Institution Resources</Text>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#F0ABFC" : "#163A2A" }]}>{institutionResourcesLabel}</Text>
               <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-                {institutionKnowledgeLibrary.length ? `${institutionKnowledgeLibrary.length} resource${institutionKnowledgeLibrary.length === 1 ? "" : "s"} shared` : "School resources will appear here"}
+                {institutionKnowledgeLibrary.length
+                  ? `${institutionKnowledgeLibrary.length} resource${institutionKnowledgeLibrary.length === 1 ? "" : "s"} shared`
+                  : isKid
+                    ? "Class resources will appear here"
+                    : "School resources will appear here"}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/challenges" as never)}>
-              <Text style={[styles.institutionTileTitle, { color: isDark ? "#FDBA74" : "#163A2A" }]}>Institution Competitions</Text>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#FDBA74" : "#163A2A" }]}>{institutionCompetitionsLabel}</Text>
               <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
-                {challenges.length ? `${challenges.length} active challenge${challenges.length === 1 ? "" : "s"}` : "School competitions will appear here"}
+                {challenges.length
+                  ? `${challenges.length} active ${isKid ? "challenge" : "competition"}${challenges.length === 1 ? "" : "s"}`
+                  : isKid
+                    ? "Fun school challenges will appear here"
+                    : "School competitions will appear here"}
               </Text>
             </TouchableOpacity>
           </View>
@@ -1716,7 +1757,9 @@ export default function StudentDashboard() {
       </View>
 
       <View style={styles.sectionHeaderRow}>
-        <Text style={[styles.sectionHeader, { color: colors.text }]}>Mentor Live Sessions</Text>
+        <Text style={[styles.sectionHeader, { color: colors.text }]}>
+          {isKid ? "Teacher Sessions" : isHighSchool ? "Teacher & Mentor Sessions" : "Mentor Live Sessions"}
+        </Text>
         <TouchableOpacity onPress={() => router.push("/mentorship?section=interaction" as never)}>
           <Text style={[styles.sectionHeaderLink, { color: colors.accent }]}>View all</Text>
         </TouchableOpacity>
@@ -1733,12 +1776,14 @@ export default function StudentDashboard() {
                 <Image source={{ uri: item.posterImageUrl }} style={styles.liveBannerImage} resizeMode="cover" />
               ) : (
                 <View style={[styles.liveBannerImagePlaceholder, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                  <Text style={[styles.liveBannerPlaceholderText, { color: colors.textMuted }]}>Live Session</Text>
+                  <Text style={[styles.liveBannerPlaceholderText, { color: colors.textMuted }]}>
+                    {isKid ? "Teacher Session" : "Live Session"}
+                  </Text>
                 </View>
               )}
               <Text style={[styles.liveBannerTitle, { color: colors.text }]} numberOfLines={2}>{item.title}</Text>
               <Text style={[styles.liveBannerMeta, { color: colors.textMuted }]} numberOfLines={1}>
-                {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
+                {item.mentor?.name || (isKid ? "Teacher" : "Mentor")} | {new Date(item.startsAt).toLocaleString()}
               </Text>
               <Text style={[styles.liveBannerMeta, { color: colors.textMuted }]} numberOfLines={1}>
                 {item.sessionMode === "paid" ? `INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
@@ -1918,9 +1963,19 @@ export default function StudentDashboard() {
 
       {growthSubSection === "ai" ? (
         <>
-      <Text style={[styles.groupTitle, { color: colors.text }]}>AI Intelligence</Text>
-      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Personalized AI guidance based on your goal, skills, and progress.</Text>
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>AI Mentor Matching</Text>
+      <Text style={[styles.groupTitle, { color: colors.text }]}>
+        {isKid ? "Learning Guidance" : isHighSchool ? "Study Intelligence" : "AI Intelligence"}
+      </Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>
+        {isKid
+          ? "Simple learning guidance, teacher support, and friendly school progress tools."
+          : isHighSchool
+            ? "Study guidance based on your goals, subjects, and school progress."
+            : "Personalized AI guidance based on your goal, skills, and progress."}
+      </Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>
+        {isKid ? "Teacher & Guide Matching" : isHighSchool ? "Career Explorer" : "AI Mentor Matching"}
+      </Text>
       <View style={styles.matchWrap}>
         {mentorMatches.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>No mentor recommendations available right now.</Text>
@@ -1940,13 +1995,13 @@ export default function StudentDashboard() {
                   style={styles.matchBtn}
                   onPress={() => router.push(`/mentor/${item.mentorId}` as never)}
                 >
-                  <Text style={styles.matchBtnText}>View Profile</Text>
+                  <Text style={styles.matchBtnText}>{isKid ? "View Guide" : "View Profile"}</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.matchBtn, styles.matchBtnPrimary]}
                   onPress={() => router.push(`/mentor/${item.mentorId}` as never)}
                 >
-                  <Text style={[styles.matchBtnText, styles.matchBtnTextPrimary]}>Book Session</Text>
+                  <Text style={[styles.matchBtnText, styles.matchBtnTextPrimary]}>{isKid ? "Open Guidance" : "Book Session"}</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1954,70 +2009,82 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>AI Skill Gap Analyzer</Text>
-      <View style={styles.roadmapCard}>
-        {!skillGap ? (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>Skill gap analysis unavailable right now.</Text>
-        ) : (
-          <>
-            <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Goal: {skillGap.goal}</Text>
-            <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Current Skills: {skillGap.currentSkills.join(", ") || "None yet"}</Text>
-            <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
-              Missing Skills: {skillGap.missingSkills.length ? skillGap.missingSkills.join(", ") : "No gaps detected"}
-            </Text>
-            <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
-              Suggested Courses: {skillGap.suggestions?.courses?.slice(0, 3).join(", ") || "No suggestions"}
-            </Text>
-          </>
-        )}
-      </View>
+      {!isKid ? (
+        <>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>{isHighSchool ? "Study Gap Analyzer" : "AI Skill Gap Analyzer"}</Text>
+          <View style={styles.roadmapCard}>
+            {!skillGap ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>Skill gap analysis unavailable right now.</Text>
+            ) : (
+              <>
+                <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Goal: {skillGap.goal}</Text>
+                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Current Skills: {skillGap.currentSkills.join(", ") || "None yet"}</Text>
+                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+                  Missing Skills: {skillGap.missingSkills.length ? skillGap.missingSkills.join(", ") : "No gaps detected"}
+                </Text>
+                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+                  Suggested Courses: {skillGap.suggestions?.courses?.slice(0, 3).join(", ") || "No suggestions"}
+                </Text>
+              </>
+            )}
+          </View>
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>Skill Radar</Text>
-      <View style={styles.roadmapCard}>
-        {!dailyDashboard?.skillRadar || (dailyDashboard.skillRadar.skills || []).length === 0 ? (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>Complete daily quiz to unlock your skill radar.</Text>
-        ) : (
-          <>
-            <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Domain: {dailyDashboard.skillRadar.domain}</Text>
-            {(dailyDashboard.skillRadar.skills || []).map((item) => (
-              <View key={`${item.name}-${item.score}`} style={styles.radarRow}>
-                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.name}</Text>
-                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.score}/100</Text>
-              </View>
-            ))}
-          </>
-        )}
-      </View>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>{isHighSchool ? "Study Radar" : "Skill Radar"}</Text>
+          <View style={styles.roadmapCard}>
+            {!dailyDashboard?.skillRadar || (dailyDashboard.skillRadar.skills || []).length === 0 ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>Complete daily quiz to unlock your skill radar.</Text>
+            ) : (
+              <>
+                <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Domain: {dailyDashboard.skillRadar.domain}</Text>
+                {(dailyDashboard.skillRadar.skills || []).map((item) => (
+                  <View key={`${item.name}-${item.score}`} style={styles.radarRow}>
+                    <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.name}</Text>
+                    <Text style={[styles.historyMeta, { color: colors.textMuted }]}>{item.score}/100</Text>
+                  </View>
+                ))}
+              </>
+            )}
+          </View>
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>Career Intelligence</Text>
-      <View style={styles.roadmapCard}>
-        {!dailyDashboard?.careerIntelligence ? (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>Complete today&apos;s quiz to get personalized intelligence.</Text>
-        ) : (
-          <>
-            <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Strength: {dailyDashboard.careerIntelligence.strength}</Text>
-            <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
-              Needs Improvement: {(dailyDashboard.careerIntelligence.needsImprovement || []).join(", ") || "No major gaps"}
-            </Text>
-            <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Next Step: {dailyDashboard.careerIntelligence.recommendedNextStep}</Text>
-            {dailyDashboard.careerIntelligence.trendingOpportunity?.title ? (
-              <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
-                Trending Opportunity: {dailyDashboard.careerIntelligence.trendingOpportunity.title}
-              </Text>
-            ) : null}
-            {(dailyDashboard.careerIntelligence.mentorRecommendations || []).length ? (
-              <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
-                Recommended Mentors:{" "}
-                {dailyDashboard.careerIntelligence.mentorRecommendations?.map((item) => item.name).join(", ")}
-              </Text>
-            ) : null}
-          </>
-        )}
-      </View>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>{isHighSchool ? "Study Intelligence" : "Career Intelligence"}</Text>
+          <View style={styles.roadmapCard}>
+            {!dailyDashboard?.careerIntelligence ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>Complete today&apos;s quiz to get personalized intelligence.</Text>
+            ) : (
+              <>
+                <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Strength: {dailyDashboard.careerIntelligence.strength}</Text>
+                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+                  Needs Improvement: {(dailyDashboard.careerIntelligence.needsImprovement || []).join(", ") || "No major gaps"}
+                </Text>
+                <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Next Step: {dailyDashboard.careerIntelligence.recommendedNextStep}</Text>
+                {dailyDashboard.careerIntelligence.trendingOpportunity?.title ? (
+                  <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+                    Trending Opportunity: {dailyDashboard.careerIntelligence.trendingOpportunity.title}
+                  </Text>
+                ) : null}
+                {(dailyDashboard.careerIntelligence.mentorRecommendations || []).length ? (
+                  <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+                    Recommended Mentors:{" "}
+                    {dailyDashboard.careerIntelligence.mentorRecommendations?.map((item) => item.name).join(", ")}
+                  </Text>
+                ) : null}
+              </>
+            )}
+          </View>
+        </>
+      ) : null}
 
-      <Text style={[styles.groupTitle, { color: colors.text }]}>Trust & Mentor Quality</Text>
-      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Verified mentors and transparent quality signals for safer mentorship.</Text>
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>Verified Mentor System</Text>
+      <Text style={[styles.groupTitle, { color: colors.text }]}>
+        {isKid ? "Teacher Support" : "Trust & Mentor Quality"}
+      </Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>
+        {isKid
+          ? "Trusted teachers and verified guides help students learn in a safe school environment."
+          : "Verified mentors and transparent quality signals for safer mentorship."}
+      </Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>
+        {isKid ? "Verified Teacher System" : "Verified Mentor System"}
+      </Text>
       <View style={styles.matchWrap}>
         {verifiedMentors.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>No verified mentors available currently.</Text>
@@ -2027,55 +2094,71 @@ export default function StudentDashboard() {
               <Text style={[styles.matchName, { color: colors.text }]}>
                 {item.name} {item.verifiedBadge ? "(Verified)" : ""}
               </Text>
-              <Text style={[styles.matchMeta, { color: colors.textMuted }]}>{item.title || "Mentor"}</Text>
+              <Text style={[styles.matchMeta, { color: colors.textMuted }]}>{item.title || (isKid ? "Teacher" : "Mentor")}</Text>
               <Text style={[styles.matchMeta, { color: colors.textMuted }]}>Rating: {item.rating || 0}</Text>
             </View>
           ))
         )}
       </View>
 
-      <Text style={[styles.groupTitle, { color: colors.text }]}>Career Progress</Text>
-      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Roadmaps, opportunities, and live sessions to accelerate your journey.</Text>
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>AI Career Roadmap</Text>
-      <View style={styles.roadmapCard}>
-        {!roadmap ? (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>Roadmap unavailable right now.</Text>
-        ) : (
-          <>
-            <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Goal: {roadmap.goal}</Text>
-            {roadmap.steps.map((step) => (
-              <Text key={`${step.stepNumber}-${step.title}`} style={styles.roadmapStep}>
-                Step {step.stepNumber}: {step.title}
-              </Text>
-            ))}
-          </>
-        )}
-      </View>
+      <Text style={[styles.groupTitle, { color: colors.text }]}>
+        {isKid ? "School Progress" : isHighSchool ? "Study Progress" : "Career Progress"}
+      </Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>
+        {isKid
+          ? "Track school activities, teacher sessions, and simple progress milestones."
+          : isHighSchool
+            ? "Track study roadmaps, opportunities, and mentor sessions as you grow."
+            : "Roadmaps, opportunities, and live sessions to accelerate your journey."}
+      </Text>
+      {!isKid ? (
+        <>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>{isHighSchool ? "Study Roadmap" : "AI Career Roadmap"}</Text>
+          <View style={styles.roadmapCard}>
+            {!roadmap ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>Roadmap unavailable right now.</Text>
+            ) : (
+              <>
+                <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Goal: {roadmap.goal}</Text>
+                {roadmap.steps.map((step) => (
+                  <Text key={`${step.stepNumber}-${step.title}`} style={styles.roadmapStep}>
+                    Step {step.stepNumber}: {step.title}
+                  </Text>
+                ))}
+              </>
+            )}
+          </View>
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>Internships & Opportunities</Text>
-      <View style={styles.opportunityWrap}>
-        {opportunities.length === 0 ? (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>No opportunities available right now.</Text>
-        ) : (
-          opportunities.slice(0, 5).map((item) => (
-            <View key={item._id} style={styles.opportunityCard}>
-              <Text style={[styles.opportunityTitle, { color: colors.text }]}>{item.title}</Text>
-              <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>
-                {item.company || "ORIN Network"} | {item.role || item.type || "Opportunity"}
-              </Text>
-              <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>Duration: {item.duration || "Flexible"}</Text>
-            </View>
-          ))
-        )}
-      </View>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>{isHighSchool ? "Programs & Opportunities" : "Internships & Opportunities"}</Text>
+          <View style={styles.opportunityWrap}>
+            {opportunities.length === 0 ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>No opportunities available right now.</Text>
+            ) : (
+              opportunities.slice(0, 5).map((item) => (
+                <View key={item._id} style={styles.opportunityCard}>
+                  <Text style={[styles.opportunityTitle, { color: colors.text }]}>{item.title}</Text>
+                  <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>
+                    {item.company || "ORIN Network"} | {item.role || item.type || "Opportunity"}
+                  </Text>
+                  <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>Duration: {item.duration || "Flexible"}</Text>
+                </View>
+              ))
+            )}
+          </View>
+        </>
+      ) : null}
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>College Leaderboard</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>
+        {isKid ? "Star Board" : isHighSchool ? "Institution Leaderboard" : "College Leaderboard"}
+      </Text>
       <View style={[styles.leaderboardCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {!leaderboard || leaderboard.collegeTop.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>Leaderboard will appear after enough activity.</Text>
         ) : (
           <>
-            <Text style={[styles.leaderboardTitle, { color: colors.text }]}>{leaderboard.collegeName || "Your College"}</Text>
+            <Text style={[styles.leaderboardTitle, { color: colors.text }]}>
+              {leaderboard.collegeName || (isKid || isHighSchool ? "Your Institution" : "Your College")}
+            </Text>
             {leaderboard.collegeTop.slice(0, 5).map((entry) => (
               <Text key={`${entry.rank}-${entry.name}`} style={[styles.leaderboardRow, { color: colors.textMuted }]}>
                 {entry.rank}. {entry.name} - {entry.score}
@@ -2085,7 +2168,9 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>Mentor Live Sessions</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>
+        {isKid ? "Teacher Sessions" : isHighSchool ? "Teacher & Mentor Sessions" : "Mentor Live Sessions"}
+      </Text>
       <View style={styles.liveWrap}>
         {liveSessions.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>No upcoming live sessions right now.</Text>
@@ -2094,10 +2179,12 @@ export default function StudentDashboard() {
             <View key={item.id} style={[styles.liveCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               {item.posterImageUrl ? <Image source={{ uri: item.posterImageUrl }} style={styles.liveImage} /> : null}
               <Text style={[styles.liveTitle, { color: colors.text }]}>{item.title}</Text>
-              <Text style={[styles.liveMeta, { color: colors.textMuted }]}>{item.topic || "Live mentoring session"}</Text>
+              <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
+                {item.topic || (isKid ? "Teacher-led school session" : "Live mentoring session")}
+              </Text>
               {item.description ? <Text style={[styles.liveMeta, { color: colors.textMuted }]}>{item.description}</Text> : null}
               <Text style={[styles.liveMeta, { color: colors.textMuted }]}>
-                Mentor: {item.mentor?.name || "Mentor"} | {new Date(item.startsAt).toLocaleString()}
+                {isKid ? "Teacher" : "Mentor"}: {item.mentor?.name || (isKid ? "Teacher" : "Mentor")} | {new Date(item.startsAt).toLocaleString()}
               </Text>
               <Text style={[styles.liveBannerMeta, { color: colors.textMuted }]} numberOfLines={1}>
                 {item.sessionMode === "paid" ? `INR ${item.price || 0}` : "Free"} | Seats left {item.seatsLeft ?? 0}
@@ -2147,9 +2234,9 @@ export default function StudentDashboard() {
 
       {growthSubSection === "community" ? (
       <>
-      <Text style={[styles.groupTitle, { color: colors.text }]}>Community & Collaboration</Text>
-      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Learn together through challenges, certifications, and mentor-led groups.</Text>
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>Community Challenges</Text>
+      <Text style={[styles.groupTitle, { color: colors.text }]}>{isKid ? "School Activities" : isHighSchool ? "School Community" : "Community & Collaboration"}</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>{isKid ? "Join fun school challenges, collect rewards, and learn with groups." : "Learn together through challenges, certifications, and mentor-led groups."}</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>{isKid ? "Fun Challenges" : "Community Challenges"}</Text>
       <View style={styles.opportunityWrap}>
         {challenges.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>No active challenges right now.</Text>
@@ -2172,7 +2259,7 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>ORIN Certification System</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>{isKid ? "Star Rewards" : "ORIN Certification System"}</Text>
       <View style={styles.historyWrap}>
         {certifications.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>No certifications yet.</Text>
@@ -2186,7 +2273,7 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>Mentor Groups</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>{isKid ? "Teacher Groups" : "Mentor Groups"}</Text>
       <View style={styles.opportunityWrap}>
         {mentorGroups.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>No mentor groups available.</Text>
@@ -2212,25 +2299,32 @@ export default function StudentDashboard() {
 
       {growthSubSection === "resources" ? (
       <>
-      <Text style={[styles.groupTitle, { color: colors.text }]}>Resources & Portfolio</Text>
-      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Build projects, access knowledge, and generate your resume.</Text>
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>AI Project Idea Generator</Text>
-      <View style={styles.roadmapCard}>
-        {!projectIdeas ? (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>Project ideas unavailable right now.</Text>
-        ) : (
-          <>
-            <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Goal: {projectIdeas.goal}</Text>
-            {projectIdeas.ideas.slice(0, 5).map((idea, idx) => (
-              <Text key={`${idea.title}-${idx}`} style={styles.roadmapStep}>
-                {idx + 1}. {idea.title}
-              </Text>
-            ))}
-          </>
-        )}
-      </View>
+      <Text style={[styles.groupTitle, { color: colors.text }]}>{isKid ? "Resources & Creativity" : "Resources & Portfolio"}</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>{isKid ? "Open class resources, creative tasks, and simple school learning support." : "Build projects, access knowledge, and generate your resume."}</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>{isKid ? "Creative Activity Ideas" : "AI Project Idea Generator"}</Text>
+      {isKid ? (
+        <TouchableOpacity style={styles.roadmapCard} onPress={() => router.push("/ai/creative-corner" as never)}>
+          <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Create drawing, story, craft, and class activity ideas.</Text>
+          <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Open Creative Corner</Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.roadmapCard}>
+          {!projectIdeas ? (
+            <Text style={[styles.empty, { color: colors.textMuted }]}>Project ideas unavailable right now.</Text>
+          ) : (
+            <>
+              <Text style={[styles.roadmapGoal, { color: colors.accent }]}>Goal: {projectIdeas.goal}</Text>
+              {projectIdeas.ideas.slice(0, 5).map((idea, idx) => (
+                <Text key={`${idea.title}-${idx}`} style={styles.roadmapStep}>
+                  {idx + 1}. {idea.title}
+                </Text>
+              ))}
+            </>
+          )}
+        </View>
+      )}
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>Knowledge Library</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>{isKid ? "Class Resource Library" : "Knowledge Library"}</Text>
       <View style={styles.historyWrap}>
         {knowledgeLibrary.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>No resources available right now.</Text>
@@ -2246,7 +2340,7 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>Institution Resources</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>{isKid ? "School Resource Library" : "Institution Resources"}</Text>
       <View style={styles.historyWrap}>
         {institutionKnowledgeLibrary.length === 0 ? (
           <Text style={[styles.empty, { color: colors.textMuted }]}>No institution resources available right now.</Text>
@@ -2262,35 +2356,39 @@ export default function StudentDashboard() {
         )}
       </View>
 
-      <Text style={[styles.groupTitle, { color: colors.text }]}>Reputation & Ranking</Text>
-      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Track your ORIN standing and percentile among learners.</Text>
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>ORIN Reputation Score</Text>
-      <View style={styles.leaderboardCard}>
-        {!reputationSummary ? (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>Reputation summary unavailable.</Text>
-        ) : (
-          <>
-            <Text style={[styles.leaderboardTitle, { color: colors.text }]}>Reputation Score: {reputationSummary.score}</Text>
-            <Text style={[styles.leaderboardRow, { color: colors.textMuted }]}>{reputationSummary.levelTag}</Text>
-            <Text style={[styles.leaderboardRow, { color: colors.textMuted }]}>Top {reputationSummary.topPercent}% learners</Text>
-          </>
-        )}
-      </View>
+      {!isKid ? (
+        <>
+          <Text style={[styles.groupTitle, { color: colors.text }]}>Reputation & Ranking</Text>
+          <Text style={[styles.groupNote, { color: colors.textMuted }]}>Track your ORIN standing and percentile among learners.</Text>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>ORIN Reputation Score</Text>
+          <View style={styles.leaderboardCard}>
+            {!reputationSummary ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>Reputation summary unavailable.</Text>
+            ) : (
+              <>
+                <Text style={[styles.leaderboardTitle, { color: colors.text }]}>Reputation Score: {reputationSummary.score}</Text>
+                <Text style={[styles.leaderboardRow, { color: colors.textMuted }]}>{reputationSummary.levelTag}</Text>
+                <Text style={[styles.leaderboardRow, { color: colors.textMuted }]}>Top {reputationSummary.topPercent}% learners</Text>
+              </>
+            )}
+          </View>
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>AI Resume Builder</Text>
-      <View style={styles.resumeCard}>
-        {!resumePreview?.markdown ? (
-          <Text style={[styles.empty, { color: colors.textMuted }]}>Resume preview unavailable right now.</Text>
-        ) : (
-          <>
-            <Text style={[styles.resumeTitle, { color: colors.text }]}>Resume generated</Text>
-            <Text style={[styles.resumeMeta, { color: colors.textMuted }]}>File: {resumePreview.export?.fileName || "orin_resume.md"}</Text>
-            <Text style={[styles.resumeSnippet, { color: colors.textMuted }]} numberOfLines={5}>
-              {markdownToPlainText(resumePreview.markdown)}
-            </Text>
-          </>
-        )}
-      </View>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>{isHighSchool ? "Study Portfolio" : "AI Resume Builder"}</Text>
+          <View style={styles.resumeCard}>
+            {!resumePreview?.markdown ? (
+              <Text style={[styles.empty, { color: colors.textMuted }]}>Resume preview unavailable right now.</Text>
+            ) : (
+              <>
+                <Text style={[styles.resumeTitle, { color: colors.text }]}>{isHighSchool ? "Portfolio generated" : "Resume generated"}</Text>
+                <Text style={[styles.resumeMeta, { color: colors.textMuted }]}>File: {resumePreview.export?.fileName || "orin_resume.md"}</Text>
+                <Text style={[styles.resumeSnippet, { color: colors.textMuted }]} numberOfLines={5}>
+                  {markdownToPlainText(resumePreview.markdown)}
+                </Text>
+              </>
+            )}
+          </View>
+        </>
+      ) : null}
       </>
       ) : null}
 

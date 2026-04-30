@@ -67,7 +67,7 @@ export default function RegisterScreen() {
       // Auto-login so new users land directly on Home (Android requirement).
       await login({ email: normalizedEmail, password });
       resetForm();
-      // Root layout will redirect from auth screens -> the right home screen for the user.
+      router.replace((role === "student" ? "/learner-onboarding" : "/mentor-dashboard?section=overview") as never);
     } catch (e: any) {
       const rawMessage = e?.response?.data?.message || e?.message || "Registration failed.";
       const message =

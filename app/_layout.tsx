@@ -19,6 +19,7 @@ import { useGlobalSearchParams, useNavigation, usePathname, useRouter } from "ex
 import { DrawerContentScrollView, DrawerItem, DrawerContentComponentProps } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { LearnerProvider } from "@/context/LearnerContext";
 import { ThemeProvider, useAppTheme } from "@/context/ThemeContext";
 import { api, pingBackendReady } from "@/lib/api";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -154,7 +155,9 @@ function RootDrawer() {
       pathname.startsWith("/news-updates") ||
       pathname.startsWith("/mentorship") ||
       pathname.startsWith("/ai-hub") ||
+      pathname.startsWith("/ai/") ||
       pathname.startsWith("/community-growth") ||
+      pathname.startsWith("/community/") ||
       pathname.startsWith("/about") ||
       pathname.startsWith("/privacy") ||
       pathname.startsWith("/terms") ||
@@ -164,6 +167,7 @@ function RootDrawer() {
       pathname.startsWith("/settings") ||
       pathname.startsWith("/notifications") ||
       pathname.startsWith("/my-profile") ||
+      pathname.startsWith("/learner-onboarding") ||
       pathname.startsWith("/student-dashboard") ||
       pathname.startsWith("/mentor-dashboard") ||
       pathname.startsWith("/admin-dashboard") ||
@@ -181,6 +185,8 @@ function RootDrawer() {
 
     if (isAuthenticated && user) {
       if (pathname.startsWith("/mentor-dashboard") && user.role !== "mentor") {
+        router.replace(homeRouteForUser(user) as never);
+      } else if (pathname.startsWith("/learner-onboarding") && user.role !== "student") {
         router.replace(homeRouteForUser(user) as never);
       } else if (pathname.startsWith("/student-dashboard") && user.role !== "student") {
         router.replace(homeRouteForUser(user) as never);
@@ -261,8 +267,8 @@ function RootDrawer() {
           api.get<{ profile?: { profilePhotoUrl?: string } }>(endpoint),
           api.get<{ levelTag?: string; xp?: number; reputationScore?: number }>("/api/network/daily-dashboard"),
           user.role === "mentor"
-            ? api.get<Array<{ studentId?: { email?: string; name?: string } | null }>>("/api/sessions/mentor/me")
-            : Promise.resolve({ data: [] as Array<{ studentId?: { email?: string; name?: string } | null }> })
+            ? api.get<{ studentId?: { email?: string; name?: string } | null }[]>("/api/sessions/mentor/me")
+            : Promise.resolve({ data: [] as { studentId?: { email?: string; name?: string } | null }[] })
         ]);
         if (!active) return;
         setDrawerPhotoUrl(profileRes.status === "fulfilled" ? profileRes.value.data?.profile?.profilePhotoUrl || "" : "");
@@ -303,7 +309,7 @@ function RootDrawer() {
     return () => {
       active = false;
     };
-  }, [isAuthenticated, user?.id, user?.role]);
+  }, [isAuthenticated, user]);
 
   useEffect(() => {
     if (__DEV__ || Platform.OS === "web") {
@@ -601,6 +607,7 @@ function RootDrawer() {
           <Drawer.Screen name="index" options={{ title: "Home", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="login" options={{ title: "Login", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="register" options={{ title: "Register", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="learner-onboarding" options={{ title: "Learner Setup", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="verify-email" options={{ title: "Verify Email", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="verify/[certificateId]" options={{ title: "Verify Certificate", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerItemStyle: { display: "none" } }} />
@@ -628,7 +635,22 @@ function RootDrawer() {
           <Drawer.Screen name="ai/project-ideas" options={{ title: "AI Project Ideas", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/resume-builder" options={{ title: "AI Resume Builder", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/assistant" options={{ title: "AI Assistant", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/kids-learning-games" options={{ title: "Learning Games", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/reading-and-numbers" options={{ title: "Reading & Numbers", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/creative-corner" options={{ title: "Creative Corner", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/career-explorer" options={{ title: "Career Explorer", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/study-planner" options={{ title: "Study Planner", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community-growth" options={{ title: "Community & Growth", drawerItemStyle: { display: "none" }, headerShown: false }} />
+          <Drawer.Screen name="community/kids-community" options={{ title: "Kids Community", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/highschool-community" options={{ title: "High School Community", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/kid-group-activities" options={{ title: "Group Activities", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/kid-fun-challenges" options={{ title: "Fun Challenges", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/kid-star-rewards" options={{ title: "Star Rewards", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/kid-class-resources" options={{ title: "Class Resources", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/highschool-study-groups" options={{ title: "Study Groups", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/highschool-school-challenges" options={{ title: "School Challenges", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/highschool-resource-library" options={{ title: "Resource Library", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/highschool-achievements" options={{ title: "Achievements", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/collaboration" options={{ title: "Community & Collaboration", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/challenges" options={{ title: "Community Challenges", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/certifications" options={{ title: "Certifications", drawerItemStyle: { display: "none" } }} />
@@ -835,7 +857,9 @@ export default function Layout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <RootDrawer />
+        <LearnerProvider>
+          <RootDrawer />
+        </LearnerProvider>
       </AuthProvider>
     </ThemeProvider>
   );

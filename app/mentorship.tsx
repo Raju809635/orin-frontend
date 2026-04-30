@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Alert, BackHandler, Image, Linking, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
+import { useLearner } from "@/context/LearnerContext";
+import { isKidStage } from "@/lib/learnerExperience";
 import { useAppTheme } from "@/context/ThemeContext";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
@@ -113,8 +115,11 @@ export default function MentorshipHubScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: MentorshipSectionId; search?: string }>();
   const { user } = useAuth();
+  const { learnerStage } = useLearner();
   const { colors, isDark } = useAppTheme();
   const isMentor = user?.role === "mentor";
+  const isKid = !isMentor && isKidStage(learnerStage);
+  const isHighSchool = !isMentor && learnerStage === "highschool";
   const [activeSection, setActiveSection] = useState<MentorshipSectionId>("discovery");
   const [verifiedMentors, setVerifiedMentors] = useState<VerifiedMentor[]>([]);
   const [mentorGroups, setMentorGroups] = useState<MentorGroupItem[]>([]);
@@ -170,6 +175,12 @@ export default function MentorshipHubScreen() {
       setActiveSection(section);
     }
   }, [params.section]);
+
+  useEffect(() => {
+    if (isKid && activeSection === "session_management") {
+      setActiveSection("interaction");
+    }
+  }, [activeSection, isKid]);
 
   useEffect(() => {
     setSearchQuery(String(params.search || "").trim());
@@ -432,21 +443,27 @@ export default function MentorshipHubScreen() {
   }[] = [
     {
       id: "discovery",
-      label: isMentor ? "Mentor Operations" : "Discover Mentors",
+      label: isMentor ? "Mentor Operations" : isKid ? "Teacher Discovery" : "Discover Mentors",
       description: isMentor
         ? "Manage pricing, domains, and the mentor-side controls that students depend on."
-        : "Browse domains, open guides, and find verified mentors.",
-      icon: isMentor ? "briefcase" : "search",
+        : isKid
+          ? "Browse trusted teachers and simple guidance spaces without advanced session complexity."
+          : isHighSchool
+            ? "Browse mentors, domain guides, and verified educators with a simpler school-first flow."
+            : "Browse domains, open guides, and find verified mentors.",
+      icon: isMentor ? "briefcase" : isKid ? "school" : "search",
       border: "#A4BCFD",
       gradient: ["#FFFFFF", "#EEF4FF"],
       gradientActive: ["#E0EAFF", "#EEF4FF"]
     },
     {
       id: "interaction",
-      label: isMentor ? "Student Interaction" : "Mentor Interaction",
+      label: isMentor ? "Student Interaction" : isKid ? "Teacher Interaction" : "Mentor Interaction",
       description: isMentor
         ? "Review student chats, mentor groups, and live sessions that support your mentoring delivery."
-        : "Explore mentor groups and upcoming live mentoring sessions.",
+        : isKid
+          ? "Explore teacher groups, guided activity sessions, and safe school interactions."
+          : "Explore mentor groups and upcoming live mentoring sessions.",
       icon: "people",
       border: "#ABEFC6",
       gradient: ["#FFFFFF", "#ECFDF3"],
@@ -454,10 +471,14 @@ export default function MentorshipHubScreen() {
     },
     {
       id: "session_management",
-      label: "Session Management",
+      label: isKid ? "Activity Tracking" : "Session Management",
       description: isMentor
         ? "Handle booking requests, upcoming sessions, completed sessions, notes, pricing, and availability."
-        : "Track bookings, payments, verification, and confirmed sessions.",
+        : isKid
+          ? "Track joined teacher activities and simple session status without payment-heavy workflows."
+          : isHighSchool
+            ? "Track bookings, confirmations, and guided session progress with simpler language."
+            : "Track bookings, payments, verification, and confirmed sessions.",
       icon: "calendar",
       border: "#F9DBAF",
       gradient: ["#FFFFFF", "#FFF7ED"],
@@ -470,6 +491,8 @@ export default function MentorshipHubScreen() {
     interaction: { idle: ["#14261E", "#183025"], active: ["#183126", "#1B382C"] },
     session_management: { idle: ["#2B2117", "#33261A"], active: ["#3A2A1B", "#44311E"] }
   };
+
+  const visibleSections = isKid ? sections.filter((item) => item.id !== "session_management") : sections;
 
   const getPanelCardStyle = (tone: "blue" | "green" | "orange") => {
     if (!isDark) {
@@ -497,11 +520,15 @@ export default function MentorshipHubScreen() {
       <Text style={[styles.sub, { color: colors.textMuted }]}>
         {isMentor
           ? "Use the same mentorship workspace in mentor mode to manage requests, sessions, pricing, and availability."
-          : "Select a module below to open focused mentorship tools."}
+          : isKid
+            ? "Open school-friendly teacher guidance modules with simpler interaction paths."
+            : isHighSchool
+              ? "Open school-focused mentorship modules for teachers, groups, and guided sessions."
+              : "Select a module below to open focused mentorship tools."}
       </Text>
       {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
       <View style={styles.moduleStack}>
-        {sections.map((item) => {
+        {visibleSections.map((item) => {
           const active = activeSection === item.id;
           return (
             <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={() => setActiveSection(item.id)}>
@@ -533,7 +560,7 @@ export default function MentorshipHubScreen() {
 
       {!loading && activeSection === "discovery" ? (
         <View style={styles.panel}>
-          <Text style={[styles.panelTitle, { color: colors.text }]}>{isMentor ? "Mentor Operations" : "Discovery"}</Text>
+          <Text style={[styles.panelTitle, { color: colors.text }]}>{isMentor ? "Mentor Operations" : isKid ? "Teacher Discovery" : "Discovery"}</Text>
           {isMentor ? (
             <>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
@@ -560,12 +587,12 @@ export default function MentorshipHubScreen() {
           ) : (
             <>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/domains" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Domains</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>Browse mentorship categories and mentors.</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isKid ? "Teachers & Subjects" : "Domains"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{isKid ? "Browse teachers and school-friendly learning categories." : "Browse mentorship categories and mentors."}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/domain-guide" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Domain Guide</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>Understand domain paths and sub-domains.</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isKid ? "Learning Guide" : "Domain Guide"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{isKid ? "Open simpler subject guidance and classroom learning paths." : "Understand domain paths and sub-domains."}</Text>
               </TouchableOpacity>
               <View style={[styles.card, getPanelCardStyle("blue")]}>
                 <Text style={[styles.cardTitle, { color: colors.text }]}>Verified Mentor System</Text>
@@ -586,7 +613,7 @@ export default function MentorshipHubScreen() {
 
       {!loading && activeSection === "interaction" ? (
         <View style={styles.panel}>
-          <Text style={[styles.panelTitle, { color: colors.text }]}>{isMentor ? "Student Interaction" : "Interaction"}</Text>
+          <Text style={[styles.panelTitle, { color: colors.text }]}>{isMentor ? "Student Interaction" : isKid ? "Teacher Interaction" : "Interaction"}</Text>
           {isMentor ? (
             <>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("green")]} onPress={() => router.push("/chat" as never)}>

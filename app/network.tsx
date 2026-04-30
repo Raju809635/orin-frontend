@@ -22,6 +22,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
+import { useLearner } from "@/context/LearnerContext";
+import { isKidStage } from "@/lib/learnerExperience";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadPostImages } from "@/utils/postMediaUpload";
@@ -164,7 +166,10 @@ export default function NetworkScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: string; search?: string }>();
   const { user } = useAuth();
+  const { learnerStage } = useLearner();
   const { colors, isDark } = useAppTheme();
+  const isKid = user?.role === "student" && isKidStage(learnerStage);
+  const isHighSchool = user?.role === "student" && learnerStage === "highschool";
   const insets = useSafeAreaInsets();
   const sectionFetchAtRef = useRef<Record<string, number>>({});
   const feedScrollRef = useRef<ScrollView | null>(null);
@@ -216,6 +221,10 @@ export default function NetworkScreen() {
   const [error, setError] = useState<string | null>(null);
   const [hiddenPostIds, setHiddenPostIds] = useState<Record<string, boolean>>({});
   const [connectionActionById, setConnectionActionById] = useState<Record<string, boolean>>({});
+  const visibleSections = React.useMemo(
+    () => (isKid ? networkSections.filter((item) => item.id === "institution") : networkSections),
+    [isKid]
+  );
 
   useEffect(() => {
     const section = String(params.section || "");
@@ -223,6 +232,12 @@ export default function NetworkScreen() {
       setActiveSection(section);
     }
   }, [params.section]);
+
+  useEffect(() => {
+    if (isKid && activeSection !== "institution") {
+      setActiveSection("institution");
+    }
+  }, [activeSection, isKid]);
 
   useEffect(() => {
     setSearchQuery(String(params.search || "").trim());
@@ -1081,14 +1096,23 @@ export default function NetworkScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true, true)} tintColor={colors.accent} />}
           keyboardShouldPersistTaps="handled"
         >
-        <Text style={[styles.heading, { color: colors.text }]}>Home</Text>
+        <Text style={[styles.heading, { color: colors.text }]}>{isKid ? "School Home" : "Home"}</Text>
         <Text style={[styles.subheading, { color: colors.textMuted }]}>
           {user?.role === "mentor" ? "Your professional feed for mentor insights, conversations, and visibility." : "Your student growth feed with people, ideas, and progress that match your journey."}
         </Text>
+        {isKid ? (
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            Kids mode shows only your institution feed with simple reactions and teacher-friendly updates.
+          </Text>
+        ) : isHighSchool ? (
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            High school mode keeps institution learning first while still allowing selected posting and discussion.
+          </Text>
+        ) : null}
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavRow}>
-          {networkSections.map((item) => {
+          {visibleSections.map((item) => {
             const active = activeSection === item.id;
             return (
               <TouchableOpacity
@@ -1463,41 +1487,49 @@ export default function NetworkScreen() {
                             ? REACTION_OPTIONS[(userReaction in REACTION_OPTIONS
                                 ? userReaction
                                 : "like") as keyof typeof REACTION_OPTIONS]?.label || "Like"
-                            : "Like"}
+                            : isKid
+                              ? "React"
+                              : "Like"}
                         </Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.postActionBtn}
-                        onPress={() => {
-                          setReactionMenuFor(null);
-                          openComments(post._id);
-                        }}
-                      >
-                         <Ionicons name="chatbubble-outline" size={16} color={colors.textMuted} />
-                         <Text style={[styles.postActionText, { color: colors.textMuted }]} numberOfLines={1}>Comment</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.postActionBtn}
-                        onPress={() => {
-                          setReactionMenuFor(null);
-                          react(post._id, "share");
-                        }}
-                      >
-                         <Ionicons name="share-social-outline" size={16} color={colors.textMuted} />
-                         <Text style={[styles.postActionText, { color: colors.textMuted }]} numberOfLines={1}>Share</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.postActionBtn}
-                        onPress={() => {
-                          setReactionMenuFor(null);
-                          react(post._id, "save");
-                        }}
-                      >
-                         <Ionicons name={post.isSaved ? "bookmark" : "bookmark-outline"} size={16} color={post.isSaved ? colors.accent : colors.textMuted} />
-                         <Text style={[styles.postActionText, { color: post.isSaved ? colors.accent : colors.textMuted }]} numberOfLines={1}>
-                           {post.isSaved ? "Saved" : "Save"}
-                         </Text>
-                      </TouchableOpacity>
+                      {!isKid ? (
+                        <TouchableOpacity
+                          style={styles.postActionBtn}
+                          onPress={() => {
+                            setReactionMenuFor(null);
+                            openComments(post._id);
+                          }}
+                        >
+                           <Ionicons name="chatbubble-outline" size={16} color={colors.textMuted} />
+                           <Text style={[styles.postActionText, { color: colors.textMuted }]} numberOfLines={1}>Comment</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      {!isKid ? (
+                        <TouchableOpacity
+                          style={styles.postActionBtn}
+                          onPress={() => {
+                            setReactionMenuFor(null);
+                            react(post._id, "share");
+                          }}
+                        >
+                           <Ionicons name="share-social-outline" size={16} color={colors.textMuted} />
+                           <Text style={[styles.postActionText, { color: colors.textMuted }]} numberOfLines={1}>Share</Text>
+                        </TouchableOpacity>
+                      ) : null}
+                      {!isKid ? (
+                        <TouchableOpacity
+                          style={styles.postActionBtn}
+                          onPress={() => {
+                            setReactionMenuFor(null);
+                            react(post._id, "save");
+                          }}
+                        >
+                           <Ionicons name={post.isSaved ? "bookmark" : "bookmark-outline"} size={16} color={post.isSaved ? colors.accent : colors.textMuted} />
+                           <Text style={[styles.postActionText, { color: post.isSaved ? colors.accent : colors.textMuted }]} numberOfLines={1}>
+                             {post.isSaved ? "Saved" : "Save"}
+                           </Text>
+                        </TouchableOpacity>
+                      ) : null}
                       <TouchableOpacity
                         style={styles.postActionBtn}
                         onPress={() => {
@@ -1509,7 +1541,7 @@ export default function NetworkScreen() {
                          <Text style={[styles.postActionText, { color: colors.textMuted }]} numberOfLines={1}>More</Text>
                       </TouchableOpacity>
                     </View>
-                    {(post.commentCount || 0) > 0 ? (
+                    {!isKid && (post.commentCount || 0) > 0 ? (
                       <TouchableOpacity onPress={() => openComments(post._id)}>
                         <Text style={[styles.viewCommentsLink, { color: isDark ? "#8AB4FF" : "#1D4ED8" }]}>View all {post.commentCount || 0} comments</Text>
                       </TouchableOpacity>

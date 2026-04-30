@@ -12,11 +12,13 @@ import {
   View
 } from "react-native";
 import { api } from "@/lib/api";
+import { learnerStageLabel, normalizeLearnerStage, type LearnerStage } from "@/lib/learnerExperience";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
 import { pickAndUploadResumeFile } from "@/utils/resumeUpload";
 import DateField from "@/components/profile/date-field";
+import { useRouter } from "expo-router";
 
 type ProfileProject = {
   title: string;
@@ -66,6 +68,7 @@ type StudentProfile = {
   institutionDistrict: string;
   institutionSource: string;
   className: string;
+  learnerStage: LearnerStage;
   skills: string[];
   careerGoals: string;
   profileCompleteness: number;
@@ -93,6 +96,7 @@ const emptyProfile: StudentProfile = {
   institutionDistrict: "",
   institutionSource: "",
   className: "",
+  learnerStage: "after12",
   skills: [],
   careerGoals: "",
   profileCompleteness: 0,
@@ -159,9 +163,15 @@ const INSTITUTION_TYPE_OPTIONS = [
   "Engineering College",
   "University"
 ];
-const PROFILE_TYPE_OPTIONS: Array<StudentProfile["profileType"]> = ["student", "graduate", "job_seeker"];
+const PROFILE_TYPE_OPTIONS: StudentProfile["profileType"][] = ["student", "graduate", "job_seeker"];
+const LEARNER_STAGE_OPTIONS: { value: LearnerStage; label: string }[] = [
+  { value: "kid", label: "Kids" },
+  { value: "highschool", label: "High School" },
+  { value: "after12", label: "After 12" }
+];
 
 export default function StudentProfileScreen() {
+  const router = useRouter();
   const { colors } = useAppTheme();
   const [profile, setProfile] = useState<StudentProfile>(emptyProfile);
   const [loading, setLoading] = useState(true);
@@ -197,6 +207,7 @@ export default function StudentProfileScreen() {
           institutionDistrict: profileData.institutionDistrict || "",
           institutionSource: profileData.institutionSource || "",
           className: profileData.className || "",
+          learnerStage: normalizeLearnerStage(profileData.learnerStage),
           skills: Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : [],
           careerGoals: profileData.careerGoals || "",
           profileCompleteness: Number(profileData.profileCompleteness || 0),
@@ -351,6 +362,7 @@ export default function StudentProfileScreen() {
         institutionDistrict: String(profile.institutionDistrict || "").trim(),
         institutionSource: String(profile.institutionSource || "").trim(),
         className: String(profile.className || "").trim(),
+        learnerStage: normalizeLearnerStage(profile.learnerStage),
         collegeName: String(profile.institutionName || profile.collegeName || institutionQuery || "").trim(),
         state: String(profile.state || "").trim(),
         skills: parseCommaSeparated(skillsDraft),
@@ -385,6 +397,7 @@ export default function StudentProfileScreen() {
           ? profileData.institutionSource
           : payload.institutionSource,
         className: typeof profileData.className === "string" ? profileData.className : payload.className,
+        learnerStage: normalizeLearnerStage(profileData.learnerStage || payload.learnerStage),
         collegeName: typeof profileData.collegeName === "string" ? profileData.collegeName : payload.collegeName,
         state: typeof profileData.state === "string" ? profileData.state : payload.state,
         skills: Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : payload.skills,
@@ -531,6 +544,21 @@ export default function StudentProfileScreen() {
       <Text style={[styles.title, { color: colors.text }]}>Student Profile</Text>
       <Text style={[styles.sub, { color: colors.textMuted }]}>Profile completeness: {profile.profileCompleteness || 0}%</Text>
 
+      <View style={[styles.setupCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.setupHeader}>
+          <View style={styles.setupCopy}>
+            <Text style={[styles.setupTitle, { color: colors.text }]}>Learning setup</Text>
+            <Text style={[styles.setupMeta, { color: colors.textMuted }]}>
+              {learnerStageLabel(profile.learnerStage)} | {profile.institutionName || profile.collegeName || "Institution not added"}
+              {profile.className ? ` | ${profile.className}` : ""}
+            </Text>
+          </View>
+          <TouchableOpacity style={[styles.changeBtn, { backgroundColor: colors.accentSoft }]} onPress={() => router.push("/learner-onboarding" as never)}>
+            <Text style={[styles.changeBtnText, { color: colors.accent }]}>Change</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
       <View style={styles.photoWrap}>
         {profile.profilePhotoUrl ? (
           <Image source={{ uri: profile.profilePhotoUrl }} style={styles.photo} />
@@ -583,6 +611,36 @@ export default function StudentProfileScreen() {
           );
         })}
       </View>
+
+      <Text style={[styles.label, { color: colors.text }]}>Learning Stage</Text>
+      <View style={styles.selectionWrap}>
+        {LEARNER_STAGE_OPTIONS.map((option) => {
+          const active = profile.learnerStage === option.value;
+          return (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.optionChip,
+                { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]
+              ]}
+              onPress={() =>
+                setProfile((prev) => ({
+                  ...prev,
+                  learnerStage: option.value
+                }))
+              }
+            >
+              <Text style={[styles.optionText, { color: colors.textMuted }, active && [styles.optionTextActive, { color: colors.accent }]]}>
+                {option.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <Text style={[styles.helperText, { color: colors.textMuted }]}>
+        Existing ORIN users stay in After 12 mode by default. Switch this only if you want a school-friendly experience.
+      </Text>
 
       <Text style={[styles.label, { color: colors.text }]}>Institution Type</Text>
       <View style={styles.selectionWrap}>
@@ -867,6 +925,13 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#F4F9F6" },
   title: { fontSize: 28, fontWeight: "700", color: "#0B3D2E" },
   sub: { marginTop: 6, marginBottom: 16, color: "#475467" },
+  setupCard: { borderWidth: 1, borderRadius: 14, padding: 14, marginBottom: 16 },
+  setupHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 },
+  setupCopy: { flex: 1 },
+  setupTitle: { fontSize: 16, fontWeight: "800", marginBottom: 4 },
+  setupMeta: { fontSize: 13, lineHeight: 18 },
+  changeBtn: { borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8 },
+  changeBtnText: { fontWeight: "800" },
   label: { marginTop: 10, marginBottom: 6, fontWeight: "600", color: "#1E2B24" },
   input: {
     backgroundColor: "#fff",

@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useAuth } from "@/context/AuthContext";
+import { useLearner } from "@/context/LearnerContext";
+import { isKidStage } from "@/lib/learnerExperience";
 import { useAppTheme } from "@/context/ThemeContext";
 import GlobalHeader from "@/components/global-header";
 
@@ -25,8 +27,11 @@ export default function AiHubScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ search?: string }>();
   const { user } = useAuth();
+  const { learnerStage } = useLearner();
   const { colors, isDark } = useAppTheme();
   const isMentor = user?.role === "mentor";
+  const isKid = !isMentor && isKidStage(learnerStage);
+  const isHighSchool = !isMentor && learnerStage === "highschool";
   const [searchQuery, setSearchQuery] = React.useState("");
 
   React.useEffect(() => {
@@ -36,12 +41,16 @@ export default function AiHubScreen() {
   const modules: AiModule[] = [
     {
       id: "mentor_matching",
-      label: "AI Mentor Matching",
+      label: isKid ? "Learning Games" : isHighSchool ? "Career Explorer" : "AI Mentor Matching",
       description: isMentor
         ? "Identify students whose goals and interests align with your mentoring domains."
-        : "Find best-fit mentors with match score and experience insights.",
-      icon: "sparkles",
-      path: "/ai/mentor-matching",
+        : isKid
+          ? "Play guided learning activities and simple practice sessions."
+          : isHighSchool
+            ? "Explore future streams and mentor-guided direction with simpler suggestions."
+            : "Find best-fit mentors with match score and experience insights.",
+      icon: isKid ? "game-controller" : "sparkles",
+      path: isKid ? "/ai/kids-learning-games" : isHighSchool ? "/ai/career-explorer" : "/ai/mentor-matching",
       iconColor: "#D4A017",
       iconBg: "#FFF7D6",
       darkIconBg: "rgba(212,160,23,0.16)",
@@ -51,12 +60,14 @@ export default function AiHubScreen() {
     },
     {
       id: "skill_gap",
-      label: "AI Skill Gap Analysis",
+      label: isKid ? "Reading & Numbers" : "AI Skill Gap Analysis",
       description: isMentor
         ? "Review likely student skill gaps before sessions and plan better guidance."
-        : "Identify missing skills and course suggestions for your goal.",
-      icon: "analytics",
-      path: "/ai/skill-gap",
+        : isKid
+          ? "Practice reading, numbers, and basic concept support in a simpler guided format."
+          : "Identify missing skills and course suggestions for your goal.",
+      icon: isKid ? "school" : "analytics",
+      path: isKid ? "/ai/reading-and-numbers" : "/ai/skill-gap",
       iconColor: "#6D28D9",
       iconBg: "#F3E8FF",
       darkIconBg: "rgba(109,40,217,0.18)",
@@ -66,12 +77,14 @@ export default function AiHubScreen() {
     },
     {
       id: "roadmap",
-      label: "AI Career Roadmap",
+      label: isKid ? "Learning Activities" : "AI Career Roadmap",
       description: isMentor
         ? "Generate structured mentoring plans and milestone-based guidance for mentees."
-        : "Get your step-by-step path and next milestones.",
+        : isKid
+          ? "Open simpler weekly activities and mentor-guided progress instead of a career roadmap."
+          : "Get your step-by-step path and next milestones.",
       icon: "map",
-      path: "/ai/career-roadmap",
+      path: isKid ? "/ai/career-roadmap?section=institution" : "/ai/career-roadmap",
       iconColor: "#0F766E",
       iconBg: "#DDF7F2",
       darkIconBg: "rgba(15,118,110,0.18)",
@@ -81,12 +94,14 @@ export default function AiHubScreen() {
     },
     {
       id: "project_ideas",
-      label: "AI Project Ideas",
+      label: isKid ? "Creative Corner" : "AI Project Ideas",
       description: isMentor
         ? "Generate assignments, practice tasks, and project suggestions for students."
-        : "Generate practical project ideas aligned to your career track.",
-      icon: "bulb",
-      path: "/ai/project-ideas",
+        : isKid
+          ? "Get drawing, story, and simple make-and-build ideas for class activities."
+          : "Generate practical project ideas aligned to your career track.",
+      icon: isKid ? "color-wand" : "bulb",
+      path: isKid ? "/ai/creative-corner" : "/ai/project-ideas",
       iconColor: "#D97706",
       iconBg: "#FFF1DA",
       darkIconBg: "rgba(217,119,6,0.18)",
@@ -96,12 +111,16 @@ export default function AiHubScreen() {
     },
     {
       id: "resume_builder",
-      label: "AI Resume Builder",
+      label: isKid ? "Story & Drawing" : isHighSchool ? "Study Planner" : "AI Resume Builder",
       description: isMentor
         ? "Review student resumes and prepare sharper improvement suggestions."
-        : "Create resume draft from profile and activity data.",
-      icon: "document-text",
-      path: "/ai/resume-builder",
+        : isKid
+          ? "Use ORIN for storytelling, creativity prompts, and simple self-expression tasks."
+          : isHighSchool
+            ? "Turn goals and school tasks into a simpler study plan."
+            : "Create resume draft from profile and activity data.",
+      icon: isKid ? "brush" : isHighSchool ? "calendar" : "document-text",
+      path: isKid ? "/ai/creative-corner" : isHighSchool ? "/ai/study-planner" : "/ai/resume-builder",
       iconColor: "#DC2626",
       iconBg: "#FEE2E2",
       darkIconBg: "rgba(220,38,38,0.18)",
@@ -111,10 +130,12 @@ export default function AiHubScreen() {
     },
     {
       id: "assistant",
-      label: "AI Assistant",
+      label: isKid ? "Ask ORIN" : "AI Assistant",
       description: isMentor
         ? "Open your mentoring assistant for session preparation and student guidance support."
-        : "Open AI chat for personalized answers and guidance.",
+        : isKid
+          ? "Open a simpler AI helper for class doubts, learning help, and guided support."
+          : "Open AI chat for personalized answers and guidance.",
       icon: "chatbubbles",
       path: "/ai/assistant",
       iconColor: "#7C3AED",
@@ -143,7 +164,11 @@ export default function AiHubScreen() {
       <Text style={[styles.sub, { color: colors.textMuted }]}>
         {isMentor
           ? "Open a mentor-focused AI tool to prepare sessions, guide students, and improve mentoring delivery."
-          : "Open a module to go to its dedicated full page."}
+          : isKid
+            ? "Open simple AI learning tools chosen for younger students."
+            : isHighSchool
+              ? "Open guided AI tools for study planning, projects, and school growth."
+              : "Open a module to go to its dedicated full page."}
       </Text>
 
       <View style={styles.moduleStack}>
