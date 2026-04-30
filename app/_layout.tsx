@@ -665,9 +665,11 @@ function RootDrawer() {
           <Drawer.Screen name="mentor-policy" options={{ title: "Mentor Policy", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentors" options={{ title: "Mentors", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor/[mentorId]" options={{ title: "Mentor Profile", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="mentor-group-chat/[groupId]" options={{ title: "Mentor Group Chat", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor-pending" options={{ title: "Mentor Pending", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor-awaiting" options={{ title: "Mentor Awaiting", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="admin-dashboard" options={{ title: "Admin Dashboard", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="sprints/[sprintId]" options={{ title: "Sprint", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="network" options={{ title: "Network", drawerItemStyle: { display: "none" }, headerShown: false }} />
           <Drawer.Screen name="posts" options={{ title: "Posts", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="public-profile/[userId]" options={{ title: "Profile", drawerItemStyle: { display: "none" } }} />
