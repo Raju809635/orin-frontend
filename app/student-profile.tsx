@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { api } from "@/lib/api";
 import { learnerStageLabel, normalizeLearnerStage, type LearnerStage } from "@/lib/learnerExperience";
+import { useLearner } from "@/context/LearnerContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
@@ -172,6 +173,7 @@ const LEARNER_STAGE_OPTIONS: { value: LearnerStage; label: string }[] = [
 
 export default function StudentProfileScreen() {
   const router = useRouter();
+  const { refresh: refreshLearner } = useLearner();
   const { colors } = useAppTheme();
   const [profile, setProfile] = useState<StudentProfile>(emptyProfile);
   const [loading, setLoading] = useState(true);
@@ -350,20 +352,61 @@ export default function StudentProfileScreen() {
     }));
   };
 
+  async function persistLearnerStage(nextStage: LearnerStage) {
+    const normalizedStage = normalizeLearnerStage(nextStage);
+    const selectedInstitutionName = String(profile.institutionName || profile.collegeName || "").trim();
+    const nextInstitutionType =
+      normalizedStage === "kid" || normalizedStage === "highschool"
+        ? profile.institutionType || "School"
+        : profile.institutionType;
+
+    setProfile((prev) => ({
+      ...prev,
+      learnerStage: normalizedStage,
+      institutionType: nextInstitutionType
+    }));
+
+    try {
+      setSaving(true);
+      setError(null);
+      await api.patch("/api/profiles/student/me", {
+        learnerStage: normalizedStage,
+        institutionName: selectedInstitutionName,
+        collegeName: selectedInstitutionName,
+        institutionType: nextInstitutionType,
+        className: String(profile.className || "").trim(),
+        state: String(profile.state || "").trim()
+      });
+      await refreshLearner();
+      notify("Learning stage updated");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || "Unable to update learning stage");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function save() {
     try {
       setSaving(true);
       setError(null);
+      const selectedInstitutionName = String(profile.institutionName || profile.collegeName || "").trim();
+      const typedInstitutionName = institutionQuery.trim();
+      if (typedInstitutionName && selectedInstitutionName !== typedInstitutionName) {
+        setError("Please select your institution from the list before saving.");
+        notify("Please select your institution from the list.");
+        return;
+      }
       const payload = {
         ...profile,
         profileType: String(profile.profileType || "student").trim(),
-        institutionName: String(profile.institutionName || profile.collegeName || institutionQuery || "").trim(),
+        institutionName: selectedInstitutionName,
         institutionType: String(profile.institutionType || "").trim(),
         institutionDistrict: String(profile.institutionDistrict || "").trim(),
         institutionSource: String(profile.institutionSource || "").trim(),
         className: String(profile.className || "").trim(),
         learnerStage: normalizeLearnerStage(profile.learnerStage),
-        collegeName: String(profile.institutionName || profile.collegeName || institutionQuery || "").trim(),
+        collegeName: selectedInstitutionName,
         state: String(profile.state || "").trim(),
         skills: parseCommaSeparated(skillsDraft),
         education: profile.education.filter((item) => item.school || item.degree || item.year),
@@ -421,6 +464,7 @@ export default function StudentProfileScreen() {
       const nextProjects = Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects;
       setProjectTechDrafts(Object.fromEntries(nextProjects.map((item, index) => [index, item.tech.join(", ")])));
       setPhotoDirty(false);
+      await refreshLearner();
       notify("Student profile updated");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Save failed");
@@ -625,10 +669,7 @@ export default function StudentProfileScreen() {
                 active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]
               ]}
               onPress={() =>
-                setProfile((prev) => ({
-                  ...prev,
-                  learnerStage: option.value
-                }))
+                void persistLearnerStage(option.value)
               }
             >
               <Text style={[styles.optionText, { color: colors.textMuted }, active && [styles.optionTextActive, { color: colors.accent }]]}>
@@ -639,7 +680,7 @@ export default function StudentProfileScreen() {
         })}
       </View>
       <Text style={[styles.helperText, { color: colors.textMuted }]}>
-        Existing ORIN users stay in After 12 mode by default. Switch this only if you want a school-friendly experience.
+        Existing ORIN users stay in After 12 mode by default. Tapping a stage updates it immediately.
       </Text>
 
       <Text style={[styles.label, { color: colors.text }]}>Institution Type</Text>
@@ -677,15 +718,18 @@ export default function StudentProfileScreen() {
         value={institutionQuery}
         onFocus={() => setInstitutionFocused(true)}
         onChangeText={(value) => {
+          const selectedInstitutionName = String(profile.institutionName || profile.collegeName || "").trim();
           setInstitutionQuery(value);
           setInstitutionFocused(true);
-          setProfile((prev) => ({
-            ...prev,
-            institutionName: value,
-            collegeName: value,
-            institutionDistrict: value.trim() ? prev.institutionDistrict : "",
-            institutionSource: value.trim() ? prev.institutionSource : ""
-          }));
+          if (value.trim() !== selectedInstitutionName) {
+            setProfile((prev) => ({
+              ...prev,
+              institutionName: "",
+              collegeName: "",
+              institutionDistrict: "",
+              institutionSource: ""
+            }));
+          }
         }}
       />
       {searchingInstitutions ? <ActivityIndicator size="small" color={colors.accent} style={styles.searchLoader} /> : null}
@@ -707,11 +751,11 @@ export default function StudentProfileScreen() {
       ) : null}
       {institutionFocused && !searchingInstitutions && institutionQuery.trim().length >= 2 && institutionResults.length === 0 ? (
         <Text style={[styles.helperText, { color: colors.textMuted }]}>
-          No institution match yet. Keep typing or save manually if your institution is rare.
+          No institution match yet. Please search again or ask admin to add your institution.
         </Text>
       ) : null}
       <Text style={[styles.helperText, { color: colors.textMuted }]}>
-        Pick a real institution when possible so your institution and state leaderboards stay accurate.
+        Select your institution from the list so feeds, resources, roadmaps, and leaderboards connect correctly.
       </Text>
       {profile.institutionDistrict || profile.institutionSource ? (
         <Text style={[styles.helperText, { color: colors.textMuted }]}>

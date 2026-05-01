@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -31,15 +31,29 @@ const STAGES: { value: LearnerStage; title: string; body: string; icon: keyof ty
   }
 ];
 
+type InstitutionSearchResult = {
+  id: string;
+  name: string;
+  institutionType: string;
+  district?: string;
+  state?: string;
+  source?: string;
+};
+
 export default function LearnerOnboardingScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { refresh } = useLearner();
   const { colors, isDark } = useAppTheme();
   const [stage, setStage] = useState<LearnerStage>("after12");
+  const [institutionQuery, setInstitutionQuery] = useState("");
   const [institutionName, setInstitutionName] = useState("");
+  const [institutionResults, setInstitutionResults] = useState<InstitutionSearchResult[]>([]);
+  const [searchingInstitutions, setSearchingInstitutions] = useState(false);
+  const [institutionFocused, setInstitutionFocused] = useState(false);
   const [className, setClassName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loadingProfile, setLoadingProfile] = useState(true);
 
   const isSchoolStage = stage === "kid" || stage === "highschool";
   const stageHelp = useMemo(() => {
@@ -47,6 +61,94 @@ export default function LearnerOnboardingScreen() {
     if (stage === "highschool") return "High School mode keeps study and institution features in front.";
     return "After 12 keeps the complete existing ORIN experience.";
   }, [stage]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadCurrentProfile() {
+      if (user?.role !== "student") {
+        if (active) setLoadingProfile(false);
+        return;
+      }
+      try {
+        const { data } = await api.get("/api/profiles/student/me");
+        if (!active) return;
+        const profile = data?.profile || {};
+        const nextStage = normalizeLearnerStage(profile?.learnerStage);
+        const nextInstitution = String(profile?.institutionName || profile?.collegeName || "").trim();
+        setStage(nextStage);
+        setInstitutionName(nextInstitution);
+        setInstitutionQuery(nextInstitution);
+        setClassName(String(profile?.className || "").trim());
+      } catch {
+        if (!active) return;
+      } finally {
+        if (active) setLoadingProfile(false);
+      }
+    }
+    void loadCurrentProfile();
+    return () => {
+      active = false;
+    };
+  }, [user?.role]);
+
+  useEffect(() => {
+    if (!institutionFocused) {
+      setInstitutionResults([]);
+      return;
+    }
+
+    const query = institutionQuery.trim();
+    if (query.length < 2) {
+      setInstitutionResults([]);
+      setSearchingInstitutions(false);
+      return;
+    }
+
+    let active = true;
+    const timer = setTimeout(async () => {
+      try {
+        setSearchingInstitutions(true);
+        const { data } = await api.get("/api/profiles/institutions/search", {
+          params: {
+            q: query,
+            institutionType: stage === "kid" || stage === "highschool" ? "School" : undefined,
+            limit: 8
+          }
+        });
+        if (!active) return;
+        let nextResults = Array.isArray(data?.results) ? data.results : [];
+
+        if (nextResults.length === 0) {
+          const fallback = await api.get("/api/profiles/institutions/search", {
+            params: {
+              q: query,
+              limit: 8
+            }
+          });
+          if (!active) return;
+          nextResults = Array.isArray(fallback?.data?.results) ? fallback.data.results : [];
+        }
+
+        setInstitutionResults(nextResults);
+      } catch {
+        if (active) setInstitutionResults([]);
+      } finally {
+        if (active) setSearchingInstitutions(false);
+      }
+    }, 250);
+
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [institutionFocused, institutionQuery, stage]);
+
+  function selectInstitution(institution: InstitutionSearchResult) {
+    setInstitutionName(institution.name);
+    setInstitutionQuery(institution.name);
+    setInstitutionFocused(false);
+    setInstitutionResults([]);
+  }
 
   async function handleContinue() {
     if (user?.role !== "student") {
@@ -57,10 +159,17 @@ export default function LearnerOnboardingScreen() {
     try {
       setIsSubmitting(true);
       const normalizedStage = normalizeLearnerStage(stage);
+      const selectedInstitutionName = institutionName.trim();
+      if (isSchoolStage && institutionQuery.trim() && institutionQuery.trim() !== selectedInstitutionName) {
+        handleAppError(new Error("Please select your institution from the list before continuing."), {
+          fallbackMessage: "Please select your institution from the list before continuing."
+        });
+        return;
+      }
       await api.put("/api/profiles/student/me", {
         learnerStage: normalizedStage,
-        institutionName: institutionName.trim(),
-        collegeName: institutionName.trim(),
+        institutionName: selectedInstitutionName,
+        collegeName: selectedInstitutionName,
         institutionType: isSchoolStage ? "School" : "",
         className: className.trim()
       });
@@ -82,6 +191,7 @@ export default function LearnerOnboardingScreen() {
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {loadingProfile ? <ActivityIndicator size="small" color={colors.accent} style={styles.loader} /> : null}
         <Text style={[styles.eyebrow, { color: colors.accent }]}>Set up your ORIN experience</Text>
         <Text style={[styles.title, { color: colors.text }]}>Choose how you learn</Text>
         <Text style={[styles.subtitle, { color: colors.textMuted }]}>
@@ -99,9 +209,16 @@ export default function LearnerOnboardingScreen() {
                   styles.stageCard,
                   { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
                   active && { borderColor: colors.accent, backgroundColor: colors.accentSoft }
-                ]}
-                onPress={() => setStage(item.value)}
-              >
+              ]}
+              onPress={() => {
+                setStage(item.value);
+                if (item.value === "kid" || item.value === "highschool") {
+                  setInstitutionFocused(true);
+                } else {
+                  setInstitutionFocused(false);
+                }
+              }}
+            >
                 <View style={[styles.iconWrap, { backgroundColor: isDark ? "#111827" : "#FFFFFF" }]}>
                   <Ionicons name={item.icon} size={20} color={active ? colors.accent : colors.textMuted} />
                 </View>
@@ -119,11 +236,40 @@ export default function LearnerOnboardingScreen() {
             <Text style={[styles.label, { color: colors.text }]}>School / Institution</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
-              placeholder="Example: ORIN Public School"
+              placeholder="Search and select your school"
               placeholderTextColor={colors.textMuted}
-              value={institutionName}
-              onChangeText={setInstitutionName}
+              value={institutionQuery}
+              onFocus={() => setInstitutionFocused(true)}
+              onChangeText={(value) => {
+                setInstitutionQuery(value);
+                setInstitutionFocused(true);
+                if (value.trim() !== institutionName.trim()) {
+                  setInstitutionName("");
+                }
+              }}
             />
+            {searchingInstitutions ? <ActivityIndicator size="small" color={colors.accent} style={styles.searchLoader} /> : null}
+            {institutionFocused && institutionResults.length > 0 ? (
+              <View style={[styles.suggestionBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                {institutionResults.map((item) => (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[styles.suggestionItem, { borderBottomColor: colors.border }]}
+                    onPress={() => selectInstitution(item)}
+                  >
+                    <Text style={[styles.suggestionTitle, { color: colors.text }]}>{item.name}</Text>
+                    <Text style={[styles.suggestionMeta, { color: colors.textMuted }]}>
+                      {[item.institutionType, item.district, item.state].filter(Boolean).join(" | ")}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : null}
+            {institutionFocused && !searchingInstitutions && institutionQuery.trim().length >= 2 && institutionResults.length === 0 ? (
+              <Text style={[styles.helper, { color: colors.textMuted }]}>
+                No institution match yet. You can skip and add it later after admin adds your institution.
+              </Text>
+            ) : null}
             <Text style={[styles.label, { color: colors.text }]}>Class / Section</Text>
             <TextInput
               style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
@@ -167,9 +313,15 @@ const styles = StyleSheet.create({
   stageTitle: { fontSize: 17, fontWeight: "900", marginBottom: 4 },
   stageBody: { fontSize: 14, lineHeight: 20 },
   helper: { marginTop: 14, lineHeight: 20 },
+  loader: { marginBottom: 10 },
   formBlock: { borderTopWidth: 1, marginTop: 16, paddingTop: 16 },
   label: { fontSize: 14, fontWeight: "800", marginBottom: 8 },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 12 },
+  searchLoader: { marginBottom: 8 },
+  suggestionBox: { borderWidth: 1, borderRadius: 14, overflow: "hidden", marginBottom: 8 },
+  suggestionItem: { paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1 },
+  suggestionTitle: { fontSize: 14, fontWeight: "800" },
+  suggestionMeta: { marginTop: 2, fontSize: 12 },
   primaryBtn: { minHeight: 50, borderRadius: 14, alignItems: "center", justifyContent: "center", marginTop: 10 },
   primaryText: { fontWeight: "900", fontSize: 16 },
   skipBtn: { alignItems: "center", paddingVertical: 14 },
