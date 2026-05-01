@@ -175,7 +175,7 @@ export default function LearnerOnboardingScreen() {
         });
         return;
       }
-      await api.put("/api/profiles/student/me", {
+      await api.patch("/api/profiles/student/me", {
         learnerStage: normalizedStage,
         institutionName: selectedInstitutionName,
         collegeName: selectedInstitutionName,
