@@ -23,7 +23,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { LearnerProvider } from "@/context/LearnerContext";
 import { ThemeProvider, useAppTheme } from "@/context/ThemeContext";
 import { api, pingBackendReady } from "@/lib/api";
-import { LEARNER_ONBOARDING_PENDING_KEY } from "@/lib/learnerExperience";
+import { LEARNER_ONBOARDING_COMPLETING_KEY, LEARNER_ONBOARDING_PENDING_KEY } from "@/lib/learnerExperience";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function defaultRouteByRole(role: "student" | "mentor") {
@@ -104,6 +104,7 @@ function RootDrawer() {
   const [drawerReputation, setDrawerReputation] = useState<{ levelTag?: string; xp?: number; score?: number } | null>(null);
   const [drawerMentorStats, setDrawerMentorStats] = useState<{ rating?: number; studentsMentored?: number } | null>(null);
   const [hasPendingLearnerOnboarding, setHasPendingLearnerOnboarding] = useState(false);
+  const [isCompletingLearnerOnboarding, setIsCompletingLearnerOnboarding] = useState(false);
   const isCheckingUpdateRef = useRef(false);
   const hasPromptedReloadRef = useRef(false);
   const tabHistoryRef = useRef<Record<AppTabKey, string[]>>({
@@ -133,14 +134,26 @@ function RootDrawer() {
     let active = true;
     async function syncPendingLearnerOnboarding() {
       if (!isAuthenticated || user?.role !== "student") {
-        if (active) setHasPendingLearnerOnboarding(false);
+        if (active) {
+          setHasPendingLearnerOnboarding(false);
+          setIsCompletingLearnerOnboarding(false);
+        }
         return;
       }
       try {
-        const value = await AsyncStorage.getItem(LEARNER_ONBOARDING_PENDING_KEY);
-        if (active) setHasPendingLearnerOnboarding(value === "1");
+        const [pendingValue, completingValue] = await Promise.all([
+          AsyncStorage.getItem(LEARNER_ONBOARDING_PENDING_KEY),
+          AsyncStorage.getItem(LEARNER_ONBOARDING_COMPLETING_KEY)
+        ]);
+        if (active) {
+          setHasPendingLearnerOnboarding(pendingValue === "1");
+          setIsCompletingLearnerOnboarding(completingValue === "1");
+        }
       } catch {
-        if (active) setHasPendingLearnerOnboarding(false);
+        if (active) {
+          setHasPendingLearnerOnboarding(false);
+          setIsCompletingLearnerOnboarding(false);
+        }
       }
     }
     void syncPendingLearnerOnboarding();
@@ -148,6 +161,29 @@ function RootDrawer() {
       active = false;
     };
   }, [isAuthenticated, user?.role, pathname]);
+
+  useEffect(() => {
+    if (!isCompletingLearnerOnboarding || pathname.startsWith("/learner-onboarding")) {
+      return;
+    }
+
+    let active = true;
+    async function clearCompletingFlag() {
+      try {
+        await AsyncStorage.removeItem(LEARNER_ONBOARDING_COMPLETING_KEY);
+      } finally {
+        if (active) {
+          setIsCompletingLearnerOnboarding(false);
+          setHasPendingLearnerOnboarding(false);
+        }
+      }
+    }
+
+    void clearCompletingFlag();
+    return () => {
+      active = false;
+    };
+  }, [isCompletingLearnerOnboarding, pathname]);
 
   useEffect(() => {
     if (!user || !isAuthenticated) return;
@@ -202,7 +238,7 @@ function RootDrawer() {
     }
 
     if (isAuthenticated && user && isAuthScreen) {
-      if (user.role === "student" && hasPendingLearnerOnboarding) {
+      if (user.role === "student" && hasPendingLearnerOnboarding && !isCompletingLearnerOnboarding) {
         router.replace("/learner-onboarding?new=1" as never);
         return;
       }
@@ -211,7 +247,7 @@ function RootDrawer() {
     }
 
     if (isAuthenticated && user) {
-      if (user.role === "student" && hasPendingLearnerOnboarding && !pathname.startsWith("/learner-onboarding")) {
+      if (user.role === "student" && hasPendingLearnerOnboarding && !isCompletingLearnerOnboarding && !pathname.startsWith("/learner-onboarding")) {
         router.replace("/learner-onboarding?new=1" as never);
       } else if (pathname.startsWith("/mentor-dashboard") && user.role !== "mentor") {
         router.replace(homeRouteForUser(user) as never);
@@ -227,7 +263,7 @@ function RootDrawer() {
         }
       }
     }
-  }, [hasPendingLearnerOnboarding, isBootstrapping, isAuthenticated, pathname, router, user]);
+  }, [hasPendingLearnerOnboarding, isBootstrapping, isAuthenticated, isCompletingLearnerOnboarding, pathname, router, user]);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
@@ -561,6 +597,7 @@ function RootDrawer() {
     if (!isAuthenticated || !user) return false;
     if (pathname === "/login" || pathname === "/register" || pathname === "/verify-email") return false;
     if (pathname === "/mentor-awaiting" || pathname === "/mentor-pending") return false;
+    if (pathname.startsWith("/learner-onboarding")) return false;
     return true;
   }
 

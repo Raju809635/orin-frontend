@@ -8,7 +8,7 @@ import { handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useLearner } from "@/context/LearnerContext";
 import { useAppTheme } from "@/context/ThemeContext";
-import { LEARNER_ONBOARDING_PENDING_KEY, normalizeLearnerStage, type LearnerStage } from "@/lib/learnerExperience";
+import { LEARNER_ONBOARDING_COMPLETING_KEY, LEARNER_ONBOARDING_PENDING_KEY, normalizeLearnerStage, type LearnerStage } from "@/lib/learnerExperience";
 
 const STAGES: { value: LearnerStage; title: string; body: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   {
@@ -173,6 +173,7 @@ export default function LearnerOnboardingScreen() {
         institutionType: isSchoolStage ? "School" : "",
         className: className.trim()
       });
+      await AsyncStorage.setItem(LEARNER_ONBOARDING_COMPLETING_KEY, "1");
       await AsyncStorage.removeItem(LEARNER_ONBOARDING_PENDING_KEY);
       await refresh();
       router.replace("/student-dashboard?section=overview" as never);
@@ -184,8 +185,11 @@ export default function LearnerOnboardingScreen() {
   }
 
   function handleSkip() {
-    void AsyncStorage.removeItem(LEARNER_ONBOARDING_PENDING_KEY);
-    router.replace("/student-dashboard?section=overview" as never);
+    void (async () => {
+      await AsyncStorage.setItem(LEARNER_ONBOARDING_COMPLETING_KEY, "1");
+      await AsyncStorage.removeItem(LEARNER_ONBOARDING_PENDING_KEY);
+      router.replace("/student-dashboard?section=overview" as never);
+    })();
   }
 
   return (
