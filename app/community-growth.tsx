@@ -60,7 +60,7 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "challenges",
-      label: isKid ? "Fun Challenges" : "Challenges",
+      label: isKid ? "Fun Challenges" : isHighSchool ? "School Challenges" : "Challenges",
       description: isMentor
         ? "Join mentoring challenges and contribute structured learning activities."
         : isKid
@@ -77,7 +77,7 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "certifications",
-      label: isKid ? "Star Rewards" : "Certifications",
+      label: isKid ? "Star Rewards" : isHighSchool ? "Achievements" : "Certifications",
       description: isMentor
         ? "Track certification tracks you can recommend, review, or contribute toward."
         : isKid
@@ -128,7 +128,7 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "library",
-      label: isKid ? "Class Resource Library" : "Knowledge Library",
+      label: isKid ? "Class Resource Library" : isHighSchool ? "Resource Library" : "Knowledge Library",
       description: isMentor
         ? "Contribute guides, mentoring notes, and reusable learning resources."
         : isKid
@@ -145,12 +145,14 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "reputation",
-      label: isKid ? "School Highlights" : "Reputation & Ranking",
+      label: isKid ? "School Highlights" : isHighSchool ? "School Progress" : "Reputation & Ranking",
       description: isMentor
         ? "Track your mentor reputation, ranking, and trust indicators inside ORIN."
         : isKid
           ? "See achievements and positive learning highlights without complex ranking."
-          : "Track your score, tag, and percentile performance.",
+          : isHighSchool
+            ? "Track school progress, institution standing, and achievement momentum."
+            : "Track your score, tag, and percentile performance.",
       icon: "stats-chart",
       path: isKid ? "/community/kid-group-activities" : isHighSchool ? "/community/highschool-achievements" : "/community/reputation",
       iconColor: "#DC2626",
