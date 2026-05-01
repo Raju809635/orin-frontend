@@ -14,6 +14,7 @@ type AiModule = {
   label: string;
   description: string;
   icon: keyof typeof Ionicons.glyphMap;
+  emoji?: string;
   path: string;
   iconColor: string;
   iconBg: string;
@@ -50,6 +51,7 @@ export default function AiHubScreen() {
             ? "Explore future streams and mentor-guided direction with simpler suggestions."
             : "Find best-fit mentors with match score and experience insights.",
       icon: isKid ? "game-controller" : "sparkles",
+      emoji: isKid ? "🎮" : isHighSchool ? "🧭" : undefined,
       path: isKid ? "/ai/kids-learning-games" : isHighSchool ? "/ai/career-explorer" : "/ai/mentor-matching",
       iconColor: "#D4A017",
       iconBg: "#FFF7D6",
@@ -69,7 +71,8 @@ export default function AiHubScreen() {
             ? "See missing subject areas and simple study suggestions for your next goal."
             : "Identify missing skills and course suggestions for your goal.",
       icon: isKid ? "school" : "analytics",
-      path: isKid ? "/ai/reading-and-numbers" : "/ai/skill-gap",
+      emoji: isKid ? "🔢" : isHighSchool ? "🧠" : undefined,
+      path: isKid ? "/ai/reading-and-numbers" : isHighSchool ? "/ai/highschool-subject-gap" : "/ai/skill-gap",
       iconColor: "#6D28D9",
       iconBg: "#F3E8FF",
       darkIconBg: "rgba(109,40,217,0.18)",
@@ -88,7 +91,8 @@ export default function AiHubScreen() {
             ? "Get a subject-first plan with guided milestones for school progress."
             : "Get your step-by-step path and next milestones.",
       icon: "map",
-      path: isKid ? "/ai/career-roadmap?section=institution" : "/ai/career-roadmap",
+      emoji: isKid ? "🗺️" : isHighSchool ? "🎯" : undefined,
+      path: isKid ? "/ai/kids-learning-activities" : isHighSchool ? "/ai/highschool-study-roadmap" : "/ai/career-roadmap",
       iconColor: "#0F766E",
       iconBg: "#DDF7F2",
       darkIconBg: "rgba(15,118,110,0.18)",
@@ -107,6 +111,7 @@ export default function AiHubScreen() {
             ? "Generate school-friendly project, exhibition, and portfolio ideas."
             : "Generate practical project ideas aligned to your career track.",
       icon: isKid ? "color-wand" : "bulb",
+      emoji: isKid ? "🎨" : isHighSchool ? "💡" : undefined,
       path: isKid ? "/ai/creative-corner" : "/ai/project-ideas",
       iconColor: "#D97706",
       iconBg: "#FFF1DA",
@@ -126,7 +131,8 @@ export default function AiHubScreen() {
             ? "Turn goals and school tasks into a simpler study plan."
             : "Create resume draft from profile and activity data.",
       icon: isKid ? "brush" : isHighSchool ? "calendar" : "document-text",
-      path: isKid ? "/ai/creative-corner" : isHighSchool ? "/ai/study-planner" : "/ai/resume-builder",
+      emoji: isKid ? "✏️" : isHighSchool ? "📅" : undefined,
+      path: isKid ? "/ai/story-and-drawing" : isHighSchool ? "/ai/study-planner" : "/ai/resume-builder",
       iconColor: "#DC2626",
       iconBg: "#FEE2E2",
       darkIconBg: "rgba(220,38,38,0.18)",
@@ -145,7 +151,8 @@ export default function AiHubScreen() {
             ? "Open a simpler study helper for doubts, revision, and school guidance."
             : "Open AI chat for personalized answers and guidance.",
       icon: "chatbubbles",
-      path: "/ai/assistant",
+      emoji: isKid ? "💬" : isHighSchool ? "📘" : undefined,
+      path: isKid ? "/ai/kids-ask-orin" : isHighSchool ? "/ai/highschool-study-assistant" : "/ai/assistant",
       iconColor: "#7C3AED",
       iconBg: "#F3E8FF",
       darkIconBg: "rgba(124,58,237,0.18)",
@@ -180,25 +187,38 @@ export default function AiHubScreen() {
       </Text>
 
       <View style={styles.moduleStack}>
-        {filteredModules.map((item) => (
+        {filteredModules.map((item) => {
+          const playful = isKid || isHighSchool;
+          return (
           <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={() => router.push(item.path as never)}>
             <LinearGradient
               colors={isDark ? item.darkGradient : item.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[styles.moduleCard, { borderColor: isDark ? item.iconColor : item.border, shadowColor: item.iconColor, shadowOpacity: isDark ? 0.18 : 0.08 }]}
+              style={[
+                styles.moduleCard,
+                playful && styles.stageModuleCard,
+                { borderColor: isDark ? item.iconColor : item.border, shadowColor: item.iconColor, shadowOpacity: isDark ? 0.18 : 0.08 }
+              ]}
             >
-              <View style={[styles.moduleIconWrap, { backgroundColor: isDark ? item.darkIconBg : item.iconBg, borderColor: isDark ? `${item.iconColor}55` : "transparent" }]}>
+              {playful && item.emoji ? <Text style={styles.stageEmoji}>{item.emoji}</Text> : null}
+              <View style={[styles.moduleIconWrap, playful && styles.stageIconWrap, { backgroundColor: isDark ? item.darkIconBg : item.iconBg, borderColor: isDark ? `${item.iconColor}55` : "transparent" }]}>
                 <Ionicons name={item.icon} size={20} color={item.iconColor} />
               </View>
               <View style={styles.moduleTextWrap}>
                 <Text style={[styles.moduleTitle, { color: colors.text }]}>{item.label}</Text>
                 <Text style={[styles.moduleDesc, { color: colors.textMuted }]}>{item.description}</Text>
+                {playful ? (
+                  <Text style={[styles.stageActionText, { color: item.iconColor }]}>
+                    {isKid ? "Tap to play and learn" : "Open guided study tool"}
+                  </Text>
+                ) : null}
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </LinearGradient>
           </TouchableOpacity>
-        ))}
+          );
+        })}
       </View>
     </ScrollView>
     </View>
@@ -223,6 +243,19 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4
   },
+  stageModuleCard: {
+    minHeight: 112,
+    borderRadius: 24,
+    padding: 16,
+    gap: 12
+  },
+  stageEmoji: {
+    position: "absolute",
+    right: 46,
+    top: 12,
+    fontSize: 32,
+    opacity: 0.9
+  },
   moduleIconWrap: {
     width: 38,
     height: 38,
@@ -232,7 +265,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center"
   },
+  stageIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 18
+  },
   moduleTextWrap: { flex: 1, gap: 2 },
-  moduleTitle: { color: "#1E2B24", fontWeight: "800", fontSize: 15 },
-  moduleDesc: { color: "#667085", fontSize: 12, lineHeight: 16 }
+  moduleTitle: { color: "#1E2B24", fontWeight: "900", fontSize: 16 },
+  moduleDesc: { color: "#667085", fontSize: 12, lineHeight: 16 },
+  stageActionText: { marginTop: 6, fontSize: 12, fontWeight: "900" }
 });

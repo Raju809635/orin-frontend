@@ -450,6 +450,71 @@ function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
+const REWARD_LEVELS = [
+  { min: 0, label: "Starter", icon: "leaf", tone: "#22C55E" },
+  { min: 100, label: "Bronze", icon: "medal", tone: "#B45309" },
+  { min: 300, label: "Silver", icon: "shield-checkmark", tone: "#64748B" },
+  { min: 700, label: "Gold", icon: "trophy", tone: "#D97706" },
+  { min: 1200, label: "Diamond", icon: "diamond", tone: "#2563EB" },
+  { min: 2000, label: "Champion", icon: "ribbon", tone: "#7C3AED" }
+] as const;
+
+function buildRewardSummary(dashboard: DailyDashboard | null, isKid: boolean, isHighSchool: boolean) {
+  const score = Math.max(0, Number(dashboard?.reputationScore || 0));
+  const todayXp = Math.max(0, Number(dashboard?.xp || dashboard?.dailyQuiz?.result?.xpEarned || 0));
+  const streak = Math.max(0, Number(dashboard?.streakDays || dashboard?.dailyQuiz?.result?.streak || 0));
+  const currentIndex = REWARD_LEVELS.reduce((best, level, index) => (score >= level.min ? index : best), 0);
+  const current = REWARD_LEVELS[currentIndex];
+  const next = REWARD_LEVELS[currentIndex + 1] || null;
+  const levelBase = current.min;
+  const nextTarget = next?.min || Math.max(current.min + 500, score + 1);
+  const progress = Math.max(0.08, Math.min(1, (score - levelBase) / Math.max(1, nextTarget - levelBase)));
+  const rank = dashboard?.leaderboard?.collegeRank || dashboard?.leaderboard?.globalRank || null;
+  const pointsLabel = isKid ? "Stars" : "XP";
+  const boardLabel = isKid ? "Star Board" : isHighSchool ? "School Board" : "Leaderboard";
+  const completedQuiz = Boolean(dashboard?.dailyQuiz?.completedToday);
+  const badges = [
+    {
+      label: isKid ? "Daily Star" : "Daily Learner",
+      earned: completedQuiz,
+      icon: "star",
+      tone: "#F59E0B"
+    },
+    {
+      label: `${Math.max(streak, 0)} Day Streak`,
+      earned: streak >= 3,
+      icon: "flame",
+      tone: "#EF4444"
+    },
+    {
+      label: current.label,
+      earned: score >= current.min,
+      icon: current.icon,
+      tone: current.tone
+    },
+    {
+      label: rank ? `${boardLabel} #${rank}` : boardLabel,
+      earned: Boolean(rank && rank <= 10),
+      icon: "podium",
+      tone: "#6366F1"
+    }
+  ];
+
+  return {
+    score,
+    todayXp,
+    streak,
+    current,
+    next,
+    progress,
+    rank,
+    pointsLabel,
+    boardLabel,
+    completedQuiz,
+    badges
+  };
+}
+
 export default function StudentDashboard() {
   const params = useLocalSearchParams<{ section?: string; openQuiz?: string }>();
   const router = useRouter();
@@ -481,6 +546,10 @@ export default function StudentDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [networkFeed, setNetworkFeed] = useState<NetworkPost[]>([]);
   const [dailyDashboard, setDailyDashboard] = useState<DailyDashboard | null>(null);
+  const rewardSummary = useMemo(
+    () => buildRewardSummary(dailyDashboard, isKid, isHighSchool),
+    [dailyDashboard, isHighSchool, isKid]
+  );
   const [dailyQuiz, setDailyQuiz] = useState<DailyQuizResponse | null>(null);
   const [quizVisible, setQuizVisible] = useState(false);
   const [quizDomainPickerVisible, setQuizDomainPickerVisible] = useState(false);
@@ -1525,6 +1594,174 @@ export default function StudentDashboard() {
   const progressRatio = quizQuestions.length ? (quizIndex + 1) / quizQuestions.length : 0;
   const selectedAnswersCount = quizAnswers.length;
   const canFinalizeQuiz = selectedAnswersCount === 5 && !quizResult;
+  const kidActivityCount = institutionRoadmaps.reduce((count, roadmap) => count + (roadmap.weeks?.length || 0), 0);
+  const kidStarCount = certifications.length * 10 + challenges.filter((item) => item.isParticipating).length * 5;
+  const renderKidOverview = () => (
+    <>
+      <View style={[styles.institutionHubCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <TouchableOpacity activeOpacity={0.92} style={styles.institutionHubHeaderRow} onPress={() => setInstitutionExpanded((prev) => !prev)}>
+          <View style={styles.institutionHubHeader}>
+            <View style={[styles.institutionHubBadge, { backgroundColor: isDark ? "rgba(99,102,241,0.18)" : "#EEF2FF" }]}>
+              <Text style={[styles.institutionHubBadgeText, { color: isDark ? "#C7D2FE" : "#1849A9" }]}>School</Text>
+            </View>
+            <Text style={[styles.institutionHubTitle, { color: colors.text }]}>My Institution</Text>
+            <Text style={[styles.institutionHubMeta, { color: colors.textMuted }]}>
+              {studentInstitutionName
+                ? `${studentInstitutionName}${studentClassName ? ` - Class ${studentClassName}` : ""}`
+                : "Join your school in profile to unlock school feed, activities, and class resources."}
+            </Text>
+          </View>
+          <View style={[styles.institutionExpandBtn, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name={institutionExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} />
+          </View>
+        </TouchableOpacity>
+        {institutionExpanded ? (
+          <View style={styles.institutionTileGrid}>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/network?section=institution" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#86EFAC" : "#163A2A" }]}>School Feed</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>Teacher and school posts only</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/leaderboard" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#93C5FD" : "#163A2A" }]}>Star Board</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {leaderboard?.collegeTop?.length ? `${leaderboard.collegeTop.length} star spot${leaderboard.collegeTop.length === 1 ? "" : "s"} visible` : "Friendly class stars and highlights"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/ai/kids-learning-activities" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#FDE68A" : "#163A2A" }]}>Today&apos;s Activity</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {kidActivityCount ? `${kidActivityCount} teacher activit${kidActivityCount === 1 ? "y" : "ies"} ready` : "Open your school activity for today"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/knowledge-library?section=institution" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#F0ABFC" : "#163A2A" }]}>Class Resources</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {institutionKnowledgeLibrary.length ? `${institutionKnowledgeLibrary.length} class resource${institutionKnowledgeLibrary.length === 1 ? "" : "s"} shared` : "Worksheets, images, and activities appear here"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
+
+      <Text style={[styles.groupTitle, { color: colors.text }]}>Today&apos;s Activity</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Open one teacher activity, finish it, and submit it for stars.</Text>
+      <View style={styles.opportunityWrap}>
+        <TouchableOpacity style={[styles.opportunityCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/ai/kids-learning-activities" as never)}>
+          <Text style={[styles.opportunityTitle, { color: colors.text }]}>Do Today&apos;s Activity</Text>
+          <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>
+            {kidActivityCount ? `${kidActivityCount} school activit${kidActivityCount === 1 ? "y" : "ies"} available now` : "Open your school activity and submit your work"}
+          </Text>
+          <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>Flow: Open -&gt; Do -&gt; Submit -&gt; Get Stars</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={[styles.groupTitle, { color: colors.text }]}>Stars</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Collect stars from activities, fun challenges, and school rewards.</Text>
+      <View style={styles.historyWrap}>
+        <View style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.historyTitle, { color: colors.text }]}>Star Rewards</Text>
+          <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+            {certifications.length ? `${certifications.length} reward${certifications.length === 1 ? "" : "s"} earned` : "Finish activities to unlock your first reward"}
+          </Text>
+          <Text style={[styles.historyMeta, { color: colors.textMuted }]}>Estimated stars: {kidStarCount}</Text>
+        </View>
+        <View style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.historyTitle, { color: colors.text }]}>Fun Challenges</Text>
+          <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+            {challenges.length ? `${challenges.length} fun challenge${challenges.length === 1 ? "" : "s"} ready` : "Teacher challenges will appear here"}
+          </Text>
+          <TouchableOpacity onPress={() => router.push("/community/challenges" as never)}>
+            <Text style={[styles.sectionHeaderLink, { color: colors.accent }]}>Open challenges</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </>
+  );
+  const renderHighSchoolOverview = () => (
+    <>
+      <View style={[styles.institutionHubCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <TouchableOpacity activeOpacity={0.92} style={styles.institutionHubHeaderRow} onPress={() => setInstitutionExpanded((prev) => !prev)}>
+          <View style={styles.institutionHubHeader}>
+            <View style={[styles.institutionHubBadge, { backgroundColor: isDark ? "rgba(99,102,241,0.18)" : "#EEF2FF" }]}>
+              <Text style={[styles.institutionHubBadgeText, { color: isDark ? "#C7D2FE" : "#1849A9" }]}>School</Text>
+            </View>
+            <Text style={[styles.institutionHubTitle, { color: colors.text }]}>My Institution</Text>
+            <Text style={[styles.institutionHubMeta, { color: colors.textMuted }]}>
+              {studentInstitutionName
+                ? `${studentInstitutionName}${studentClassName ? ` - Class ${studentClassName}` : ""}`
+                : "Add your school in profile to unlock roadmap, resources, and school progress."}
+            </Text>
+          </View>
+          <View style={[styles.institutionExpandBtn, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+            <Ionicons name={institutionExpanded ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} />
+          </View>
+        </TouchableOpacity>
+        {institutionExpanded ? (
+          <View style={styles.institutionTileGrid}>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/network?section=institution" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#86EFAC" : "#163A2A" }]}>School Feed</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>Teacher and school posts first</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/ai/highschool-study-roadmap" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#FDE68A" : "#163A2A" }]}>Study Roadmap</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {institutionRoadmaps.length ? `${institutionRoadmaps.length} roadmap${institutionRoadmaps.length === 1 ? "" : "s"} available` : "Open your weekly study roadmap"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/highschool-resource-library" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#F0ABFC" : "#163A2A" }]}>Resource Library</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {institutionKnowledgeLibrary.length ? `${institutionKnowledgeLibrary.length} school resource${institutionKnowledgeLibrary.length === 1 ? "" : "s"} shared` : "Notes, PDFs, and videos appear here"}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/highschool-school-challenges" as never)}>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#FDBA74" : "#163A2A" }]}>School Challenges</Text>
+              <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
+                {challenges.length ? `${challenges.length} challenge${challenges.length === 1 ? "" : "s"} active` : "Quizzes and competitions will appear here"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+      </View>
+
+      <Text style={[styles.groupTitle, { color: colors.text }]}>Academic Roadmap</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Keep school goals, weekly tasks, and institution roadmap progress in one place.</Text>
+      <View style={styles.opportunityWrap}>
+        <TouchableOpacity style={[styles.opportunityCard, { backgroundColor: colors.surface, borderColor: colors.border }]} onPress={() => router.push("/ai/highschool-study-roadmap" as never)}>
+          <Text style={[styles.opportunityTitle, { color: colors.text }]}>Open Study Roadmap</Text>
+          <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>
+            {roadmap?.steps?.length ? `${roadmap.steps.length} AI roadmap step${roadmap.steps.length === 1 ? "" : "s"} ready` : "Generate and follow your weekly study plan"}
+          </Text>
+          <Text style={[styles.opportunityMeta, { color: colors.textMuted }]}>
+            {institutionRoadmaps.length ? `${institutionRoadmaps.length} institution roadmap${institutionRoadmaps.length === 1 ? "" : "s"} also available` : "Add school roadmap support from your institution"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={[styles.groupTitle, { color: colors.text }]}>School Progress</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>Track challenge activity, streaks, and school rank in a study-first way.</Text>
+      <View style={styles.historyWrap}>
+        <View style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.historyTitle, { color: colors.text }]}>Progress Snapshot</Text>
+          <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+            {dailyDashboard ? `XP ${dailyDashboard.xp} - Streak ${dailyDashboard.streakDays} day${dailyDashboard.streakDays === 1 ? "" : "s"}` : "Daily study progress will appear here"}
+          </Text>
+          <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+            {reputationSummary ? `School percentile: Top ${reputationSummary.topPercent}%` : "Finish quizzes and tasks to unlock ranking"}
+          </Text>
+        </View>
+        <View style={[styles.historyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.historyTitle, { color: colors.text }]}>Teachers & Guidance</Text>
+          <Text style={[styles.historyMeta, { color: colors.textMuted }]}>
+            {verifiedMentors.length ? `${verifiedMentors.length} verified teachers or mentors available` : "Teacher guidance will appear here"}
+          </Text>
+          <TouchableOpacity onPress={() => router.push("/mentorship?section=interaction" as never)}>
+            <Text style={[styles.sectionHeaderLink, { color: colors.accent }]}>Open guidance</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -1583,6 +1820,7 @@ export default function StudentDashboard() {
       ) : null}
 
       {activeSection === "overview" ? (
+      isKid ? renderKidOverview() : isHighSchool ? renderHighSchoolOverview() : (
       <>
       <Text style={[styles.sectionHeader, { color: colors.text }]}>Career & Tech Updates</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.newsTabRow}>
@@ -1883,52 +2121,124 @@ export default function StudentDashboard() {
 
       {FEATURE_FLAGS.dailyEngagement ? (
         <>
-        <Text style={[styles.sectionHeader, { color: colors.text }]}>Daily Career Quiz</Text>
-          <View style={[styles.dailyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.sectionHeader, { color: colors.text }]}>
+          {isKid ? "Learn. Compete. Win." : isHighSchool ? "Daily Growth Arena" : "Daily Career Quiz"}
+        </Text>
+          <View style={[styles.rewardHeroCard, { borderColor: isDark ? "#6D28D9" : "#DDD6FE" }]}>
             {!dailyDashboard ? (
-              <Text style={[styles.empty, { color: colors.textMuted }]}>Daily quiz unavailable right now.</Text>
+              <Text style={styles.rewardHeroEmpty}>Daily rewards unavailable right now.</Text>
             ) : (
               <>
-                <Text style={[styles.dailyTitle, { color: colors.text }]}>Reputation Score: {dailyDashboard.reputationScore}</Text>
-                <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>Tag: {dailyDashboard.levelTag}</Text>
-                <Text style={[styles.dailyItem, { color: colors.text }]}>
-                  Domain: {dailyDashboard.dailyQuiz?.domain || "Career Domain"}
-                </Text>
-                <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>
-                  Streak: {dailyDashboard.streakDays} days | XP: {dailyDashboard.xp}
-                </Text>
-                <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>
-                  Leaderboard: College #{dailyDashboard.leaderboard?.collegeRank ?? "-"} | Global #
-                  {dailyDashboard.leaderboard?.globalRank ?? "-"}
-                </Text>
+                <View style={styles.rewardHeroTop}>
+                  <View style={styles.rewardHeroTitleBlock}>
+                    <Text style={styles.rewardHeroEyebrow}>{isKid ? "Today&apos;s Mission" : "Growth Mission"}</Text>
+                    <Text style={styles.rewardHeroTitle}>
+                      {isKid ? "Collect stars and climb the Star Board" : "Build your streak and climb the leaderboard"}
+                    </Text>
+                    <Text style={styles.rewardHeroSubtitle}>
+                      {dailyDashboard.dailyQuiz?.message || "Complete today's quiz to earn rewards."}
+                    </Text>
+                  </View>
+                  <View style={[styles.rewardLevelBadge, { backgroundColor: rewardSummary.current.tone }]}>
+                    <Ionicons name={rewardSummary.current.icon} size={22} color="#FFFFFF" />
+                    <Text style={styles.rewardLevelBadgeText}>{rewardSummary.current.label}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.rewardStatsRow}>
+                  <View style={styles.rewardStatCard}>
+                    <Ionicons name="star" size={18} color="#FBBF24" />
+                    <Text style={styles.rewardStatValue}>{rewardSummary.score}</Text>
+                    <Text style={styles.rewardStatLabel}>{rewardSummary.pointsLabel}</Text>
+                  </View>
+                  <View style={styles.rewardStatCard}>
+                    <Ionicons name="flame" size={18} color="#FB7185" />
+                    <Text style={styles.rewardStatValue}>{rewardSummary.streak}</Text>
+                    <Text style={styles.rewardStatLabel}>Streak</Text>
+                  </View>
+                  <View style={styles.rewardStatCard}>
+                    <Ionicons name="trophy" size={18} color="#F59E0B" />
+                    <Text style={styles.rewardStatValue}>{rewardSummary.rank ? `#${rewardSummary.rank}` : "-"}</Text>
+                    <Text style={styles.rewardStatLabel}>{rewardSummary.boardLabel}</Text>
+                  </View>
+                  <View style={styles.rewardStatCard}>
+                    <Ionicons name="flash" size={18} color="#38BDF8" />
+                    <Text style={styles.rewardStatValue}>+{rewardSummary.todayXp}</Text>
+                    <Text style={styles.rewardStatLabel}>Today</Text>
+                  </View>
+                </View>
+
+                <View style={styles.rewardProgressWrap}>
+                  <View style={styles.rewardProgressHeader}>
+                    <Text style={styles.rewardProgressText}>{rewardSummary.current.label}</Text>
+                    <Text style={styles.rewardProgressText}>
+                      {rewardSummary.next ? `${rewardSummary.next.label} at ${rewardSummary.next.min}` : "Max level"}
+                    </Text>
+                  </View>
+                  <View style={styles.rewardProgressTrack}>
+                    <View style={[styles.rewardProgressFill, { width: `${Math.round(rewardSummary.progress * 100)}%` }]} />
+                  </View>
+                </View>
+
+                <View style={styles.rewardBadgeRow}>
+                  {rewardSummary.badges.map((badge) => (
+                    <View
+                      key={badge.label}
+                      style={[
+                        styles.rewardBadgeChip,
+                        { borderColor: badge.earned ? badge.tone : "rgba(255,255,255,0.18)" },
+                        !badge.earned && styles.rewardBadgeChipLocked
+                      ]}
+                    >
+                      <Ionicons name={badge.earned ? badge.icon : "lock-closed"} size={15} color={badge.earned ? badge.tone : "#CBD5E1"} />
+                      <Text style={styles.rewardBadgeText}>{badge.label}</Text>
+                    </View>
+                  ))}
+                </View>
+
                 {dailyDashboard.dailyQuiz?.result ? (
-                  <View style={[styles.dailyResultCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                    <Text style={[styles.dailyResultTitle, { color: colors.text }]}>Today&apos;s Quiz Completed</Text>
-                    <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>
+                  <View style={styles.rewardResultCard}>
+                    <Text style={styles.rewardResultTitle}>Today&apos;s Quiz Completed</Text>
+                    <Text style={styles.rewardResultMeta}>
                       Score: {dailyDashboard.dailyQuiz.result.score}/{dailyDashboard.dailyQuiz.result.totalQuestions}
                     </Text>
-                    <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>XP Earned: +{dailyDashboard.dailyQuiz.result.xpEarned}</Text>
-                    <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>Streak: {dailyDashboard.dailyQuiz.result.streak} days</Text>
+                    <Text style={styles.rewardResultMeta}>Reward Earned: +{dailyDashboard.dailyQuiz.result.xpEarned}</Text>
+                    <Text style={styles.rewardResultMeta}>Streak: {dailyDashboard.dailyQuiz.result.streak} days</Text>
                   </View>
                 ) : null}
-                <TouchableOpacity
-                  style={[
-                    styles.dailyTaskButton,
-                    (dailyDashboard.dailyQuiz?.completedToday || quizLoading) && styles.dailyTaskButtonDone
-                  ]}
-                  onPress={openQuizDomainPicker}
-                  disabled={Boolean(dailyDashboard.dailyQuiz?.completedToday) || quizLoading}
-                >
-                  <Text style={styles.dailyTaskButtonText}>
-                    {quizLoading
-                      ? "Loading..."
-                      : dailyDashboard.dailyQuiz?.completedToday
-                        ? "Completed for Today"
-                        : "Start Daily Quiz"}
-                  </Text>
-                </TouchableOpacity>
-                {dailyDashboard.dailyQuiz?.message ? <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>{dailyDashboard.dailyQuiz.message}</Text> : null}
-                {quizMessage ? <Text style={[styles.dailyMeta, { color: colors.textMuted }]}>{quizMessage}</Text> : null}
+                <View style={styles.rewardActionRow}>
+                  <TouchableOpacity
+                    style={[
+                      styles.rewardPrimaryButton,
+                      (dailyDashboard.dailyQuiz?.completedToday || quizLoading) && styles.rewardPrimaryButtonDone
+                    ]}
+                    onPress={openQuizDomainPicker}
+                    disabled={Boolean(dailyDashboard.dailyQuiz?.completedToday) || quizLoading}
+                  >
+                    <Ionicons
+                      name={dailyDashboard.dailyQuiz?.completedToday ? "checkmark-circle" : "game-controller"}
+                      size={18}
+                      color="#FFFFFF"
+                    />
+                    <Text style={styles.rewardPrimaryButtonText}>
+                      {quizLoading
+                        ? "Loading..."
+                        : dailyDashboard.dailyQuiz?.completedToday
+                          ? "Mission Complete"
+                          : isKid
+                            ? "Start Daily Quiz"
+                            : "Start Quiz"}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.rewardSecondaryButton}
+                    onPress={() => router.push("/community/leaderboard" as never)}
+                  >
+                    <Ionicons name="podium" size={18} color="#FDE68A" />
+                    <Text style={styles.rewardSecondaryButtonText}>{rewardSummary.boardLabel}</Text>
+                  </TouchableOpacity>
+                </View>
+                {quizMessage ? <Text style={styles.rewardHeroSubtitle}>{quizMessage}</Text> : null}
               </>
             )}
           </View>
@@ -1942,6 +2252,7 @@ export default function StudentDashboard() {
         <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Share ideas, partnerships, and initiatives with the ORIN team.</Text>
       </TouchableOpacity>
       </>
+      )
       ) : null}
 
       {activeSection === "growth" ? (
@@ -3306,6 +3617,104 @@ const styles = StyleSheet.create({
     padding: 10
   },
   dailyResultTitle: { color: "#1849A9", fontWeight: "800", marginBottom: 4 },
+  rewardHeroCard: {
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16,
+    marginBottom: 12,
+    backgroundColor: "#26115F",
+    shadowColor: "#4C1D95",
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3
+  },
+  rewardHeroEmpty: { color: "#EDE9FE", fontWeight: "800" },
+  rewardHeroTop: { flexDirection: "row", justifyContent: "space-between", gap: 12, alignItems: "flex-start" },
+  rewardHeroTitleBlock: { flex: 1 },
+  rewardHeroEyebrow: { color: "#FDE68A", fontSize: 12, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8 },
+  rewardHeroTitle: { color: "#FFFFFF", fontSize: 21, fontWeight: "900", lineHeight: 27, marginTop: 5 },
+  rewardHeroSubtitle: { color: "#DDD6FE", fontSize: 13, fontWeight: "700", lineHeight: 19, marginTop: 6 },
+  rewardLevelBadge: {
+    minWidth: 76,
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5
+  },
+  rewardLevelBadgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+  rewardStatsRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
+  rewardStatCard: {
+    width: "48%",
+    borderRadius: 16,
+    padding: 11,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)"
+  },
+  rewardStatValue: { color: "#FFFFFF", fontSize: 18, fontWeight: "900", marginTop: 5 },
+  rewardStatLabel: { color: "#C4B5FD", fontSize: 11, fontWeight: "800", marginTop: 2 },
+  rewardProgressWrap: { marginTop: 14 },
+  rewardProgressHeader: { flexDirection: "row", justifyContent: "space-between", marginBottom: 7 },
+  rewardProgressText: { color: "#FDE68A", fontSize: 12, fontWeight: "900" },
+  rewardProgressTrack: {
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    overflow: "hidden"
+  },
+  rewardProgressFill: { height: "100%", borderRadius: 999, backgroundColor: "#FBBF24" },
+  rewardBadgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
+  rewardBadgeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    backgroundColor: "rgba(255,255,255,0.1)"
+  },
+  rewardBadgeChipLocked: { opacity: 0.72 },
+  rewardBadgeText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+  rewardResultCard: {
+    marginTop: 14,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    padding: 12
+  },
+  rewardResultTitle: { color: "#FFFFFF", fontWeight: "900", marginBottom: 5 },
+  rewardResultMeta: { color: "#DDD6FE", fontWeight: "800", fontSize: 12, marginTop: 2 },
+  rewardActionRow: { flexDirection: "row", gap: 10, marginTop: 14 },
+  rewardPrimaryButton: {
+    flex: 1,
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: "#16A34A",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingHorizontal: 10
+  },
+  rewardPrimaryButtonDone: { backgroundColor: "#0F766E" },
+  rewardPrimaryButtonText: { color: "#FFFFFF", fontWeight: "900", fontSize: 13 },
+  rewardSecondaryButton: {
+    minHeight: 46,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(253,230,138,0.55)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingHorizontal: 12
+  },
+  rewardSecondaryButtonText: { color: "#FDE68A", fontWeight: "900", fontSize: 12 },
   radarRow: {
     flexDirection: "row",
     justifyContent: "space-between",

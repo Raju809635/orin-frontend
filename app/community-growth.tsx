@@ -14,6 +14,7 @@ type CommunityModule = {
   label: string;
   description: string;
   icon: keyof typeof Ionicons.glyphMap;
+  emoji?: string;
   path: string;
   iconColor: string;
   iconBg: string;
@@ -50,6 +51,7 @@ export default function CommunityGrowthScreen() {
             ? "Join study groups, school initiatives, and guided collaboration."
             : "Join ORIN collaboration initiatives and partnerships.",
       icon: "people",
+      emoji: isKid ? "👫" : isHighSchool ? "👥" : undefined,
       path: isKid ? "/community/kid-group-activities" : isHighSchool ? "/community/highschool-study-groups" : "/community/collaboration",
       iconColor: "#7C3AED",
       iconBg: "#F3E8FF",
@@ -60,14 +62,17 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "challenges",
-      label: isKid ? "Fun Challenges" : isHighSchool ? "School Challenges" : "Challenges",
+      label: isKid ? "Learning Games" : isHighSchool ? "Quiz Battle & Study Games" : "Challenges",
       description: isMentor
         ? "Join mentoring challenges and contribute structured learning activities."
         : isKid
-          ? "Take part in simpler activity-based school challenges and reward tasks."
-          : "Participate in monthly challenges and competitions.",
-      icon: "trophy",
-      path: isKid ? "/community/kid-fun-challenges" : isHighSchool ? "/community/highschool-school-challenges" : "/community/challenges",
+          ? "Play quiz battles, speed math, word games, streak missions, and reward tasks."
+          : isHighSchool
+            ? "Practice quiz battles, speed math, subject games, and school tournaments."
+            : "Participate in monthly challenges and competitions.",
+      icon: isKid || isHighSchool ? "game-controller" : "trophy",
+      emoji: isKid ? "🎮" : isHighSchool ? "⚔️" : undefined,
+      path: isKid || isHighSchool ? "/community/learning-games" : "/community/challenges",
       iconColor: "#C98A00",
       iconBg: "#FFF4CC",
       darkIconBg: "rgba(201,138,0,0.18)",
@@ -84,6 +89,7 @@ export default function CommunityGrowthScreen() {
           ? "View stars, badges, and simple recognition for class progress."
           : "Explore ORIN certifications and level progression.",
       icon: "ribbon",
+      emoji: isKid ? "⭐" : isHighSchool ? "🎓" : undefined,
       path: isKid ? "/community/kid-star-rewards" : isHighSchool ? "/community/highschool-achievements" : "/community/certifications",
       iconColor: "#1D4ED8",
       iconBg: "#DBEAFE",
@@ -101,7 +107,8 @@ export default function CommunityGrowthScreen() {
           ? "Discover selected school-friendly programs, camps, and future opportunities."
           : "Discover internships and career opportunities.",
       icon: "briefcase",
-      path: isHighSchool ? "/community/highschool-achievements" : "/community/opportunities",
+      emoji: isHighSchool ? "🚀" : undefined,
+      path: isHighSchool ? "/community/highschool-programs" : "/community/opportunities",
       iconColor: "#15803D",
       iconBg: "#DCFCE7",
       darkIconBg: "rgba(21,128,61,0.18)",
@@ -111,14 +118,17 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "leaderboard",
-      label: isKid ? "Star Board" : "College Leaderboard",
+      label: isKid ? "Star Board" : isHighSchool ? "School Leaderboard" : "College Leaderboard",
       description: isMentor
         ? "See where your students and mentoring community are performing across colleges."
         : isKid
           ? "See stars and friendly rankings inside your school community."
-          : "Check rankings and top students in your college.",
+          : isHighSchool
+            ? "Check rankings and top students in your school."
+            : "Check rankings and top students in your college.",
       icon: "podium",
-      path: isKid ? "/community/kid-star-rewards" : isHighSchool ? "/community/highschool-achievements" : "/community/leaderboard",
+      emoji: isKid ? "🥇" : isHighSchool ? "📊" : undefined,
+      path: isKid ? "/community/kid-star-rewards" : isHighSchool ? "/community/highschool-leaderboard" : "/community/leaderboard",
       iconColor: "#B45309",
       iconBg: "#FFEDD5",
       darkIconBg: "rgba(180,83,9,0.18)",
@@ -135,6 +145,7 @@ export default function CommunityGrowthScreen() {
           ? "Open simple class resources, activity sheets, and school learning material."
           : "Access resources, guides, and interview prep.",
       icon: "library",
+      emoji: isKid ? "📚" : isHighSchool ? "📖" : undefined,
       path: isKid ? "/community/kid-class-resources" : isHighSchool ? "/community/highschool-resource-library" : "/community/knowledge-library",
       iconColor: "#0369A1",
       iconBg: "#E0F2FE",
@@ -154,7 +165,8 @@ export default function CommunityGrowthScreen() {
             ? "Track school progress, institution standing, and achievement momentum."
             : "Track your score, tag, and percentile performance.",
       icon: "stats-chart",
-      path: isKid ? "/community/kid-group-activities" : isHighSchool ? "/community/highschool-achievements" : "/community/reputation",
+      emoji: isKid ? "✨" : isHighSchool ? "📈" : undefined,
+      path: isKid ? "/community/kid-group-activities" : isHighSchool ? "/community/highschool-progress" : "/community/reputation",
       iconColor: "#DC2626",
       iconBg: "#FEE2E2",
       darkIconBg: "rgba(220,38,38,0.18)",
@@ -194,25 +206,38 @@ export default function CommunityGrowthScreen() {
       </Text>
 
       <View style={styles.moduleStack}>
-        {filteredModules.map((item) => (
+        {filteredModules.map((item) => {
+          const playful = isKid || isHighSchool;
+          return (
           <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={() => router.push(item.path as never)}>
             <LinearGradient
               colors={isDark ? item.darkGradient : item.gradient}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
-              style={[styles.moduleCard, { borderColor: isDark ? item.iconColor : item.border, shadowColor: item.iconColor, shadowOpacity: isDark ? 0.18 : 0.08 }]}
+              style={[
+                styles.moduleCard,
+                playful && styles.stageModuleCard,
+                { borderColor: isDark ? item.iconColor : item.border, shadowColor: item.iconColor, shadowOpacity: isDark ? 0.18 : 0.08 }
+              ]}
             >
-              <View style={[styles.moduleIconWrap, { backgroundColor: isDark ? item.darkIconBg : item.iconBg, borderColor: isDark ? `${item.iconColor}55` : "transparent" }]}>
+              {playful && item.emoji ? <Text style={styles.stageEmoji}>{item.emoji}</Text> : null}
+              <View style={[styles.moduleIconWrap, playful && styles.stageIconWrap, { backgroundColor: isDark ? item.darkIconBg : item.iconBg, borderColor: isDark ? `${item.iconColor}55` : "transparent" }]}>
                 <Ionicons name={item.icon} size={20} color={item.iconColor} />
               </View>
               <View style={styles.moduleTextWrap}>
                 <Text style={[styles.moduleTitle, { color: colors.text }]}>{item.label}</Text>
                 <Text style={[styles.moduleDesc, { color: colors.textMuted }]}>{item.description}</Text>
+                {playful ? (
+                  <Text style={[styles.stageActionText, { color: item.iconColor }]}>
+                    {isKid ? "Open fun school space" : "Open school growth space"}
+                  </Text>
+                ) : null}
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
             </LinearGradient>
           </TouchableOpacity>
-        ))}
+          );
+        })}
       </View>
     </ScrollView>
     </View>
@@ -237,6 +262,19 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 4
   },
+  stageModuleCard: {
+    minHeight: 112,
+    borderRadius: 24,
+    padding: 16,
+    gap: 12
+  },
+  stageEmoji: {
+    position: "absolute",
+    right: 46,
+    top: 12,
+    fontSize: 32,
+    opacity: 0.9
+  },
   moduleIconWrap: {
     width: 38,
     height: 38,
@@ -246,7 +284,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center"
   },
+  stageIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: 18
+  },
   moduleTextWrap: { flex: 1, gap: 2 },
-  moduleTitle: { color: "#1E2B24", fontWeight: "800", fontSize: 15 },
-  moduleDesc: { color: "#667085", fontSize: 12, lineHeight: 16 }
+  moduleTitle: { color: "#1E2B24", fontWeight: "900", fontSize: 16 },
+  moduleDesc: { color: "#667085", fontSize: 12, lineHeight: 16 },
+  stageActionText: { marginTop: 6, fontSize: 12, fontWeight: "900" }
 });

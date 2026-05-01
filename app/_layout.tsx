@@ -20,7 +20,7 @@ import { useGlobalSearchParams, useNavigation, usePathname, useRouter } from "ex
 import { DrawerContentScrollView, DrawerItem, DrawerContentComponentProps } from "@react-navigation/drawer";
 import { Ionicons } from "@expo/vector-icons";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
-import { LearnerProvider } from "@/context/LearnerContext";
+import { LearnerProvider, useLearner } from "@/context/LearnerContext";
 import { ThemeProvider, useAppTheme } from "@/context/ThemeContext";
 import { api, pingBackendReady } from "@/lib/api";
 import { LEARNER_ONBOARDING_COMPLETING_KEY, LEARNER_ONBOARDING_PENDING_KEY } from "@/lib/learnerExperience";
@@ -98,6 +98,7 @@ function RootDrawer() {
   const globalParams = useGlobalSearchParams<Record<string, string | string[]>>();
   const { colors, isDark } = useAppTheme();
   const { user, isAuthenticated, isBootstrapping, logout } = useAuth();
+  const { learnerStage } = useLearner();
   const [isBackendReady, setIsBackendReady] = useState(false);
   const [isCheckingBackend, setIsCheckingBackend] = useState(true);
   const [drawerPhotoUrl, setDrawerPhotoUrl] = useState("");
@@ -603,7 +604,7 @@ function RootDrawer() {
 
   const studentTabs = [
     { key: "home", label: "Home", icon: "home", path: "/network?section=feed" },
-    { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
+    { key: "mentorship", label: learnerStage === "kid" ? "Teachers" : "Mentorship", icon: "school", path: "/mentorship" },
     { key: "journey", label: "Journey", icon: "map", path: "/student-dashboard?section=overview" },
     { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
     { key: "community", label: "Community", icon: "trophy", path: "/community-growth" }
@@ -704,8 +705,14 @@ function RootDrawer() {
           <Drawer.Screen name="ai/kids-learning-games" options={{ title: "Learning Games", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/reading-and-numbers" options={{ title: "Reading & Numbers", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/creative-corner" options={{ title: "Creative Corner", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/story-and-drawing" options={{ title: "Story & Drawing", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/kids-learning-activities" options={{ title: "Learning Activities", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/kids-ask-orin" options={{ title: "Ask ORIN", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/career-explorer" options={{ title: "Career Explorer", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/study-planner" options={{ title: "Study Planner", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/highschool-subject-gap" options={{ title: "Subject Gap Analyzer", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/highschool-study-roadmap" options={{ title: "Study Roadmap", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/highschool-study-assistant" options={{ title: "Study Assistant", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community-growth" options={{ title: "Community & Growth", drawerItemStyle: { display: "none" }, headerShown: false }} />
           <Drawer.Screen name="community/kids-community" options={{ title: "Kids Community", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/highschool-community" options={{ title: "High School Community", drawerItemStyle: { display: "none" } }} />
@@ -717,6 +724,10 @@ function RootDrawer() {
           <Drawer.Screen name="community/highschool-school-challenges" options={{ title: "School Challenges", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/highschool-resource-library" options={{ title: "Resource Library", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/highschool-achievements" options={{ title: "Achievements", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/learning-games" options={{ title: "Learning Games", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/highschool-programs" options={{ title: "Programs & Opportunities", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/highschool-leaderboard" options={{ title: "School Leaderboard", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/highschool-progress" options={{ title: "School Progress", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/collaboration" options={{ title: "Community & Collaboration", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/challenges" options={{ title: "Community Challenges", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/certifications" options={{ title: "Certifications", drawerItemStyle: { display: "none" } }} />

@@ -42,6 +42,14 @@ export default function KidFunChallengesScreen() {
         { label: "Active", value: String(items.length) },
         { label: "Submitted", value: String(items.filter((item) => item.submissionStatus === "submitted" || item.submissionStatus === "reviewed").length) }
       ]} />
+      <StageSection title="Learning Games" icon="game-controller" actionLabel="Play now" onAction={() => router.push("/community/learning-games" as never)}>
+        <StageListCard
+          title="Quiz Battle, Speed Math, Memory Match"
+          meta="Play games, collect stars, and keep your streak alive"
+          note="Correct answers, fast play, and daily streaks help you climb the Star Board."
+          tone="kid"
+        />
+      </StageSection>
       <StageSection title="Challenge Board" icon="trophy" actionLabel="Open full" onAction={() => router.push("/community/challenges" as never)}>
         {items.length ? items.slice(0, 6).map((item) => (
           <StageListCard

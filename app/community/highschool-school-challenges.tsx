@@ -48,6 +48,14 @@ export default function HighSchoolSchoolChallengesScreen() {
         { label: "Active", value: String(items.length) },
         { label: "Top ranks", value: String(leaders.length) }
       ]} />
+      <StageSection title="Quiz Battle & Study Games" icon="game-controller" actionLabel="Play now" onAction={() => router.push("/community/learning-games" as never)}>
+        <StageListCard
+          title="Quiz Battle, Speed Math, Tournament Mode"
+          meta="Practice subjects, earn XP, and climb the school leaderboard"
+          note="Use games for fast revision, formula practice, vocabulary, and daily streaks."
+          tone="highschool"
+        />
+      </StageSection>
       <StageSection title="Challenge Board" icon="trophy" actionLabel="Open full" onAction={() => router.push("/community/challenges" as never)}>
         {items.length ? items.slice(0, 6).map((item) => (
           <StageListCard

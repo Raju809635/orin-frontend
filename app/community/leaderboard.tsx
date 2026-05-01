@@ -13,6 +13,8 @@ import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useLearner } from "@/context/LearnerContext";
+import { isKidStage } from "@/lib/learnerExperience";
 import { useAppTheme } from "@/context/ThemeContext";
 
 type LeaderboardEntry = {
@@ -58,7 +60,10 @@ function getInitial(name?: string) {
 
 export default function CommunityLeaderboardPage() {
   const { user } = useAuth();
-  const { colors, isDark } = useAppTheme();
+  const { learnerStage } = useLearner();
+  const { colors } = useAppTheme();
+  const isKid = user?.role === "student" && isKidStage(learnerStage);
+  const isHighSchool = user?.role === "student" && learnerStage === "highschool";
   const [data, setData] = useState<LeaderboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,20 +98,28 @@ export default function CommunityLeaderboardPage() {
   }, [activeTab, data?.collegeTop, data?.globalTop, data?.stateTop]);
 
   const activeTitle = useMemo(() => {
-    if (activeTab === "college") return data?.collegeName ? `${data.collegeName} Leaderboard` : "Institution Leaderboard";
+    if (activeTab === "college") {
+      if (isKid) return data?.collegeName ? `${data.collegeName} Star Board` : "School Star Board";
+      if (isHighSchool) return data?.collegeName ? `${data.collegeName} School Leaderboard` : "School Leaderboard";
+      return data?.collegeName ? `${data.collegeName} Leaderboard` : "Institution Leaderboard";
+    }
     if (activeTab === "state") return data?.stateName ? `${data.stateName} Leaderboard` : "State Leaderboard";
     return "Global Leaderboard";
-  }, [activeTab, data?.collegeName, data?.stateName]);
+  }, [activeTab, data?.collegeName, data?.stateName, isHighSchool, isKid]);
 
   const activeSubtitle = useMemo(() => {
-    if (activeTab === "college") return "Compete with learners from your school, college, or institution and push toward the podium.";
+    if (activeTab === "college") {
+      if (isKid) return "Collect stars, keep learning, and celebrate friendly school progress.";
+      if (isHighSchool) return "Compete with students from your school and push toward the podium.";
+      return "Compete with learners from your school, college, or institution and push toward the podium.";
+    }
     if (activeTab === "state") {
       return data?.stateName
         ? "See how you rank against learners from your state."
         : "Add your state in profile to join the state leaderboard.";
     }
     return "See where you stand against ORIN learners across the platform.";
-  }, [activeTab, data?.stateName]);
+  }, [activeTab, data?.stateName, isHighSchool, isKid]);
 
   const topThree = useMemo(
     () =>

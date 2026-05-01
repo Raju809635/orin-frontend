@@ -19,6 +19,8 @@ import * as Clipboard from "expo-clipboard";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
+import { useLearner } from "@/context/LearnerContext";
+import { isKidStage } from "@/lib/learnerExperience";
 import { useAppTheme } from "@/context/ThemeContext";
 import GlobalHeader from "@/components/global-header";
 
@@ -151,7 +153,15 @@ export default function ChatScreen() {
   const requestedUserId = useMemo(() => (params.userId || "").trim(), [params.userId]);
   const requestedTab = useMemo(() => String(params.tab || "").trim(), [params.tab]);
   const { user } = useAuth();
+  const { learnerStage } = useLearner();
   const { colors } = useAppTheme();
+  const isKidStudent = user?.role === "student" && isKidStage(learnerStage);
+  const isHighSchoolStudent = user?.role === "student" && learnerStage === "highschool";
+  const visibleMessageTabs = useMemo(() => {
+    if (isKidStudent) return ["Mentor Chat"] as const;
+    if (isHighSchoolStudent) return ["Mentor Chat", "Mentor Groups"] as const;
+    return MESSAGE_TABS;
+  }, [isHighSchoolStudent, isKidStudent]);
   const [searchQuery, setSearchQuery] = useState("");
 
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -244,9 +254,15 @@ export default function ChatScreen() {
       return;
     }
     if (normalized.includes("circle")) {
-      setActiveTab("Circle Chat");
+      setActiveTab(isKidStudent || isHighSchoolStudent ? "Mentor Chat" : "Circle Chat");
     }
-  }, [requestedTab]);
+  }, [isHighSchoolStudent, isKidStudent, requestedTab]);
+
+  useEffect(() => {
+    if (!visibleMessageTabs.includes(activeTab)) {
+      setActiveTab("Mentor Chat");
+    }
+  }, [activeTab, visibleMessageTabs]);
 
   const loadConversations = useCallback(async (options?: { includeContacts?: boolean; includeGroups?: boolean }) => {
     const includeContacts = options?.includeContacts ?? true;
@@ -655,6 +671,107 @@ export default function ChatScreen() {
     );
   }
 
+  if (isKidStudent) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <GlobalHeader
+          searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search teachers"
+        />
+        <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+          <View style={styles.screenHeader}>
+            <Text style={[styles.heading, { color: colors.text }]}>Teachers</Text>
+            <Text style={[styles.subTitle, { color: colors.textMuted }]}>
+              Kids can only message approved teachers for school guidance. Public and peer chat stays hidden here.
+            </Text>
+          </View>
+          {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+          <View style={styles.quickActionsRow}>
+            <TouchableOpacity
+              style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+              onPress={() => router.push("/mentorship?section=interaction" as never)}
+            >
+              <Ionicons name="school-outline" size={16} color={colors.accent} />
+              <Text style={[styles.quickActionText, { color: colors.text }]}>Open Teachers</Text>
+            </TouchableOpacity>
+          </View>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Teacher Conversations</Text>
+          {filteredMentors.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.confirmedList} contentContainerStyle={styles.confirmedListContent}>
+              {filteredMentors.map((item) => (
+                <TouchableOpacity key={item._id} style={[styles.mentorProfileCard, { borderColor: colors.border, backgroundColor: colors.surface }]} onPress={() => openThread(item._id)}>
+                  {item.profilePhotoUrl ? (
+                    <Image source={{ uri: item.profilePhotoUrl }} style={styles.avatar} />
+                  ) : (
+                    <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.accentSoft }]}>
+                      <Text style={styles.avatarText}>{getInitial(item.name)}</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.mentorName, { color: colors.text }]} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  <Text style={[styles.mentorMail, { color: colors.textMuted }]} numberOfLines={1}>
+                    Teacher Guidance
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Text style={styles.emptyEmoji}>TG</Text>
+              <Text style={[styles.emptyTitle, { color: colors.text }]}>No teacher chats yet</Text>
+              <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                Teacher conversations will appear here after your school guidance sessions are confirmed.
+              </Text>
+            </View>
+          )}
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>Recent Messages</Text>
+          <View style={styles.conversationList}>
+            {filteredConversations.filter((item) => item.counterpart.role === "mentor").length > 0 ? (
+              filteredConversations
+                .filter((item) => item.counterpart.role === "mentor")
+                .map((item) => (
+                  <TouchableOpacity
+                    key={item.counterpartId}
+                    style={[styles.conversationRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                    onPress={() => openThread(item.counterpartId)}
+                  >
+                    <View>
+                      {item.counterpart.profilePhotoUrl || profilePhotoById[item.counterpartId] ? (
+                        <Image source={{ uri: item.counterpart.profilePhotoUrl || profilePhotoById[item.counterpartId] }} style={styles.avatarLarge} />
+                      ) : (
+                        <View style={[styles.avatarLarge, styles.avatarFallback, { backgroundColor: colors.accentSoft }]}>
+                          <Text style={styles.avatarText}>{getInitial(item.counterpart.name)}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.conversationBody}>
+                      <View style={styles.conversationTopLine}>
+                        <Text style={[styles.conversationName, { color: colors.text }]}>{item.counterpart.name}</Text>
+                        <Text style={[styles.conversationTime, { color: colors.textMuted }]}>{formatConversationTime(item.lastMessageAt)}</Text>
+                      </View>
+                      <Text style={[styles.conversationMeta, { color: colors.textMuted }]} numberOfLines={2}>
+                        {item.lastMessage || "Open your teacher chat"}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                ))
+            ) : (
+              <View style={[styles.emptyCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <Text style={styles.emptyEmoji}>HI</Text>
+                <Text style={[styles.emptyTitle, { color: colors.text }]}>Teacher guidance only</Text>
+                <Text style={[styles.emptyText, { color: colors.textMuted }]}>
+                  Peer and public chat are hidden in Kids mode to keep communication school-safe.
+                </Text>
+              </View>
+            )}
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView
       style={[styles.container, { backgroundColor: colors.background }]}
@@ -683,7 +800,7 @@ export default function ChatScreen() {
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
         <View style={styles.tabRow}>
-          {MESSAGE_TABS.map((tab) => {
+          {visibleMessageTabs.map((tab) => {
             const active = activeTab === tab;
             return (
               <TouchableOpacity
@@ -708,7 +825,9 @@ export default function ChatScreen() {
               onPress={() => (activeTab === "Mentor Chat" ? router.push("/mentors" as never) : router.push("/network?section=connections" as never))}
             >
               <Ionicons name="search-outline" size={16} color={colors.accent} />
-              <Text style={[styles.quickActionText, { color: colors.text }]}>{activeTab === "Mentor Chat" ? "Find Mentor" : "Find People"}</Text>
+              <Text style={[styles.quickActionText, { color: colors.text }]}>
+                {activeTab === "Mentor Chat" ? (isHighSchoolStudent ? "Find Teacher" : "Find Mentor") : "Find People"}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.quickActionBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
