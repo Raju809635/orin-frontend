@@ -150,6 +150,15 @@ export default function LearnerOnboardingScreen() {
     setInstitutionResults([]);
   }
 
+  function finishOnboardingNavigation() {
+    const target = "/student-dashboard?section=overview";
+    if (typeof window !== "undefined") {
+      window.location.assign(target);
+      return;
+    }
+    router.replace(target as never);
+  }
+
   async function handleContinue() {
     if (user?.role !== "student") {
       router.replace("/mentor-dashboard?section=overview" as never);
@@ -175,8 +184,8 @@ export default function LearnerOnboardingScreen() {
       });
       await AsyncStorage.setItem(LEARNER_ONBOARDING_COMPLETING_KEY, "1");
       await AsyncStorage.removeItem(LEARNER_ONBOARDING_PENDING_KEY);
-      await refresh();
-      router.replace("/student-dashboard?section=overview" as never);
+      void refresh();
+      finishOnboardingNavigation();
     } catch (error) {
       handleAppError(error);
     } finally {
@@ -188,7 +197,8 @@ export default function LearnerOnboardingScreen() {
     void (async () => {
       await AsyncStorage.setItem(LEARNER_ONBOARDING_COMPLETING_KEY, "1");
       await AsyncStorage.removeItem(LEARNER_ONBOARDING_PENDING_KEY);
-      router.replace("/student-dashboard?section=overview" as never);
+      void refresh();
+      finishOnboardingNavigation();
     })();
   }
 
