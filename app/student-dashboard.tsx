@@ -1596,6 +1596,71 @@ export default function StudentDashboard() {
   const canFinalizeQuiz = selectedAnswersCount === 5 && !quizResult;
   const kidActivityCount = institutionRoadmaps.reduce((count, roadmap) => count + (roadmap.weeks?.length || 0), 0);
   const kidStarCount = certifications.length * 10 + challenges.filter((item) => item.isParticipating).length * 5;
+  const firstName = String(user?.name || "Learner").trim().split(/\s+/)[0] || "Learner";
+  const renderHighSchoolHero = () => (
+    <View style={[styles.homeHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+      <View style={styles.homeHeroTop}>
+        <View style={styles.homeHeroCopy}>
+          <Text style={[styles.homeHeroEyebrow, { color: colors.accent }]}>Student Home</Text>
+          <Text style={[styles.homeHeroTitle, { color: colors.text }]}>
+            Hi {firstName}, keep your study streak moving
+          </Text>
+          <Text style={[styles.homeHeroSubtitle, { color: colors.textMuted }]}>
+            Your roadmap, school progress, and guidance are ready for today&apos;s session.
+          </Text>
+        </View>
+        <View style={[styles.homeHeroBadge, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
+          <Ionicons name="flame" size={22} color={colors.accent} />
+          <Text style={[styles.homeHeroBadgeText, { color: colors.accent }]}>{rewardSummary.current.label}</Text>
+        </View>
+      </View>
+
+      <View style={styles.homeMetricRow}>
+        <View style={[styles.homeMetricCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+          <Ionicons name="flash" size={18} color="#F59E0B" />
+          <Text style={[styles.homeMetricValue, { color: colors.text }]}>{rewardSummary.todayXp}</Text>
+          <Text style={[styles.homeMetricLabel, { color: colors.textMuted }]}>{rewardSummary.pointsLabel}</Text>
+        </View>
+        <View style={[styles.homeMetricCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+          <Ionicons name="flame" size={18} color="#EF4444" />
+          <Text style={[styles.homeMetricValue, { color: colors.text }]}>{rewardSummary.streak}</Text>
+          <Text style={[styles.homeMetricLabel, { color: colors.textMuted }]}>Day streak</Text>
+        </View>
+        <View style={[styles.homeMetricCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+          <Ionicons name="podium" size={18} color="#2563EB" />
+          <Text style={[styles.homeMetricValue, { color: colors.text }]}>{rewardSummary.rank ? `#${rewardSummary.rank}` : "-"}</Text>
+          <Text style={[styles.homeMetricLabel, { color: colors.textMuted }]}>{rewardSummary.boardLabel}</Text>
+        </View>
+      </View>
+
+      <View style={styles.homeProgressWrap}>
+        <View style={styles.homeProgressHeader}>
+          <Text style={[styles.homeProgressTitle, { color: colors.text }]}>{rewardSummary.current.label} progress</Text>
+          <Text style={[styles.homeProgressMeta, { color: colors.textMuted }]}>
+            {rewardSummary.next ? `Next: ${rewardSummary.next.label}` : "Top tier"}
+          </Text>
+        </View>
+        <View style={[styles.homeProgressTrack, { backgroundColor: colors.surfaceAlt }]}>
+          <View style={[styles.homeProgressFill, { width: `${Math.round(rewardSummary.progress * 100)}%`, backgroundColor: colors.accent }]} />
+        </View>
+      </View>
+
+      <View style={styles.homeHeroActions}>
+        <TouchableOpacity style={[styles.homePrimaryAction, { backgroundColor: colors.accent }]} onPress={() => router.push("/ai/highschool-study-roadmap" as never)}>
+          <Ionicons name="play" size={16} color={colors.accentText} />
+          <Text style={[styles.homePrimaryActionText, { color: colors.accentText }]}>Weekly study plan</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.homeSecondaryAction, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/community/highschool-progress" as never)}>
+          <Ionicons name="stats-chart" size={16} color={colors.accent} />
+          <Text style={[styles.homeSecondaryActionText, { color: colors.text }]}>Progress</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.homeSecondaryAction, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => router.push("/community/highschool-leaderboard" as never)}>
+          <Ionicons name="trophy" size={16} color={colors.accent} />
+          <Text style={[styles.homeSecondaryActionText, { color: colors.text }]}>Ranks</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
   const renderKidOverview = () => (
     <>
       <View style={[styles.institutionHubCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -1679,6 +1744,7 @@ export default function StudentDashboard() {
   );
   const renderHighSchoolOverview = () => (
     <>
+      {renderHighSchoolHero()}
       <View style={[styles.institutionHubCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <TouchableOpacity activeOpacity={0.92} style={styles.institutionHubHeaderRow} onPress={() => setInstitutionExpanded((prev) => !prev)}>
           <View style={styles.institutionHubHeader}>
@@ -1801,6 +1867,7 @@ export default function StudentDashboard() {
         </>
       ) : null}
 
+      {!isHighSchool ? (
       <View style={[styles.heroBanner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.heroEyebrow, { color: colors.accent }]}>Student Space</Text>
         <Text style={[styles.heroTitle, { color: colors.text }]}>{isKid ? "Grow With Your School" : isHighSchool ? "Build Your School Journey" : "Unlock Your Mentorship Journey"}</Text>
@@ -1812,6 +1879,7 @@ export default function StudentDashboard() {
               : "Explore mentors, track sessions, and grow faster with ORIN."}
         </Text>
       </View>
+      ) : null}
 
       {activeSection !== "overview" ? (
         <TouchableOpacity style={styles.sectionBackButton} onPress={() => setActiveSection("overview")}>
@@ -3173,6 +3241,121 @@ const styles = StyleSheet.create({
   heroEyebrow: { color: "#165DFF", fontWeight: "700", marginBottom: 6 },
   heroTitle: { color: "#11261E", fontSize: 28, fontWeight: "900", lineHeight: 34 },
   heroSubTitle: { marginTop: 8, color: "#4A5B53", fontWeight: "500", lineHeight: 20 },
+  homeHero: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
+    gap: 14,
+    shadowColor: "#0F172A",
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 2
+  },
+  homeHeroTop: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  homeHeroCopy: { flex: 1, minWidth: 0 },
+  homeHeroEyebrow: {
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0,
+    marginBottom: 5
+  },
+  homeHeroTitle: {
+    fontSize: 26,
+    lineHeight: 31,
+    fontWeight: "900"
+  },
+  homeHeroSubtitle: {
+    marginTop: 7,
+    fontSize: 14,
+    lineHeight: 20,
+    fontWeight: "600"
+  },
+  homeHeroBadge: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    alignItems: "center",
+    gap: 5,
+    minWidth: 82
+  },
+  homeHeroBadgeText: {
+    fontSize: 11,
+    fontWeight: "900",
+    textAlign: "center"
+  },
+  homeMetricRow: {
+    flexDirection: "row",
+    gap: 8
+  },
+  homeMetricCard: {
+    flex: 1,
+    minHeight: 76,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    justifyContent: "space-between"
+  },
+  homeMetricValue: {
+    fontSize: 20,
+    fontWeight: "900"
+  },
+  homeMetricLabel: {
+    fontSize: 11,
+    fontWeight: "800"
+  },
+  homeProgressWrap: { gap: 8 },
+  homeProgressHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 10
+  },
+  homeProgressTitle: { fontWeight: "900", fontSize: 13 },
+  homeProgressMeta: { fontWeight: "700", fontSize: 12 },
+  homeProgressTrack: {
+    height: 9,
+    borderRadius: 999,
+    overflow: "hidden"
+  },
+  homeProgressFill: {
+    height: "100%",
+    borderRadius: 999
+  },
+  homeHeroActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  homePrimaryAction: {
+    minHeight: 44,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    flexGrow: 1
+  },
+  homePrimaryActionText: { fontWeight: "900" },
+  homeSecondaryAction: {
+    minHeight: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7
+  },
+  homeSecondaryActionText: { fontWeight: "900" },
   sectionNavRow: { flexDirection: "row", gap: 8, marginBottom: 12 },
   sectionBackButton: {
     marginBottom: 12,

@@ -366,7 +366,20 @@ type NewsArticle = {
   url?: string;
 };
 
-type SectionId = "overview" | "growth" | "pricing" | "availability" | "sessions" | "requests" | "adminChat";
+type SectionId =
+  | "overview"
+  | "growth"
+  | "pricing"
+  | "availability"
+  | "sessions"
+  | "requests"
+  | "adminChat"
+  | "classes"
+  | "assign"
+  | "reviews"
+  | "teachers"
+  | "reports"
+  | "approvals";
 type MentorGrowthSectionId = "reputation" | "live" | "community";
 type ProgramTabId = "live" | "sprint";
 
@@ -384,6 +397,24 @@ const mentorGrowthSections: { id: MentorGrowthSectionId; label: string }[] = [
   { id: "reputation", label: "Reputation" },
   { id: "live", label: "Programs" },
   { id: "community", label: "Community" }
+];
+
+const teacherSectionOrder: { id: SectionId; label: string }[] = [
+  { id: "overview", label: "Home" },
+  { id: "classes", label: "Classes" },
+  { id: "assign", label: "Assign Work" },
+  { id: "reviews", label: "Reviews" },
+  { id: "adminChat", label: "Admin Chat" },
+  { id: "growth", label: "Global Tools" }
+];
+
+const headSectionOrder: { id: SectionId; label: string }[] = [
+  { id: "overview", label: "Home" },
+  { id: "teachers", label: "Teachers" },
+  { id: "reports", label: "Reports" },
+  { id: "approvals", label: "Approvals" },
+  { id: "adminChat", label: "Admin Chat" },
+  { id: "growth", label: "Global Tools" }
 ];
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -538,6 +569,15 @@ export default function MentorDashboard() {
       : mentorOrgRole === "institution_teacher"
         ? "Institution Teacher"
         : "Global Mentor";
+  const mentorMode =
+    mentorOrgRole === "organisation_head"
+      ? "head"
+      : mentorOrgRole === "institution_teacher"
+        ? "teacher"
+        : "global";
+  const roleSectionOrder = mentorMode === "teacher" ? teacherSectionOrder : mentorMode === "head" ? headSectionOrder : sectionOrder;
+  const pendingReviewCount = resourceSubmissions.length + institutionRoadmapSubmissions.length;
+  const assignedClassCount = mentorAssignedClasses.length;
   const calendarDateOptions = useMemo(() => nextDates(14), []);
   const liveSessionTimeOptions = useMemo(
     () => [
@@ -636,7 +676,21 @@ export default function MentorDashboard() {
 
   useEffect(() => {
     const section = String(params.section || "");
-    if (section === "requests" || section === "sessions" || section === "pricing" || section === "availability" || section === "adminChat" || section === "overview" || section === "growth") {
+    if (
+      section === "requests" ||
+      section === "sessions" ||
+      section === "pricing" ||
+      section === "availability" ||
+      section === "adminChat" ||
+      section === "overview" ||
+      section === "growth" ||
+      section === "classes" ||
+      section === "assign" ||
+      section === "reviews" ||
+      section === "teachers" ||
+      section === "reports" ||
+      section === "approvals"
+    ) {
       setActiveSection(section);
     }
     const growth = String(params.growth || "");
@@ -1446,20 +1500,36 @@ export default function MentorDashboard() {
 
       <View style={styles.journeySummaryRow}>
         <View style={styles.journeySummaryChip}>
-          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>{pendingRequests.length}</Text>
-          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>Requests</Text>
+          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>
+            {mentorMode === "teacher" ? assignedClassCount : mentorMode === "head" ? mentorResources.length : pendingRequests.length}
+          </Text>
+          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>
+            {mentorMode === "teacher" ? "Classes" : mentorMode === "head" ? "Resources" : "Requests"}
+          </Text>
         </View>
         <View style={styles.journeySummaryChip}>
-          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>{upcomingSessions.length}</Text>
-          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>Upcoming</Text>
+          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>
+            {mentorMode === "global" ? upcomingSessions.length : institutionRoadmaps.length}
+          </Text>
+          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>
+            {mentorMode === "global" ? "Upcoming" : "Roadmaps"}
+          </Text>
         </View>
         <View style={styles.journeySummaryChip}>
-          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>{pendingLiveApprovals}</Text>
-          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>Live Pending</Text>
+          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>
+            {mentorMode === "global" ? pendingLiveApprovals : pendingReviewCount}
+          </Text>
+          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>
+            {mentorMode === "global" ? "Live Pending" : "Reviews"}
+          </Text>
         </View>
         <View style={styles.journeySummaryChip}>
-          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>{availableSlotCount}</Text>
-          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>Open Slots</Text>
+          <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>
+            {mentorMode === "teacher" ? mentorAssignedClasses.length : mentorMode === "head" ? assignedClassCount : availableSlotCount}
+          </Text>
+          <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>
+            {mentorMode === "teacher" ? "Assigned" : mentorMode === "head" ? "Focus Classes" : "Open Slots"}
+          </Text>
         </View>
       </View>
 
@@ -1505,6 +1575,8 @@ export default function MentorDashboard() {
         ) : null}
       </View>
 
+      {mentorMode === "global" ? (
+      <>
       <Text style={[styles.sectionHeader, { color: colors.text }]}>Quick Actions</Text>
       <View style={styles.quickGrid}>
         {mentorServices.map((item) => (
@@ -1693,10 +1765,12 @@ export default function MentorDashboard() {
           <Text style={[styles.featureCopy, { color: colors.textMuted }]}>Attach session links at the right time and keep delivery clean.</Text>
         </TouchableOpacity>
       </ScrollView>
+      </>
+      ) : null}
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sectionNav} onLayout={(event) => setPanelAnchorY(event.nativeEvent.layout.y)}>
         <View style={styles.sectionNavRow}>
-          {sectionOrder.map((section) => {
+          {roleSectionOrder.map((section) => {
             const active = activeSection === section.id;
             return (
               <TouchableOpacity
@@ -1719,7 +1793,87 @@ export default function MentorDashboard() {
 
       {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
-      {!isLoading && activeSection === "overview" ? (
+      {!isLoading && activeSection === "overview" && mentorMode === "teacher" ? (
+        <View style={[styles.panel, styles.panelOverview]}>
+          <Text style={[styles.panelTitle, styles.panelTitleOverview]}>Class Teacher Home</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            {mentorInstitutionName || "Institution not linked yet"} {mentorAssignedClasses.length ? `| Classes: ${mentorAssignedClasses.join(", ")}` : "| Add assigned classes in profile"}
+          </Text>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{assignedClassCount}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Assigned Classes</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{pendingReviewCount}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Pending Reviews</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{mentorResources.length}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Resources</Text>
+            </View>
+          </View>
+          <View style={styles.focusStack}>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("classes")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Class Overview</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Open assigned classes, student activity, weak students, and top performers.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open class list</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("reviews")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Review Queue</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Roadmap reviews: {institutionRoadmapSubmissions.length} | Resource reviews: {resourceSubmissions.length}</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Review submissions</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("assign")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Assign Work</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Create class resources, activities, challenges, announcements, and certificate templates.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open assign tools</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "overview" && mentorMode === "head" ? (
+        <View style={[styles.panel, styles.panelOverview]}>
+          <Text style={[styles.panelTitle, styles.panelTitleOverview]}>Organisation Head Home</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            {mentorInstitutionName || "Institution not linked yet"} | School-level management workspace
+          </Text>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{mentorResources.length}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Resources</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{institutionRoadmaps.length}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Roadmaps</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{pendingReviewCount}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Pending Reviews</Text>
+            </View>
+          </View>
+          <View style={styles.focusStack}>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("teachers")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Teachers & Classes</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Review teachers, assigned classes, and institution delivery readiness.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open teacher controls</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("reports")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Reports</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Track participation, resources, roadmaps, competitions, and school progress.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open reports</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("approvals")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Approvals</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Manage teacher, student, content, competition, reward, and certificate approvals.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open approvals</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "overview" && mentorMode === "global" ? (
         <View style={[styles.panel, styles.panelOverview]}>
           <Text style={[styles.panelTitle, styles.panelTitleOverview]}>Overview</Text>
           <View style={styles.metricsRow}>
@@ -1737,6 +1891,155 @@ export default function MentorDashboard() {
             </View>
           </View>
           <Text style={[styles.meta, { color: colors.textMuted }]}>Use sections above to update price, timings and session actions quickly.</Text>
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "classes" ? (
+        <View style={[styles.panel, styles.panelGrowth]}>
+          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Classes</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            Assigned classes stay separate from global mentorship. Add or update classes from mentor profile.
+          </Text>
+          <View style={styles.focusStack}>
+            {mentorAssignedClasses.length ? (
+              mentorAssignedClasses.map((className) => (
+                <TouchableOpacity key={className} style={styles.focusCard} onPress={() => router.push("/network?section=institution" as never)}>
+                  <Text style={[styles.focusCardTitle, { color: colors.text }]}>{className}</Text>
+                  <Text style={[styles.meta, { color: colors.textMuted }]}>Student list, quiz completion, class posts, weak students, and top performers will be scoped here.</Text>
+                  <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open class posts</Text>
+                </TouchableOpacity>
+              ))
+            ) : (
+              <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/mentor-profile" as never)}>
+                <Text style={[styles.focusCardTitle, { color: colors.text }]}>No assigned classes yet</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>Add class and section names in mentor profile to unlock class-level controls.</Text>
+                <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open mentor profile</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "assign" ? (
+        <View style={[styles.panel, styles.panelGrowth]}>
+          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Assign Work</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Create and assign class resources, activities, competitions, and certificates from existing ORIN tools.</Text>
+          <View style={styles.focusStack}>
+            <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/community/knowledge-library" as never)}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Class Resources</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Upload worksheets, links, files, images, and activity resources for assigned classes.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open resource manager</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/ai/career-roadmap?section=institution" as never)}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Activities & Roadmaps</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Create weekly tasks, proof requirements, XP, and class activities.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open roadmap tools</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/community/challenges" as never)}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Class Challenges</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Run quiz, drawing, speaking, project, or activity challenges for assigned classes.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open challenges</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "reviews" ? (
+        <View style={[styles.panel, styles.panelGrowth]}>
+          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Reviews</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Review class submissions, give marks, award XP, add feedback, and recommend certificates.</Text>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{resourceSubmissions.length}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Resource Proofs</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{institutionRoadmapSubmissions.length}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Roadmap Proofs</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{pendingReviewCount}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Total Pending</Text>
+            </View>
+          </View>
+          <View style={styles.focusStack}>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("growth", "community")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Open Review Tools</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Use the existing review forms for resource and roadmap submissions.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Go to review forms</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "teachers" ? (
+        <View style={[styles.panel, styles.panelGrowth]}>
+          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Teachers</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Organisation heads manage teacher readiness, assigned classes, and school delivery from this workspace.</Text>
+          <View style={styles.focusStack}>
+            <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/mentor-profile" as never)}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Teacher Directory</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Teacher list and assignments will use institution-scoped mentor profiles as the source of truth.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Review profile setup</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("approvals")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Teacher Approvals</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Approve teacher roles, assigned classes, and permission readiness.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open approvals</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "reports" ? (
+        <View style={[styles.panel, styles.panelGrowth]}>
+          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Reports</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>School progress uses existing resources, roadmaps, reviews, leaderboard, certificates, and participation data.</Text>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{mentorResources.length}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Resources</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{institutionRoadmaps.length}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Roadmaps</Text>
+            </View>
+            <View style={styles.metricCard}>
+              <Text style={[styles.metricValue, { color: colors.accent }]}>{pendingReviewCount}</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Pending</Text>
+            </View>
+          </View>
+          <View style={styles.focusStack}>
+            <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/community/leaderboard" as never)}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>School Leaderboard</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Open class and school ranking views from existing ORIN modules.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open leaderboard</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/community/certifications" as never)}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Certificates & Rewards</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Review certificates, badges, and recognition for school activity.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open certificates</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : null}
+
+      {!isLoading && activeSection === "approvals" ? (
+        <View style={[styles.panel, styles.panelGrowth]}>
+          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Approvals</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Manage school-level approvals while admin approval remains the final platform gate where required.</Text>
+          <View style={styles.focusStack}>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("teachers")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Teacher Role Approvals</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Review teacher role, institution, and assigned classes.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open teacher list</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("growth", "community")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Content Approvals</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Resources, roadmaps, challenges, rewards, and certificates continue through existing ORIN controls.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open content controls</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : null}
 

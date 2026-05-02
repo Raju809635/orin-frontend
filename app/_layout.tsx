@@ -70,17 +70,32 @@ function getTabKeyForPath(pathname: string): AppTabKey | null {
   return null;
 }
 
-function getDefaultTabPath(tabKey: AppTabKey, user: { role: "student" | "mentor" }) {
+type MentorOrgRole = "global_mentor" | "institution_teacher" | "organisation_head";
+
+function getMentorMode(user?: { mentorOrgRole?: MentorOrgRole }) {
+  if (user?.mentorOrgRole === "organisation_head") return "head";
+  if (user?.mentorOrgRole === "institution_teacher") return "teacher";
+  return "global";
+}
+
+function getDefaultTabPath(tabKey: AppTabKey, user: { role: "student" | "mentor"; mentorOrgRole?: MentorOrgRole }) {
+  const mentorMode = user.role === "mentor" ? getMentorMode(user) : "global";
   switch (tabKey) {
     case "home":
-      return postsRouteByRole(user.role);
+      return user.role === "mentor" && mentorMode !== "global" ? "/network?section=institution" : postsRouteByRole(user.role);
     case "mentorship":
+      if (user.role === "mentor" && mentorMode === "teacher") return "/mentor-dashboard?section=classes";
+      if (user.role === "mentor" && mentorMode === "head") return "/mentor-dashboard?section=teachers";
       return "/mentorship";
     case "journey":
       return user.role === "mentor" ? "/mentor-dashboard?section=overview" : "/student-dashboard?section=overview";
     case "ai":
+      if (user.role === "mentor" && mentorMode === "teacher") return "/mentor-dashboard?section=assign";
+      if (user.role === "mentor" && mentorMode === "head") return "/mentor-dashboard?section=reports";
       return "/ai-hub";
     case "community":
+      if (user.role === "mentor" && mentorMode === "teacher") return "/mentor-dashboard?section=reviews";
+      if (user.role === "mentor" && mentorMode === "head") return "/mentor-dashboard?section=approvals";
       return "/community-growth";
     default:
       return defaultRouteByRole(user.role);
@@ -614,20 +629,52 @@ function RootDrawer() {
     { key: "community", label: "Community", icon: "trophy", path: "/community-growth" }
   ] as const;
 
-  const mentorTabs = [
-    { key: "home", label: "Posts", icon: "newspaper", path: "/network?section=feed" },
-    { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
-    { key: "journey", label: "Home", icon: "home", path: "/mentor-dashboard?section=overview" },
-    { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
-    { key: "community", label: "Community", icon: "trophy", path: "/community-growth" }
-  ] as const;
+  const mentorMode = getMentorMode(user || undefined);
+  const mentorTabs = mentorMode === "teacher"
+    ? [
+        { key: "home", label: "Class Posts", icon: "newspaper", path: "/network?section=institution" },
+        { key: "mentorship", label: "Classes", icon: "people", path: "/mentor-dashboard?section=classes" },
+        { key: "journey", label: "Home", icon: "home", path: "/mentor-dashboard?section=overview" },
+        { key: "ai", label: "Assign", icon: "create", path: "/mentor-dashboard?section=assign" },
+        { key: "community", label: "Reviews", icon: "checkmark-done", path: "/mentor-dashboard?section=reviews" }
+      ]
+    : mentorMode === "head"
+      ? [
+          { key: "home", label: "School Posts", icon: "newspaper", path: "/network?section=institution" },
+          { key: "mentorship", label: "Teachers", icon: "people", path: "/mentor-dashboard?section=teachers" },
+          { key: "journey", label: "Home", icon: "home", path: "/mentor-dashboard?section=overview" },
+          { key: "ai", label: "Reports", icon: "stats-chart", path: "/mentor-dashboard?section=reports" },
+          { key: "community", label: "Approvals", icon: "shield-checkmark", path: "/mentor-dashboard?section=approvals" }
+        ]
+      : [
+          { key: "home", label: "Posts", icon: "newspaper", path: "/network?section=feed" },
+          { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
+          { key: "journey", label: "Home", icon: "home", path: "/mentor-dashboard?section=overview" },
+          { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
+          { key: "community", label: "Community", icon: "trophy", path: "/community-growth" }
+        ];
 
   const tabs = user?.role === "mentor" ? mentorTabs : studentTabs;
   const isTabActive = (tabKey: string, path: string) => {
     const basePath = path.split("?")[0];
     if (basePath === "/") return pathname === "/";
     if (tabKey === "journey" && basePath.startsWith("/student-dashboard")) return pathname.startsWith("/student-dashboard");
-    if (tabKey === "journey" && basePath.startsWith("/mentor-dashboard")) return pathname.startsWith("/mentor-dashboard");
+    if (user?.role === "mentor" && pathname.startsWith("/mentor-dashboard")) {
+      const section = normalizeRouteParam(globalParams.section) || "overview";
+      if (mentorMode === "teacher") {
+        if (tabKey === "mentorship") return section === "classes";
+        if (tabKey === "ai") return section === "assign";
+        if (tabKey === "community") return section === "reviews";
+        if (tabKey === "journey") return section === "overview";
+      }
+      if (mentorMode === "head") {
+        if (tabKey === "mentorship") return section === "teachers";
+        if (tabKey === "ai") return section === "reports";
+        if (tabKey === "community") return section === "approvals";
+        if (tabKey === "journey") return section === "overview";
+      }
+      if (tabKey === "journey" && basePath.startsWith("/mentor-dashboard")) return true;
+    }
     if (tabKey === "mentorship") {
       return pathname.startsWith("/mentorship") || pathname.startsWith("/domains") || pathname.startsWith("/domain-guide") || pathname.startsWith("/mentor/") || pathname.startsWith("/mentors") || pathname.startsWith("/student-sessions") || pathname.startsWith("/sprints/");
     }

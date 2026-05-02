@@ -11,6 +11,7 @@ export type AuthUser = {
   role: "student" | "mentor";
   isAdmin?: boolean;
   approvalStatus?: "pending" | "approved" | "rejected";
+  mentorOrgRole?: "global_mentor" | "institution_teacher" | "organisation_head";
   primaryCategory?: string;
   subCategory?: string;
   specializations?: string[];
