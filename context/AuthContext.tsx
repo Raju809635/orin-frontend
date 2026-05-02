@@ -13,6 +13,12 @@ type RegisterPayload = {
   password: string;
   role: "student" | "mentor";
   phoneNumber?: string;
+  mentorOrgRole?: "global_mentor" | "institution_teacher" | "organisation_head";
+  institutionName?: string;
+  institutionType?: string;
+  institutionDistrict?: string;
+  institutionSource?: string;
+  assignedClasses?: string[];
 };
 
 type LoginPayload = {

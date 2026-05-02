@@ -88,6 +88,11 @@ type MentorProfilePayload = {
   specializations?: string[];
   totalSessionsConducted?: number;
   verifiedBadge?: boolean;
+  institutionName?: string;
+  institutionType?: string;
+  mentorOrgRole?: "global_mentor" | "institution_teacher" | "organisation_head";
+  assignedClasses?: string[];
+  institutionPermissions?: string[];
 };
 
 type MentorPayoutResponse = {
@@ -522,6 +527,17 @@ export default function MentorDashboard() {
   const [mentorPayoutSessions, setMentorPayoutSessions] = useState<Session[]>([]);
   const [mentorSprintPayoutSummary, setMentorSprintPayoutSummary] = useState<MentorSprintPayoutResponse["summary"] | null>(null);
   const [mentorSprintPayouts, setMentorSprintPayouts] = useState<SprintPayoutEnrollment[]>([]);
+  const mentorOrgRole = mentorProfileSummary?.mentorOrgRole || "global_mentor";
+  const mentorInstitutionName = mentorProfileSummary?.institutionName || "";
+  const mentorAssignedClasses = Array.isArray(mentorProfileSummary?.assignedClasses)
+    ? mentorProfileSummary.assignedClasses.filter(Boolean)
+    : [];
+  const mentorModeLabel =
+    mentorOrgRole === "organisation_head"
+      ? "Organisation Head"
+      : mentorOrgRole === "institution_teacher"
+        ? "Institution Teacher"
+        : "Global Mentor";
   const calendarDateOptions = useMemo(() => nextDates(14), []);
   const liveSessionTimeOptions = useMemo(
     () => [
@@ -1412,9 +1428,19 @@ export default function MentorDashboard() {
 
       <View style={styles.heroBanner}>
         <Text style={[styles.heroEyebrow, { color: colors.accent }]}>Mentor Workspace</Text>
-        <Text style={[styles.heroTitle, { color: colors.text }]}>Run Your Mentor Journey From One Place</Text>
+        <Text style={[styles.heroTitle, { color: colors.text }]}>
+          {mentorOrgRole === "organisation_head"
+            ? "Run Your Institution From One Place"
+            : mentorOrgRole === "institution_teacher"
+              ? "Run Your Teacher Workspace From One Place"
+              : "Run Your Mentor Journey From One Place"}
+        </Text>
         <Text style={[styles.heroSubTitle, { color: colors.textMuted }]}>
-          Create sessions, review bookings, manage pricing, publish live events, and stay updated without hunting through the app.
+          {mentorOrgRole === "organisation_head"
+            ? "Track teachers, students, classes, resources, roadmaps, competitions, and institution progress without disturbing global mentor tools."
+            : mentorOrgRole === "institution_teacher"
+              ? "Manage assigned classes, student submissions, resources, activities, and guidance while keeping your global mentor access."
+              : "Create sessions, review bookings, manage pricing, publish live events, and stay updated without hunting through the app."}
         </Text>
       </View>
 
@@ -1435,6 +1461,48 @@ export default function MentorDashboard() {
           <Text style={[styles.journeySummaryValue, { color: colors.accent }]}>{availableSlotCount}</Text>
           <Text style={[styles.journeySummaryLabel, { color: colors.textMuted }]}>Open Slots</Text>
         </View>
+      </View>
+
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>Institution Role</Text>
+      <View style={styles.focusStack}>
+        <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/mentor-profile" as never)}>
+          <Text style={[styles.focusCardTitle, { color: colors.text }]}>{mentorModeLabel}</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            {mentorInstitutionName
+              ? `${mentorInstitutionName}${mentorAssignedClasses.length ? ` | Classes: ${mentorAssignedClasses.join(", ")}` : ""}`
+              : "Add institution in mentor profile to unlock teacher/head workflows."}
+          </Text>
+          <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open mentor profile setup</Text>
+        </TouchableOpacity>
+
+        {mentorOrgRole === "institution_teacher" ? (
+          <>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("growth", "community")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>My Class Work</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>
+                Resources: {mentorResources.length} | Roadmaps: {institutionRoadmaps.length} | Reviews: {resourceSubmissions.length + institutionRoadmapSubmissions.length}
+              </Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Review assigned class submissions and award XP</Text>
+            </TouchableOpacity>
+          </>
+        ) : null}
+
+        {mentorOrgRole === "organisation_head" ? (
+          <>
+            <TouchableOpacity style={styles.focusCard} onPress={() => openSection("growth", "community")}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Institution Control Center</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>
+                Teachers/resources/roadmaps will be managed here step by step. Current snapshot: {mentorResources.length} resources, {institutionRoadmaps.length} roadmaps.
+              </Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open institution content controls</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/community/leaderboard" as never)}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Institution Progress</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Monitor leaderboard, competitions, certificates, and student growth from existing ORIN modules.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open leaderboard</Text>
+            </TouchableOpacity>
+          </>
+        ) : null}
       </View>
 
       <Text style={[styles.sectionHeader, { color: colors.text }]}>Quick Actions</Text>

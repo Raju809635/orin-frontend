@@ -70,6 +70,9 @@ type MentorProfile = {
   institutionType: string;
   institutionDistrict: string;
   institutionSource: string;
+  mentorOrgRole: "global_mentor" | "institution_teacher" | "organisation_head";
+  assignedClasses: string[];
+  institutionPermissions: string[];
   education: ProfileEducation[];
   achievements: ProfileAchievement[];
   projects: ProfileProject[];
@@ -163,6 +166,11 @@ const INSTITUTION_TYPE_OPTIONS = [
   "Engineering College",
   "University"
 ];
+const MENTOR_ORG_ROLE_OPTIONS: { value: MentorProfile["mentorOrgRole"]; label: string; note: string }[] = [
+  { value: "global_mentor", label: "Global Mentor", note: "Keep current global mentorship access." },
+  { value: "institution_teacher", label: "Institution Teacher", note: "Manage assigned classes, reviews, resources, and activities." },
+  { value: "organisation_head", label: "Organisation Head", note: "Oversee institution teachers, students, classes, and analytics." }
+];
 
 export default function MentorProfileScreen() {
   const { colors } = useAppTheme();
@@ -179,6 +187,7 @@ export default function MentorProfileScreen() {
   const [projectTechDrafts, setProjectTechDrafts] = useState<Record<number, string>>({});
   const dragOffset = useRef(new Animated.Value(0)).current;
   const [institutionQuery, setInstitutionQuery] = useState("");
+  const [assignedClassesDraft, setAssignedClassesDraft] = useState("");
   const [institutionResults, setInstitutionResults] = useState<InstitutionSearchResult[]>([]);
   const [searchingInstitutions, setSearchingInstitutions] = useState(false);
   const [institutionFocused, setInstitutionFocused] = useState(false);
@@ -207,6 +216,11 @@ export default function MentorProfileScreen() {
           institutionType: profilePayload.institutionType || "",
           institutionDistrict: profilePayload.institutionDistrict || "",
           institutionSource: profilePayload.institutionSource || "",
+          mentorOrgRole: ["institution_teacher", "organisation_head"].includes(profilePayload.mentorOrgRole)
+            ? profilePayload.mentorOrgRole
+            : "global_mentor",
+          assignedClasses: Array.isArray(profilePayload.assignedClasses) ? profilePayload.assignedClasses.filter(Boolean) : [],
+          institutionPermissions: Array.isArray(profilePayload.institutionPermissions) ? profilePayload.institutionPermissions.filter(Boolean) : [],
           education: Array.isArray(profilePayload.education) ? profilePayload.education.map(normalizeEducation) : [],
           achievements: Array.isArray(profilePayload.achievements)
             ? profilePayload.achievements.map(normalizeAchievement)
@@ -232,6 +246,7 @@ export default function MentorProfileScreen() {
             : {}
         );
         setInstitutionQuery(profilePayload.institutionName || "");
+        setAssignedClassesDraft(Array.isArray(profilePayload.assignedClasses) ? profilePayload.assignedClasses.filter(Boolean).join(", ") : "");
         setCategories(Array.isArray(categoryData.categories) ? categoryData.categories : []);
       } catch (e: any) {
         if (mounted) setError(e?.response?.data?.message || "Failed to load profile");
@@ -498,6 +513,13 @@ export default function MentorProfileScreen() {
         institutionType: String(profile.institutionType || "").trim(),
         institutionDistrict: String(profile.institutionDistrict || "").trim(),
         institutionSource: String(profile.institutionSource || "").trim(),
+        mentorOrgRole: profile.mentorOrgRole || "global_mentor",
+        assignedClasses: parseCommaSeparated(assignedClassesDraft),
+        institutionPermissions: profile.mentorOrgRole === "organisation_head"
+          ? ["manage_teachers", "manage_students", "assign_work", "view_analytics", "issue_certificates"]
+          : profile.mentorOrgRole === "institution_teacher"
+            ? ["manage_assigned_classes", "review_submissions", "award_xp", "recommend_certificates"]
+            : [],
         state: String(profile.state || "").trim(),
         expertiseDomains: profile.specializations,
         education: profile.education.filter((item) => item.school || item.degree || item.year),
@@ -531,6 +553,15 @@ export default function MentorProfileScreen() {
                 institutionSource: typeof profileData.institutionSource === "string"
                   ? profileData.institutionSource
                   : payload.institutionSource,
+                mentorOrgRole: ["institution_teacher", "organisation_head"].includes(profileData.mentorOrgRole)
+                  ? profileData.mentorOrgRole
+                  : payload.mentorOrgRole,
+                assignedClasses: Array.isArray(profileData.assignedClasses)
+                  ? profileData.assignedClasses.filter(Boolean)
+                  : payload.assignedClasses,
+                institutionPermissions: Array.isArray(profileData.institutionPermissions)
+                  ? profileData.institutionPermissions.filter(Boolean)
+                  : payload.institutionPermissions,
                 state: typeof profileData.state === "string" ? profileData.state : payload.state,
                 education: Array.isArray(profileData.education)
                   ? profileData.education.map(normalizeEducation)
@@ -552,6 +583,9 @@ export default function MentorProfileScreen() {
         typeof profileData.institutionName === "string"
           ? profileData.institutionName
           : payload.institutionName
+      );
+      setAssignedClassesDraft(
+        (Array.isArray(profileData.assignedClasses) ? profileData.assignedClasses.filter(Boolean) : payload.assignedClasses).join(", ")
       );
       const nextProjects = Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects;
       setProjectTechDrafts(Object.fromEntries(nextProjects.map((item, index) => [index, item.tech.join(", ")])));
@@ -671,6 +705,38 @@ export default function MentorProfileScreen() {
         onChangeText={(company) => setProfile((prev) => (prev ? { ...prev, company } : prev))}
       />
 
+      <Text style={[styles.label, { color: colors.text }]}>Mentor Dashboard Mode</Text>
+      <View style={styles.selectionWrap}>
+        {MENTOR_ORG_ROLE_OPTIONS.map((option) => {
+          const active = profile.mentorOrgRole === option.value;
+          return (
+            <TouchableOpacity
+              key={option.value}
+              style={[
+                styles.optionChip,
+                { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
+                active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]
+              ]}
+              onPress={() =>
+                setProfile((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        mentorOrgRole: option.value
+                      }
+                    : prev
+                )
+              }
+            >
+              <Text style={[styles.optionText, { color: active ? colors.accent : colors.textMuted }]}>{option.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <Text style={[styles.hint, { color: colors.textMuted }]}>
+        {MENTOR_ORG_ROLE_OPTIONS.find((item) => item.value === profile.mentorOrgRole)?.note}
+      </Text>
+
       <Text style={[styles.label, { color: colors.text }]}>Institution Type</Text>
       <View style={styles.selectionWrap}>
         {INSTITUTION_TYPE_OPTIONS.map((type) => {
@@ -759,6 +825,22 @@ export default function MentorProfileScreen() {
         <Text style={[styles.hint, { color: colors.textMuted }]}>
           {[profile.institutionDistrict, profile.institutionSource].filter(Boolean).join(" | ")}
         </Text>
+      ) : null}
+
+      {profile.mentorOrgRole !== "global_mentor" ? (
+        <>
+          <Text style={[styles.label, { color: colors.text }]}>Assigned Classes</Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+            placeholder="Example: Class 8 A, Class 9 B, Class 10"
+            placeholderTextColor={colors.textMuted}
+            value={assignedClassesDraft}
+            onChangeText={setAssignedClassesDraft}
+          />
+          <Text style={[styles.hint, { color: colors.textMuted }]}>
+            Teachers see only assigned classes. Organisation heads can use this as their default focus classes.
+          </Text>
+        </>
       ) : null}
 
       <Text style={[styles.label, { color: colors.text }]}>State</Text>
