@@ -28,19 +28,12 @@ export default function HomeScreen() {
     ).start();
   }, [scaleAnim]);
 
-  const dashboardRoute =
+  const homeRoute =
     user?.role === "mentor"
       ? user?.approvalStatus === "approved"
         ? "/mentor-dashboard?section=overview"
         : "/mentor-pending"
       : "/student-dashboard?section=overview";
-
-  const homeRoute =
-    user?.role === "mentor"
-      ? user?.approvalStatus === "approved"
-        ? "/network?section=feed"
-        : "/mentor-pending"
-      : "/network?section=feed";
 
   useEffect(() => {
     if (!isAuthenticated || !user) return;

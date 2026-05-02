@@ -166,7 +166,6 @@ const INSTITUTION_TYPE_OPTIONS = [
 ];
 const PROFILE_TYPE_OPTIONS: StudentProfile["profileType"][] = ["student", "graduate", "job_seeker"];
 const LEARNER_STAGE_OPTIONS: { value: LearnerStage; label: string }[] = [
-  { value: "kid", label: "Kids" },
   { value: "highschool", label: "High School" },
   { value: "after12", label: "After 12" }
 ];
@@ -197,6 +196,9 @@ export default function StudentProfileScreen() {
         const { data } = await api.get("/api/profiles/student/me");
         if (!mounted) return;
         const profileData = data.profile || {};
+        const visibleLearnerStage = normalizeLearnerStage(profileData.learnerStage) === "kid"
+          ? "highschool"
+          : normalizeLearnerStage(profileData.learnerStage);
         setProfile({
           ...emptyProfile,
           profilePhotoUrl: profileData.profilePhotoUrl || "",
@@ -209,7 +211,7 @@ export default function StudentProfileScreen() {
           institutionDistrict: profileData.institutionDistrict || "",
           institutionSource: profileData.institutionSource || "",
           className: profileData.className || "",
-          learnerStage: normalizeLearnerStage(profileData.learnerStage),
+          learnerStage: visibleLearnerStage,
           skills: Array.isArray(profileData.skills) ? profileData.skills.filter(Boolean) : [],
           careerGoals: profileData.careerGoals || "",
           profileCompleteness: Number(profileData.profileCompleteness || 0),
@@ -353,7 +355,7 @@ export default function StudentProfileScreen() {
   };
 
   async function persistLearnerStage(nextStage: LearnerStage) {
-    const normalizedStage = normalizeLearnerStage(nextStage);
+    const normalizedStage = normalizeLearnerStage(nextStage) === "kid" ? "highschool" : normalizeLearnerStage(nextStage);
     const selectedInstitutionName = String(profile.institutionName || profile.collegeName || "").trim();
     const nextInstitutionType =
       normalizedStage === "kid" || normalizedStage === "highschool"

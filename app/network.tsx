@@ -80,10 +80,10 @@ type FeedPost = {
     sad?: number;
     angry?: number;
   };
-  reactions?: Array<{
+  reactions?: {
     userId?: string | { _id?: string; name?: string; role?: string; profilePhotoUrl?: string } | null;
     type?: "like" | "love" | "care" | "haha" | "wow" | "sad" | "angry" | null;
-  }>;
+  }[];
   authorId?: {
     _id?: string;
     name?: string;
@@ -133,7 +133,7 @@ type PostLikeUser = {
 type NetworkSectionId = "compose" | "feed" | "institution" | "connections";
 
 const networkSections: { id: NetworkSectionId; label: string }[] = [
-  { id: "feed", label: "Home Feed" },
+  { id: "feed", label: "Posts" },
   { id: "institution", label: "Institution Feed" },
   { id: "compose", label: "Post" },
   { id: "connections", label: "My Circle" }
@@ -1059,7 +1059,7 @@ export default function NetworkScreen() {
         ? "Preparing your post composer..."
         : activeSection === "connections"
           ? "Loading your circle..."
-          : "Home feed is loading...";
+          : "Posts are loading...";
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <GlobalHeader
@@ -1096,7 +1096,7 @@ export default function NetworkScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true, true)} tintColor={colors.accent} />}
           keyboardShouldPersistTaps="handled"
         >
-        <Text style={[styles.heading, { color: colors.text }]}>{isKid ? "School Home" : "Home"}</Text>
+        <Text style={[styles.heading, { color: colors.text }]}>{isKid ? "School Posts" : "Posts"}</Text>
         <Text style={[styles.subheading, { color: colors.textMuted }]}>
           {user?.role === "mentor" ? "Your professional feed for mentor insights, conversations, and visibility." : "Your student growth feed with people, ideas, and progress that match your journey."}
         </Text>
@@ -1321,7 +1321,7 @@ export default function NetworkScreen() {
             )}
             {loading && filteredPosts.length === 0 ? (
               <Text style={[styles.meta, { color: colors.textMuted }]}>
-                {activeSection === "institution" ? "Institution feed is loading..." : "Home feed is loading..."}
+                {activeSection === "institution" ? "Institution feed is loading..." : "Posts are loading..."}
               </Text>
             ) : filteredPosts.filter((post) => !hiddenPostIds[post._id]).length === 0 ? (
               <Text style={[styles.meta, { color: colors.textMuted }]}>

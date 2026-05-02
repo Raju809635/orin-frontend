@@ -12,12 +12,6 @@ import { LEARNER_ONBOARDING_COMPLETING_KEY, LEARNER_ONBOARDING_PENDING_KEY, norm
 
 const STAGES: { value: LearnerStage; title: string; body: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   {
-    value: "kid",
-    title: "Kids",
-    body: "School feed, activities, stars, teacher support.",
-    icon: "sparkles"
-  },
-  {
     value: "highschool",
     title: "High School",
     body: "Study plans, institution resources, competitions.",
@@ -56,8 +50,8 @@ export default function LearnerOnboardingScreen() {
   const [loadingProfile, setLoadingProfile] = useState(true);
 
   const isSchoolStage = stage === "kid" || stage === "highschool";
+  const isVisibleSchoolStage = stage === "highschool";
   const stageHelp = useMemo(() => {
-    if (stage === "kid") return "Kids mode keeps ORIN school-safe and simple.";
     if (stage === "highschool") return "High School mode keeps study and institution features in front.";
     return "After 12 keeps the complete existing ORIN experience.";
   }, [stage]);
@@ -75,7 +69,7 @@ export default function LearnerOnboardingScreen() {
         const profile = data?.profile || {};
         const nextStage = normalizeLearnerStage(profile?.learnerStage);
         const nextInstitution = String(profile?.institutionName || profile?.collegeName || "").trim();
-        setStage(nextStage);
+        setStage(nextStage === "kid" ? "highschool" : nextStage);
         setInstitutionName(nextInstitution);
         setInstitutionQuery(nextInstitution);
         setClassName(String(profile?.className || "").trim());
@@ -111,7 +105,7 @@ export default function LearnerOnboardingScreen() {
         const { data } = await api.get("/api/profiles/institutions/search", {
           params: {
             q: query,
-            institutionType: stage === "kid" || stage === "highschool" ? "School" : undefined,
+            institutionType: stage === "highschool" ? "School" : undefined,
             limit: 8
           }
         });
@@ -179,7 +173,7 @@ export default function LearnerOnboardingScreen() {
         learnerStage: normalizedStage,
         institutionName: selectedInstitutionName,
         collegeName: selectedInstitutionName,
-        institutionType: isSchoolStage ? "School" : "",
+        institutionType: isVisibleSchoolStage ? "School" : "",
         className: className.trim()
       });
       await AsyncStorage.setItem(LEARNER_ONBOARDING_COMPLETING_KEY, "1");
@@ -209,7 +203,7 @@ export default function LearnerOnboardingScreen() {
         <Text style={[styles.eyebrow, { color: colors.accent }]}>Set up your ORIN experience</Text>
         <Text style={[styles.title, { color: colors.text }]}>Choose how you learn</Text>
         <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          Existing users stay in After 12 mode by default. This step helps new students get the right school or career experience.
+          Choose High School for school-focused learning, or After 12 for the full ORIN career and mentorship experience.
         </Text>
 
         <View style={styles.stageGrid}>
@@ -226,7 +220,7 @@ export default function LearnerOnboardingScreen() {
               ]}
               onPress={() => {
                 setStage(item.value);
-                if (item.value === "kid" || item.value === "highschool") {
+                if (item.value === "highschool") {
                   setInstitutionFocused(true);
                 } else {
                   setInstitutionFocused(false);
@@ -245,7 +239,7 @@ export default function LearnerOnboardingScreen() {
 
         <Text style={[styles.helper, { color: colors.textMuted }]}>{stageHelp}</Text>
 
-        {isSchoolStage ? (
+        {isVisibleSchoolStage ? (
           <View style={[styles.formBlock, { borderColor: colors.border }]}>
             <Text style={[styles.label, { color: colors.text }]}>School / Institution</Text>
             <TextInput

@@ -27,6 +27,10 @@ import { LEARNER_ONBOARDING_COMPLETING_KEY, LEARNER_ONBOARDING_PENDING_KEY } fro
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function defaultRouteByRole(role: "student" | "mentor") {
+  return role === "mentor" ? "/mentor-dashboard?section=overview" : "/student-dashboard?section=overview";
+}
+
+function postsRouteByRole(_role: "student" | "mentor") {
   return "/network?section=feed";
 }
 
@@ -69,7 +73,7 @@ function getTabKeyForPath(pathname: string): AppTabKey | null {
 function getDefaultTabPath(tabKey: AppTabKey, user: { role: "student" | "mentor" }) {
   switch (tabKey) {
     case "home":
-      return defaultRouteByRole(user.role);
+      return postsRouteByRole(user.role);
     case "mentorship":
       return "/mentorship";
     case "journey":
@@ -603,17 +607,17 @@ function RootDrawer() {
   }
 
   const studentTabs = [
-    { key: "home", label: "Home", icon: "home", path: "/network?section=feed" },
+    { key: "home", label: "Posts", icon: "newspaper", path: "/network?section=feed" },
     { key: "mentorship", label: learnerStage === "kid" ? "Teachers" : "Mentorship", icon: "school", path: "/mentorship" },
-    { key: "journey", label: "Journey", icon: "map", path: "/student-dashboard?section=overview" },
+    { key: "journey", label: "Home", icon: "home", path: "/student-dashboard?section=overview" },
     { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
     { key: "community", label: "Community", icon: "trophy", path: "/community-growth" }
   ] as const;
 
   const mentorTabs = [
-    { key: "home", label: "Home", icon: "home", path: "/network?section=feed" },
+    { key: "home", label: "Posts", icon: "newspaper", path: "/network?section=feed" },
     { key: "mentorship", label: "Mentorship", icon: "school", path: "/mentorship" },
-    { key: "journey", label: "Journey", icon: "map", path: "/mentor-dashboard?section=overview" },
+    { key: "journey", label: "Home", icon: "home", path: "/mentor-dashboard?section=overview" },
     { key: "ai", label: "AI", icon: "sparkles", path: "/ai-hub" },
     { key: "community", label: "Community", icon: "trophy", path: "/community-growth" }
   ] as const;
