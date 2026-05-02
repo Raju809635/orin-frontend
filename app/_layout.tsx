@@ -63,6 +63,9 @@ function buildTrackedRoute(pathname: string, params: Record<string, unknown>) {
 
 function getTabKeyForPath(pathname: string): AppTabKey | null {
   if (pathname.startsWith("/network") || pathname.startsWith("/posts")) return "home";
+  if (pathname.startsWith("/institution-management/teacher-classes") || pathname.startsWith("/institution-management/head-teachers")) return "mentorship";
+  if (pathname.startsWith("/institution-management/teacher-assign") || pathname.startsWith("/institution-management/head-reports")) return "ai";
+  if (pathname.startsWith("/institution-management/teacher-reviews") || pathname.startsWith("/institution-management/head-approvals")) return "community";
   if (pathname.startsWith("/mentorship") || pathname.startsWith("/domains") || pathname.startsWith("/domain-guide") || pathname.startsWith("/mentor/") || pathname.startsWith("/mentors") || pathname.startsWith("/student-sessions") || pathname.startsWith("/sprints/")) return "mentorship";
   if (pathname.startsWith("/student-dashboard") || pathname.startsWith("/mentor-dashboard")) return "journey";
   if (pathname.startsWith("/ai-hub") || pathname.startsWith("/ai/") || pathname.startsWith("/ai-assistant")) return "ai";
@@ -84,18 +87,18 @@ function getDefaultTabPath(tabKey: AppTabKey, user: { role: "student" | "mentor"
     case "home":
       return user.role === "mentor" && mentorMode !== "global" ? "/network?section=institution" : postsRouteByRole(user.role);
     case "mentorship":
-      if (user.role === "mentor" && mentorMode === "teacher") return "/mentor-dashboard?section=classes";
-      if (user.role === "mentor" && mentorMode === "head") return "/mentor-dashboard?section=teachers";
+      if (user.role === "mentor" && mentorMode === "teacher") return "/institution-management/teacher-classes";
+      if (user.role === "mentor" && mentorMode === "head") return "/institution-management/head-teachers";
       return "/mentorship";
     case "journey":
       return user.role === "mentor" ? "/mentor-dashboard?section=overview" : "/student-dashboard?section=overview";
     case "ai":
-      if (user.role === "mentor" && mentorMode === "teacher") return "/mentor-dashboard?section=assign";
-      if (user.role === "mentor" && mentorMode === "head") return "/mentor-dashboard?section=reports";
+      if (user.role === "mentor" && mentorMode === "teacher") return "/institution-management/teacher-assign";
+      if (user.role === "mentor" && mentorMode === "head") return "/institution-management/head-reports";
       return "/ai-hub";
     case "community":
-      if (user.role === "mentor" && mentorMode === "teacher") return "/mentor-dashboard?section=reviews";
-      if (user.role === "mentor" && mentorMode === "head") return "/mentor-dashboard?section=approvals";
+      if (user.role === "mentor" && mentorMode === "teacher") return "/institution-management/teacher-reviews";
+      if (user.role === "mentor" && mentorMode === "head") return "/institution-management/head-approvals";
       return "/community-growth";
     default:
       return defaultRouteByRole(user.role);
@@ -247,6 +250,7 @@ function RootDrawer() {
       pathname.startsWith("/notifications") ||
       pathname.startsWith("/my-profile") ||
       pathname.startsWith("/learner-onboarding") ||
+      pathname.startsWith("/institution-management") ||
       pathname.startsWith("/student-dashboard") ||
       pathname.startsWith("/mentor-dashboard") ||
       pathname.startsWith("/admin-dashboard") ||
@@ -270,6 +274,8 @@ function RootDrawer() {
       if (user.role === "student" && hasPendingLearnerOnboarding && !isCompletingLearnerOnboarding && !pathname.startsWith("/learner-onboarding")) {
         router.replace("/learner-onboarding?new=1" as never);
       } else if (pathname.startsWith("/mentor-dashboard") && user.role !== "mentor") {
+        router.replace(homeRouteForUser(user) as never);
+      } else if (pathname.startsWith("/institution-management") && user.role !== "mentor") {
         router.replace(homeRouteForUser(user) as never);
       } else if (pathname.startsWith("/learner-onboarding") && user.role !== "student") {
         router.replace(homeRouteForUser(user) as never);
@@ -633,18 +639,18 @@ function RootDrawer() {
   const mentorTabs = mentorMode === "teacher"
     ? [
         { key: "home", label: "Class Posts", icon: "newspaper", path: "/network?section=institution" },
-        { key: "mentorship", label: "Classes", icon: "people", path: "/mentor-dashboard?section=classes" },
+        { key: "mentorship", label: "Classes", icon: "people", path: "/institution-management/teacher-classes" },
         { key: "journey", label: "Home", icon: "home", path: "/mentor-dashboard?section=overview" },
-        { key: "ai", label: "Assign", icon: "create", path: "/mentor-dashboard?section=assign" },
-        { key: "community", label: "Reviews", icon: "checkmark-done", path: "/mentor-dashboard?section=reviews" }
+        { key: "ai", label: "Assign", icon: "create", path: "/institution-management/teacher-assign" },
+        { key: "community", label: "Reviews", icon: "checkmark-done", path: "/institution-management/teacher-reviews" }
       ]
     : mentorMode === "head"
       ? [
           { key: "home", label: "School Posts", icon: "newspaper", path: "/network?section=institution" },
-          { key: "mentorship", label: "Teachers", icon: "people", path: "/mentor-dashboard?section=teachers" },
+          { key: "mentorship", label: "Teachers", icon: "people", path: "/institution-management/head-teachers" },
           { key: "journey", label: "Home", icon: "home", path: "/mentor-dashboard?section=overview" },
-          { key: "ai", label: "Reports", icon: "stats-chart", path: "/mentor-dashboard?section=reports" },
-          { key: "community", label: "Approvals", icon: "shield-checkmark", path: "/mentor-dashboard?section=approvals" }
+          { key: "ai", label: "Reports", icon: "stats-chart", path: "/institution-management/head-reports" },
+          { key: "community", label: "Approvals", icon: "shield-checkmark", path: "/institution-management/head-approvals" }
         ]
       : [
           { key: "home", label: "Posts", icon: "newspaper", path: "/network?section=feed" },
@@ -674,6 +680,18 @@ function RootDrawer() {
         if (tabKey === "journey") return section === "overview";
       }
       if (tabKey === "journey" && basePath.startsWith("/mentor-dashboard")) return true;
+    }
+    if (user?.role === "mentor" && pathname.startsWith("/institution-management")) {
+      if (mentorMode === "teacher") {
+        if (tabKey === "mentorship") return pathname.startsWith("/institution-management/teacher-classes");
+        if (tabKey === "ai") return pathname.startsWith("/institution-management/teacher-assign");
+        if (tabKey === "community") return pathname.startsWith("/institution-management/teacher-reviews");
+      }
+      if (mentorMode === "head") {
+        if (tabKey === "mentorship") return pathname.startsWith("/institution-management/head-teachers");
+        if (tabKey === "ai") return pathname.startsWith("/institution-management/head-reports");
+        if (tabKey === "community") return pathname.startsWith("/institution-management/head-approvals");
+      }
     }
     if (tabKey === "mentorship") {
       return pathname.startsWith("/mentorship") || pathname.startsWith("/domains") || pathname.startsWith("/domain-guide") || pathname.startsWith("/mentor/") || pathname.startsWith("/mentors") || pathname.startsWith("/student-sessions") || pathname.startsWith("/sprints/");
@@ -789,6 +807,12 @@ function RootDrawer() {
           <Drawer.Screen name="my-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="student-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor-dashboard" options={{ title: "Mentor Dashboard", drawerItemStyle: { display: "none" }, headerShown: false }} />
+          <Drawer.Screen name="institution-management/teacher-classes" options={{ title: "Classes", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="institution-management/teacher-assign" options={{ title: "Assign", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="institution-management/teacher-reviews" options={{ title: "Reviews", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="institution-management/head-teachers" options={{ title: "Teachers", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="institution-management/head-reports" options={{ title: "Reports", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="institution-management/head-approvals" options={{ title: "Approvals", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor-profile" options={{ title: "My Profile", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentor-policy" options={{ title: "Mentor Policy", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="mentors" options={{ title: "Mentors", drawerItemStyle: { display: "none" } }} />
