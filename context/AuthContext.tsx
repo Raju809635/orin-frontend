@@ -33,6 +33,7 @@ type AuthContextType = {
   isAuthenticated: boolean;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<RegisterResponse>;
+  refreshAuthUser: () => Promise<AuthUser | null>;
   logout: () => Promise<void>;
 };
 
@@ -57,6 +58,18 @@ type RegisterResponse = {
   otpExpiresAt?: string;
 };
 
+function mergeMentorProfileIntoUser(user: AuthUser, profilePayload: any, userPayload?: any): AuthUser {
+  if (user.role !== "mentor") return user;
+  const mentorOrgRole = profilePayload?.mentorOrgRole;
+  return {
+    ...user,
+    approvalStatus: userPayload?.approvalStatus || userPayload?.status || user.approvalStatus,
+    mentorOrgRole: ["institution_teacher", "organisation_head", "global_mentor"].includes(mentorOrgRole)
+      ? mentorOrgRole
+      : user.mentorOrgRole || "global_mentor"
+  };
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -74,10 +87,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return;
         }
 
+        setApiAuthToken(session.token);
         setToken(session.token);
         setRefreshToken(session.refreshToken);
-        setUser(session.user);
-        setApiAuthToken(session.token);
+
+        if (session.user.role === "mentor") {
+          try {
+            const { data } = await api.get("/api/profiles/mentor/me");
+            const nextUser = mergeMentorProfileIntoUser(session.user, data?.profile, data?.user);
+            setUser(nextUser);
+            await saveAuthSession(session.token, session.refreshToken, nextUser);
+          } catch {
+            setUser(session.user);
+          }
+        } else {
+          setUser(session.user);
+        }
       } finally {
         if (mounted) {
           setIsBootstrapping(false);
@@ -113,6 +138,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data } = await api.post<RegisterResponse>("/api/auth/register", payload);
     return data;
   }, []);
+
+  const refreshAuthUser = useCallback(async () => {
+    if (!user || !token || !refreshToken) {
+      return user;
+    }
+
+    if (user.role !== "mentor") {
+      return user;
+    }
+
+    const { data } = await api.get("/api/profiles/mentor/me");
+    const nextUser = mergeMentorProfileIntoUser(user, data?.profile, data?.user);
+    setUser(nextUser);
+    await saveAuthSession(token, refreshToken, nextUser);
+    return nextUser;
+  }, [refreshToken, token, user]);
 
   useEffect(() => {
     const interceptorId = api.interceptors.response.use(
@@ -196,9 +237,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAuthenticated: Boolean(user && token),
       login,
       register,
+      refreshAuthUser,
       logout
     }),
-    [user, token, isBootstrapping, login, register, logout]
+    [user, token, isBootstrapping, login, register, refreshAuthUser, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

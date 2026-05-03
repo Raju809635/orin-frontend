@@ -14,6 +14,7 @@ import {
   View
 } from "react-native";
 import { useAppTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import { api } from "@/lib/api";
 import { notify } from "@/utils/notify";
 import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
@@ -174,6 +175,7 @@ const MENTOR_ORG_ROLE_OPTIONS: { value: MentorProfile["mentorOrgRole"]; label: s
 
 export default function MentorProfileScreen() {
   const { colors } = useAppTheme();
+  const { refreshAuthUser } = useAuth();
   const [profile, setProfile] = useState<MentorProfile | null>(null);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
@@ -269,6 +271,9 @@ export default function MentorProfileScreen() {
     return subCategoryOptions.find((sub) => sub.sub === profile.subCategory)?.specializations || [];
   }, [subCategoryOptions, profile?.subCategory]);
 
+  const searchInstitutionType = profile?.institutionType || "";
+  const searchInstitutionState = profile?.state || "";
+
   useEffect(() => {
     if (!profile || !institutionFocused) {
       setInstitutionResults([]);
@@ -289,15 +294,15 @@ export default function MentorProfileScreen() {
         const { data } = await api.get("/api/profiles/institutions/search", {
           params: {
             q: query,
-            institutionType: profile.institutionType || undefined,
-            state: profile.state || undefined,
+            institutionType: searchInstitutionType || undefined,
+            state: searchInstitutionState || undefined,
             limit: 8
           }
         });
         if (!active) return;
         let nextResults = Array.isArray(data?.results) ? data.results : [];
 
-        if (nextResults.length === 0 && (profile.institutionType || profile.state)) {
+        if (nextResults.length === 0 && (searchInstitutionType || searchInstitutionState)) {
           const fallback = await api.get("/api/profiles/institutions/search", {
             params: {
               q: query,
@@ -320,7 +325,7 @@ export default function MentorProfileScreen() {
       active = false;
       clearTimeout(timer);
     };
-  }, [institutionFocused, institutionQuery, profile?.institutionType, profile?.state]);
+  }, [institutionFocused, institutionQuery, profile, searchInstitutionState, searchInstitutionType]);
 
   const applyInstitutionSelection = (institution: InstitutionSearchResult) => {
     setProfile((prev) =>
@@ -589,6 +594,11 @@ export default function MentorProfileScreen() {
       );
       const nextProjects = Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects;
       setProjectTechDrafts(Object.fromEntries(nextProjects.map((item, index) => [index, item.tech.join(", ")])));
+      try {
+        await refreshAuthUser();
+      } catch {
+        // Profile is already saved; auth context can refresh on next app load if this call fails.
+      }
       setPhotoDirty(false);
       notify("Mentor profile updated");
     } catch (e: any) {
