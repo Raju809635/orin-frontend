@@ -234,7 +234,7 @@ export default function NetworkScreen() {
         if (item.id === "connections") return { ...item, label: "Students" };
       }
       if (isHeadMentor) {
-        if (item.id === "feed") return { ...item, label: "School Posts" };
+        if (item.id === "feed") return { ...item, label: "Global Schools Posts" };
         if (item.id === "institution") return { ...item, label: "School Feed" };
         if (item.id === "compose") return { ...item, label: "Notice" };
         if (item.id === "connections") return { ...item, label: "Network" };
@@ -1113,7 +1113,7 @@ export default function NetworkScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true, true)} tintColor={colors.accent} />}
           keyboardShouldPersistTaps="handled"
         >
-        <Text style={[styles.heading, { color: colors.text }]}>{isTeacherMentor ? "Class Posts" : isHeadMentor ? "School Posts" : isKid ? "School Posts" : "Posts"}</Text>
+        <Text style={[styles.heading, { color: colors.text }]}>{isTeacherMentor ? "Class Posts" : isHeadMentor ? "Global Schools Posts" : isKid ? "School Posts" : "Posts"}</Text>
         <Text style={[styles.subheading, { color: colors.textMuted }]}>
           {isTeacherMentor
             ? "Post class announcements, quiz reminders, student wins, activity updates, and motivation."

@@ -64,8 +64,9 @@ function buildTrackedRoute(pathname: string, params: Record<string, unknown>) {
 function getTabKeyForPath(pathname: string): AppTabKey | null {
   if (pathname.startsWith("/network") || pathname.startsWith("/posts")) return "home";
   if (pathname.startsWith("/institution-management/teacher-classes") || pathname.startsWith("/institution-management/head-teachers")) return "mentorship";
-  if (pathname.startsWith("/institution-management/teacher-assign") || pathname.startsWith("/institution-management/head-reports")) return "ai";
-  if (pathname.startsWith("/institution-management/teacher-reviews") || pathname.startsWith("/institution-management/head-approvals")) return "community";
+  if (pathname.startsWith("/institution-management/teacher-assign") || pathname.startsWith("/institution-management/head-approvals")) return "journey";
+  if (pathname.startsWith("/institution-management/head-reports")) return "ai";
+  if (pathname.startsWith("/institution-management/teacher-reviews")) return "ai";
   if (pathname.startsWith("/mentorship") || pathname.startsWith("/domains") || pathname.startsWith("/domain-guide") || pathname.startsWith("/mentor/") || pathname.startsWith("/mentors") || pathname.startsWith("/student-sessions") || pathname.startsWith("/sprints/")) return "mentorship";
   if (pathname.startsWith("/student-dashboard") || pathname.startsWith("/mentor-dashboard")) return "journey";
   if (pathname.startsWith("/ai-hub") || pathname.startsWith("/ai/") || pathname.startsWith("/ai-assistant")) return "ai";
@@ -93,12 +94,11 @@ function getDefaultTabPath(tabKey: AppTabKey, user: { role: "student" | "mentor"
     case "journey":
       return user.role === "mentor" ? "/mentor-dashboard?section=overview" : "/student-dashboard?section=overview";
     case "ai":
-      if (user.role === "mentor" && mentorMode === "teacher") return "/institution-management/teacher-assign";
+      if (user.role === "mentor" && mentorMode === "teacher") return "/institution-management/teacher-reviews";
       if (user.role === "mentor" && mentorMode === "head") return "/institution-management/head-reports";
       return "/ai-hub";
     case "community":
-      if (user.role === "mentor" && mentorMode === "teacher") return "/institution-management/teacher-reviews";
-      if (user.role === "mentor" && mentorMode === "head") return "/institution-management/head-approvals";
+      if (user.role === "mentor" && mentorMode !== "global") return "/community-growth?scope=global";
       return "/community-growth";
     default:
       return defaultRouteByRole(user.role);
@@ -641,16 +641,16 @@ function RootDrawer() {
         { key: "home", label: "Class Feed", icon: "newspaper", path: "/network?section=institution" },
         { key: "mentorship", label: "My Classes", icon: "people", path: "/institution-management/teacher-classes" },
         { key: "journey", label: "Teacher Hub", icon: "home", path: "/mentor-dashboard?section=overview" },
-        { key: "ai", label: "Assign Work", icon: "create", path: "/institution-management/teacher-assign" },
-        { key: "community", label: "Check Work", icon: "checkmark-done", path: "/institution-management/teacher-reviews" }
+        { key: "ai", label: "Reviews", icon: "checkmark-done", path: "/institution-management/teacher-reviews" },
+        { key: "community", label: "Global", icon: "globe-outline", path: "/community-growth?scope=global" }
       ]
     : mentorMode === "head"
       ? [
           { key: "home", label: "School Feed", icon: "newspaper", path: "/network?section=institution" },
           { key: "mentorship", label: "Staff", icon: "people", path: "/institution-management/head-teachers" },
           { key: "journey", label: "Head Hub", icon: "home", path: "/mentor-dashboard?section=overview" },
-          { key: "ai", label: "School Data", icon: "stats-chart", path: "/institution-management/head-reports" },
-          { key: "community", label: "Approvals", icon: "shield-checkmark", path: "/institution-management/head-approvals" }
+          { key: "ai", label: "Reports", icon: "stats-chart", path: "/institution-management/head-reports" },
+          { key: "community", label: "Global", icon: "globe-outline", path: "/community-growth?scope=global" }
         ]
       : [
           { key: "home", label: "Posts", icon: "newspaper", path: "/network?section=feed" },
@@ -669,14 +669,12 @@ function RootDrawer() {
       const section = normalizeRouteParam(globalParams.section) || "overview";
       if (mentorMode === "teacher") {
         if (tabKey === "mentorship") return section === "classes";
-        if (tabKey === "ai") return section === "assign";
-        if (tabKey === "community") return section === "reviews";
+        if (tabKey === "ai") return section === "reviews";
         if (tabKey === "journey") return section === "overview";
       }
       if (mentorMode === "head") {
         if (tabKey === "mentorship") return section === "teachers";
         if (tabKey === "ai") return section === "reports";
-        if (tabKey === "community") return section === "approvals";
         if (tabKey === "journey") return section === "overview";
       }
       if (tabKey === "journey" && basePath.startsWith("/mentor-dashboard")) return true;
@@ -684,13 +682,32 @@ function RootDrawer() {
     if (user?.role === "mentor" && pathname.startsWith("/institution-management")) {
       if (mentorMode === "teacher") {
         if (tabKey === "mentorship") return pathname.startsWith("/institution-management/teacher-classes");
-        if (tabKey === "ai") return pathname.startsWith("/institution-management/teacher-assign");
-        if (tabKey === "community") return pathname.startsWith("/institution-management/teacher-reviews");
+        if (tabKey === "ai") return pathname.startsWith("/institution-management/teacher-reviews");
       }
       if (mentorMode === "head") {
         if (tabKey === "mentorship") return pathname.startsWith("/institution-management/head-teachers");
         if (tabKey === "ai") return pathname.startsWith("/institution-management/head-reports");
-        if (tabKey === "community") return pathname.startsWith("/institution-management/head-approvals");
+      }
+    }
+    if (user?.role === "mentor" && mentorMode !== "global") {
+      const section = normalizeRouteParam(globalParams.section);
+      if (tabKey === "home") {
+        return pathname.startsWith("/network") && section === "institution";
+      }
+      if (tabKey === "ai") {
+        if (mentorMode === "teacher") return pathname.startsWith("/institution-management/teacher-reviews");
+        if (mentorMode === "head") return pathname.startsWith("/institution-management/head-reports");
+        return false;
+      }
+      if (tabKey === "community") {
+        return (
+          pathname.startsWith("/community-growth") ||
+          pathname.startsWith("/community/") ||
+          pathname.startsWith("/collaborate") ||
+          pathname.startsWith("/posts") ||
+          (pathname.startsWith("/network") && section !== "institution") ||
+          pathname.startsWith("/ai/career-roadmap")
+        );
       }
     }
     if (tabKey === "mentorship") {
@@ -698,7 +715,12 @@ function RootDrawer() {
     }
     if (tabKey === "ai") return pathname.startsWith("/ai-hub") || pathname.startsWith("/ai/") || pathname.startsWith("/ai-assistant");
     if (tabKey === "home") return pathname.startsWith("/network") || pathname.startsWith("/posts");
-    if (tabKey === "community") return pathname.startsWith("/community-growth") || pathname.startsWith("/community/") || pathname.startsWith("/collaborate");
+    if (tabKey === "community") {
+      if (user?.role === "mentor" && mentorMode !== "global") {
+        return pathname.startsWith("/community-growth") || pathname.startsWith("/community/") || pathname.startsWith("/collaborate");
+      }
+      return pathname.startsWith("/community-growth") || pathname.startsWith("/community/") || pathname.startsWith("/collaborate");
+    }
     return pathname.startsWith(basePath);
   };
 

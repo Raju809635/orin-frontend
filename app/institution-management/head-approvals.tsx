@@ -58,6 +58,35 @@ export default function HeadApprovalsScreen() {
       ) : (
         <EmptyState title="No pending approvals" subtitle="Teacher, resource, and challenge approvals will appear here when they need attention." />
       )}
+
+      <SectionTitle title="Head Control Tools" subtitle="School monitoring, teacher quality, class reports, and certificate control start here." />
+      <InfoCard
+        title="Teacher Performance"
+        subtitle="Compare teacher activity, assigned classes, created content, pending reviews, and student completion rate."
+        meta="Use teacher reports to find who needs support and which classes are moving well."
+        icon="people"
+        to="/institution-management/head-teachers"
+      />
+      <InfoCard
+        title="Class-Wise Reports"
+        subtitle="Track class participation, quiz activity, roadmap completion, challenge submissions, and top students."
+        meta="Class reports help compare sections like Class 8 A, 8 B, and 9 A inside the same school."
+        icon="stats-chart"
+        to="/institution-management/head-reports"
+      />
+      <InfoCard
+        title="Content Approval Control"
+        subtitle="Review school resources, class challenges, roadmap programs, certificate templates, and teacher requests."
+        meta="Final admin/security approval remains protected; this is school-side visibility and control."
+        icon="shield-checkmark"
+      />
+      <InfoCard
+        title="Certificate & Reward Issuing"
+        subtitle="Issue recognition for school toppers, class champions, competition winners, most improved, and perfect score students."
+        meta="Uses the existing certificate templates and school reward categories."
+        icon="ribbon"
+        to="/community/certifications"
+      />
     </ManagementScreen>
   );
 }

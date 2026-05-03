@@ -62,6 +62,36 @@ export default function TeacherReviewsScreen() {
       ) : (
         <EmptyState title="No reviews yet" subtitle="Student submissions from your assigned classes will appear here." />
       )}
+
+      <SectionTitle title="Teacher Review Tools" subtitle="Daily correction, marks, XP, and recognition actions stay grouped here." />
+      <InfoCard
+        title="Marks & Feedback"
+        subtitle="Approve, reject, request changes, add score, and award XP from the linked review module."
+        meta="Use this after opening a roadmap, challenge, or resource submission from the queue."
+        icon="create"
+        to="/mentor-dashboard?section=reviews"
+      />
+      <InfoCard
+        title="Certificate Recommendations"
+        subtitle="Recommend certificates for completed roadmap work, competition winners, perfect scores, and improvement."
+        meta="Certificate templates and issuing continue through the current certificate system."
+        icon="ribbon"
+        to="/community/certifications"
+      />
+      <InfoCard
+        title="Class Activity Tracker"
+        subtitle="Check active students, missing submissions, participation, streaks, and repeated pending work."
+        meta="This starts the teacher-side tracking layer without changing student screens."
+        icon="pulse"
+        to="/institution-management/teacher-classes"
+      />
+      <InfoCard
+        title="Student Detail Follow-up"
+        subtitle="Open class lists first, then drill into student work history, progress, quiz activity, and notes as that view expands."
+        meta="Useful for one-to-one correction and parent/admin discussion later."
+        icon="person-circle"
+        to="/institution-management/teacher-classes"
+      />
     </ManagementScreen>
   );
 }

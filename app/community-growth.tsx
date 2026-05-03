@@ -26,14 +26,15 @@ type CommunityModule = {
 
 export default function CommunityGrowthScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ search?: string }>();
+  const params = useLocalSearchParams<{ search?: string; scope?: string }>();
   const { user } = useAuth();
   const { learnerStage } = useLearner();
   const { colors, isDark } = useAppTheme();
   const isMentor = user?.role === "mentor";
   const mentorOrgRole = user?.mentorOrgRole || "global_mentor";
-  const isTeacherMentor = isMentor && mentorOrgRole === "institution_teacher";
-  const isHeadMentor = isMentor && mentorOrgRole === "organisation_head";
+  const isRoleGlobalView = isMentor && String(params.scope || "") === "global" && mentorOrgRole !== "global_mentor";
+  const isTeacherMentor = isMentor && mentorOrgRole === "institution_teacher" && !isRoleGlobalView;
+  const isHeadMentor = isMentor && mentorOrgRole === "organisation_head" && !isRoleGlobalView;
   const isKid = !isMentor && isKidStage(learnerStage);
   const isHighSchool = !isMentor && learnerStage === "highschool";
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -207,7 +208,38 @@ export default function CommunityGrowthScreen() {
     }
   ];
 
-  const stageModules = modules.filter((item) => {
+  const globalModules: CommunityModule[] = isRoleGlobalView
+    ? [
+        {
+          id: "global_posts",
+          label: mentorOrgRole === "organisation_head" ? "Global Schools Posts" : "Global Posts",
+          description: "Open ORIN-wide posts, public updates, global announcements, and cross-institution activity.",
+          icon: "newspaper",
+          path: "/network?section=feed",
+          iconColor: "#0F766E",
+          iconBg: "#DDF7F2",
+          darkIconBg: "rgba(15,118,110,0.18)",
+          border: "#ABEFC6",
+          gradient: ["#FFFFFF", "#ECFDF3"],
+          darkGradient: ["#14292A", "#0F1E24"]
+        },
+        {
+          id: "global_roadmaps",
+          label: "Global Roadmaps",
+          description: "Open ORIN-wide AI roadmaps and global learning paths outside your institution/class workspace.",
+          icon: "map",
+          path: "/ai/career-roadmap",
+          iconColor: "#6D28D9",
+          iconBg: "#F3E8FF",
+          darkIconBg: "rgba(109,40,217,0.18)",
+          border: "#C4B5FD",
+          gradient: ["#FFFFFF", "#F4F3FF"],
+          darkGradient: ["#20192F", "#111827"]
+        }
+      ]
+    : [];
+
+  const stageModules = [...globalModules, ...modules].filter((item) => {
     if (isKid && item.id === "opportunities") return false;
     return true;
   });
@@ -225,10 +257,12 @@ export default function CommunityGrowthScreen() {
         searchPlaceholder="Search community tools"
       />
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.title, { color: colors.text }]}>Community & Growth</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{isRoleGlobalView ? "Global" : "Community & Growth"}</Text>
       <Text style={[styles.sub, { color: colors.textMuted }]}>
-        {isMentor
-          ? isTeacherMentor
+        {isRoleGlobalView
+          ? "Open ORIN-wide posts, challenges, competitions, resources, certificates, leaderboards, and mentor/community tools. Institution and class work stays out of this tab."
+          : isMentor
+            ? isTeacherMentor
             ? "Open class-focused tools for groups, challenges, rewards, resources, quiz battles, and progress."
             : isHeadMentor
               ? "Open school-wide tools for community, competitions, certificates, events, reports, and leaderboards."
