@@ -10,6 +10,7 @@ import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import GlobalHeader from "@/components/global-header";
+import HighSchoolHeader from "@/components/high-school/HighSchoolHeader";
 
 let RazorpayCheckout: any = null;
 if (Platform.OS !== "web") {
@@ -531,20 +532,29 @@ export default function MentorshipHubScreen() {
       contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true)} />}
     >
-      <Text style={[styles.title, { color: colors.text }]}>Mentorship</Text>
-      <Text style={[styles.sub, { color: colors.textMuted }]}>
-        {isMentor
-          ? isTeacherMentor
-            ? "Use teacher tools for class work, student interaction, reviews, sessions, and guided school support."
-            : isHeadMentor
-              ? "Use head tools for teacher coordination, school programs, reports, approvals, and recognition."
-              : "Use the same mentorship workspace in mentor mode to manage requests, sessions, pricing, and availability."
-          : isKid
-            ? "Open school-friendly teacher guidance modules with simpler interaction paths."
-            : isHighSchool
-              ? "Open school-focused mentorship modules for teachers, groups, and guided sessions."
-              : "Select a module below to open focused mentorship tools."}
-      </Text>
+      {isHighSchool ? (
+        <HighSchoolHeader
+          eyebrow="High School Guidance"
+          title="Teachers, mentors, support"
+          subtitle="Find guidance for doubts, subject direction, group sessions, and school-friendly mentoring without the paid marketplace feeling first."
+          chips={["Doubt help", "Group guidance", "Teacher first"]}
+        />
+      ) : (
+        <>
+          <Text style={[styles.title, { color: colors.text }]}>Mentorship</Text>
+          <Text style={[styles.sub, { color: colors.textMuted }]}>
+            {isMentor
+              ? isTeacherMentor
+                ? "Use teacher tools for class work, student interaction, reviews, sessions, and guided school support."
+                : isHeadMentor
+                  ? "Use head tools for teacher coordination, school programs, reports, approvals, and recognition."
+                  : "Use the same mentorship workspace in mentor mode to manage requests, sessions, pricing, and availability."
+              : isKid
+                ? "Open school-friendly teacher guidance modules with simpler interaction paths."
+                : "Select a module below to open focused mentorship tools."}
+          </Text>
+        </>
+      )}
       {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
       <View style={styles.moduleStack}>
         {visibleSections.map((item) => {
@@ -555,14 +565,14 @@ export default function MentorshipHubScreen() {
                 colors={isDark ? (active ? darkModuleGradients[item.id].active : darkModuleGradients[item.id].idle) : active ? item.gradientActive : item.gradient}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={[styles.moduleCard, { borderColor: item.border }, active && styles.moduleCardActive]}
+                style={[styles.moduleCard, isHighSchool && styles.highSchoolModuleCard, { borderColor: item.border }, active && styles.moduleCardActive]}
               >
                 <View style={[styles.moduleIconWrap, isDark && { backgroundColor: colors.surfaceAlt }, active && styles.moduleIconWrapActive, isDark && active && { backgroundColor: colors.surface }]}>
                   <Ionicons name={item.icon} size={20} color={active ? "#1F7A4C" : isDark ? colors.textMuted : "#475467"} />
                 </View>
                 <View style={styles.moduleTextWrap}>
-                  <Text style={[styles.moduleTitle, { color: isDark ? "#F8FAFC" : colors.text }]}>{item.label}</Text>
-                  <Text style={[styles.moduleDesc, { color: isDark ? "#D0D5DD" : colors.textMuted }]}>{item.description}</Text>
+                  <Text style={[styles.moduleTitle, isHighSchool && styles.highSchoolModuleTitle, { color: isDark ? "#F8FAFC" : colors.text }]}>{item.label}</Text>
+                  <Text style={[styles.moduleDesc, isHighSchool && styles.highSchoolModuleDesc, { color: isDark ? "#D0D5DD" : colors.textMuted }]}>{item.description}</Text>
                 </View>
                 <Ionicons name="chevron-forward" size={18} color={active ? "#1F7A4C" : isDark ? "#D0D5DD" : "#98A2B3"} />
               </LinearGradient>
@@ -959,6 +969,19 @@ const styles = StyleSheet.create({
   moduleTextWrap: { flex: 1, gap: 2 },
   moduleTitle: { color: "#1E2B24", fontWeight: "800", fontSize: 15 },
   moduleDesc: { color: "#667085", fontSize: 12, lineHeight: 16 },
+  highSchoolModuleCard: {
+    borderRadius: 22,
+    padding: 16,
+    minHeight: 106
+  },
+  highSchoolModuleTitle: {
+    fontSize: 16,
+    lineHeight: 21
+  },
+  highSchoolModuleDesc: {
+    fontSize: 13,
+    lineHeight: 19
+  },
   loadingWrap: { alignItems: "center", justifyContent: "center", minHeight: 180 },
   panel: { gap: 8, marginTop: 4 },
   panelTitle: { fontSize: 16, fontWeight: "800", color: "#1E2B24" },

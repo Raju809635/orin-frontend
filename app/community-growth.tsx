@@ -8,6 +8,7 @@ import { useLearner } from "@/context/LearnerContext";
 import { isKidStage } from "@/lib/learnerExperience";
 import { useAppTheme } from "@/context/ThemeContext";
 import GlobalHeader from "@/components/global-header";
+import HighSchoolHeader from "@/components/high-school/HighSchoolHeader";
 
 type CommunityModule = {
   id: string;
@@ -257,26 +258,36 @@ export default function CommunityGrowthScreen() {
         searchPlaceholder="Search community tools"
       />
     <ScrollView style={{ backgroundColor: colors.background }} contentContainerStyle={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.title, { color: colors.text }]}>{isRoleGlobalView ? "Global" : "Community & Growth"}</Text>
-      <Text style={[styles.sub, { color: colors.textMuted }]}>
-        {isRoleGlobalView
-          ? "Open ORIN-wide posts, challenges, competitions, resources, certificates, leaderboards, and mentor/community tools. Institution and class work stays out of this tab."
-          : isMentor
-            ? isTeacherMentor
-            ? "Open class-focused tools for groups, challenges, rewards, resources, quiz battles, and progress."
-            : isHeadMentor
-              ? "Open school-wide tools for community, competitions, certificates, events, reports, and leaderboards."
-              : "Use community tools to collaborate with mentors, contribute knowledge, and track your mentor standing."
-          : isKid
-            ? "Open school-safe community modules built around rewards, activities, and class participation."
-            : isHighSchool
-              ? "Open guided community modules for study groups, challenges, and school growth."
-              : "Open a module to go to its dedicated full page."}
-      </Text>
+      {isHighSchool ? (
+        <HighSchoolHeader
+          eyebrow="High School Community"
+          title="Learn with your school"
+          subtitle="Study groups, school challenges, achievements, resources, and progress are grouped for academic growth instead of open social noise."
+          chips={["Study groups", "Challenges", "Achievements"]}
+        />
+      ) : (
+        <>
+          <Text style={[styles.title, { color: colors.text }]}>{isRoleGlobalView ? "Global" : "Community & Growth"}</Text>
+          <Text style={[styles.sub, { color: colors.textMuted }]}>
+            {isRoleGlobalView
+              ? "Open ORIN-wide posts, challenges, competitions, resources, certificates, leaderboards, and mentor/community tools. Institution and class work stays out of this tab."
+              : isMentor
+                ? isTeacherMentor
+                  ? "Open class-focused tools for groups, challenges, rewards, resources, quiz battles, and progress."
+                  : isHeadMentor
+                    ? "Open school-wide tools for community, competitions, certificates, events, reports, and leaderboards."
+                    : "Use community tools to collaborate with mentors, contribute knowledge, and track your mentor standing."
+                : isKid
+                  ? "Open school-safe community modules built around rewards, activities, and class participation."
+                  : "Open a module to go to its dedicated full page."}
+          </Text>
+        </>
+      )}
 
       <View style={styles.moduleStack}>
         {filteredModules.map((item) => {
-          const playful = isKid || isHighSchool || isTeacherMentor || isHeadMentor;
+          const stageStyled = isKid || isHighSchool || isTeacherMentor || isHeadMentor;
+          const playful = isKid || isTeacherMentor || isHeadMentor;
           return (
           <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={() => router.push(item.path as never)}>
             <LinearGradient
@@ -285,7 +296,8 @@ export default function CommunityGrowthScreen() {
               end={{ x: 1, y: 1 }}
               style={[
                 styles.moduleCard,
-                playful && styles.stageModuleCard,
+                stageStyled && styles.stageModuleCard,
+                isHighSchool && styles.highSchoolModuleCard,
                 { borderColor: isDark ? item.iconColor : item.border, shadowColor: item.iconColor, shadowOpacity: isDark ? 0.18 : 0.08 }
               ]}
             >
@@ -294,9 +306,9 @@ export default function CommunityGrowthScreen() {
                 <Ionicons name={item.icon} size={20} color={item.iconColor} />
               </View>
               <View style={styles.moduleTextWrap}>
-                <Text style={[styles.moduleTitle, { color: colors.text }]}>{item.label}</Text>
-                <Text style={[styles.moduleDesc, { color: colors.textMuted }]}>{item.description}</Text>
-                {playful ? (
+                <Text style={[styles.moduleTitle, isHighSchool && styles.highSchoolModuleTitle, { color: colors.text }]}>{item.label}</Text>
+                <Text style={[styles.moduleDesc, isHighSchool && styles.highSchoolModuleDesc, { color: colors.textMuted }]}>{item.description}</Text>
+                {stageStyled ? (
                   <Text style={[styles.stageActionText, { color: item.iconColor }]}>
                     {isKid ? "Open fun school space" : isTeacherMentor ? "Open class tool" : isHeadMentor ? "Open school tool" : "Open school growth space"}
                   </Text>
@@ -361,5 +373,18 @@ const styles = StyleSheet.create({
   moduleTextWrap: { flex: 1, gap: 2 },
   moduleTitle: { color: "#1E2B24", fontWeight: "900", fontSize: 16 },
   moduleDesc: { color: "#667085", fontSize: 12, lineHeight: 16 },
-  stageActionText: { marginTop: 6, fontSize: 12, fontWeight: "900" }
+  stageActionText: { marginTop: 6, fontSize: 12, fontWeight: "900" },
+  highSchoolModuleCard: {
+    minHeight: 118,
+    borderRadius: 22,
+    padding: 17
+  },
+  highSchoolModuleTitle: {
+    fontSize: 17,
+    lineHeight: 22
+  },
+  highSchoolModuleDesc: {
+    fontSize: 13,
+    lineHeight: 19
+  }
 });

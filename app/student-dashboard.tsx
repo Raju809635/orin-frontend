@@ -32,6 +32,7 @@ import { FEATURE_FLAGS } from "@/constants/featureFlags";
 import { getStoredNewsLanguage, NewsLanguageCode } from "@/utils/newsLanguage";
 import { markdownToPlainText } from "@/utils/textFormat";
 import GlobalHeader from "@/components/global-header";
+import HighSchoolHeader from "@/components/high-school/HighSchoolHeader";
 
 let RazorpayCheckout: any = null;
 if (Platform.OS !== "web") {
@@ -1598,15 +1599,22 @@ export default function StudentDashboard() {
   const kidStarCount = certifications.length * 10 + challenges.filter((item) => item.isParticipating).length * 5;
   const firstName = String(user?.name || "Learner").trim().split(/\s+/)[0] || "Learner";
   const renderHighSchoolHero = () => (
+    <>
+    <HighSchoolHeader
+      eyebrow="High School Home"
+      title={`Hi ${firstName}, stay on track`}
+      subtitle="Your academic roadmap, school progress, teacher guidance, and daily growth live here."
+      chips={["Weekly goals", "School progress", "Guidance"]}
+    />
     <View style={[styles.homeHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
       <View style={styles.homeHeroTop}>
         <View style={styles.homeHeroCopy}>
-          <Text style={[styles.homeHeroEyebrow, { color: colors.accent }]}>Student Home</Text>
+          <Text style={[styles.homeHeroEyebrow, { color: colors.accent }]}>Today&apos;s Dashboard</Text>
           <Text style={[styles.homeHeroTitle, { color: colors.text }]}>
-            Hi {firstName}, keep your study streak moving
+            Focus on one plan, one task, one win
           </Text>
           <Text style={[styles.homeHeroSubtitle, { color: colors.textMuted }]}>
-            Your roadmap, school progress, and guidance are ready for today&apos;s session.
+            Start with your weekly study plan, then check progress and leaderboard movement.
           </Text>
         </View>
         <View style={[styles.homeHeroBadge, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
@@ -1660,6 +1668,7 @@ export default function StudentDashboard() {
         </TouchableOpacity>
       </View>
     </View>
+    </>
   );
   const renderKidOverview = () => (
     <>
@@ -3243,10 +3252,10 @@ const styles = StyleSheet.create({
   heroSubTitle: { marginTop: 8, color: "#4A5B53", fontWeight: "500", lineHeight: 20 },
   homeHero: {
     borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
+    borderRadius: 24,
+    padding: 17,
     marginBottom: 14,
-    gap: 14,
+    gap: 16,
     shadowColor: "#0F172A",
     shadowOpacity: 0.08,
     shadowRadius: 16,
@@ -3267,8 +3276,8 @@ const styles = StyleSheet.create({
     marginBottom: 5
   },
   homeHeroTitle: {
-    fontSize: 26,
-    lineHeight: 31,
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: "900"
   },
   homeHeroSubtitle: {
@@ -3293,14 +3302,14 @@ const styles = StyleSheet.create({
   },
   homeMetricRow: {
     flexDirection: "row",
-    gap: 8
+    gap: 10
   },
   homeMetricCard: {
     flex: 1,
-    minHeight: 76,
+    minHeight: 86,
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 10,
+    borderRadius: 16,
+    padding: 12,
     justifyContent: "space-between"
   },
   homeMetricValue: {
@@ -3321,7 +3330,7 @@ const styles = StyleSheet.create({
   homeProgressTitle: { fontWeight: "900", fontSize: 13 },
   homeProgressMeta: { fontWeight: "700", fontSize: 12 },
   homeProgressTrack: {
-    height: 9,
+    height: 10,
     borderRadius: 999,
     overflow: "hidden"
   },
@@ -3335,8 +3344,8 @@ const styles = StyleSheet.create({
     gap: 8
   },
   homePrimaryAction: {
-    minHeight: 44,
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 16,
     paddingHorizontal: 14,
     flexDirection: "row",
     alignItems: "center",
@@ -3346,8 +3355,8 @@ const styles = StyleSheet.create({
   },
   homePrimaryActionText: { fontWeight: "900" },
   homeSecondaryAction: {
-    minHeight: 44,
-    borderRadius: 12,
+    minHeight: 48,
+    borderRadius: 16,
     borderWidth: 1,
     paddingHorizontal: 12,
     flexDirection: "row",
@@ -3380,17 +3389,19 @@ const styles = StyleSheet.create({
   sectionChipText: { color: "#475467", fontWeight: "700", fontSize: 12 },
   sectionChipTextActive: { color: "#1F7A4C" },
   groupTitle: {
-    marginTop: 8,
-    marginBottom: 2,
+    marginTop: 12,
+    marginBottom: 4,
     color: "#0F172A",
     fontWeight: "900",
-    fontSize: 17
+    fontSize: 19,
+    letterSpacing: -0.2
   },
   groupNote: {
-    marginBottom: 8,
+    marginBottom: 10,
     color: "#667085",
-    fontSize: 12,
-    fontWeight: "500"
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "600"
   },
   sectionHeader: { fontSize: 16, fontWeight: "800", color: "#1E2B24", marginBottom: 10 },
   sectionHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
@@ -3595,10 +3606,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#D6E4FF",
-    borderRadius: 16,
-    padding: 14,
-    gap: 12,
-    marginBottom: 12
+    borderRadius: 24,
+    padding: 16,
+    gap: 14,
+    marginBottom: 14
   },
   institutionHubHeaderRow: {
     flexDirection: "row",
@@ -3615,8 +3626,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#EEF4FF"
   },
   institutionHubBadgeText: { fontWeight: "800", fontSize: 12 },
-  institutionHubTitle: { fontWeight: "800", fontSize: 18 },
-  institutionHubMeta: { fontWeight: "600" },
+  institutionHubTitle: { fontWeight: "900", fontSize: 20 },
+  institutionHubMeta: { fontWeight: "600", lineHeight: 19 },
   institutionExpandBtn: {
     width: 34,
     height: 34,
@@ -3628,15 +3639,15 @@ const styles = StyleSheet.create({
   institutionTileGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   institutionTile: {
     width: "48%",
-    minHeight: 96,
+    minHeight: 108,
     backgroundColor: "#F8FAFC",
     borderWidth: 1,
     borderColor: "#E4E7EC",
-    borderRadius: 12,
-    padding: 12,
+    borderRadius: 18,
+    padding: 13,
     gap: 6
   },
-  institutionTileTitle: { fontWeight: "800", fontSize: 14 },
+  institutionTileTitle: { fontWeight: "900", fontSize: 14 },
   institutionTileMeta: { fontWeight: "600", fontSize: 12, lineHeight: 18 },
   roadmapGoal: { color: "#1849A9", fontWeight: "800", marginBottom: 8 },
   roadmapStep: { color: "#344054", marginBottom: 4, fontWeight: "600" },
@@ -3645,11 +3656,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderWidth: 1,
     borderColor: "#E5E7EB",
-    borderRadius: 12,
-    padding: 11
+    borderRadius: 18,
+    padding: 14
   },
-  opportunityTitle: { color: "#1E2B24", fontWeight: "800" },
-  opportunityMeta: { marginTop: 3, color: "#667085" },
+  opportunityTitle: { color: "#1E2B24", fontWeight: "900", fontSize: 15 },
+  opportunityMeta: { marginTop: 4, color: "#667085", lineHeight: 19 },
   leaderboardCard: {
     backgroundColor: "#FFF8F1",
     borderWidth: 1,

@@ -28,6 +28,7 @@ import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadPostImages } from "@/utils/postMediaUpload";
 import { sharePost } from "@/utils/sharePost";
+import HighSchoolHeader from "@/components/high-school/HighSchoolHeader";
 import { sanitizeDisplayText } from "@/utils/textSanitize";
 import GlobalHeader from "@/components/global-header";
 
@@ -1113,16 +1114,27 @@ export default function NetworkScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true, true)} tintColor={colors.accent} />}
           keyboardShouldPersistTaps="handled"
         >
-        <Text style={[styles.heading, { color: colors.text }]}>{isTeacherMentor ? "Class Posts" : isHeadMentor ? "Global Schools Posts" : isKid ? "School Posts" : "Posts"}</Text>
-        <Text style={[styles.subheading, { color: colors.textMuted }]}>
-          {isTeacherMentor
-            ? "Post class announcements, quiz reminders, student wins, activity updates, and motivation."
-            : isHeadMentor
-              ? "Share school notices, event updates, winners, teacher guidance, and institution announcements."
-              : user?.role === "mentor"
-                ? "Your professional feed for mentor insights, conversations, and visibility."
-                : "Your student growth feed with people, ideas, and progress that match your journey."}
-        </Text>
+        {isHighSchool ? (
+          <HighSchoolHeader
+            eyebrow="High School Posts"
+            title="School-first updates"
+            subtitle="See institution posts, teacher updates, student wins, and useful study discussions with less public-feed noise."
+            chips={["School feed", "Achievements", "Study posts"]}
+          />
+        ) : (
+          <>
+            <Text style={[styles.heading, { color: colors.text }]}>{isTeacherMentor ? "Class Posts" : isHeadMentor ? "Global Schools Posts" : isKid ? "School Posts" : "Posts"}</Text>
+            <Text style={[styles.subheading, { color: colors.textMuted }]}>
+              {isTeacherMentor
+                ? "Post class announcements, quiz reminders, student wins, activity updates, and motivation."
+                : isHeadMentor
+                  ? "Share school notices, event updates, winners, teacher guidance, and institution announcements."
+                  : user?.role === "mentor"
+                    ? "Your professional feed for mentor insights, conversations, and visibility."
+                    : "Your student growth feed with people, ideas, and progress that match your journey."}
+            </Text>
+          </>
+        )}
         {isTeacherMentor ? (
           <Text style={[styles.meta, { color: colors.textMuted }]}>
             Use Announce for daily quiz reminders, top performer appreciation, homework proof instructions, and class motivation.
@@ -1138,7 +1150,7 @@ export default function NetworkScreen() {
           </Text>
         ) : isHighSchool ? (
           <Text style={[styles.meta, { color: colors.textMuted }]}>
-            High school mode keeps institution learning first while still allowing selected posting and discussion.
+            Use Posts for school updates and focused study conversations. Deep tools live in Home, AI, and Community.
           </Text>
         ) : null}
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
