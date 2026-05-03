@@ -32,6 +32,7 @@ import {
   StatPill,
   StatusBadge
 } from "@/components/community/ui";
+import ClassSectionSelector from "@/components/ClassSectionSelector";
 
 type LibraryItem = {
   id: string;
@@ -863,7 +864,7 @@ export default function CommunityLibraryPage() {
             </View>
             <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
             {submitForm.scope === "class" ? (
-              <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Class / Section" placeholderTextColor={colors.textMuted} value={submitForm.className} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, className: text }))} />
+              <ClassSectionSelector value={submitForm.className} onChange={(className) => setSubmitForm((prev) => ({ ...prev, className }))} />
             ) : null}
             <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Type (roadmap, interview_questions, coding_resource, career_guide, other)" placeholderTextColor={colors.textMuted} value={submitForm.type} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, type: text }))} />
             <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Title" placeholderTextColor={colors.textMuted} value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />

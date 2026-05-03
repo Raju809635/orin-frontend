@@ -28,6 +28,7 @@ import {
   StatPill,
   StatusBadge
 } from "@/components/community/ui";
+import ClassSectionSelector from "@/components/ClassSectionSelector";
 
 type TrackItem = {
   id: string;
@@ -431,13 +432,7 @@ export default function CommunityCertificationsPage() {
             onChangeText={setTemplateTitle}
           />
           {templateScope === "class" ? (
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
-              placeholder="Class / Section"
-              placeholderTextColor={colors.textMuted}
-              value={templateClassName}
-              onChangeText={setTemplateClassName}
-            />
+            <ClassSectionSelector value={templateClassName} onChange={setTemplateClassName} />
           ) : null}
           <TextInput
             style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}

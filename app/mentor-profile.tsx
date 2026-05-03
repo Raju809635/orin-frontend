@@ -20,6 +20,7 @@ import { notify } from "@/utils/notify";
 import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
 import { pickAndUploadResumeFile } from "@/utils/resumeUpload";
 import DateField from "@/components/profile/date-field";
+import ClassSectionSelector from "@/components/ClassSectionSelector";
 
 type ProfileAchievement = {
   title: string;
@@ -190,6 +191,7 @@ export default function MentorProfileScreen() {
   const dragOffset = useRef(new Animated.Value(0)).current;
   const [institutionQuery, setInstitutionQuery] = useState("");
   const [assignedClassesDraft, setAssignedClassesDraft] = useState("");
+  const [assignedClassPick, setAssignedClassPick] = useState("");
   const [institutionResults, setInstitutionResults] = useState<InstitutionSearchResult[]>([]);
   const [searchingInstitutions, setSearchingInstitutions] = useState(false);
   const [institutionFocused, setInstitutionFocused] = useState(false);
@@ -343,6 +345,20 @@ export default function MentorProfileScreen() {
     setInstitutionQuery(institution.name);
     setInstitutionResults([]);
     setInstitutionFocused(false);
+  };
+
+  const addAssignedClass = () => {
+    const nextClass = assignedClassPick.trim();
+    if (!nextClass) return;
+    const existing = parseCommaSeparated(assignedClassesDraft);
+    if (!existing.includes(nextClass)) {
+      setAssignedClassesDraft([...existing, nextClass].join(", "));
+    }
+    setAssignedClassPick("");
+  };
+
+  const removeAssignedClass = (className: string) => {
+    setAssignedClassesDraft(parseCommaSeparated(assignedClassesDraft).filter((item) => item !== className).join(", "));
   };
 
   const toggleSpecialization = (value: string) => {
@@ -840,15 +856,27 @@ export default function MentorProfileScreen() {
       {profile.mentorOrgRole !== "global_mentor" ? (
         <>
           <Text style={[styles.label, { color: colors.text }]}>Assigned Classes</Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
-            placeholder="Example: Class 8 A, Class 9 B, Class 10"
-            placeholderTextColor={colors.textMuted}
-            value={assignedClassesDraft}
-            onChangeText={setAssignedClassesDraft}
-          />
+          <ClassSectionSelector value={assignedClassPick} onChange={setAssignedClassPick} />
+          <TouchableOpacity
+            style={[styles.uploadBtn, { borderColor: colors.accent, backgroundColor: colors.accentSoft, alignSelf: "flex-start", opacity: assignedClassPick ? 1 : 0.6 }]}
+            onPress={addAssignedClass}
+            disabled={!assignedClassPick}
+          >
+            <Text style={[styles.uploadBtnText, { color: colors.accent }]}>Add Class</Text>
+          </TouchableOpacity>
+          <View style={styles.selectionWrap}>
+            {parseCommaSeparated(assignedClassesDraft).map((item) => (
+              <TouchableOpacity
+                key={item}
+                style={[styles.optionChip, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}
+                onPress={() => removeAssignedClass(item)}
+              >
+                <Text style={[styles.optionText, { color: colors.accent }]}>{item} x</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
           <Text style={[styles.hint, { color: colors.textMuted }]}>
-            Teachers see only assigned classes. Organisation heads can use this as their default focus classes.
+            Select class number and section, then add it. Tap an added class to remove it.
           </Text>
         </>
       ) : null}

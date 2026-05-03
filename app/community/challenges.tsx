@@ -27,6 +27,7 @@ import {
   StatPill,
   StatusBadge
 } from "@/components/community/ui";
+import ClassSectionSelector from "@/components/ClassSectionSelector";
 
 type ChallengeItem = {
   id: string;
@@ -532,7 +533,7 @@ export default function CommunityChallengesPage() {
           <TextInput style={styles.input} placeholder="Challenge title" value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />
           <TextInput style={styles.input} placeholder="Domain (optional)" value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
           {submitForm.scope === "class" ? (
-            <TextInput style={styles.input} placeholder="Class / Section" value={submitForm.className} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, className: text }))} />
+            <ClassSectionSelector value={submitForm.className} onChange={(className) => setSubmitForm((prev) => ({ ...prev, className }))} />
           ) : null}
           <View style={styles.uploadRow}>
             <TouchableOpacity style={styles.uploadBtn} onPress={uploadBanner} disabled={uploadingBanner}>

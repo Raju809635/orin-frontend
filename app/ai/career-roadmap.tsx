@@ -24,6 +24,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
+import ClassSectionSelector from "@/components/ClassSectionSelector";
 
 const AI_GOLD = "#D4A017";
 const AI_GOLD_SOFT = "#FFF4CC";
@@ -882,7 +883,7 @@ export default function AiCareerRoadmapPage() {
         <Text style={[styles.meta, { color: colors.textMuted }]}>Create institution or class roadmaps here. Students will consume them on the same roadmap page and submit proof back to you.</Text>
         <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapTitle} onChangeText={setInstitutionRoadmapTitle} placeholder="Roadmap title" placeholderTextColor={colors.textMuted} />
         <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapDomain} onChangeText={setInstitutionRoadmapDomain} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} />
-        <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapClassName} onChangeText={setInstitutionRoadmapClassName} placeholder="Class / Section (optional)" placeholderTextColor={colors.textMuted} />
+        <ClassSectionSelector value={institutionRoadmapClassName} onChange={setInstitutionRoadmapClassName} optionalSection />
         <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapDescription} onChangeText={setInstitutionRoadmapDescription} placeholder="Roadmap description" placeholderTextColor={colors.textMuted} multiline />
         <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapWeekOne} onChangeText={setInstitutionRoadmapWeekOne} placeholder="Week 1 title" placeholderTextColor={colors.textMuted} />
         <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapWeekTwo} onChangeText={setInstitutionRoadmapWeekTwo} placeholder="Week 2 title" placeholderTextColor={colors.textMuted} />

@@ -6,6 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { LEARNER_ONBOARDING_PENDING_KEY } from "@/lib/learnerExperience";
 import { api } from "@/lib/api";
+import ClassSectionSelector from "@/components/ClassSectionSelector";
 
 type Role = "student" | "mentor";
 type MentorOrgRole = "global_mentor" | "institution_teacher" | "organisation_head";
@@ -64,6 +65,7 @@ export default function RegisterScreen() {
   const [institutionFocused, setInstitutionFocused] = useState(false);
   const [searchingInstitutions, setSearchingInstitutions] = useState(false);
   const [assignedClassesDraft, setAssignedClassesDraft] = useState("");
+  const [assignedClassPick, setAssignedClassPick] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -80,6 +82,7 @@ export default function RegisterScreen() {
     setInstitutionResults([]);
     setInstitutionFocused(false);
     setAssignedClassesDraft("");
+    setAssignedClassPick("");
     setError(null);
     setIsSubmitting(false);
   }, []);
@@ -138,7 +141,11 @@ export default function RegisterScreen() {
       setError("Please select your institution from the list.");
       return;
     }
-    if (role === "mentor" && mentorOrgRole === "institution_teacher" && parseCommaSeparated(assignedClassesDraft).length === 0) {
+    const selectedAssignedClasses = [
+      ...parseCommaSeparated(assignedClassesDraft),
+      ...(assignedClassPick.trim() ? [assignedClassPick.trim()] : [])
+    ].filter((item, index, arr) => arr.indexOf(item) === index);
+    if (role === "mentor" && mentorOrgRole === "institution_teacher" && selectedAssignedClasses.length === 0) {
       setError("Please add at least one assigned class.");
       return;
     }
@@ -157,7 +164,7 @@ export default function RegisterScreen() {
         institutionType: role === "mentor" && selectedInstitution ? selectedInstitution.institutionType : "",
         institutionDistrict: role === "mentor" && selectedInstitution ? selectedInstitution.district || "" : "",
         institutionSource: role === "mentor" && selectedInstitution ? selectedInstitution.source || "" : "",
-        assignedClasses: role === "mentor" ? parseCommaSeparated(assignedClassesDraft) : []
+        assignedClasses: role === "mentor" ? selectedAssignedClasses : []
       });
       if (!response) {
         throw new Error("Registration failed");
@@ -264,12 +271,13 @@ export default function RegisterScreen() {
                   style={[styles.mentorRoleCard, active && styles.mentorRoleCardActive]}
                   onPress={() => {
                     setMentorOrgRole(item.value);
-                    if (item.value === "global_mentor") {
-                      setInstitutionQuery("");
-                      setSelectedInstitution(null);
-                      setInstitutionResults([]);
-                      setAssignedClassesDraft("");
-                    }
+                  if (item.value === "global_mentor") {
+                    setInstitutionQuery("");
+                    setSelectedInstitution(null);
+                    setInstitutionResults([]);
+                    setAssignedClassesDraft("");
+                    setAssignedClassPick("");
+                  }
                   }}
                 >
                   <View style={styles.mentorRoleHeader}>
@@ -340,13 +348,33 @@ export default function RegisterScreen() {
           {mentorOrgRole !== "global_mentor" ? (
             <>
               <Text style={styles.label}>{mentorOrgRole === "organisation_head" ? "Focus Classes (optional)" : "Assigned Classes"}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Example: Class 8 A, Class 9 B"
-                placeholderTextColor="#6B7280"
-                value={assignedClassesDraft}
-                onChangeText={setAssignedClassesDraft}
-              />
+              <ClassSectionSelector value={assignedClassPick} onChange={setAssignedClassPick} />
+              <TouchableOpacity
+                style={[styles.classAddButton, !assignedClassPick && styles.classAddButtonDisabled]}
+                disabled={!assignedClassPick}
+                onPress={() => {
+                  const nextClass = assignedClassPick.trim();
+                  if (!nextClass) return;
+                  const existing = parseCommaSeparated(assignedClassesDraft);
+                  if (!existing.includes(nextClass)) {
+                    setAssignedClassesDraft([...existing, nextClass].join(", "));
+                  }
+                  setAssignedClassPick("");
+                }}
+              >
+                <Text style={styles.classAddButtonText}>Add Class</Text>
+              </TouchableOpacity>
+              <View style={styles.classChipWrap}>
+                {parseCommaSeparated(assignedClassesDraft).map((item) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={styles.classChip}
+                    onPress={() => setAssignedClassesDraft(parseCommaSeparated(assignedClassesDraft).filter((classItem) => classItem !== item).join(", "))}
+                  >
+                    <Text style={styles.classChipText}>{item} x</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
             </>
           ) : null}
 
@@ -483,6 +511,41 @@ const styles = StyleSheet.create({
     marginTop: -4,
     marginBottom: 10,
     lineHeight: 19
+  },
+  classAddButton: {
+    alignSelf: "flex-start",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#1F7A4C",
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 10
+  },
+  classAddButtonDisabled: {
+    opacity: 0.6
+  },
+  classAddButtonText: {
+    color: "#1F7A4C",
+    fontWeight: "800"
+  },
+  classChipWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12
+  },
+  classChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "#1F7A4C",
+    backgroundColor: "#E8F5EE",
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  classChipText: {
+    color: "#1F7A4C",
+    fontWeight: "800"
   },
   infoCard: {
     marginBottom: 12,

@@ -9,6 +9,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useLearner } from "@/context/LearnerContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { LEARNER_ONBOARDING_COMPLETING_KEY, LEARNER_ONBOARDING_PENDING_KEY, normalizeLearnerStage, type LearnerStage } from "@/lib/learnerExperience";
+import ClassSectionSelector from "@/components/ClassSectionSelector";
 
 const STAGES: { value: LearnerStage; title: string; body: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   {
@@ -279,13 +280,7 @@ export default function LearnerOnboardingScreen() {
               </Text>
             ) : null}
             <Text style={[styles.label, { color: colors.text }]}>Class / Section</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
-              placeholder="Example: Class 8 A"
-              placeholderTextColor={colors.textMuted}
-              value={className}
-              onChangeText={setClassName}
-            />
+            <ClassSectionSelector value={className} onChange={setClassName} />
             <Text style={[styles.helper, { color: colors.textMuted }]}>
               You can continue without this and add school/class later from profile.
             </Text>

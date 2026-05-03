@@ -20,6 +20,7 @@ import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
 import { pickAndUploadResumeFile } from "@/utils/resumeUpload";
 import DateField from "@/components/profile/date-field";
 import { useRouter } from "expo-router";
+import ClassSectionSelector from "@/components/ClassSectionSelector";
 
 type ProfileProject = {
   title: string;
@@ -769,12 +770,9 @@ export default function StudentProfileScreen() {
       <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} placeholder="State" autoCapitalize="words" placeholderTextColor={colors.textMuted} value={profile.state} onChangeText={(state) => setProfile((prev) => ({ ...prev, state }))} />
 
       <Text style={[styles.label, { color: colors.text }]}>Class (Optional)</Text>
-      <TextInput
-        style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
-        placeholder="Example: Class 10, Grade 12, Section A"
-        placeholderTextColor={colors.textMuted}
+      <ClassSectionSelector
         value={profile.className}
-        onChangeText={(className) => setProfile((prev) => ({ ...prev, className }))}
+        onChange={(className) => setProfile((prev) => ({ ...prev, className }))}
       />
       <Text style={[styles.helperText, { color: colors.textMuted }]}>
         Add class only if it matters for your school workflow. It stays optional.
