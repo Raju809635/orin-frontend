@@ -578,6 +578,61 @@ export default function MentorDashboard() {
   const roleSectionOrder = mentorMode === "teacher" ? teacherSectionOrder : mentorMode === "head" ? headSectionOrder : sectionOrder;
   const pendingReviewCount = resourceSubmissions.length + institutionRoadmapSubmissions.length;
   const assignedClassCount = mentorAssignedClasses.length;
+  const reviewStudentHighlights = useMemo(() => {
+    const seen = new Set<string>();
+    return [...resourceSubmissions, ...institutionRoadmapSubmissions]
+      .map((item) => item.student)
+      .filter((student): student is NonNullable<typeof student> => Boolean(student?.name || student?.email))
+      .filter((student) => {
+        const key = String(student.id || student.email || student.name || "").toLowerCase();
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 5);
+  }, [institutionRoadmapSubmissions, resourceSubmissions]);
+  const teacherChecklist = useMemo(
+    () => [
+      {
+        label: "Check class dashboard",
+        detail: `${assignedClassCount || 0} assigned class${assignedClassCount === 1 ? "" : "es"}`
+      },
+      {
+        label: "Review student submissions",
+        detail: `${pendingReviewCount} proof${pendingReviewCount === 1 ? "" : "s"} waiting`
+      },
+      {
+        label: "Assign one learning action",
+        detail: `${mentorResources.length} resources and ${institutionRoadmaps.length} roadmaps ready`
+      },
+      {
+        label: "Celebrate top effort",
+        detail: "Announce topper, streak holder, or most improved student"
+      }
+    ],
+    [assignedClassCount, institutionRoadmaps.length, mentorResources.length, pendingReviewCount]
+  );
+  const headChecklist = useMemo(
+    () => [
+      {
+        label: "Review school participation",
+        detail: `${mentorResources.length} resources, ${institutionRoadmaps.length} roadmaps, ${challenges.length} challenges`
+      },
+      {
+        label: "Check teacher activity",
+        detail: `${assignedClassCount || 0} focus class${assignedClassCount === 1 ? "" : "es"} configured`
+      },
+      {
+        label: "Track pending approvals",
+        detail: `${pendingReviewCount} student review${pendingReviewCount === 1 ? "" : "s"} in queue`
+      },
+      {
+        label: "Plan recognition",
+        detail: "Top class, best teacher, topper, and improvement awards"
+      }
+    ],
+    [assignedClassCount, challenges.length, institutionRoadmaps.length, mentorResources.length, pendingReviewCount]
+  );
   const calendarDateOptions = useMemo(() => nextDates(14), []);
   const liveSessionTimeOptions = useMemo(
     () => [
@@ -1574,6 +1629,135 @@ export default function MentorDashboard() {
           </>
         ) : null}
       </View>
+
+      {mentorMode === "teacher" ? (
+        <>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>Teacher Command Center</Text>
+          <View style={styles.roleHeroGrid}>
+            <TouchableOpacity style={[styles.roleHeroCard, styles.teacherHeroCard]} onPress={() => openSection("classes")}>
+              <View style={styles.roleHeroIcon}>
+                <Ionicons name="people" size={22} color="#155EEF" />
+              </View>
+              <Text style={[styles.roleHeroTitle, { color: colors.text }]}>Class Dashboard</Text>
+              <Text style={[styles.roleHeroMeta, { color: colors.textMuted }]}>
+                Track class activity, top performers, weak students, streaks, and daily quiz participation.
+              </Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open classes</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.roleHeroCard, styles.teacherHeroCardAlt]} onPress={() => openSection("reviews")}>
+              <View style={styles.roleHeroIcon}>
+                <Ionicons name="checkmark-done" size={22} color="#079455" />
+              </View>
+              <Text style={[styles.roleHeroTitle, { color: colors.text }]}>Review & Award XP</Text>
+              <Text style={[styles.roleHeroMeta, { color: colors.textMuted }]}>
+                Review proofs, give feedback, award XP, and recommend certificates for completed work.
+              </Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>{pendingReviewCount} pending reviews</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.playbookGrid}>
+            <View style={styles.playbookCard}>
+              <Text style={[styles.playbookTitle, { color: colors.text }]}>Daily Teacher Checklist</Text>
+              {teacherChecklist.map((item, index) => (
+                <View key={item.label} style={styles.checklistRow}>
+                  <View style={[styles.checklistBadge, { backgroundColor: index < 2 ? "#DCFCE7" : "#EAF2FF" }]}>
+                    <Ionicons name={index < 2 ? "checkmark" : "star"} size={14} color={index < 2 ? "#15803D" : "#155EEF"} />
+                  </View>
+                  <View style={styles.checklistTextWrap}>
+                    <Text style={[styles.checklistTitle, { color: colors.text }]}>{item.label}</Text>
+                    <Text style={[styles.checklistMeta, { color: colors.textMuted }]}>{item.detail}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+            <View style={styles.playbookCard}>
+              <Text style={[styles.playbookTitle, { color: colors.text }]}>Students To Notice</Text>
+              {reviewStudentHighlights.length ? (
+                reviewStudentHighlights.map((student) => (
+                  <View key={student.id || student.email || student.name} style={styles.studentMiniRow}>
+                    <View style={styles.studentAvatar}>
+                      <Text style={styles.studentAvatarText}>{String(student.name || student.email || "S").slice(0, 1).toUpperCase()}</Text>
+                    </View>
+                    <View style={styles.checklistTextWrap}>
+                      <Text style={[styles.checklistTitle, { color: colors.text }]}>{student.name || "Student"}</Text>
+                      <Text style={[styles.checklistMeta, { color: colors.textMuted }]}>{student.email || "Proof submitted for review"}</Text>
+                    </View>
+                  </View>
+                ))
+              ) : (
+                <Text style={[styles.meta, { color: colors.textMuted }]}>No student submissions waiting. Use Assign Work to create the next activity.</Text>
+              )}
+              <TouchableOpacity style={styles.inlineActionButton} onPress={() => openSection("assign")}>
+                <Text style={styles.inlineActionText}>Assign next class activity</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </>
+      ) : null}
+
+      {mentorMode === "head" ? (
+        <>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>School Management Console</Text>
+          <View style={styles.roleHeroGrid}>
+            <TouchableOpacity style={[styles.roleHeroCard, styles.headHeroCard]} onPress={() => openSection("reports")}>
+              <View style={styles.roleHeroIcon}>
+                <Ionicons name="analytics" size={22} color="#B54708" />
+              </View>
+              <Text style={[styles.roleHeroTitle, { color: colors.text }]}>School Analytics</Text>
+              <Text style={[styles.roleHeroMeta, { color: colors.textMuted }]}>
+                Monitor participation, resources, roadmaps, reviews, competitions, and recognition signals.
+              </Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open reports</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.roleHeroCard, styles.headHeroCardAlt]} onPress={() => openSection("approvals")}>
+              <View style={styles.roleHeroIcon}>
+                <Ionicons name="shield-checkmark" size={22} color="#7C3AED" />
+              </View>
+              <Text style={[styles.roleHeroTitle, { color: colors.text }]}>Approvals & Recognition</Text>
+              <Text style={[styles.roleHeroMeta, { color: colors.textMuted }]}>
+                Manage teacher readiness, content approvals, certificates, and school-level reward moments.
+              </Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>{pendingReviewCount} pending actions</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.playbookGrid}>
+            <View style={styles.playbookCard}>
+              <Text style={[styles.playbookTitle, { color: colors.text }]}>Principal Success Checklist</Text>
+              {headChecklist.map((item, index) => (
+                <View key={item.label} style={styles.checklistRow}>
+                  <View style={[styles.checklistBadge, { backgroundColor: index < 2 ? "#FEF3C7" : "#F3E8FF" }]}>
+                    <Ionicons name={index < 2 ? "trophy" : "sparkles"} size={14} color={index < 2 ? "#B54708" : "#7C3AED"} />
+                  </View>
+                  <View style={styles.checklistTextWrap}>
+                    <Text style={[styles.checklistTitle, { color: colors.text }]}>{item.label}</Text>
+                    <Text style={[styles.checklistMeta, { color: colors.textMuted }]}>{item.detail}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+            <View style={styles.playbookCard}>
+              <Text style={[styles.playbookTitle, { color: colors.text }]}>Recognition Engine</Text>
+              <View style={styles.rewardGrid}>
+                {["Top Student", "Top Class", "Best Teacher", "Most Improved"].map((item, index) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.rewardChip, { backgroundColor: index % 2 === 0 ? "#FFF7ED" : "#ECFDF3" }]}
+                    onPress={() => router.push("/community/certifications" as never)}
+                  >
+                    <Ionicons name={index % 2 === 0 ? "medal" : "ribbon"} size={16} color={index % 2 === 0 ? "#B54708" : "#067647"} />
+                    <Text style={styles.rewardChipText}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity style={styles.inlineActionButton} onPress={() => router.push("/community/leaderboard" as never)}>
+                <Text style={styles.inlineActionText}>Open school leaderboard</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </>
+      ) : null}
 
       {mentorMode === "global" ? (
       <>
@@ -3240,6 +3424,81 @@ const styles = StyleSheet.create({
   },
   focusCardTitle: { color: "#1E2B24", fontWeight: "800", fontSize: 15 },
   focusCardAccent: { marginTop: 6, color: "#1F7A4C", fontWeight: "700", fontSize: 12 },
+  roleHeroGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 },
+  roleHeroCard: {
+    flex: 1,
+    minWidth: 230,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14
+  },
+  teacherHeroCard: { backgroundColor: "#EEF4FF", borderColor: "#C7D7FE" },
+  teacherHeroCardAlt: { backgroundColor: "#ECFDF3", borderColor: "#ABEFC6" },
+  headHeroCard: { backgroundColor: "#FFF7ED", borderColor: "#FEDF89" },
+  headHeroCardAlt: { backgroundColor: "#F4F3FF", borderColor: "#D9D6FE" },
+  roleHeroIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10
+  },
+  roleHeroTitle: { fontSize: 17, fontWeight: "900", color: "#1E2B24" },
+  roleHeroMeta: { marginTop: 6, color: "#667085", lineHeight: 19, fontWeight: "600" },
+  playbookGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 12 },
+  playbookCard: {
+    flex: 1,
+    minWidth: 260,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D8E4DE",
+    borderRadius: 16,
+    padding: 13
+  },
+  playbookTitle: { color: "#1E2B24", fontWeight: "900", fontSize: 15, marginBottom: 8 },
+  checklistRow: { flexDirection: "row", alignItems: "flex-start", gap: 9, paddingVertical: 7 },
+  checklistBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1
+  },
+  checklistTextWrap: { flex: 1 },
+  checklistTitle: { color: "#1E2B24", fontWeight: "800" },
+  checklistMeta: { color: "#667085", marginTop: 2, lineHeight: 17, fontSize: 12 },
+  studentMiniRow: { flexDirection: "row", alignItems: "center", gap: 9, paddingVertical: 7 },
+  studentAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#E8F5EE",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  studentAvatarText: { color: "#0B3D2E", fontWeight: "900" },
+  inlineActionButton: {
+    marginTop: 9,
+    alignSelf: "flex-start",
+    backgroundColor: "#1F7A4C",
+    borderRadius: 999,
+    paddingHorizontal: 13,
+    paddingVertical: 8
+  },
+  inlineActionText: { color: "#FFFFFF", fontWeight: "800", fontSize: 12 },
+  rewardGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  rewardChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 8
+  },
+  rewardChipText: { color: "#1E2B24", fontWeight: "800", fontSize: 12 },
   mentorMapWrap: { gap: 10, marginBottom: 8 },
   mentorMapCard: {
     borderWidth: 1,
