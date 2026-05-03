@@ -168,6 +168,9 @@ export default function NetworkScreen() {
   const { user } = useAuth();
   const { learnerStage } = useLearner();
   const { colors, isDark } = useAppTheme();
+  const mentorOrgRole = user?.mentorOrgRole || "global_mentor";
+  const isTeacherMentor = user?.role === "mentor" && mentorOrgRole === "institution_teacher";
+  const isHeadMentor = user?.role === "mentor" && mentorOrgRole === "organisation_head";
   const isKid = user?.role === "student" && isKidStage(learnerStage);
   const isHighSchool = user?.role === "student" && learnerStage === "highschool";
   const insets = useSafeAreaInsets();
@@ -221,10 +224,24 @@ export default function NetworkScreen() {
   const [error, setError] = useState<string | null>(null);
   const [hiddenPostIds, setHiddenPostIds] = useState<Record<string, boolean>>({});
   const [connectionActionById, setConnectionActionById] = useState<Record<string, boolean>>({});
-  const visibleSections = React.useMemo(
-    () => (isKid ? networkSections.filter((item) => item.id === "institution") : networkSections),
-    [isKid]
-  );
+  const visibleSections = React.useMemo(() => {
+    const sections = isKid ? networkSections.filter((item) => item.id === "institution") : networkSections;
+    return sections.map((item) => {
+      if (isTeacherMentor) {
+        if (item.id === "feed") return { ...item, label: "Class Posts" };
+        if (item.id === "institution") return { ...item, label: "Class Feed" };
+        if (item.id === "compose") return { ...item, label: "Announce" };
+        if (item.id === "connections") return { ...item, label: "Students" };
+      }
+      if (isHeadMentor) {
+        if (item.id === "feed") return { ...item, label: "School Posts" };
+        if (item.id === "institution") return { ...item, label: "School Feed" };
+        if (item.id === "compose") return { ...item, label: "Notice" };
+        if (item.id === "connections") return { ...item, label: "Network" };
+      }
+      return item;
+    });
+  }, [isHeadMentor, isKid, isTeacherMentor]);
 
   useEffect(() => {
     const section = String(params.section || "");
@@ -1096,10 +1113,25 @@ export default function NetworkScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => loadData(true, true)} tintColor={colors.accent} />}
           keyboardShouldPersistTaps="handled"
         >
-        <Text style={[styles.heading, { color: colors.text }]}>{isKid ? "School Posts" : "Posts"}</Text>
+        <Text style={[styles.heading, { color: colors.text }]}>{isTeacherMentor ? "Class Posts" : isHeadMentor ? "School Posts" : isKid ? "School Posts" : "Posts"}</Text>
         <Text style={[styles.subheading, { color: colors.textMuted }]}>
-          {user?.role === "mentor" ? "Your professional feed for mentor insights, conversations, and visibility." : "Your student growth feed with people, ideas, and progress that match your journey."}
+          {isTeacherMentor
+            ? "Post class announcements, quiz reminders, student wins, activity updates, and motivation."
+            : isHeadMentor
+              ? "Share school notices, event updates, winners, teacher guidance, and institution announcements."
+              : user?.role === "mentor"
+                ? "Your professional feed for mentor insights, conversations, and visibility."
+                : "Your student growth feed with people, ideas, and progress that match your journey."}
         </Text>
+        {isTeacherMentor ? (
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            Use Announce for daily quiz reminders, top performer appreciation, homework proof instructions, and class motivation.
+          </Text>
+        ) : isHeadMentor ? (
+          <Text style={[styles.meta, { color: colors.textMuted }]}>
+            Use Notice for school-wide announcements, inter-class competitions, teacher updates, and event communication.
+          </Text>
+        ) : null}
         {isKid ? (
           <Text style={[styles.meta, { color: colors.textMuted }]}>
             Kids mode shows only your institution feed with simple reactions and teacher-friendly updates.
@@ -1132,14 +1164,28 @@ export default function NetworkScreen() {
 
         {activeSection === "compose" ? (
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Start a post</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Create class announcement" : isHeadMentor ? "Create school notice" : "Start a post"}</Text>
             <View style={styles.chipsRow}>
-              {[
-                ["learning_progress", "Learning"],
-                ["project_update", "Project"],
-                ["achievement", "Achievement"],
-                ["question", "Question"]
-              ].map(([value, label]) => (
+              {(isTeacherMentor
+                ? [
+                    ["learning_progress", "Quiz Reminder"],
+                    ["project_update", "Activity"],
+                    ["achievement", "Winner"],
+                    ["question", "Doubt"]
+                  ]
+                : isHeadMentor
+                  ? [
+                      ["learning_progress", "Notice"],
+                      ["project_update", "Event"],
+                      ["achievement", "Recognition"],
+                      ["question", "Support"]
+                    ]
+                  : [
+                      ["learning_progress", "Learning"],
+                      ["project_update", "Project"],
+                      ["achievement", "Achievement"],
+                      ["question", "Question"]
+                    ]).map(([value, label]) => (
                 <TouchableOpacity
                   key={value}
                     style={[styles.chip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, postType === value ? [styles.chipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }] : null]}
@@ -1151,7 +1197,7 @@ export default function NetworkScreen() {
             </View>
             <TextInput
               style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
-              placeholder="Share update, achievement, project or question..."
+              placeholder={isTeacherMentor ? "Write a class reminder, winner note, activity update, or feedback..." : isHeadMentor ? "Write a school notice, event update, recognition post, or teacher message..." : "Share update, achievement, project or question..."}
               placeholderTextColor={colors.textMuted}
               value={postText}
               onChangeText={setPostText}
@@ -1197,7 +1243,7 @@ export default function NetworkScreen() {
             ) : null}
               <Text style={[styles.meta, { color: colors.textMuted }]}>Images selected: {postImageUrls.length}/5</Text>
             <TouchableOpacity style={styles.primaryButton} onPress={publishPost} disabled={submitting}>
-              <Text style={styles.primaryButtonText}>{submitting ? "Posting..." : "Publish Insight"}</Text>
+              <Text style={styles.primaryButtonText}>{submitting ? "Posting..." : isTeacherMentor ? "Publish Class Update" : isHeadMentor ? "Publish School Notice" : "Publish Insight"}</Text>
             </TouchableOpacity>
               <Text style={[styles.cardTitle, { marginTop: 14, color: colors.text }]}>People You May Know</Text>
               {filteredSuggestions.length === 0 ? (

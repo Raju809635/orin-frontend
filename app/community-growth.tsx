@@ -31,6 +31,9 @@ export default function CommunityGrowthScreen() {
   const { learnerStage } = useLearner();
   const { colors, isDark } = useAppTheme();
   const isMentor = user?.role === "mentor";
+  const mentorOrgRole = user?.mentorOrgRole || "global_mentor";
+  const isTeacherMentor = isMentor && mentorOrgRole === "institution_teacher";
+  const isHeadMentor = isMentor && mentorOrgRole === "organisation_head";
   const isKid = !isMentor && isKidStage(learnerStage);
   const isHighSchool = !isMentor && learnerStage === "highschool";
   const [searchQuery, setSearchQuery] = React.useState("");
@@ -42,17 +45,21 @@ export default function CommunityGrowthScreen() {
   const modules: CommunityModule[] = [
     {
       id: "collaboration",
-      label: isKid ? "Group Activities" : isHighSchool ? "Study Groups" : "Community & Collaboration",
-      description: isMentor
-        ? "Collaborate with other mentors, support initiatives, and grow your mentoring network."
-        : isKid
+      label: isTeacherMentor ? "Class Groups" : isHeadMentor ? "School Community" : isKid ? "Group Activities" : isHighSchool ? "Study Groups" : "Community & Collaboration",
+      description: isTeacherMentor
+        ? "Coordinate class groups, student discussions, activity posts, and teacher-guided participation."
+        : isHeadMentor
+          ? "Build school-wide community through teachers, class posts, announcements, and shared wins."
+          : isMentor
+            ? "Collaborate with other mentors, support initiatives, and grow your mentoring network."
+            : isKid
           ? "Safe class activities and guided group participation for younger learners."
           : isHighSchool
             ? "Join study groups, school initiatives, and guided collaboration."
             : "Join ORIN collaboration initiatives and partnerships.",
       icon: "people",
       emoji: isKid ? "👫" : isHighSchool ? "👥" : undefined,
-      path: isKid ? "/community/kid-group-activities" : isHighSchool ? "/community/highschool-study-groups" : "/community/collaboration",
+      path: isTeacherMentor || isHeadMentor ? "/network?section=institution" : isKid ? "/community/kid-group-activities" : isHighSchool ? "/community/highschool-study-groups" : "/community/collaboration",
       iconColor: "#7C3AED",
       iconBg: "#F3E8FF",
       darkIconBg: "rgba(124,58,237,0.18)",
@@ -62,17 +69,21 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "challenges",
-      label: isKid ? "Learning Games" : isHighSchool ? "Quiz Battle & Study Games" : "Challenges",
-      description: isMentor
-        ? "Join mentoring challenges and contribute structured learning activities."
-        : isKid
+      label: isTeacherMentor ? "Class Challenges" : isHeadMentor ? "Inter-Class Competitions" : isKid ? "Learning Games" : isHighSchool ? "Quiz Battle & Study Games" : "Challenges",
+      description: isTeacherMentor
+        ? "Run daily quiz challenges, streak missions, topper awards, and classroom competitions."
+        : isHeadMentor
+          ? "Promote inter-class competitions, weekly winners, school champion events, and fair play."
+          : isMentor
+            ? "Join mentoring challenges and contribute structured learning activities."
+            : isKid
           ? "Play quiz battles, speed math, word games, streak missions, and reward tasks."
           : isHighSchool
             ? "Practice quiz battles, speed math, subject games, and school tournaments."
             : "Participate in monthly challenges and competitions.",
       icon: isKid || isHighSchool ? "game-controller" : "trophy",
       emoji: isKid ? "🎮" : isHighSchool ? "⚔️" : undefined,
-      path: isKid || isHighSchool ? "/community/learning-games" : "/community/challenges",
+      path: isTeacherMentor || isHeadMentor || isKid || isHighSchool ? "/community/learning-games" : "/community/challenges",
       iconColor: "#C98A00",
       iconBg: "#FFF4CC",
       darkIconBg: "rgba(201,138,0,0.18)",
@@ -82,10 +93,14 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "certifications",
-      label: isKid ? "Star Rewards" : isHighSchool ? "Achievements" : "Certifications",
-      description: isMentor
-        ? "Track certification tracks you can recommend, review, or contribute toward."
-        : isKid
+      label: isTeacherMentor ? "Student Rewards" : isHeadMentor ? "School Certificates" : isKid ? "Star Rewards" : isHighSchool ? "Achievements" : "Certifications",
+      description: isTeacherMentor
+        ? "Recognize top performers, most improved students, streak holders, and helpful classmates."
+        : isHeadMentor
+          ? "Track certificates, class awards, teacher recognition, and school-wide achievements."
+          : isMentor
+            ? "Track certification tracks you can recommend, review, or contribute toward."
+            : isKid
           ? "View stars, badges, and simple recognition for class progress."
           : "Explore ORIN certifications and level progression.",
       icon: "ribbon",
@@ -100,15 +115,19 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "opportunities",
-      label: isHighSchool ? "Programs & Opportunities" : "Internship Opportunities",
-      description: isMentor
-        ? "Track opportunities you can share with students and your mentoring circle."
-        : isHighSchool
+      label: isTeacherMentor ? "Quiz Battle" : isHeadMentor ? "Programs & Events" : isHighSchool ? "Programs & Opportunities" : "Internship Opportunities",
+      description: isTeacherMentor
+        ? "Open game-style practice for quiz battles, speed math, streaks, and subject mini games."
+        : isHeadMentor
+          ? "Plan school events, ORIN champions programs, competitions, and special awards."
+          : isMentor
+            ? "Track opportunities you can share with students and your mentoring circle."
+            : isHighSchool
           ? "Discover selected school-friendly programs, camps, and future opportunities."
           : "Discover internships and career opportunities.",
-      icon: "briefcase",
+      icon: isTeacherMentor ? "game-controller" : isHeadMentor ? "calendar" : "briefcase",
       emoji: isHighSchool ? "🚀" : undefined,
-      path: isHighSchool ? "/community/highschool-programs" : "/community/opportunities",
+      path: isTeacherMentor ? "/community/learning-games" : isHeadMentor ? "/community/challenges" : isHighSchool ? "/community/highschool-programs" : "/community/opportunities",
       iconColor: "#15803D",
       iconBg: "#DCFCE7",
       darkIconBg: "rgba(21,128,61,0.18)",
@@ -118,10 +137,14 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "leaderboard",
-      label: isKid ? "Star Board" : isHighSchool ? "School Leaderboard" : "College Leaderboard",
-      description: isMentor
-        ? "See where your students and mentoring community are performing across colleges."
-        : isKid
+      label: isTeacherMentor ? "Class Leaderboard" : isHeadMentor ? "School Leaderboard" : isKid ? "Star Board" : isHighSchool ? "School Leaderboard" : "College Leaderboard",
+      description: isTeacherMentor
+        ? "Track class toppers, streaks, quiz participation, XP, and students who need support."
+        : isHeadMentor
+          ? "Compare classes, teachers, active students, participation rate, and school ranking."
+          : isMentor
+            ? "See where your students and mentoring community are performing across colleges."
+            : isKid
           ? "See stars and friendly rankings inside your school community."
           : isHighSchool
             ? "Check rankings and top students in your school."
@@ -138,10 +161,14 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "library",
-      label: isKid ? "Class Resource Library" : isHighSchool ? "Resource Library" : "Knowledge Library",
-      description: isMentor
-        ? "Contribute guides, mentoring notes, and reusable learning resources."
-        : isKid
+      label: isTeacherMentor ? "Class Resources" : isHeadMentor ? "School Resource Library" : isKid ? "Class Resource Library" : isHighSchool ? "Resource Library" : "Knowledge Library",
+      description: isTeacherMentor
+        ? "Upload and reuse class resources, activity sheets, quiz notes, and teacher materials."
+        : isHeadMentor
+          ? "Organize school resources, institution roadmaps, teacher content, and shared libraries."
+          : isMentor
+            ? "Contribute guides, mentoring notes, and reusable learning resources."
+            : isKid
           ? "Open simple class resources, activity sheets, and school learning material."
           : "Access resources, guides, and interview prep.",
       icon: "library",
@@ -156,17 +183,21 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "reputation",
-      label: isKid ? "School Highlights" : isHighSchool ? "School Progress" : "Reputation & Ranking",
-      description: isMentor
-        ? "Track your mentor reputation, ranking, and trust indicators inside ORIN."
-        : isKid
+      label: isTeacherMentor ? "Class Progress" : isHeadMentor ? "Reports & Recognition" : isKid ? "School Highlights" : isHighSchool ? "School Progress" : "Reputation & Ranking",
+      description: isTeacherMentor
+        ? "See class momentum through participation, rewards, feedback, and improvement signals."
+        : isHeadMentor
+          ? "Review school progress, recognition culture, reports, and engagement health."
+          : isMentor
+            ? "Track your mentor reputation, ranking, and trust indicators inside ORIN."
+            : isKid
           ? "See achievements and positive learning highlights without complex ranking."
           : isHighSchool
             ? "Track school progress, institution standing, and achievement momentum."
             : "Track your score, tag, and percentile performance.",
       icon: "stats-chart",
       emoji: isKid ? "✨" : isHighSchool ? "📈" : undefined,
-      path: isKid ? "/community/kid-group-activities" : isHighSchool ? "/community/highschool-progress" : "/community/reputation",
+      path: isTeacherMentor || isHeadMentor ? "/community/leaderboard" : isKid ? "/community/kid-group-activities" : isHighSchool ? "/community/highschool-progress" : "/community/reputation",
       iconColor: "#DC2626",
       iconBg: "#FEE2E2",
       darkIconBg: "rgba(220,38,38,0.18)",
@@ -197,7 +228,11 @@ export default function CommunityGrowthScreen() {
       <Text style={[styles.title, { color: colors.text }]}>Community & Growth</Text>
       <Text style={[styles.sub, { color: colors.textMuted }]}>
         {isMentor
-          ? "Use community tools to collaborate with mentors, contribute knowledge, and track your mentor standing."
+          ? isTeacherMentor
+            ? "Open class-focused tools for groups, challenges, rewards, resources, quiz battles, and progress."
+            : isHeadMentor
+              ? "Open school-wide tools for community, competitions, certificates, events, reports, and leaderboards."
+              : "Use community tools to collaborate with mentors, contribute knowledge, and track your mentor standing."
           : isKid
             ? "Open school-safe community modules built around rewards, activities, and class participation."
             : isHighSchool
@@ -207,7 +242,7 @@ export default function CommunityGrowthScreen() {
 
       <View style={styles.moduleStack}>
         {filteredModules.map((item) => {
-          const playful = isKid || isHighSchool;
+          const playful = isKid || isHighSchool || isTeacherMentor || isHeadMentor;
           return (
           <TouchableOpacity key={item.id} activeOpacity={0.92} onPress={() => router.push(item.path as never)}>
             <LinearGradient
@@ -229,7 +264,7 @@ export default function CommunityGrowthScreen() {
                 <Text style={[styles.moduleDesc, { color: colors.textMuted }]}>{item.description}</Text>
                 {playful ? (
                   <Text style={[styles.stageActionText, { color: item.iconColor }]}>
-                    {isKid ? "Open fun school space" : "Open school growth space"}
+                    {isKid ? "Open fun school space" : isTeacherMentor ? "Open class tool" : isHeadMentor ? "Open school tool" : "Open school growth space"}
                   </Text>
                 ) : null}
               </View>

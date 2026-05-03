@@ -638,18 +638,18 @@ function RootDrawer() {
   const mentorMode = getMentorMode(user || undefined);
   const mentorTabs = mentorMode === "teacher"
     ? [
-        { key: "home", label: "Class Posts", icon: "newspaper", path: "/network?section=institution" },
-        { key: "mentorship", label: "Classes", icon: "people", path: "/institution-management/teacher-classes" },
-        { key: "journey", label: "Home", icon: "home", path: "/mentor-dashboard?section=overview" },
-        { key: "ai", label: "Assign", icon: "create", path: "/institution-management/teacher-assign" },
-        { key: "community", label: "Reviews", icon: "checkmark-done", path: "/institution-management/teacher-reviews" }
+        { key: "home", label: "Class Feed", icon: "newspaper", path: "/network?section=institution" },
+        { key: "mentorship", label: "My Classes", icon: "people", path: "/institution-management/teacher-classes" },
+        { key: "journey", label: "Teacher Hub", icon: "home", path: "/mentor-dashboard?section=overview" },
+        { key: "ai", label: "Assign Work", icon: "create", path: "/institution-management/teacher-assign" },
+        { key: "community", label: "Check Work", icon: "checkmark-done", path: "/institution-management/teacher-reviews" }
       ]
     : mentorMode === "head"
       ? [
-          { key: "home", label: "School Posts", icon: "newspaper", path: "/network?section=institution" },
-          { key: "mentorship", label: "Teachers", icon: "people", path: "/institution-management/head-teachers" },
-          { key: "journey", label: "Home", icon: "home", path: "/mentor-dashboard?section=overview" },
-          { key: "ai", label: "Reports", icon: "stats-chart", path: "/institution-management/head-reports" },
+          { key: "home", label: "School Feed", icon: "newspaper", path: "/network?section=institution" },
+          { key: "mentorship", label: "Staff", icon: "people", path: "/institution-management/head-teachers" },
+          { key: "journey", label: "Head Hub", icon: "home", path: "/mentor-dashboard?section=overview" },
+          { key: "ai", label: "School Data", icon: "stats-chart", path: "/institution-management/head-reports" },
           { key: "community", label: "Approvals", icon: "shield-checkmark", path: "/institution-management/head-approvals" }
         ]
       : [

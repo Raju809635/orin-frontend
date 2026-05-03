@@ -118,6 +118,9 @@ export default function MentorshipHubScreen() {
   const { learnerStage } = useLearner();
   const { colors, isDark } = useAppTheme();
   const isMentor = user?.role === "mentor";
+  const mentorOrgRole = user?.mentorOrgRole || "global_mentor";
+  const isTeacherMentor = isMentor && mentorOrgRole === "institution_teacher";
+  const isHeadMentor = isMentor && mentorOrgRole === "organisation_head";
   const isKid = !isMentor && isKidStage(learnerStage);
   const isHighSchool = !isMentor && learnerStage === "highschool";
   const [activeSection, setActiveSection] = useState<MentorshipSectionId>("discovery");
@@ -443,25 +446,33 @@ export default function MentorshipHubScreen() {
   }[] = [
     {
       id: "discovery",
-      label: isMentor ? "Mentor Operations" : isKid ? "Teacher Discovery" : "Discover Mentors",
-      description: isMentor
-        ? "Manage pricing, domains, and the mentor-side controls that students depend on."
-        : isKid
+      label: isTeacherMentor ? "Teacher Toolkit" : isHeadMentor ? "School Operations" : isMentor ? "Mentor Operations" : isKid ? "Teacher Discovery" : "Discover Mentors",
+      description: isTeacherMentor
+        ? "Open teacher work areas for classes, assigned work, reviews, resources, and student support."
+        : isHeadMentor
+          ? "Open school management areas for teachers, reports, approvals, programs, and operations."
+          : isMentor
+            ? "Manage pricing, domains, and the mentor-side controls that students depend on."
+            : isKid
           ? "Browse trusted teachers and simple guidance spaces without advanced session complexity."
           : isHighSchool
             ? "Browse mentors, domain guides, and verified educators with a simpler school-first flow."
             : "Browse domains, open guides, and find verified mentors.",
-      icon: isMentor ? "briefcase" : isKid ? "school" : "search",
+      icon: isTeacherMentor ? "school" : isHeadMentor ? "business" : isMentor ? "briefcase" : isKid ? "school" : "search",
       border: "#A4BCFD",
       gradient: ["#FFFFFF", "#EEF4FF"],
       gradientActive: ["#E0EAFF", "#EEF4FF"]
     },
     {
       id: "interaction",
-      label: isMentor ? "Student Interaction" : isKid ? "Teacher Interaction" : "Mentor Interaction",
-      description: isMentor
-        ? "Review student chats, mentor groups, and live sessions that support your mentoring delivery."
-        : isKid
+      label: isTeacherMentor ? "Class Interaction" : isHeadMentor ? "Teacher Network" : isMentor ? "Student Interaction" : isKid ? "Teacher Interaction" : "Mentor Interaction",
+      description: isTeacherMentor
+        ? "Guide class conversations, live activities, teacher groups, and student follow-up."
+        : isHeadMentor
+          ? "Coordinate teachers, school communication, live programs, and management follow-up."
+          : isMentor
+            ? "Review student chats, mentor groups, and live sessions that support your mentoring delivery."
+            : isKid
           ? "Explore teacher groups, guided activity sessions, and safe school interactions."
           : "Explore mentor groups and upcoming live mentoring sessions.",
       icon: "people",
@@ -471,10 +482,14 @@ export default function MentorshipHubScreen() {
     },
     {
       id: "session_management",
-      label: isKid ? "Activity Tracking" : "Session Management",
-      description: isMentor
-        ? "Handle booking requests, upcoming sessions, completed sessions, notes, pricing, and availability."
-        : isKid
+      label: isTeacherMentor ? "Activity & Sessions" : isHeadMentor ? "Programs & Reviews" : isKid ? "Activity Tracking" : "Session Management",
+      description: isTeacherMentor
+        ? "Manage class sessions, student submissions, activity reviews, and teacher availability."
+        : isHeadMentor
+          ? "Track school programs, review flows, teacher execution, and operational health."
+          : isMentor
+            ? "Handle booking requests, upcoming sessions, completed sessions, notes, pricing, and availability."
+            : isKid
           ? "Track joined teacher activities and simple session status without payment-heavy workflows."
           : isHighSchool
             ? "Track bookings, confirmations, and guided session progress with simpler language."
@@ -519,7 +534,11 @@ export default function MentorshipHubScreen() {
       <Text style={[styles.title, { color: colors.text }]}>Mentorship</Text>
       <Text style={[styles.sub, { color: colors.textMuted }]}>
         {isMentor
-          ? "Use the same mentorship workspace in mentor mode to manage requests, sessions, pricing, and availability."
+          ? isTeacherMentor
+            ? "Use teacher tools for class work, student interaction, reviews, sessions, and guided school support."
+            : isHeadMentor
+              ? "Use head tools for teacher coordination, school programs, reports, approvals, and recognition."
+              : "Use the same mentorship workspace in mentor mode to manage requests, sessions, pricing, and availability."
           : isKid
             ? "Open school-friendly teacher guidance modules with simpler interaction paths."
             : isHighSchool
@@ -560,23 +579,41 @@ export default function MentorshipHubScreen() {
 
       {!loading && activeSection === "discovery" ? (
         <View style={styles.panel}>
-          <Text style={[styles.panelTitle, { color: colors.text }]}>{isMentor ? "Mentor Operations" : isKid ? "Teacher Discovery" : "Discovery"}</Text>
+          <Text style={[styles.panelTitle, { color: colors.text }]}>{isTeacherMentor ? "Teacher Toolkit" : isHeadMentor ? "School Operations" : isMentor ? "Mentor Operations" : isKid ? "Teacher Discovery" : "Discovery"}</Text>
           {isMentor ? (
             <>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Booking Requests</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>Review student booking requests and respond from your mentor dashboard.</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Class Requests" : isHeadMentor ? "School Requests" : "Booking Requests"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  {isTeacherMentor
+                    ? "Review student help requests, class activity requests, and follow-up items."
+                    : isHeadMentor
+                      ? "Review school-level requests, teacher support needs, and management follow-ups."
+                      : "Review student booking requests and respond from your mentor dashboard."}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/mentor-dashboard?section=pricing" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Pricing Management</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>Update your mentor title and session fee without leaving the existing app flow.</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Teacher Profile Setup" : isHeadMentor ? "School Profile Setup" : "Pricing Management"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  {isTeacherMentor
+                    ? "Keep your teacher domains, classes, subjects, and guidance details updated."
+                    : isHeadMentor
+                      ? "Maintain organisation details, focus classes, institution settings, and school identity."
+                      : "Update your mentor title and session fee without leaving the existing app flow."}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/mentor-dashboard?section=availability" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Availability & Slot Management</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>Publish only the slots you want students to book.</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Class Availability" : isHeadMentor ? "Teacher Availability" : "Availability & Slot Management"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  {isTeacherMentor
+                    ? "Set when students can reach you for doubts, activities, and class guidance."
+                    : isHeadMentor
+                      ? "Monitor teacher availability and program readiness across the school."
+                      : "Publish only the slots you want students to book."}
+                </Text>
               </TouchableOpacity>
               <View style={[styles.card, getPanelCardStyle("blue")]}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Verified Mentor System</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Verified Teacher System" : isHeadMentor ? "Verified School System" : "Verified Mentor System"}</Text>
                 {filteredVerifiedMentors.some((item) => item.mentorId === user?.id && item.verifiedBadge) ? (
                   <Text style={[styles.meta, { color: colors.textMuted }]}>Your mentor profile currently carries a verified badge.</Text>
                 ) : (
@@ -613,22 +650,34 @@ export default function MentorshipHubScreen() {
 
       {!loading && activeSection === "interaction" ? (
         <View style={styles.panel}>
-          <Text style={[styles.panelTitle, { color: colors.text }]}>{isMentor ? "Student Interaction" : isKid ? "Teacher Interaction" : "Interaction"}</Text>
+          <Text style={[styles.panelTitle, { color: colors.text }]}>{isTeacherMentor ? "Class Interaction" : isHeadMentor ? "Teacher Network" : isMentor ? "Student Interaction" : isKid ? "Teacher Interaction" : "Interaction"}</Text>
           {isMentor ? (
             <>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("green")]} onPress={() => router.push("/chat" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Student Chats</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>Open your conversation workspace for student coordination and follow-up.</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Student & Class Chats" : isHeadMentor ? "Teacher & Admin Chats" : "Student Chats"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  {isTeacherMentor
+                    ? "Open student conversations, reminders, encouragement messages, and class follow-up."
+                    : isHeadMentor
+                      ? "Coordinate teacher updates, school support, and admin communication."
+                      : "Open your conversation workspace for student coordination and follow-up."}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.card, getPanelCardStyle("green")]}
                 onPress={() => router.push("/mentor-dashboard?section=growth&growth=live" as never)}
               >
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Create / Manage Programs</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>Run live sessions and multi-week sprints from one mentor program workspace.</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Create Class Activities" : isHeadMentor ? "Create School Programs" : "Create / Manage Programs"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  {isTeacherMentor
+                    ? "Run classroom activities, daily quiz pushes, learning sessions, and proof-based work."
+                    : isHeadMentor
+                      ? "Run school-wide programs, competitions, weekly events, and teacher-led initiatives."
+                      : "Run live sessions and multi-week sprints from one mentor program workspace."}
+                </Text>
               </TouchableOpacity>
               <View style={[styles.card, getPanelCardStyle("green")]}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Mentor Groups</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Class Groups" : isHeadMentor ? "Teacher Groups" : "Mentor Groups"}</Text>
                 {filteredMentorGroups.length === 0 ? (
                   <Text style={[styles.meta, { color: colors.textMuted }]}>No mentor groups available.</Text>
                 ) : (
@@ -640,7 +689,7 @@ export default function MentorshipHubScreen() {
                 )}
               </View>
               <View style={[styles.card, getPanelCardStyle("green")]}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Mentor Live Sessions</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Teacher Live Sessions" : isHeadMentor ? "School Live Sessions" : "Mentor Live Sessions"}</Text>
                 {filteredLiveSessions.length === 0 ? (
                   <Text style={[styles.meta, { color: colors.textMuted }]}>No live sessions scheduled.</Text>
                 ) : (
@@ -662,7 +711,7 @@ export default function MentorshipHubScreen() {
                 )}
               </View>
               <View style={[styles.card, getPanelCardStyle("green")]}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Sprint Programs</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Class Sprint Programs" : isHeadMentor ? "School Sprint Programs" : "Sprint Programs"}</Text>
                 {filteredSprints.length === 0 ? (
                   <Text style={[styles.meta, { color: colors.textMuted }]}>No sprint programs available.</Text>
                 ) : (
@@ -792,32 +841,48 @@ export default function MentorshipHubScreen() {
 
       {!loading && activeSection === "session_management" ? (
         <View style={styles.panel}>
-          <Text style={[styles.panelTitle, { color: colors.text }]}>Session Management</Text>
+          <Text style={[styles.panelTitle, { color: colors.text }]}>{isTeacherMentor ? "Activity & Sessions" : isHeadMentor ? "Programs & Reviews" : "Session Management"}</Text>
           {isMentor ? (
             <>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("orange")]} onPress={() => router.push("/mentor-dashboard?section=requests" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>View Booking Requests</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>Pending student requests: {bookings.filter((item) => item.status === "pending").length}</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Review Student Requests" : isHeadMentor ? "Review School Requests" : "View Booking Requests"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  {isTeacherMentor
+                    ? `Student/class requests needing action: ${bookings.filter((item) => item.status === "pending").length}`
+                    : isHeadMentor
+                      ? `School requests and teacher follow-ups: ${bookings.filter((item) => item.status === "pending").length}`
+                      : `Pending student requests: ${bookings.filter((item) => item.status === "pending").length}`}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("orange")]} onPress={() => router.push("/mentor-dashboard?section=sessions" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Upcoming Sessions</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Upcoming Class Sessions" : isHeadMentor ? "Upcoming School Programs" : "Upcoming Sessions"}</Text>
                 <Text style={[styles.meta, { color: colors.textMuted }]}>Confirmed or active sessions: {confirmedSessions.length}</Text>
               </TouchableOpacity>
               <View style={[styles.card, getPanelCardStyle("orange")]}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Completed Sessions</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>{completedSessions.length} completed mentoring session(s)</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Completed Class Activities" : isHeadMentor ? "Completed Programs" : "Completed Sessions"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>{completedSessions.length} completed {isTeacherMentor ? "activity" : isHeadMentor ? "program" : "mentoring session"}(s)</Text>
               </View>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("orange")]} onPress={() => router.push("/mentor-dashboard?section=availability" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Manage Availability Slots</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>Open mentor availability controls.</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Manage Teacher Slots" : isHeadMentor ? "Manage School Availability" : "Manage Availability Slots"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  {isTeacherMentor ? "Open availability for doubts, reviews, and classroom support." : isHeadMentor ? "Review availability readiness for school programs." : "Open mentor availability controls."}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("orange")]} onPress={() => router.push("/mentor-dashboard?section=pricing" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Manage Pricing</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>Open mentor pricing controls for session fee updates.</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor || isHeadMentor ? "Manage Profile Controls" : "Manage Pricing"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  {isTeacherMentor || isHeadMentor ? "Open role, institution, subject, class, and profile controls." : "Open mentor pricing controls for session fee updates."}
+                </Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("orange")]} onPress={() => router.push("/mentor-dashboard?section=sessions" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>Add Session Notes & Meet Links</Text>
-                <Text style={[styles.meta, { color: colors.textMuted }]}>Use the mentor sessions panel to add links and session delivery details.</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Add Activity Notes" : isHeadMentor ? "Add Program Notes" : "Add Session Notes & Meet Links"}</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>
+                  {isTeacherMentor
+                    ? "Record teacher feedback, proof status, class notes, and next actions."
+                    : isHeadMentor
+                      ? "Record school program notes, teacher follow-ups, and implementation updates."
+                      : "Use the mentor sessions panel to add links and session delivery details."}
+                </Text>
               </TouchableOpacity>
             </>
           ) : (
