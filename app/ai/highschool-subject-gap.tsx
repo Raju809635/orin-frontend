@@ -1,8 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
-import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAppTheme } from "@/context/ThemeContext";
+import { getAppErrorMessage } from "@/lib/appError";
+import { api } from "@/lib/api";
 
 type SubjectName = "Mathematics" | "Science" | "English";
 
@@ -27,13 +29,36 @@ type ScoreRow = {
   percent: number;
 };
 
+type FocusPlan = {
+  title: string;
+  topics: string[];
+  description: string;
+  dailyPractice?: string;
+  improvementTarget?: string;
+  steps?: string[];
+};
+
+type GapReport = {
+  overallScore: number;
+  completedQuestions: number;
+  totalCorrect: number;
+  subjectRows: ScoreRow[];
+  topicRows: ScoreRow[];
+  weakRows: ScoreRow[];
+  averageRows: ScoreRow[];
+  strengthRows: ScoreRow[];
+  focusRows: ScoreRow[];
+  praise: string;
+  focusPlan: FocusPlan;
+};
+
 const SUBJECT_META: Record<SubjectName, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
   Mathematics: { icon: "calculator", color: "#0EA5E9", bg: "#E0F2FE" },
   Science: { icon: "flask", color: "#7C3AED", bg: "#F3E8FF" },
   English: { icon: "book", color: "#F59E0B", bg: "#FEF3C7" }
 };
 
-const QUESTIONS: GapQuestion[] = [
+const FALLBACK_QUESTIONS: GapQuestion[] = [
   {
     id: "math-fractions-1",
     subject: "Mathematics",
@@ -221,6 +246,38 @@ function praiseForScore(score: number) {
   return "Good attempt. Let us strengthen the basics.";
 }
 
+function buildLocalReport(questions: GapQuestion[], answers: AnswerMap): GapReport {
+  const totalCorrect = questions.reduce((sum, question) => sum + (answers[question.id] === question.correct ? 1 : 0), 0);
+  const overallScore = percent(totalCorrect, questions.length);
+  const { subjectRows, topicRows } = scoreQuestions(questions, answers);
+  const weakRows = topicRows.filter((row) => row.percent < 60).sort((a, b) => a.percent - b.percent);
+  const strengthRows = topicRows.filter((row) => row.percent >= 80).sort((a, b) => b.percent - a.percent);
+  const averageRows = topicRows.filter((row) => row.percent >= 60 && row.percent < 80).sort((a, b) => a.percent - b.percent);
+  const focusRows = weakRows.length ? weakRows.slice(0, 2) : averageRows.slice(0, 2);
+  const focusLabel = focusRows.map((item) => item.label).join(" and ") || "your next weak topic";
+
+  return {
+    overallScore,
+    completedQuestions: questions.length,
+    totalCorrect,
+    subjectRows,
+    topicRows,
+    weakRows,
+    averageRows,
+    strengthRows,
+    focusRows,
+    praise: praiseForScore(overallScore),
+    focusPlan: {
+      title: "Your Focus Plan",
+      topics: focusRows.map((item) => item.label),
+      description: `Focus on ${focusLabel} this week. Practice 5-10 questions daily and aim to improve by 10%.`,
+      dailyPractice: "Practice 5-10 short questions daily.",
+      improvementTarget: "Improve by 10% in the next report.",
+      steps: ["Revise the concept for 15 minutes.", "Attempt one short practice quiz.", "Review every wrong answer."]
+    }
+  };
+}
+
 function barColor(value: number) {
   if (value < 60) return "#EF4444";
   if (value < 80) return "#F59E0B";
@@ -230,55 +287,107 @@ function barColor(value: number) {
 export default function HighSchoolSubjectGapScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
+  const [activeQuestions, setActiveQuestions] = useState<GapQuestion[]>(FALLBACK_QUESTIONS);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [currentIndex, setCurrentIndex] = useState(0);
   const [showReport, setShowReport] = useState(false);
   const [infoVisible, setInfoVisible] = useState(false);
   const [practiceTopic, setPracticeTopic] = useState<string | null>(null);
-
-  const activeQuestions = useMemo(() => {
-    if (!practiceTopic) return QUESTIONS;
-    return QUESTIONS.filter((question) => question.topic === practiceTopic);
-  }, [practiceTopic]);
+  const [report, setReport] = useState<GapReport>(() => buildLocalReport(FALLBACK_QUESTIONS, {}));
+  const [quizSource, setQuizSource] = useState<"ai" | "fallback">("fallback");
+  const [loadingQuiz, setLoadingQuiz] = useState(false);
+  const [loadingReport, setLoadingReport] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
 
   const currentQuestion = activeQuestions[currentIndex];
-  const totalCorrect = activeQuestions.reduce((sum, question) => sum + (answers[question.id] === question.correct ? 1 : 0), 0);
-  const overallScore = percent(totalCorrect, activeQuestions.length);
-  const { subjectRows, topicRows } = useMemo(() => scoreQuestions(activeQuestions, answers), [activeQuestions, answers]);
-  const weakRows = topicRows.filter((row) => row.percent < 60).sort((a, b) => a.percent - b.percent);
-  const strengthRows = topicRows.filter((row) => row.percent >= 80).sort((a, b) => b.percent - a.percent);
-  const averageRows = topicRows.filter((row) => row.percent >= 60 && row.percent < 80).sort((a, b) => a.percent - b.percent);
-  const focusRows = weakRows.length ? weakRows.slice(0, 2) : averageRows.slice(0, 2);
-  const focusLabel = focusRows.map((item) => item.label).join(" and ") || "your next weak topic";
   const progress = activeQuestions.length ? Math.round(((currentIndex + 1) / activeQuestions.length) * 100) : 0;
+
+  const localReport = useMemo(() => buildLocalReport(activeQuestions, answers), [activeQuestions, answers]);
+  const displayedReport = showReport ? report : localReport;
+  const { overallScore, subjectRows, weakRows, strengthRows, averageRows } = displayedReport;
+
+  async function loadQuiz(focusTopic?: string | null) {
+    setLoadingQuiz(true);
+    setStatusMessage("");
+    try {
+      const { data } = await api.post<{
+        source?: "ai" | "fallback";
+        quiz?: { questions?: GapQuestion[] };
+      }>("/api/ai/highschool/subject-gap/quiz", {
+        subjects: ["Mathematics", "Science", "English"],
+        questionCount: focusTopic ? 5 : 9,
+        focusTopic: focusTopic || undefined
+      });
+      const nextQuestions = Array.isArray(data?.quiz?.questions) && data.quiz.questions.length ? data.quiz.questions : FALLBACK_QUESTIONS;
+      setActiveQuestions(nextQuestions);
+      setQuizSource(data?.source === "ai" ? "ai" : "fallback");
+      setStatusMessage(data?.source === "ai" ? "AI created this quiz from high-school subject intelligence." : "Using safe offline questions until AI is available.");
+    } catch (error) {
+      const fallback = focusTopic
+        ? FALLBACK_QUESTIONS.filter((question) => question.topic === focusTopic)
+        : FALLBACK_QUESTIONS;
+      setActiveQuestions(fallback.length ? fallback : FALLBACK_QUESTIONS);
+      setQuizSource("fallback");
+      setStatusMessage(getAppErrorMessage(error, "AI quiz is unavailable, so ORIN loaded safe offline questions."));
+    } finally {
+      setAnswers({});
+      setCurrentIndex(0);
+      setShowReport(false);
+      setLoadingQuiz(false);
+    }
+  }
+
+  async function buildAiReport() {
+    setLoadingReport(true);
+    setStatusMessage("");
+    const fallbackReport = buildLocalReport(activeQuestions, answers);
+    try {
+      const { data } = await api.post<{ source?: "ai" | "fallback"; report?: GapReport }>("/api/ai/highschool/subject-gap/analyze", {
+        questions: activeQuestions,
+        answers
+      });
+      setReport(data?.report || fallbackReport);
+      setStatusMessage(data?.source === "ai" ? "AI converted your real quiz data into a focus plan." : "Report is calculated from your real answers with safe local planning.");
+    } catch (error) {
+      setReport(fallbackReport);
+      setStatusMessage(getAppErrorMessage(error, "Report is calculated locally from your real answers."));
+    } finally {
+      setLoadingReport(false);
+      setShowReport(true);
+    }
+  }
+
+  useEffect(() => {
+    loadQuiz(null);
+  }, []);
 
   function selectAnswer(option: string) {
     if (!currentQuestion || answers[currentQuestion.id]) return;
     setAnswers((prev) => ({ ...prev, [currentQuestion.id]: option }));
   }
 
-  function nextQuestion() {
+  async function nextQuestion() {
     if (currentIndex < activeQuestions.length - 1) {
       setCurrentIndex((prev) => prev + 1);
       return;
     }
-    setShowReport(true);
+    await buildAiReport();
   }
 
   function startPractice() {
-    const nextTopic = focusRows[0]?.label || weakRows[0]?.label || topicRows[0]?.label || null;
+    const nextTopic =
+      displayedReport.focusRows[0]?.label ||
+      displayedReport.weakRows[0]?.label ||
+      displayedReport.topicRows[0]?.label ||
+      null;
     if (!nextTopic) return;
     setPracticeTopic(nextTopic);
-    setAnswers({});
-    setCurrentIndex(0);
-    setShowReport(false);
+    loadQuiz(nextTopic);
   }
 
   function resetFullQuiz() {
     setPracticeTopic(null);
-    setAnswers({});
-    setCurrentIndex(0);
-    setShowReport(false);
+    loadQuiz(null);
   }
 
   const selected = currentQuestion ? answers[currentQuestion.id] : "";
@@ -296,15 +405,30 @@ export default function HighSchoolSubjectGapScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
-        {!showReport && currentQuestion ? (
+        {statusMessage ? (
+          <View style={[styles.aiNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Ionicons name={quizSource === "ai" ? "sparkles" : "shield-checkmark"} size={18} color={colors.accent} />
+            <Text style={[styles.aiNoticeText, { color: colors.textMuted }]}>{statusMessage}</Text>
+          </View>
+        ) : null}
+
+        {loadingQuiz ? (
+          <View style={[styles.loadingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={[styles.loadingTitle, { color: colors.text }]}>Building your AI quiz...</Text>
+            <Text style={[styles.loadingText, { color: colors.textMuted }]}>ORIN is preparing subject and topic mapped questions for high school.</Text>
+          </View>
+        ) : !showReport && currentQuestion ? (
           <>
             <View style={[styles.quizHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <View style={styles.quizHeroTop}>
                 <View>
-                  <Text style={[styles.eyebrow, { color: colors.accent }]}>{practiceTopic ? "Focused Practice" : "Step 1 - Take Quiz"}</Text>
+                  <Text style={[styles.eyebrow, { color: colors.accent }]}>
+                    {practiceTopic ? "Focused Practice" : quizSource === "ai" ? "AI Smart Quiz" : "Safe Practice Quiz"}
+                  </Text>
                   <Text style={[styles.heroTitle, { color: colors.text }]}>Answer short subject questions</Text>
                   <Text style={[styles.heroSubtitle, { color: colors.textMuted }]}>
-                    Each question is mapped to a subject and topic. ORIN calculates your gaps automatically.
+                    Each question is mapped to a subject and topic. ORIN calculates your gaps from real answers.
                   </Text>
                 </View>
                 <View style={[styles.progressRing, { borderColor: colors.accentSoft }]}>
@@ -358,12 +482,13 @@ export default function HighSchoolSubjectGapScreen() {
               ) : null}
 
               <TouchableOpacity
-                disabled={!selected}
-                style={[styles.primaryButton, { backgroundColor: selected ? colors.accent : colors.surfaceAlt }, !selected && styles.disabled]}
+                disabled={!selected || loadingReport}
+                style={[styles.primaryButton, { backgroundColor: selected ? colors.accent : colors.surfaceAlt }, (!selected || loadingReport) && styles.disabled]}
                 onPress={nextQuestion}
               >
+                {loadingReport ? <ActivityIndicator color={colors.accentText} /> : null}
                 <Text style={[styles.primaryButtonText, { color: selected ? colors.accentText : colors.textMuted }]}>
-                  {currentIndex === activeQuestions.length - 1 ? "Show Learning Report" : "Next Question"}
+                  {loadingReport ? "Analyzing..." : currentIndex === activeQuestions.length - 1 ? "Show Learning Report" : "Next Question"}
                 </Text>
                 <Ionicons name="arrow-forward" size={18} color={selected ? colors.accentText : colors.textMuted} />
               </TouchableOpacity>
@@ -376,8 +501,8 @@ export default function HighSchoolSubjectGapScreen() {
                 <Ionicons name="medal" size={28} color="#F59E0B" />
               </View>
               <View style={styles.resultHeroCopy}>
-                <Text style={[styles.resultHeroTitle, { color: colors.text }]}>{praiseForScore(overallScore)}</Text>
-                <Text style={[styles.resultHeroMeta, { color: colors.textMuted }]}>You completed {activeQuestions.length} questions</Text>
+                <Text style={[styles.resultHeroTitle, { color: colors.text }]}>{displayedReport.praise}</Text>
+                <Text style={[styles.resultHeroMeta, { color: colors.textMuted }]}>You completed {displayedReport.completedQuestions} questions</Text>
               </View>
               <View style={[styles.scoreCircle, { borderColor: barColor(overallScore) }]}>
                 <Text style={[styles.scoreValue, { color: colors.text }]}>{overallScore}%</Text>
@@ -439,10 +564,11 @@ export default function HighSchoolSubjectGapScreen() {
                   <Ionicons name="locate" size={24} color="#EF4444" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.focusTitle, { color: colors.text }]}>Your Focus Plan</Text>
-                  <Text style={[styles.focusText, { color: colors.textMuted }]}>
-                    Focus on {focusLabel} this week. Practice 5-10 questions daily and aim to improve by 10%.
-                  </Text>
+                  <Text style={[styles.focusTitle, { color: colors.text }]}>{displayedReport.focusPlan.title || "Your Focus Plan"}</Text>
+                  <Text style={[styles.focusText, { color: colors.textMuted }]}>{displayedReport.focusPlan.description}</Text>
+                  {displayedReport.focusPlan.dailyPractice ? (
+                    <Text style={[styles.focusMeta, { color: colors.textMuted }]}>{displayedReport.focusPlan.dailyPractice}</Text>
+                  ) : null}
                 </View>
                 <Ionicons name="clipboard" size={36} color="#8B5CF6" />
               </View>
@@ -556,6 +682,11 @@ const styles = StyleSheet.create({
   topIconBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   topTitle: { fontSize: 18, fontWeight: "900" },
   container: { padding: 16, paddingBottom: 118, gap: 14 },
+  aiNotice: { borderWidth: 1, borderRadius: 18, padding: 12, flexDirection: "row", gap: 9, alignItems: "flex-start" },
+  aiNoticeText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: "800" },
+  loadingCard: { borderWidth: 1, borderRadius: 24, padding: 24, alignItems: "center", gap: 10 },
+  loadingTitle: { fontSize: 18, fontWeight: "900" },
+  loadingText: { textAlign: "center", lineHeight: 20, fontWeight: "700" },
   quizHero: { borderWidth: 1, borderRadius: 26, padding: 17, gap: 14 },
   quizHeroTop: { flexDirection: "row", gap: 12, alignItems: "center", justifyContent: "space-between" },
   eyebrow: { fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8 },
@@ -615,6 +746,7 @@ const styles = StyleSheet.create({
   focusIcon: { width: 44, height: 44, borderRadius: 16, alignItems: "center", justifyContent: "center" },
   focusTitle: { fontSize: 17, fontWeight: "900" },
   focusText: { lineHeight: 20, fontWeight: "700", marginTop: 2 },
+  focusMeta: { lineHeight: 19, fontWeight: "800", marginTop: 6, fontSize: 12 },
   secondaryButton: { minHeight: 46, borderRadius: 999, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   secondaryButtonText: { fontWeight: "900" },
   tipCard: { borderWidth: 1, borderRadius: 18, padding: 13, flexDirection: "row", gap: 10, alignItems: "flex-start" },
