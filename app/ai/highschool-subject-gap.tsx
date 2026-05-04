@@ -53,34 +53,6 @@ type GapReport = {
   focusPlan: FocusPlan;
 };
 
-type StudyTask = {
-  id: string;
-  type: string;
-  title: string;
-  duration: string;
-  completed: boolean;
-};
-
-type StudyWeek = {
-  week: string;
-  title: string;
-  status: "active" | "locked" | "completed";
-  progress: number;
-  focus: string;
-  tasks: StudyTask[];
-};
-
-type StudyPlan = {
-  title: string;
-  subject: SubjectName;
-  topic: string;
-  summary: string;
-  overallProgress: number;
-  weeks: StudyWeek[];
-  dailyTasks: StudyTask[];
-  adaptiveRules: string[];
-};
-
 const SUBJECT_META: Record<SubjectName, { icon: keyof typeof Ionicons.glyphMap; color: string; bg: string }> = {
   Mathematics: { icon: "calculator", color: "#0EA5E9", bg: "#E0F2FE" },
   Science: { icon: "flask", color: "#7C3AED", bg: "#F3E8FF" },
@@ -319,32 +291,6 @@ function barColor(value: number) {
   return "#12B76A";
 }
 
-function buildLocalStudyPlan(subject: SubjectName, topic: string): StudyPlan {
-  const topics = [topic, "Previous Basics", "Practice Questions", "Mistake Review", "Final Revision"];
-  const weeks = topics.map((item, index) => ({
-    week: `Week ${index + 1}`,
-    title: item,
-    status: index === 0 ? "active" as const : "locked" as const,
-    progress: index === 0 ? 25 : 0,
-    focus: index === 0 ? "Build basics, practice, and take a quick diagnostic quiz." : "Unlocks after the previous topic improves.",
-    tasks: [
-      { id: `w${index}-read`, type: "Read", title: `Read: ${item}`, duration: "15 min", completed: index === 0 },
-      { id: `w${index}-practice`, type: "Practice", title: "Practice: 10 Questions", duration: "15 min", completed: false },
-      { id: `w${index}-quiz`, type: "Quiz", title: "Quick Quiz", duration: "10 min", completed: false }
-    ]
-  }));
-  return {
-    title: `${subject} Smart Plan`,
-    subject,
-    topic,
-    summary: `Start with ${topic}, complete short daily tasks, then let ORIN update your next focus from quiz performance.`,
-    overallProgress: 25,
-    weeks,
-    dailyTasks: weeks[0].tasks,
-    adaptiveRules: ["Low score repeats basics.", "Medium score adds mixed practice.", "High score unlocks the next topic."]
-  };
-}
-
 export default function HighSchoolSubjectGapScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
@@ -359,16 +305,10 @@ export default function HighSchoolSubjectGapScreen() {
   const [quizSource, setQuizSource] = useState<"ai" | "fallback">("fallback");
   const [loadingQuiz, setLoadingQuiz] = useState(false);
   const [loadingReport, setLoadingReport] = useState(false);
-  const [loadingPlan, setLoadingPlan] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [quizStarted, setQuizStarted] = useState(false);
-  const [planCreated, setPlanCreated] = useState(false);
-  const [studyPlan, setStudyPlan] = useState<StudyPlan>(() => buildLocalStudyPlan("Mathematics", "Algebra"));
   const [selectedSubject, setSelectedSubject] = useState<SubjectName>("Mathematics");
   const [selectedTopic, setSelectedTopic] = useState("Algebra");
-  const [studyGoal, setStudyGoal] = useState("Improve marks and complete weekly revision");
-  const [currentLevel, setCurrentLevel] = useState("Basics");
-  const [timePerDay, setTimePerDay] = useState("1-2 hours");
 
   const currentQuestion = activeQuestions[currentIndex];
   const progress = activeQuestions.length ? Math.round(((currentIndex + 1) / activeQuestions.length) * 100) : 0;
@@ -377,31 +317,6 @@ export default function HighSchoolSubjectGapScreen() {
   const localReport = useMemo(() => buildLocalReport(activeQuestions, answers), [activeQuestions, answers]);
   const displayedReport = showReport ? report : localReport;
   const { overallScore, subjectRows, weakRows, strengthRows, averageRows } = displayedReport;
-
-  async function createStudyPlan() {
-    setLoadingPlan(true);
-    setStatusMessage("");
-    const fallbackPlan = buildLocalStudyPlan(selectedSubject, selectedTopic);
-    try {
-      const { data } = await api.post<{ source?: "ai" | "fallback"; plan?: StudyPlan }>("/api/ai/highschool/subject-gap/plan", {
-        subject: selectedSubject,
-        topic: selectedTopic,
-        studyGoal,
-        currentLevel,
-        timePerDay,
-        classLevel: className || "High School"
-      });
-      setStudyPlan(data?.plan || fallbackPlan);
-      setPlanCreated(true);
-      setStatusMessage(data?.source === "ai" ? "AI created your adaptive subject plan." : "Using a safe subject plan until AI is available.");
-    } catch (error) {
-      setStudyPlan(fallbackPlan);
-      setPlanCreated(true);
-      setStatusMessage(getAppErrorMessage(error, "AI plan is unavailable, so ORIN loaded a safe subject plan."));
-    } finally {
-      setLoadingPlan(false);
-    }
-  }
 
   async function loadQuiz(subject: SubjectName = selectedSubject, focusTopic: string | null = selectedTopic) {
     setLoadingQuiz(true);
@@ -486,7 +401,6 @@ export default function HighSchoolSubjectGapScreen() {
   function resetFullQuiz() {
     setPracticeTopic(null);
     setQuizStarted(false);
-    setPlanCreated(false);
     setShowReport(false);
     setAnswers({});
     setCurrentIndex(0);
@@ -515,12 +429,12 @@ export default function HighSchoolSubjectGapScreen() {
           </View>
         ) : null}
 
-        {!quizStarted && !planCreated ? (
+        {!quizStarted ? (
           <View style={[styles.setupCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.eyebrow, { color: colors.accent }]}>1. Plan Creation</Text>
-            <Text style={[styles.heroTitle, { color: colors.text }]}>Create Study Plan</Text>
+            <Text style={[styles.eyebrow, { color: colors.accent }]}>Step 1 - Select Focus</Text>
+            <Text style={[styles.heroTitle, { color: colors.text }]}>Choose subject and topic</Text>
             <Text style={[styles.heroSubtitle, { color: colors.textMuted }]}>
-              Select your subject, topic, goal, level, and study time. ORIN builds a smart weekly plan first.
+              ORIN will create a short AI quiz for this topic, then detect gaps from your score.
             </Text>
 
             <Text style={[styles.setupLabel, { color: colors.text }]}>Subject</Text>
@@ -535,7 +449,6 @@ export default function HighSchoolSubjectGapScreen() {
                     onPress={() => {
                       setSelectedSubject(subject);
                       setSelectedTopic(SUBJECT_TOPICS[subject][0]);
-                      setStudyPlan(buildLocalStudyPlan(subject, SUBJECT_TOPICS[subject][0]));
                     }}
                   >
                     <Ionicons name={meta.icon} size={20} color={active ? meta.color : colors.textMuted} />
@@ -561,106 +474,14 @@ export default function HighSchoolSubjectGapScreen() {
               })}
             </View>
 
-            <Text style={[styles.setupLabel, { color: colors.text }]}>Study Goal</Text>
-            <View style={styles.topicWrap}>
-              {["Improve marks and complete weekly revision", "Prepare for unit test", "Fix weak basics"].map((goal) => {
-                const active = studyGoal === goal;
-                return (
-                  <TouchableOpacity
-                    key={goal}
-                    style={[styles.topicChip, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]}
-                    onPress={() => setStudyGoal(goal)}
-                  >
-                    <Text style={[styles.topicChipText, { color: active ? colors.accent : colors.textMuted }]}>{goal}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={[styles.setupLabel, { color: colors.text }]}>Current Level</Text>
-            <View style={styles.segmentRow}>
-              {["Basics", "Average", "Strong"].map((level) => {
-                const active = currentLevel === level;
-                return (
-                  <TouchableOpacity
-                    key={level}
-                    style={[styles.segmentButton, { backgroundColor: active ? colors.accent : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]}
-                    onPress={() => setCurrentLevel(level)}
-                  >
-                    <Text style={[styles.segmentText, { color: active ? colors.accentText : colors.textMuted }]}>{level}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <Text style={[styles.setupLabel, { color: colors.text }]}>Available Time per Day</Text>
-            <View style={styles.segmentRow}>
-              {["30-45 min", "1-2 hours", "2+ hours"].map((time) => {
-                const active = timePerDay === time;
-                return (
-                  <TouchableOpacity
-                    key={time}
-                    style={[styles.segmentButton, { backgroundColor: active ? colors.accent : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]}
-                    onPress={() => setTimePerDay(time)}
-                  >
-                    <Text style={[styles.segmentText, { color: active ? colors.accentText : colors.textMuted }]}>{time}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={() => {
-              setPracticeTopic(selectedTopic);
-              createStudyPlan();
-            }} disabled={loadingPlan}>
-              {loadingPlan ? <ActivityIndicator color={colors.accentText} /> : <Ionicons name="sparkles" size={18} color={colors.accentText} />}
-              <Text style={[styles.primaryButtonText, { color: colors.accentText }]}>{loadingPlan ? "Creating Smart Plan..." : "Create Study Plan"}</Text>
-            </TouchableOpacity>
-          </View>
-        ) : !quizStarted && planCreated ? (
-          <>
-            <View style={[styles.quizHero, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <View style={styles.quizHeroTop}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.eyebrow, { color: colors.accent }]}>2. Smart Plan</Text>
-                  <Text style={[styles.heroTitle, { color: colors.text }]}>{studyPlan.title}</Text>
-                  <Text style={[styles.heroSubtitle, { color: colors.textMuted }]}>{studyPlan.summary}</Text>
-                </View>
-                <View style={[styles.progressRing, { borderColor: colors.accentSoft }]}>
-                  <Text style={[styles.progressRingText, { color: colors.accent }]}>{studyPlan.overallProgress}%</Text>
-                </View>
-              </View>
-              <View style={[styles.track, { backgroundColor: colors.surfaceAlt }]}>
-                <View style={[styles.trackFill, { width: `${studyPlan.overallProgress}%`, backgroundColor: colors.accent }]} />
-              </View>
-            </View>
-
-            <View style={[styles.reportCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <SectionHeader icon="calendar" title="Week View" color="#12B76A" />
-              {studyPlan.weeks.map((week) => (
-                <StudyWeekRow key={`${week.week}-${week.title}`} week={week} colors={colors} />
-              ))}
-            </View>
-
-            <View style={[styles.reportCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <SectionHeader icon="checkbox" title="Daily Tasks" color="#0EA5E9" />
-              {studyPlan.dailyTasks.map((task) => (
-                <TaskRow key={task.id} task={task} colors={colors} />
-              ))}
-            </View>
-
             <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={() => {
               setPracticeTopic(selectedTopic);
               loadQuiz(selectedSubject, selectedTopic);
             }}>
-              <Text style={[styles.primaryButtonText, { color: colors.accentText }]}>Start Quick Quiz</Text>
+              <Text style={[styles.primaryButtonText, { color: colors.accentText }]}>Start Topic Quiz</Text>
               <Ionicons name="arrow-forward" size={18} color={colors.accentText} />
             </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.secondaryButton, { borderColor: colors.border }]} onPress={() => setPlanCreated(false)}>
-              <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Edit Plan Setup</Text>
-            </TouchableOpacity>
-          </>
+          </View>
         ) : loadingQuiz ? (
           <View style={[styles.loadingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <ActivityIndicator color={colors.accent} />
@@ -829,30 +650,6 @@ export default function HighSchoolSubjectGapScreen() {
                 <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Choose Another Topic</Text>
               </TouchableOpacity>
             </View>
-
-            <View style={[styles.reportCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-              <SectionHeader icon="git-branch" title="Adaptive Plan Update" color="#7C3AED" />
-              <View style={[styles.adaptiveFocus, { backgroundColor: isDark ? "rgba(18,183,106,0.12)" : "#ECFDF3" }]}>
-                <Text style={[styles.adaptiveLabel, { color: colors.textMuted }]}>New Focus</Text>
-                <Text style={[styles.adaptiveTitle, { color: colors.text }]}>
-                  {displayedReport.focusPlan.topics[0] || displayedReport.focusRows[0]?.label || selectedTopic}
-                </Text>
-                <Text style={[styles.adaptiveText, { color: colors.textMuted }]}>
-                  Added to your plan because ORIN found it from your quiz performance.
-                </Text>
-              </View>
-              {studyPlan.weeks.slice(0, 4).map((week, index) => (
-                <StudyWeekRow
-                  key={`adaptive-${week.week}-${week.title}`}
-                  week={{
-                    ...week,
-                    status: index === 0 ? "completed" : index === 1 ? "active" : week.status,
-                    title: index === 1 ? (displayedReport.focusPlan.topics[0] || week.title) : week.title
-                  }}
-                  colors={colors}
-                />
-              ))}
-            </View>
           </>
         )}
 
@@ -943,43 +740,6 @@ function ScoreBar({
   );
 }
 
-function StudyWeekRow({ week, colors }: { week: StudyWeek; colors: { text: string; textMuted: string; accent: string; surfaceAlt: string; border: string } }) {
-  const statusColor = week.status === "completed" ? "#12B76A" : week.status === "active" ? "#0EA5E9" : "#98A2B3";
-  return (
-    <View style={[styles.weekRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
-      <View style={styles.weekTop}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.weekLabel, { color: colors.textMuted }]}>{week.week}</Text>
-          <Text style={[styles.weekTitle, { color: colors.text }]}>{week.title}</Text>
-          <Text style={[styles.weekFocus, { color: colors.textMuted }]}>{week.focus}</Text>
-        </View>
-        <View style={[styles.statusPill, { backgroundColor: `${statusColor}22` }]}>
-          <Text style={[styles.statusText, { color: statusColor }]}>{week.status}</Text>
-        </View>
-      </View>
-      <View style={[styles.scoreTrack, { backgroundColor: "#E5E7EB" }]}>
-        <View style={[styles.scoreFill, { width: `${Math.max(4, week.progress)}%`, backgroundColor: statusColor }]} />
-      </View>
-    </View>
-  );
-}
-
-function TaskRow({ task, colors }: { task: StudyTask; colors: { text: string; textMuted: string; accent: string; surfaceAlt: string; border: string } }) {
-  const icon = (task.type.toLowerCase().includes("quiz") ? "help-circle" : task.type.toLowerCase().includes("practice") ? "create" : "book") as keyof typeof Ionicons.glyphMap;
-  return (
-    <View style={[styles.taskRow, { borderColor: colors.border }]}>
-      <View style={[styles.taskIcon, { backgroundColor: task.completed ? "#DCFCE7" : colors.surfaceAlt }]}>
-        <Ionicons name={task.completed ? "checkmark-circle" : icon} size={18} color={task.completed ? "#12B76A" : colors.accent} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.taskTitle, { color: colors.text }]}>{task.title}</Text>
-        <Text style={[styles.taskMeta, { color: colors.textMuted }]}>{task.duration}</Text>
-      </View>
-      <Ionicons name={task.completed ? "checkmark-circle" : "ellipse-outline"} size={20} color={task.completed ? "#12B76A" : colors.textMuted} />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: { flex: 1 },
   topBar: {
@@ -1005,9 +765,6 @@ const styles = StyleSheet.create({
   topicWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   topicChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   topicChipText: { fontWeight: "900" },
-  segmentRow: { flexDirection: "row", gap: 8 },
-  segmentButton: { flex: 1, minHeight: 42, borderWidth: 1, borderRadius: 999, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  segmentText: { fontWeight: "900", fontSize: 12, textAlign: "center" },
   quizHero: { borderWidth: 1, borderRadius: 26, padding: 17, gap: 14 },
   quizHeroTop: { flexDirection: "row", gap: 12, alignItems: "center", justifyContent: "space-between" },
   eyebrow: { fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8 },
@@ -1062,17 +819,6 @@ const styles = StyleSheet.create({
   scoreTrack: { height: 9, borderRadius: 999, overflow: "hidden", backgroundColor: "#E5E7EB" },
   scoreFill: { height: "100%", borderRadius: 999 },
   scoreHelper: { color: "#667085", fontSize: 12, fontWeight: "700" },
-  weekRow: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 9 },
-  weekTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  weekLabel: { fontSize: 11, fontWeight: "900" },
-  weekTitle: { fontSize: 14, fontWeight: "900", marginTop: 2 },
-  weekFocus: { fontSize: 12, lineHeight: 17, fontWeight: "700", marginTop: 3 },
-  statusPill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 },
-  statusText: { fontSize: 10, fontWeight: "900", textTransform: "capitalize" },
-  taskRow: { minHeight: 56, borderWidth: 1, borderRadius: 16, padding: 10, flexDirection: "row", alignItems: "center", gap: 10 },
-  taskIcon: { width: 34, height: 34, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  taskTitle: { fontSize: 13, fontWeight: "900" },
-  taskMeta: { fontSize: 11, fontWeight: "700", marginTop: 2 },
   focusCard: { borderWidth: 1, borderRadius: 24, padding: 16, gap: 14 },
   focusTop: { flexDirection: "row", alignItems: "center", gap: 12 },
   focusIcon: { width: 44, height: 44, borderRadius: 16, alignItems: "center", justifyContent: "center" },
@@ -1081,10 +827,6 @@ const styles = StyleSheet.create({
   focusMeta: { lineHeight: 19, fontWeight: "800", marginTop: 6, fontSize: 12 },
   secondaryButton: { minHeight: 46, borderRadius: 999, borderWidth: 1, alignItems: "center", justifyContent: "center" },
   secondaryButtonText: { fontWeight: "900" },
-  adaptiveFocus: { borderRadius: 18, padding: 13, gap: 4 },
-  adaptiveLabel: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
-  adaptiveTitle: { fontSize: 17, fontWeight: "900" },
-  adaptiveText: { fontWeight: "700", lineHeight: 19 },
   tipCard: { borderWidth: 1, borderRadius: 18, padding: 13, flexDirection: "row", gap: 10, alignItems: "flex-start" },
   tipText: { flex: 1, lineHeight: 20, fontWeight: "700" },
   modalBackdrop: { flex: 1, backgroundColor: "rgba(15,23,42,0.45)", justifyContent: "flex-end" },
