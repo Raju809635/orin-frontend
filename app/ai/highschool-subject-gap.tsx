@@ -3,6 +3,7 @@ import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAppTheme } from "@/context/ThemeContext";
+import { useLearner } from "@/context/LearnerContext";
 import { getAppErrorMessage } from "@/lib/appError";
 import { api } from "@/lib/api";
 
@@ -293,6 +294,7 @@ function barColor(value: number) {
 export default function HighSchoolSubjectGapScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
+  const { className } = useLearner();
   const [activeQuestions, setActiveQuestions] = useState<GapQuestion[]>(FALLBACK_QUESTIONS);
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -327,6 +329,7 @@ export default function HighSchoolSubjectGapScreen() {
       }>("/api/ai/highschool/subject-gap/quiz", {
         subjects: [subject],
         questionCount: focusTopic ? 5 : 9,
+        classLevel: className || "High School",
         focusTopic: focusTopic || undefined
       });
       const nextQuestions = Array.isArray(data?.quiz?.questions) && data.quiz.questions.length ? data.quiz.questions : FALLBACK_QUESTIONS;
@@ -644,7 +647,7 @@ export default function HighSchoolSubjectGapScreen() {
                 <Ionicons name="arrow-forward" size={18} color={colors.accentText} />
               </TouchableOpacity>
               <TouchableOpacity style={[styles.secondaryButton, { borderColor: colors.border }]} onPress={resetFullQuiz}>
-                <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Retake Full Quiz</Text>
+                <Text style={[styles.secondaryButtonText, { color: colors.text }]}>Choose Another Topic</Text>
               </TouchableOpacity>
             </View>
           </>
