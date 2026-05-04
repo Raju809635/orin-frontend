@@ -118,7 +118,7 @@ export default function AiHubScreen() {
     },
     {
       id: "project_ideas",
-      label: isTeacherMentor ? "Class Activity Ideas" : isHeadMentor ? "Competition Ideas" : isKid ? "Creative Corner" : isHighSchool ? "School Project Ideas" : "AI Project Ideas",
+      label: isTeacherMentor ? "Class Activity Ideas" : isHeadMentor ? "Competition Ideas" : isKid ? "Creative Corner" : isHighSchool ? "Exam Strategy Builder" : "AI Project Ideas",
       description: isTeacherMentor
         ? "Generate homework, classroom tasks, challenge ideas, and proof-based activities."
         : isHeadMentor
@@ -128,11 +128,11 @@ export default function AiHubScreen() {
             : isKid
           ? "Get drawing, story, and simple make-and-build ideas for class activities."
           : isHighSchool
-            ? "Generate school-friendly project, exhibition, and portfolio ideas."
+            ? "Create a marks-focused exam strategy with subject priorities, weightage, and weekly planning."
             : "Generate practical project ideas aligned to your career track.",
-      icon: isTeacherMentor ? "clipboard" : isHeadMentor ? "trophy" : isKid ? "color-wand" : "bulb",
+      icon: isTeacherMentor ? "clipboard" : isHeadMentor ? "trophy" : isKid ? "color-wand" : isHighSchool ? "locate" : "bulb",
       emoji: isKid ? "🎨" : isHighSchool ? "💡" : undefined,
-      path: isKid ? "/ai/creative-corner" : "/ai/project-ideas",
+      path: isKid ? "/ai/creative-corner" : isHighSchool ? "/ai/exam-strategy-builder" : "/ai/project-ideas",
       iconColor: "#D97706",
       iconBg: "#FFF1DA",
       darkIconBg: "rgba(217,119,6,0.18)",

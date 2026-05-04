@@ -801,6 +801,7 @@ function RootDrawer() {
           <Drawer.Screen name="ai/kids-ask-orin" options={{ title: "Ask ORIN", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/career-explorer" options={{ title: "Career Explorer", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/study-planner" options={{ title: "Study Planner", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/exam-strategy-builder" options={{ title: "Exam Strategy Builder", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/highschool-subject-gap" options={{ title: "Subject Gap Analyzer", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/highschool-study-roadmap" options={{ title: "Study Roadmap", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/highschool-study-assistant" options={{ title: "Study Assistant", drawerItemStyle: { display: "none" } }} />
