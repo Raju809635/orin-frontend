@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAppTheme } from "@/context/ThemeContext";
 import { getAppErrorMessage } from "@/lib/appError";
@@ -56,6 +56,12 @@ const SUBJECT_META: Record<SubjectName, { icon: keyof typeof Ionicons.glyphMap; 
   Mathematics: { icon: "calculator", color: "#0EA5E9", bg: "#E0F2FE" },
   Science: { icon: "flask", color: "#7C3AED", bg: "#F3E8FF" },
   English: { icon: "book", color: "#F59E0B", bg: "#FEF3C7" }
+};
+
+const SUBJECT_TOPICS: Record<SubjectName, string[]> = {
+  Mathematics: ["Fractions", "Algebra", "Geometry", "Numbers"],
+  Science: ["Electricity", "Plants", "Forces", "Life Processes"],
+  English: ["Grammar", "Reading", "Vocabulary", "Writing Skills"]
 };
 
 const FALLBACK_QUESTIONS: GapQuestion[] = [
@@ -298,23 +304,28 @@ export default function HighSchoolSubjectGapScreen() {
   const [loadingQuiz, setLoadingQuiz] = useState(false);
   const [loadingReport, setLoadingReport] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [quizStarted, setQuizStarted] = useState(false);
+  const [selectedSubject, setSelectedSubject] = useState<SubjectName>("Mathematics");
+  const [selectedTopic, setSelectedTopic] = useState("Algebra");
 
   const currentQuestion = activeQuestions[currentIndex];
   const progress = activeQuestions.length ? Math.round(((currentIndex + 1) / activeQuestions.length) * 100) : 0;
+  const availableTopics = SUBJECT_TOPICS[selectedSubject] || [];
 
   const localReport = useMemo(() => buildLocalReport(activeQuestions, answers), [activeQuestions, answers]);
   const displayedReport = showReport ? report : localReport;
   const { overallScore, subjectRows, weakRows, strengthRows, averageRows } = displayedReport;
 
-  async function loadQuiz(focusTopic?: string | null) {
+  async function loadQuiz(subject: SubjectName = selectedSubject, focusTopic: string | null = selectedTopic) {
     setLoadingQuiz(true);
     setStatusMessage("");
+    setQuizStarted(true);
     try {
       const { data } = await api.post<{
         source?: "ai" | "fallback";
         quiz?: { questions?: GapQuestion[] };
       }>("/api/ai/highschool/subject-gap/quiz", {
-        subjects: ["Mathematics", "Science", "English"],
+        subjects: [subject],
         questionCount: focusTopic ? 5 : 9,
         focusTopic: focusTopic || undefined
       });
@@ -324,8 +335,8 @@ export default function HighSchoolSubjectGapScreen() {
       setStatusMessage(data?.source === "ai" ? "AI created this quiz from high-school subject intelligence." : "Using safe offline questions until AI is available.");
     } catch (error) {
       const fallback = focusTopic
-        ? FALLBACK_QUESTIONS.filter((question) => question.topic === focusTopic)
-        : FALLBACK_QUESTIONS;
+        ? FALLBACK_QUESTIONS.filter((question) => question.subject === subject && question.topic === focusTopic)
+        : FALLBACK_QUESTIONS.filter((question) => question.subject === subject);
       setActiveQuestions(fallback.length ? fallback : FALLBACK_QUESTIONS);
       setQuizSource("fallback");
       setStatusMessage(getAppErrorMessage(error, "AI quiz is unavailable, so ORIN loaded safe offline questions."));
@@ -357,10 +368,6 @@ export default function HighSchoolSubjectGapScreen() {
     }
   }
 
-  useEffect(() => {
-    loadQuiz(null);
-  }, []);
-
   function selectAnswer(option: string) {
     if (!currentQuestion || answers[currentQuestion.id]) return;
     setAnswers((prev) => ({ ...prev, [currentQuestion.id]: option }));
@@ -381,13 +388,20 @@ export default function HighSchoolSubjectGapScreen() {
       displayedReport.topicRows[0]?.label ||
       null;
     if (!nextTopic) return;
+    const nextSubject = (displayedReport.focusRows[0]?.subject || selectedSubject) as SubjectName;
+    setSelectedSubject(nextSubject);
+    setSelectedTopic(nextTopic);
     setPracticeTopic(nextTopic);
-    loadQuiz(nextTopic);
+    loadQuiz(nextSubject, nextTopic);
   }
 
   function resetFullQuiz() {
     setPracticeTopic(null);
-    loadQuiz(null);
+    setQuizStarted(false);
+    setShowReport(false);
+    setAnswers({});
+    setCurrentIndex(0);
+    setStatusMessage("");
   }
 
   const selected = currentQuestion ? answers[currentQuestion.id] : "";
@@ -412,7 +426,60 @@ export default function HighSchoolSubjectGapScreen() {
           </View>
         ) : null}
 
-        {loadingQuiz ? (
+        {!quizStarted ? (
+          <View style={[styles.setupCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.eyebrow, { color: colors.accent }]}>Step 1 - Select Focus</Text>
+            <Text style={[styles.heroTitle, { color: colors.text }]}>Choose subject and topic</Text>
+            <Text style={[styles.heroSubtitle, { color: colors.textMuted }]}>
+              ORIN will create a short AI quiz for this topic, then detect gaps from your score.
+            </Text>
+
+            <Text style={[styles.setupLabel, { color: colors.text }]}>Subject</Text>
+            <View style={styles.selectorGrid}>
+              {(Object.keys(SUBJECT_TOPICS) as SubjectName[]).map((subject) => {
+                const active = selectedSubject === subject;
+                const meta = SUBJECT_META[subject];
+                return (
+                  <TouchableOpacity
+                    key={subject}
+                    style={[styles.selectorTile, { backgroundColor: active ? meta.bg : colors.surfaceAlt, borderColor: active ? meta.color : colors.border }]}
+                    onPress={() => {
+                      setSelectedSubject(subject);
+                      setSelectedTopic(SUBJECT_TOPICS[subject][0]);
+                    }}
+                  >
+                    <Ionicons name={meta.icon} size={20} color={active ? meta.color : colors.textMuted} />
+                    <Text style={[styles.selectorText, { color: active ? meta.color : colors.text }]}>{subject}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.setupLabel, { color: colors.text }]}>Topic</Text>
+            <View style={styles.topicWrap}>
+              {availableTopics.map((topic) => {
+                const active = selectedTopic === topic;
+                return (
+                  <TouchableOpacity
+                    key={topic}
+                    style={[styles.topicChip, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]}
+                    onPress={() => setSelectedTopic(topic)}
+                  >
+                    <Text style={[styles.topicChipText, { color: active ? colors.accent : colors.textMuted }]}>{topic}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={() => {
+              setPracticeTopic(selectedTopic);
+              loadQuiz(selectedSubject, selectedTopic);
+            }}>
+              <Text style={[styles.primaryButtonText, { color: colors.accentText }]}>Start Topic Quiz</Text>
+              <Ionicons name="arrow-forward" size={18} color={colors.accentText} />
+            </TouchableOpacity>
+          </View>
+        ) : loadingQuiz ? (
           <View style={[styles.loadingCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <ActivityIndicator color={colors.accent} />
             <Text style={[styles.loadingTitle, { color: colors.text }]}>Building your AI quiz...</Text>
@@ -687,6 +754,14 @@ const styles = StyleSheet.create({
   loadingCard: { borderWidth: 1, borderRadius: 24, padding: 24, alignItems: "center", gap: 10 },
   loadingTitle: { fontSize: 18, fontWeight: "900" },
   loadingText: { textAlign: "center", lineHeight: 20, fontWeight: "700" },
+  setupCard: { borderWidth: 1, borderRadius: 26, padding: 17, gap: 14 },
+  setupLabel: { fontSize: 14, fontWeight: "900", marginTop: 4 },
+  selectorGrid: { flexDirection: "row", gap: 10 },
+  selectorTile: { flex: 1, minHeight: 82, borderWidth: 1, borderRadius: 18, alignItems: "center", justifyContent: "center", gap: 7, padding: 10 },
+  selectorText: { fontWeight: "900", fontSize: 12, textAlign: "center" },
+  topicWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  topicChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  topicChipText: { fontWeight: "900" },
   quizHero: { borderWidth: 1, borderRadius: 26, padding: 17, gap: 14 },
   quizHeroTop: { flexDirection: "row", gap: 12, alignItems: "center", justifyContent: "space-between" },
   eyebrow: { fontSize: 11, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8 },
