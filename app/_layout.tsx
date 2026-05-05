@@ -70,6 +70,7 @@ function getTabKeyForPath(pathname: string): AppTabKey | null {
   if (pathname.startsWith("/mentorship") || pathname.startsWith("/domains") || pathname.startsWith("/domain-guide") || pathname.startsWith("/mentor/") || pathname.startsWith("/mentors") || pathname.startsWith("/student-sessions") || pathname.startsWith("/sprints/")) return "mentorship";
   if (pathname.startsWith("/student-dashboard") || pathname.startsWith("/mentor-dashboard")) return "journey";
   if (pathname.startsWith("/ai-hub") || pathname.startsWith("/ai/") || pathname.startsWith("/ai-assistant")) return "ai";
+  if (pathname.startsWith("/resource-library")) return "community";
   if (pathname.startsWith("/community-growth") || pathname.startsWith("/community/") || pathname.startsWith("/collaborate")) return "community";
   return null;
 }
@@ -229,6 +230,7 @@ function RootDrawer() {
     const isAuthScreen = pathname === "/login" || pathname === "/register" || pathname === "/verify-email";
     const isProtected =
       pathname.startsWith("/ai-assistant") ||
+      pathname.startsWith("/resource-library") ||
       pathname.startsWith("/complaints") ||
       pathname.startsWith("/chat") ||
       pathname.startsWith("/collaborate") ||
@@ -771,6 +773,7 @@ function RootDrawer() {
           <Drawer.Screen name="collaborate" options={{ title: "Collaborate", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="chat" options={{ title: "Messages", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai-assistant" options={{ title: "AI Assistant", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="resource-library" options={{ title: "Resource Library", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="complaints" options={{ title: "Complaints", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="domains" options={{ title: "Domains", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="domain-guide" options={{ title: "Domain Guide", drawerItemStyle: { display: "none" } }} />

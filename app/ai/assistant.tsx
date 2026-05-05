@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect } from "expo-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -128,6 +128,13 @@ function renderRichAnswer(text: string, colors: { text: string }) {
 }
 
 export default function AiAssistantEntryPage() {
+  const params = useLocalSearchParams<{
+    board?: string;
+    classNumber?: string;
+    subject?: string;
+    chapterName?: string;
+    prompt?: string;
+  }>();
   const scrollRef = useRef<ScrollView | null>(null);
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useAppTheme();
@@ -144,6 +151,13 @@ export default function AiAssistantEntryPage() {
   const [renameModalVisible, setRenameModalVisible] = useState(false);
   const [renameDraft, setRenameDraft] = useState("");
   const [renamingConversationId, setRenamingConversationId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof params.prompt === "string" && params.prompt.trim()) {
+      setMessage(params.prompt);
+      setActiveTab("general");
+    }
+  }, [params.prompt]);
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -198,7 +212,15 @@ export default function AiAssistantEntryPage() {
         conversationId: selectedConversationId || undefined,
         context: {
           source: "ai-assistant-page",
-          assistantMode: activeTab
+          assistantMode: activeTab,
+          academic: params.board && params.classNumber && params.subject
+            ? {
+                board: params.board,
+                classNumber: Number(params.classNumber),
+                subject: params.subject,
+                chapterName: params.chapterName
+              }
+            : undefined
         }
       });
 
