@@ -75,6 +75,7 @@ export default function HighSchoolStudyAssistantScreen() {
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [answerSource, setAnswerSource] = useState<"ai" | "fallback">("fallback");
 
   const currentPractice = result.practiceQuestions[0];
   const practiceSelected = currentPractice ? selectedAnswers[currentPractice.id] : "";
@@ -93,10 +94,12 @@ export default function HighSchoolStudyAssistantScreen() {
         classLevel: className || "High School"
       });
       setResult(data?.result || fallbackResult());
+      setAnswerSource(data?.source === "ai" ? "ai" : "fallback");
       setSelectedAnswers({});
-      setStatusMessage(data?.source === "ai" ? "AI explained your doubt with study tools and practice." : "Using safe study help until AI is available.");
+      setStatusMessage(data?.source === "ai" ? "AI explained your doubt with study tools and practice." : "ORIN loaded checked study help because the AI answer was unavailable or did not pass quality checks.");
     } catch (error) {
       setResult(fallbackResult());
+      setAnswerSource("fallback");
       setSelectedAnswers({});
       setStatusMessage(getAppErrorMessage(error, "AI study help is unavailable, so ORIN loaded safe study help."));
     } finally {
@@ -221,7 +224,9 @@ export default function HighSchoolStudyAssistantScreen() {
               </View>
             ) : (
               <>
-                <Text style={[styles.answerMode, { color: activeStyle.color }]}>{activeStyle.title}</Text>
+                <Text style={[styles.answerMode, { color: activeStyle.color }]}>
+                  {answerSource === "ai" ? activeStyle.title : `Checked Study Help - ${activeStyle.title}`}
+                </Text>
                 <Text style={[styles.answerTitle, { color: colors.text }]}>{result.title}</Text>
                 {answerStyle === "steps" ? (
                   <View style={styles.stepList}>
