@@ -61,10 +61,41 @@ type InstitutionRoadmap = {
 
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
 const FALLBACK_SUBJECTS = ["Mathematics", "Science", "Social Science", "English", "Telugu", "Hindi"];
+const SUBJECT_PRIORITY = ["Mathematics", "Science", "Social Science", "Telugu", "English", "Hindi", "Physical Science", "Biological Science"];
 
 function normalizeSubjectLabel(item: AcademicSubject | string) {
   if (typeof item === "string") return item;
   return String(item.name || item.subject || item.key || item.slug || "").trim();
+}
+
+function sortSubjectsForSchool(values: string[]) {
+  const unique = Array.from(new Set(values.filter(Boolean)));
+  return unique.sort((a, b) => {
+    const ai = SUBJECT_PRIORITY.findIndex((item) => item.toLowerCase() === a.toLowerCase());
+    const bi = SUBJECT_PRIORITY.findIndex((item) => item.toLowerCase() === b.toLowerCase());
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.localeCompare(b);
+  });
+}
+
+function roadmapTopicsForSubject(subject: string, chapter: string) {
+  const subjectKey = subject.toLowerCase();
+  if (chapter) {
+    if (subjectKey.includes("math")) return [`${chapter}: Formula Map`, "Solved Examples", "Practice Set", "Weak Area Drill", "Final Check"];
+    if (subjectKey.includes("social")) return [`${chapter}: Key Events`, "Maps / Terms / Dates", "Short Answers", "Case-Based Practice", "Final Check"];
+    if (subjectKey.includes("telugu")) return [`${chapter}: Reading`, "Meanings & Vocabulary", "Question Answers", "Grammar / Writing", "Final Check"];
+    if (subjectKey.includes("science") || subjectKey.includes("physics") || subjectKey.includes("chem") || subjectKey.includes("bio")) {
+      return [`${chapter}: Concepts`, "Diagrams & Definitions", "Textbook Questions", "Application Practice", "Final Check"];
+    }
+    return [`${chapter}: Core Ideas`, "Examples & Notes", "Practice Set", "Weak Area Drill", "Final Check"];
+  }
+  if (subjectKey.includes("math")) return ["Formula Basics", "Solved Examples", "Exercise Practice", "Weak Area Drill", "Revision Test"];
+  if (subjectKey.includes("social")) return ["Chapter Reading", "Key Terms & Dates", "Map/Timeline Practice", "Short Answers", "Revision Test"];
+  if (subjectKey.includes("telugu")) return ["Lesson Reading", "Meanings & Vocabulary", "Question Answers", "Grammar/Writing", "Revision Test"];
+  if (subjectKey.includes("science") || subjectKey.includes("physics") || subjectKey.includes("chem") || subjectKey.includes("bio")) {
+    return ["Concept Clarity", "Diagrams & Definitions", "Textbook Questions", "Experiment/Application", "Revision Test"];
+  }
+  if (subjectKey.includes("english") || subjectKey.includes("hindi")) return ["Reading", "Vocabulary", "Grammar", "Writing Practice", "Revision Test"];
+  return ["Core Concepts", "Examples & Notes", "Practice Set", "Weak Area Drill", "Final Check"];
 }
 
 function normalizeStep(step: RoadmapStep, index: number): RoadmapStep {
@@ -87,7 +118,7 @@ function normalizeStep(step: RoadmapStep, index: number): RoadmapStep {
 }
 
 function buildLocalRoadmap(subject: string, classLevel: string, chapter: string, goal: string): StudyRoadmap {
-  const topics = [chapter || "Core Concepts", "Examples & Notes", "Practice Set", "Weak Area Drill", "Final Check"];
+  const topics = roadmapTopicsForSubject(subject, chapter);
   const steps = topics.map((topic, index) => normalizeStep({
     id: `local-${index + 1}`,
     stepNumber: index + 1,
@@ -97,8 +128,8 @@ function buildLocalRoadmap(subject: string, classLevel: string, chapter: string,
     outcome: `Show progress in ${topic}.`,
     xpReward: 20,
     tasks: [
-      { id: `local-${index + 1}-read`, type: "Read", title: `Revise ${topic}`, duration: "15 min" },
-      { id: `local-${index + 1}-practice`, type: "Practice", title: "Solve 5-10 questions", duration: "20 min" },
+      { id: `local-${index + 1}-read`, type: "Read", title: `Study ${topic}`, duration: "15 min" },
+      { id: `local-${index + 1}-practice`, type: "Practice", title: subject.toLowerCase().includes("telugu") ? "Write answers and meanings" : "Solve 5-10 questions", duration: "20 min" },
       { id: `local-${index + 1}-proof`, type: "Proof", title: "Submit notes, score, or screenshot", duration: "5 min" }
     ]
   } as RoadmapStep, index));
@@ -157,8 +188,10 @@ export default function HighSchoolStudyRoadmapScreen() {
       const { data } = await api.get<{ subjects?: AcademicSubject[] | string[]; message?: string }>(`/api/academics/class/${classLevel}/subjects`);
       const nextSubjects = (data?.subjects || []).map(normalizeSubjectLabel).filter(Boolean);
       if (nextSubjects.length) {
-        setSubjects(nextSubjects);
-        if (!nextSubjects.includes(subject)) setSubject(nextSubjects[0]);
+        const sortedSubjects = sortSubjectsForSchool(nextSubjects);
+        setSubjects(sortedSubjects);
+        setStatusMessage("");
+        if (!sortedSubjects.includes(subject)) setSubject(sortedSubjects[0]);
       } else if (data?.message) {
         setSubjects([]);
         setChapters([]);
@@ -166,7 +199,7 @@ export default function HighSchoolStudyRoadmapScreen() {
         setStatusMessage(data.message);
       }
     } catch {
-      setSubjects(FALLBACK_SUBJECTS);
+      setSubjects(sortSubjectsForSchool(FALLBACK_SUBJECTS));
     } finally {
       setLoadingContext(false);
     }
@@ -316,7 +349,7 @@ export default function HighSchoolStudyRoadmapScreen() {
           <ChipRow values={CLASS_OPTIONS} selected={classLevel} onSelect={setClassLevel} colors={colors} />
 
           <Text style={[styles.label, { color: colors.text }]}>Subject {loadingContext ? "(loading...)" : ""}</Text>
-          <ChipRow values={subjects.slice(0, 8)} selected={subject} onSelect={setSubject} colors={colors} />
+          <ChipRow values={subjects} selected={subject} onSelect={setSubject} colors={colors} />
 
           <Text style={[styles.label, { color: colors.text }]}>Chapter / Topic</Text>
           {chapters.length ? (
