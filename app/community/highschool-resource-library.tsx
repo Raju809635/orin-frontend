@@ -48,28 +48,38 @@ export default function HighSchoolResourceLibraryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const isPdfResource = useCallback((item: ResourceItem) => {
+    const documentUrl = String(item.documentUrl || "").toLowerCase().trim();
+    const externalUrl = String(item.url || "").toLowerCase().trim();
+    return documentUrl.endsWith(".pdf") || externalUrl.endsWith(".pdf") || documentUrl.includes(".pdf?") || externalUrl.includes(".pdf?");
+  }, []);
+
+  const pdfResources = useMemo(
+    () => [...institutionItems, ...domainItems].filter(isPdfResource),
+    [domainItems, institutionItems, isPdfResource]
+  );
+
   const selectedSubject = useMemo(
     () => subjects.find((item) => item.key === selectedSubjectKey) || subjects[0],
     [selectedSubjectKey, subjects]
   );
 
-  const isPdfResource = useCallback((item: ResourceItem) => {
-    const documentUrl = String(item.documentUrl || "").toLowerCase().trim();
-    const externalUrl = String(item.url || "").toLowerCase().trim();
-    return documentUrl.includes(".pdf") || externalUrl.includes(".pdf");
-  }, []);
-
   const openPdf = useCallback((item: ResourceItem) => {
-    const documentUrl = String(item.documentUrl || "").trim();
-    if (!documentUrl) return;
-    Linking.openURL(documentUrl).catch(() => {
+    const rawUrl = String(item.documentUrl || item.url || "").trim();
+    if (!rawUrl) {
+      setError("PDF URL is missing for this resource.");
+      return;
+    }
+    const normalized = /^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`;
+    Linking.openURL(normalized).catch(() => {
       setError("Unable to open PDF document.");
     });
   }, []);
 
   const load = useCallback(async (refresh = false) => {
     try {
-      if (refresh) setRefreshing(true); else setLoading(true);
+      if (refresh) setRefreshing(true);
+      else setLoading(true);
       setError(null);
       const [libraryRes, roadmapRes, subjectsRes] = await Promise.allSettled([
         api.get<LibraryResponse>("/api/network/knowledge-library"),
@@ -110,7 +120,11 @@ export default function HighSchoolResourceLibraryScreen() {
     }
   }, []);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
 
   const chapters = academicSubject?.chapters || [];
 
@@ -118,17 +132,19 @@ export default function HighSchoolResourceLibraryScreen() {
     <StageCommunityScaffold
       eyebrow={`${DEMO_BOARD} Class ${DEMO_CLASS} Demo`}
       title="Resource Library"
-      subtitle="Academic syllabus, teacher resources, and institution roadmaps in one school-first library."
+      subtitle="Same ORIN community quality, but school-academic resources only. PDFs open directly from this page."
       loading={loading}
       error={error}
       refreshing={refreshing}
       onRefresh={() => load(true)}
     >
-      <StageStatRow items={[
-        { label: "Subjects", value: String(subjects.length) },
-        { label: "Chapters", value: String(chapters.length) },
-        { label: "Resources", value: String(institutionItems.length + domainItems.length) }
-      ]} />
+      <StageStatRow
+        items={[
+          { label: "Subjects", value: String(subjects.length) },
+          { label: "Chapters", value: String(chapters.length) },
+          { label: "PDFs", value: String(pdfResources.length) }
+        ]}
+      />
 
       <StageSection title="Academic Source Browser" icon="library">
         {subjects.length ? (
@@ -139,7 +155,10 @@ export default function HighSchoolResourceLibraryScreen() {
                 return (
                   <TouchableOpacity
                     key={subject.key}
-                    style={[styles.subjectChip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surfaceAlt }]}
+                    style={[
+                      styles.subjectChip,
+                      { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surfaceAlt }
+                    ]}
                     onPress={() => loadSubject(subject.key)}
                   >
                     <Text style={[styles.subjectText, { color: active ? colors.accent : colors.textMuted }]}>{subject.subject}</Text>
@@ -150,7 +169,7 @@ export default function HighSchoolResourceLibraryScreen() {
             <StageListCard
               title={selectedSubject?.subject || academicSubject?.metadata?.subject || "Selected subject"}
               meta={`${chapters.length} chapters | ${academicSubject?.metadata?.verification_status || selectedSubject?.verificationStatus || "dataset"}`}
-              note="This comes from the ORIN academics dataset. Add official PDFs later and the same page will read the upgraded parsed data."
+              note="Pick a chapter to jump into Study Roadmap context."
               tone="highschool"
             />
             {chapters.slice(0, 6).map((chapter) => (
@@ -158,47 +177,58 @@ export default function HighSchoolResourceLibraryScreen() {
                 key={`${chapter.chapter_no}-${chapter.chapter_name}`}
                 title={`${chapter.chapter_no || ""}. ${chapter.chapter_name || "Chapter"}`}
                 meta={`${chapter.unit || "Syllabus"} | ${chapter.topics?.length || 0} topics`}
-                note={(chapter.topics || []).slice(0, 3).map((topic) => topic.topic_name).filter(Boolean).join(", ")}
+                note={(chapter.topics || [])
+                  .slice(0, 3)
+                  .map((topic) => topic.topic_name)
+                  .filter(Boolean)
+                  .join(", ")}
                 tone="highschool"
-                onPress={() => router.push(`/ai/highschool-study-roadmap?subject=${encodeURIComponent(selectedSubject?.subject || "")}&chapter=${encodeURIComponent(chapter.chapter_name || "")}` as never)}
+                onPress={() =>
+                  router.push(
+                    `/ai/highschool-study-roadmap?subject=${encodeURIComponent(selectedSubject?.subject || "")}&chapter=${encodeURIComponent(
+                      chapter.chapter_name || ""
+                    )}` as never
+                  )
+                }
               />
             ))}
           </>
-        ) : <EmptyState label="Academic dataset is not connected yet." />}
+        ) : (
+          <EmptyState label="Academic dataset is not connected yet." />
+        )}
       </StageSection>
 
-      <StageSection title="Teacher & Institution Resources" icon="document-text" actionLabel="Open full" onAction={() => router.push("/community/knowledge-library" as never)}>
-        {(institutionItems.filter(isPdfResource).length || domainItems.filter(isPdfResource).length) ? institutionItems.filter(isPdfResource).slice(0, 4).map((item) => (
-          <StageListCard
-            key={item._id || item.id || item.title}
-            title={item.title}
-            meta={`${item.domain || "School"} | ${item.type || "Resource"} | PDF`}
-            note={item.description || `Uploaded by ${item.mentor?.name || "Mentor"} · Tap to open PDF`}
-            tone="highschool"
-            onPress={() => openPdf(item)}
-          />
-        )) : domainItems.filter(isPdfResource).length ? domainItems.filter(isPdfResource).slice(0, 4).map((item) => (
-          <StageListCard
-            key={item._id || item.id || item.title}
-            title={item.title}
-            meta={`${item.domain || "Study"} | ${item.type || "Guide"} | PDF`}
-            note={`${item.description || "Academic resource"} · Tap to open PDF`}
-            tone="highschool"
-            onPress={() => openPdf(item)}
-          />
-        )) : <EmptyState label="No PDF resources yet. Upload document PDFs in Knowledge Library." />}
+      <StageSection title="Teacher & Institution Resources (PDF Only)" icon="document-text" actionLabel="Open full" onAction={() => router.push("/community/knowledge-library" as never)}>
+        {pdfResources.length ? (
+          pdfResources.slice(0, 8).map((item) => (
+            <StageListCard
+              key={item._id || item.id || item.title}
+              title={item.title}
+              meta={`${item.domain || "School"} | ${item.type || "Resource"} | PDF`}
+              note={item.description || `Uploaded by ${item.mentor?.name || "Mentor"} · Tap to open PDF`}
+              tone="highschool"
+              onPress={() => openPdf(item)}
+            />
+          ))
+        ) : (
+          <EmptyState label="No PDF resources yet. Upload document PDFs in Knowledge Library." />
+        )}
       </StageSection>
 
       <StageSection title="Institution Roadmaps" icon="map" actionLabel="Open full" onAction={() => router.push("/ai/career-roadmap?section=institution" as never)}>
-        {roadmaps.length ? roadmaps.slice(0, 4).map((item) => (
-          <StageListCard
-            key={item._id || item.id || item.title}
-            title={item.title}
-            meta={`${item.domain || "Study"} | ${item.weeks?.length || 0} weeks`}
-            note={`Mentor: ${item.mentor?.name || "Guide"}${item.className ? ` | Class ${item.className}` : ""}`}
-            tone="highschool"
-          />
-        )) : <EmptyState label="No institution roadmaps yet." />}
+        {roadmaps.length ? (
+          roadmaps.slice(0, 4).map((item) => (
+            <StageListCard
+              key={item._id || item.id || item.title}
+              title={item.title}
+              meta={`${item.domain || "Study"} | ${item.weeks?.length || 0} weeks`}
+              note={`Mentor: ${item.mentor?.name || "Guide"}${item.className ? ` | Class ${item.className}` : ""}`}
+              tone="highschool"
+            />
+          ))
+        ) : (
+          <EmptyState label="No institution roadmaps yet." />
+        )}
       </StageSection>
     </StageCommunityScaffold>
   );
@@ -209,3 +239,4 @@ const styles = StyleSheet.create({
   subjectChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   subjectText: { fontWeight: "900", fontSize: 13 }
 });
+

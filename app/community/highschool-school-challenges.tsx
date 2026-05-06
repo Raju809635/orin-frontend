@@ -54,7 +54,16 @@ export default function HighSchoolSchoolChallengesScreen() {
         { label: "Subjects", value: String(subjects.length) },
         { label: "Ranks", value: String(leaders.length) }
       ]} />
-      <StageSection title="Subject Practice Entry" icon="game-controller" actionLabel="Start quiz" onAction={() => router.push("/ai/highschool-subject-gap" as never)}>
+      <StageSection title="Quiz Battle" icon="flash" actionLabel="Open battle" onAction={() => router.push("/community/highschool-quiz-battle" as never)}>
+        <StageListCard
+          title="Live Quiz Battle Rooms"
+          meta="Real-time score race | Multi-student"
+          note="Create or join a room, answer fast, and climb academic ranks."
+          tone="highschool"
+          onPress={() => router.push("/community/highschool-quiz-battle" as never)}
+        />
+      </StageSection>
+      <StageSection title="Subject Practice Entry" icon="game-controller" actionLabel="Start subject gap" onAction={() => router.push("/ai/highschool-subject-gap" as never)}>
         {subjects.length ? subjects.slice(0, 5).map((subject) => (
           <StageListCard
             key={subject.key}
@@ -77,7 +86,7 @@ export default function HighSchoolSchoolChallengesScreen() {
           />
         )) : <EmptyState label="No school challenges yet." />}
       </StageSection>
-      <StageSection title="Leaderboard Snapshot" icon="podium" actionLabel="Open full" onAction={() => router.push("/community/leaderboard" as never)}>
+      <StageSection title="Leaderboard Snapshot" icon="podium" actionLabel="Open full" onAction={() => router.push("/community/highschool-leaderboard" as never)}>
         {leaders.length ? leaders.slice(0, 4).map((entry) => (
           <StageListCard key={`${entry.rank}-${entry.name}`} title={`#${entry.rank} ${entry.name}`} meta={`${entry.score} points`} tone="highschool" />
         )) : <EmptyState label="No leaderboard data yet." />}

@@ -55,6 +55,8 @@ export default function HighSchoolLeaderboardScreen() {
 
   const scopeTitle = scope === "school" ? data?.collegeName || "Your School" : scope === "state" ? data?.stateName || "Your State" : "Global";
   const myRank = scope === "school" ? data?.me?.collegeRank : scope === "state" ? data?.me?.stateRank : data?.me?.globalRank;
+  const podium = scopedEntries.slice(0, 3);
+  const podiumSlots = [podium[1], podium[0], podium[2]];
 
   return (
     <StageCommunityScaffold
@@ -97,6 +99,24 @@ export default function HighSchoolLeaderboardScreen() {
       </View>
 
       <StageSection title={`${scopeTitle} Top Students`} icon="podium">
+        <View style={styles.podiumRow}>
+          {podiumSlots.map((entry, idx) => (
+            <View
+              key={`podium-${idx}-${entry?.name || "empty"}`}
+              style={[
+                styles.podiumCard,
+                { borderColor: colors.border, backgroundColor: colors.surfaceAlt },
+                idx === 1 ? styles.podiumCenter : null
+              ]}
+            >
+              <Text style={[styles.podiumRank, { color: idx === 1 ? "#D4A017" : colors.textMuted }]}>{entry ? `#${entry.rank}` : "-"}</Text>
+              <Text style={[styles.podiumName, { color: colors.text }]} numberOfLines={1}>
+                {entry?.name || "—"}
+              </Text>
+              <Text style={[styles.podiumScore, { color: colors.textMuted }]}>{entry ? `${entry.score} pts` : ""}</Text>
+            </View>
+          ))}
+        </View>
         {scopedEntries.length ? (
           scopedEntries.slice(0, 15).map((entry) => (
             <StageListCard
@@ -117,5 +137,11 @@ export default function HighSchoolLeaderboardScreen() {
 const styles = StyleSheet.create({
   scopeRow: { flexDirection: "row", gap: 8 },
   scopeChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7 },
-  scopeText: { fontWeight: "900", fontSize: 12 }
+  scopeText: { fontWeight: "900", fontSize: 12 },
+  podiumRow: { flexDirection: "row", gap: 8, marginBottom: 8 },
+  podiumCard: { flex: 1, borderWidth: 1, borderRadius: 12, paddingVertical: 10, paddingHorizontal: 8, alignItems: "center" },
+  podiumCenter: { transform: [{ scale: 1.05 }] },
+  podiumRank: { fontWeight: "900", fontSize: 14 },
+  podiumName: { fontWeight: "800", fontSize: 12, marginTop: 4 },
+  podiumScore: { fontWeight: "700", fontSize: 11, marginTop: 2 }
 });
