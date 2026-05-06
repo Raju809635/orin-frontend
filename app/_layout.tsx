@@ -805,6 +805,7 @@ function RootDrawer() {
           <Drawer.Screen name="ai/highschool-subject-gap" options={{ title: "Subject Gap Analyzer", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/highschool-study-roadmap" options={{ title: "Study Roadmap", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="ai/highschool-study-assistant" options={{ title: "Study Assistant", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="ai/highschool-school-projects" options={{ title: "School Projects", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community-growth" options={{ title: "Community & Growth", drawerItemStyle: { display: "none" }, headerShown: false }} />
           <Drawer.Screen name="community/kids-community" options={{ title: "Kids Community", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/highschool-community" options={{ title: "High School Community", drawerItemStyle: { display: "none" } }} />

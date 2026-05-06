@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
@@ -8,6 +8,7 @@ import { useAppTheme } from "@/context/ThemeContext";
 import { useLearner } from "@/context/LearnerContext";
 
 type AnswerStyle = "simple" | "steps" | "exam";
+type AssistantMode = "general" | "academic";
 type Tab = "home" | "ask" | "answer" | "subject" | "practice" | "progress";
 
 type AssistantResult = {
@@ -38,6 +39,20 @@ const ANSWER_STYLES: { id: AnswerStyle; title: string; subtitle: string; icon: k
 ];
 
 const SUBJECTS = ["Biology", "Mathematics", "Physics", "Chemistry", "English", "Science", "Social Science"];
+const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
+type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
+type AcademicChapter = { title?: string; name?: string };
+type AcademicSubjectResponse = { subject?: { chapters?: AcademicChapter[] }; chapters?: AcademicChapter[] };
+
+function subjectLabel(item: AcademicSubject | string) {
+  if (typeof item === "string") return item;
+  return String(item.name || item.subject || item.key || item.slug || "").trim();
+}
+
+const ASSISTANT_MODES: { id: AssistantMode; title: string; subtitle: string; icon: keyof typeof Ionicons.glyphMap; color: string }[] = [
+  { id: "general", title: "General", subtitle: "Ask anything in simple language", icon: "chatbubbles", color: "#2563EB" },
+  { id: "academic", title: "Academic", subtitle: "School answers, steps, notes, practice", icon: "school", color: "#16A34A" }
+];
 
 function fallbackResult(): AssistantResult {
   return {
@@ -67,10 +82,16 @@ export default function HighSchoolStudyAssistantScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
   const { className } = useLearner();
+  const [board] = useState("CBSE");
+  const [classLevel, setClassLevel] = useState(className || "10");
+  const [subjects, setSubjects] = useState(SUBJECTS);
+  const [chapters, setChapters] = useState<string[]>([]);
   const [tab, setTab] = useState<Tab>("home");
+  const [assistantMode, setAssistantMode] = useState<AssistantMode>("academic");
   const [answerStyle, setAnswerStyle] = useState<AnswerStyle>("simple");
   const [question, setQuestion] = useState("Explain photosynthesis");
   const [subject, setSubject] = useState("Biology");
+  const [chapter, setChapter] = useState("");
   const [result, setResult] = useState<AssistantResult>(fallbackResult);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
@@ -80,6 +101,37 @@ export default function HighSchoolStudyAssistantScreen() {
   const currentPractice = result.practiceQuestions[0];
   const practiceSelected = currentPractice ? selectedAnswers[currentPractice.id] : "";
   const activeStyle = useMemo(() => ANSWER_STYLES.find((item) => item.id === answerStyle) || ANSWER_STYLES[0], [answerStyle]);
+  const activeMode = useMemo(() => ASSISTANT_MODES.find((item) => item.id === assistantMode) || ASSISTANT_MODES[0], [assistantMode]);
+
+  const loadSubjects = useCallback(async () => {
+    try {
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[] }>(`/api/academics/${board}/class/${classLevel}/subjects`);
+      const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
+      if (next.length) {
+        setSubjects(next);
+        if (!next.includes(subject)) setSubject(next[0]);
+      }
+    } catch {
+      setSubjects(SUBJECTS);
+    }
+  }, [board, classLevel, subject]);
+
+  const loadChapters = useCallback(async () => {
+    try {
+      const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${classLevel}/subject/${encodeURIComponent(subject)}`);
+      const next = (data?.subject?.chapters || data?.chapters || [])
+        .map((item) => String(item.title || item.name || "").trim())
+        .filter(Boolean)
+        .slice(0, 10);
+      setChapters(next);
+      if (next.length && !chapter) setChapter(next[0]);
+    } catch {
+      setChapters([]);
+    }
+  }, [board, chapter, classLevel, subject]);
+
+  useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
+  useFocusEffect(useCallback(() => { loadChapters(); }, [loadChapters]));
 
   async function ask() {
     if (!question.trim()) return;
@@ -90,13 +142,15 @@ export default function HighSchoolStudyAssistantScreen() {
       const { data } = await api.post<{ source?: "ai" | "fallback"; result?: AssistantResult }>("/api/ai/highschool/study-assistant", {
         question,
         subject,
+        chapter,
         answerStyle,
-        classLevel: className || "High School"
+        assistantMode,
+        classLevel
       });
       setResult(data?.result || fallbackResult());
       setAnswerSource(data?.source === "ai" ? "ai" : "fallback");
       setSelectedAnswers({});
-      setStatusMessage(data?.source === "ai" ? "AI explained your doubt with study tools and practice." : "ORIN loaded checked study help because the AI answer was unavailable or did not pass quality checks.");
+      setStatusMessage(data?.source === "ai" ? "AI answered your question in the selected mode." : "ORIN loaded checked help because the AI answer was unavailable or did not pass quality checks.");
     } catch (error) {
       setResult(fallbackResult());
       setAnswerSource("fallback");
@@ -107,7 +161,7 @@ export default function HighSchoolStudyAssistantScreen() {
     }
   }
 
-  const answerText = answerStyle === "exam" ? result.examAnswer : answerStyle === "steps" ? result.stepByStep.join("\n") : result.simpleAnswer;
+  const answerText = assistantMode === "general" ? result.simpleAnswer : answerStyle === "exam" ? result.examAnswer : answerStyle === "steps" ? result.stepByStep.join("\n") : result.simpleAnswer;
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
@@ -181,19 +235,69 @@ export default function HighSchoolStudyAssistantScreen() {
               style={[styles.input, styles.multi, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
               multiline
             />
-            <Text style={[styles.label, { color: colors.text }]}>Select Subject</Text>
-            <View style={styles.chipWrap}>
-              {SUBJECTS.map((item) => {
-                const active = subject === item;
-                return (
-                  <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]} onPress={() => setSubject(item)}>
-                    <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>{item}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <SectionHeader icon="options" title="Choose Answer Style" color="#0EA5E9" />
-            {ANSWER_STYLES.map((item) => {
+            <SectionHeader icon="toggle" title="Choose Mode" color="#2563EB" />
+            {ASSISTANT_MODES.map((item) => {
+              const active = assistantMode === item.id;
+              return (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.styleRow, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? item.color : colors.border }]}
+                  onPress={() => setAssistantMode(item.id)}
+                >
+                  <View style={[styles.styleIcon, { backgroundColor: `${item.color}22` }]}>
+                    <Ionicons name={item.icon} size={18} color={item.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.styleTitle, { color: colors.text }]}>{item.title}</Text>
+                    <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{item.subtitle}</Text>
+                  </View>
+                  {active ? <Ionicons name="checkmark-circle" size={20} color={item.color} /> : null}
+                </TouchableOpacity>
+              );
+            })}
+            {assistantMode === "academic" ? (
+              <>
+                <Text style={[styles.label, { color: colors.text }]}>Class</Text>
+                <View style={styles.chipWrap}>
+                  {CLASS_OPTIONS.map((item) => {
+                    const active = classLevel === item;
+                    return (
+                      <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]} onPress={() => setClassLevel(item)}>
+                        <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>Class {item}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={[styles.label, { color: colors.text }]}>Select Subject</Text>
+                <View style={styles.chipWrap}>
+                  {subjects.slice(0, 8).map((item) => {
+                    const active = subject === item;
+                    return (
+                      <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]} onPress={() => setSubject(item)}>
+                        <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>{item}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                {chapters.length ? (
+                  <>
+                    <Text style={[styles.label, { color: colors.text }]}>Chapter / Topic</Text>
+                    <View style={styles.chipWrap}>
+                      {chapters.slice(0, 6).map((item) => {
+                        const active = chapter === item;
+                        return (
+                          <TouchableOpacity key={item} style={[styles.chip, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]} onPress={() => setChapter(item)}>
+                            <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>{item}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </>
+                ) : null}
+                <SectionHeader icon="options" title="Choose Answer Style" color="#0EA5E9" />
+              </>
+            ) : null}
+            {assistantMode === "academic" ? ANSWER_STYLES.map((item) => {
               const active = answerStyle === item.id;
               return (
                 <TouchableOpacity key={item.id} style={[styles.styleRow, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? item.color : colors.border }]} onPress={() => setAnswerStyle(item.id)}>
@@ -207,7 +311,7 @@ export default function HighSchoolStudyAssistantScreen() {
                   {active ? <Ionicons name="checkmark-circle" size={20} color={item.color} /> : null}
                 </TouchableOpacity>
               );
-            })}
+            }) : null}
             <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={ask} disabled={loading}>
               {loading ? <ActivityIndicator color={colors.accentText} /> : <Text style={[styles.primaryText, { color: colors.accentText }]}>Get Help</Text>}
             </TouchableOpacity>
@@ -216,7 +320,7 @@ export default function HighSchoolStudyAssistantScreen() {
 
         {tab === "answer" ? (
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <SectionHeader icon={activeStyle.icon} title="ORIN Answer" color={activeStyle.color} />
+            <SectionHeader icon={assistantMode === "general" ? activeMode.icon : activeStyle.icon} title="ORIN Answer" color={assistantMode === "general" ? activeMode.color : activeStyle.color} />
             {loading ? (
               <View style={styles.loadingBox}>
                 <ActivityIndicator color={colors.accent} />
@@ -224,11 +328,13 @@ export default function HighSchoolStudyAssistantScreen() {
               </View>
             ) : (
               <>
-                <Text style={[styles.answerMode, { color: activeStyle.color }]}>
-                  {answerSource === "ai" ? activeStyle.title : `Checked Study Help - ${activeStyle.title}`}
+                <Text style={[styles.answerMode, { color: assistantMode === "general" ? activeMode.color : activeStyle.color }]}>
+                  {answerSource === "ai"
+                    ? assistantMode === "general" ? "General Answer" : activeStyle.title
+                    : assistantMode === "general" ? "Checked General Help" : `Checked Study Help - ${activeStyle.title}`}
                 </Text>
                 <Text style={[styles.answerTitle, { color: colors.text }]}>{result.title}</Text>
-                {answerStyle === "steps" ? (
+                {assistantMode === "academic" && answerStyle === "steps" ? (
                   <View style={styles.stepList}>
                     {result.stepByStep.map((step, index) => (
                       <View key={`${step}-${index}`} style={styles.answerStep}>
@@ -245,7 +351,7 @@ export default function HighSchoolStudyAssistantScreen() {
                 <Text style={[styles.subHeader, { color: colors.text }]}>Key Points</Text>
                 {result.keyPoints.map((point) => (
                   <View key={point} style={styles.pointRow}>
-                    <View style={[styles.dot, { backgroundColor: activeStyle.color }]} />
+                    <View style={[styles.dot, { backgroundColor: assistantMode === "general" ? activeMode.color : activeStyle.color }]} />
                     <Text style={[styles.pointText, { color: colors.textMuted }]}>{point}</Text>
                   </View>
                 ))}

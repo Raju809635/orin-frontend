@@ -164,6 +164,20 @@ export default function AiHubScreen() {
       gradient: ["#FFFFFF", "#FEF3F2"],
       darkGradient: ["#2D171A", "#161B22"]
     },
+    ...(isHighSchool ? [{
+      id: "school_projects",
+      label: "School Projects",
+      description: "Generate class, subject, and chapter-based projects with steps, materials, proof, and teacher feedback prompts.",
+      icon: "construct" as keyof typeof Ionicons.glyphMap,
+      emoji: "🧪",
+      path: "/ai/highschool-school-projects",
+      iconColor: "#0EA5E9",
+      iconBg: "#E0F2FE",
+      darkIconBg: "rgba(14,165,233,0.18)",
+      border: "#BAE6FD",
+      gradient: ["#FFFFFF", "#F0F9FF"] as [string, string],
+      darkGradient: ["#102433", "#111827"] as [string, string]
+    }] : []),
     {
       id: "assistant",
       label: isTeacherMentor ? "Teacher Assistant" : isHeadMentor ? "Management Assistant" : isKid ? "Ask ORIN" : isHighSchool ? "Study Assistant" : "AI Assistant",

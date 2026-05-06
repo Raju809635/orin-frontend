@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
@@ -41,9 +42,19 @@ type StudyPlan = {
   reminders: string[];
 };
 
-const SUBJECTS = ["Maths", "Science", "English", "Social Studies", "Computer Science", "Exam Prep"];
+type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
+type AcademicChapter = { title?: string; name?: string };
+type AcademicSubjectResponse = { subject?: { chapters?: AcademicChapter[] }; chapters?: AcademicChapter[] };
+
+const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
+const SUBJECTS = ["Mathematics", "Science", "Social Science", "English", "Telugu", "Hindi", "Computer"];
 const LEVELS = ["Basics", "Average", "Strong"];
 const TIMES = ["30-45 min", "1-2 hours", "2+ hours"];
+
+function subjectLabel(item: AcademicSubject | string) {
+  if (typeof item === "string") return item;
+  return String(item.name || item.subject || item.key || item.slug || "").trim();
+}
 
 function buildLocalPlan(subject: string, goal: string, skills: string): StudyPlan {
   const chapters = skills.split(",").map((item) => item.trim()).filter(Boolean);
@@ -88,6 +99,10 @@ function barColor(value: number) {
 export default function HighSchoolStudyPlannerScreen() {
   const { colors, isDark } = useAppTheme();
   const { className } = useLearner();
+  const [board] = useState("CBSE");
+  const [classLevel, setClassLevel] = useState(className || "10");
+  const [subjects, setSubjects] = useState<string[]>(SUBJECTS);
+  const [chapters, setChapters] = useState<string[]>([]);
   const [subject, setSubject] = useState("Science");
   const [goal, setGoal] = useState("Improve marks and complete weekly revision");
   const [skills, setSkills] = useState("basics, revision, practice tests");
@@ -104,6 +119,36 @@ export default function HighSchoolStudyPlannerScreen() {
     const completed = tasks.filter((task) => checked[task.id] ?? task.completed).length;
     return tasks.length ? Math.round((completed / tasks.length) * 100) : 0;
   }, [checked, plan?.dailyTasks]);
+
+  const loadSubjects = useCallback(async () => {
+    try {
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[] }>(`/api/academics/${board}/class/${classLevel}/subjects`);
+      const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
+      if (next.length) {
+        setSubjects(next);
+        if (!next.includes(subject)) setSubject(next[0]);
+      }
+    } catch {
+      setSubjects(SUBJECTS);
+    }
+  }, [board, classLevel, subject]);
+
+  const loadChapters = useCallback(async () => {
+    try {
+      const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${classLevel}/subject/${encodeURIComponent(subject)}`);
+      const next = (data?.subject?.chapters || data?.chapters || [])
+        .map((item) => String(item.title || item.name || "").trim())
+        .filter(Boolean)
+        .slice(0, 10);
+      setChapters(next);
+      if (next.length && skills === "basics, revision, practice tests") setSkills(next.slice(0, 3).join(", "));
+    } catch {
+      setChapters([]);
+    }
+  }, [board, classLevel, skills, subject]);
+
+  useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
+  useFocusEffect(useCallback(() => { loadChapters(); }, [loadChapters]));
 
   async function generatePlan() {
     if (!goal.trim()) {
@@ -126,7 +171,7 @@ export default function HighSchoolStudyPlannerScreen() {
         skills,
         currentLevel,
         timePerDay,
-        classLevel: className || "High School"
+        classLevel
       });
       setPlan(data?.plan || fallback);
       setChecked({});
@@ -146,7 +191,7 @@ export default function HighSchoolStudyPlannerScreen() {
         <Text style={[styles.eyebrow, { color: colors.accent }]}>AI Study Planner</Text>
         <Text style={[styles.title, { color: colors.text }]}>Create Study Plan</Text>
         <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          Build a weekly path from your subject, goal, current chapters, level, and available time.
+          Build a weekly timetable from class, subject, chapters, level, and available time.
         </Text>
       </View>
 
@@ -158,9 +203,21 @@ export default function HighSchoolStudyPlannerScreen() {
       ) : null}
 
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.label, { color: colors.text }]}>Class</Text>
+        <View style={styles.subjectRow}>
+          {CLASS_OPTIONS.map((item) => {
+            const active = item === classLevel;
+            return (
+              <TouchableOpacity key={item} style={[styles.subjectChip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surfaceAlt }]} onPress={() => setClassLevel(item)}>
+                <Text style={[styles.subjectText, { color: active ? colors.accent : colors.textMuted }]}>Class {item}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <Text style={[styles.label, { color: colors.text }]}>Subject</Text>
         <View style={styles.subjectRow}>
-          {SUBJECTS.map((item) => {
+          {subjects.slice(0, 8).map((item) => {
             const active = item === subject;
             return (
               <TouchableOpacity
@@ -173,6 +230,19 @@ export default function HighSchoolStudyPlannerScreen() {
             );
           })}
         </View>
+
+        {chapters.length ? (
+          <>
+            <Text style={[styles.label, { color: colors.text }]}>Quick Chapter Focus</Text>
+            <View style={styles.subjectRow}>
+              {chapters.slice(0, 6).map((item) => (
+                <TouchableOpacity key={item} style={[styles.subjectChip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => setSkills(item)}>
+                  <Text style={[styles.subjectText, { color: colors.textMuted }]}>{item}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        ) : null}
 
         <Text style={[styles.label, { color: colors.text }]}>Study Goal</Text>
         <TextInput

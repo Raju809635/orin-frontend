@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
@@ -39,6 +40,14 @@ type CareerExplorer = {
 };
 
 const INTERESTS = ["Science", "Commerce", "Arts", "Tech", "Law", "Design", "Defense", "Other"];
+const CLASS_OPTIONS = ["8", "9", "10", "11", "12"];
+const FALLBACK_SUBJECTS = ["Mathematics", "Science", "Social Science", "English", "Computer", "Biology", "Commerce"];
+type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
+
+function subjectLabel(item: AcademicSubject | string) {
+  if (typeof item === "string") return item;
+  return String(item.name || item.subject || item.key || item.slug || "").trim();
+}
 const CATEGORY_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   Science: "flask",
   Commerce: "briefcase",
@@ -95,6 +104,10 @@ function barColor(value: number) {
 export default function CareerExplorerScreen() {
   const { colors } = useAppTheme();
   const { className } = useLearner();
+  const [board] = useState("CBSE");
+  const [classLevel, setClassLevel] = useState(className || "10");
+  const [subjects, setSubjects] = useState(FALLBACK_SUBJECTS);
+  const [favoriteSubjects, setFavoriteSubjects] = useState(["Science", "Mathematics"]);
   const [interest, setInterest] = useState("Science");
   const [strengths, setStrengths] = useState("biology, problem solving, helping people");
   const [explorer, setExplorer] = useState<CareerExplorer>(fallbackExplorer);
@@ -105,6 +118,25 @@ export default function CareerExplorerScreen() {
 
   const topCareers = useMemo(() => explorer.careers.slice(0, 5), [explorer.careers]);
 
+  const loadSubjects = useCallback(async () => {
+    try {
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[] }>(`/api/academics/${board}/class/${classLevel}/subjects`);
+      const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
+      if (next.length) {
+        setSubjects(next);
+        setFavoriteSubjects((prev) => prev.filter((item) => next.includes(item)).length ? prev.filter((item) => next.includes(item)) : next.slice(0, 2));
+      }
+    } catch {
+      setSubjects(FALLBACK_SUBJECTS);
+    }
+  }, [board, classLevel]);
+
+  useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
+
+  function toggleFavoriteSubject(item: string) {
+    setFavoriteSubjects((prev) => prev.includes(item) ? prev.filter((subject) => subject !== item) : [...prev, item].slice(0, 4));
+  }
+
   async function explore(nextInterest = interest) {
     setInterest(nextInterest);
     setLoading(true);
@@ -112,8 +144,9 @@ export default function CareerExplorerScreen() {
     try {
       const { data } = await api.post<{ source?: "ai" | "fallback"; explorer?: CareerExplorer }>("/api/ai/highschool/career-explorer", {
         interest: nextInterest,
-        strengths,
-        classLevel: className || "High School"
+        strengths: [strengths, favoriteSubjects.length ? `favorite subjects: ${favoriteSubjects.join(", ")}` : ""].filter(Boolean).join("; "),
+        academicSubjects: favoriteSubjects,
+        classLevel
       });
       const nextExplorer = data?.explorer || fallbackExplorer();
       setExplorer(nextExplorer);
@@ -164,6 +197,28 @@ export default function CareerExplorerScreen() {
           placeholderTextColor={colors.textMuted}
           style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
         />
+        <Text style={[styles.subHeader, { color: colors.text }]}>Class</Text>
+        <View style={styles.categoryGrid}>
+          {CLASS_OPTIONS.map((item) => {
+            const active = classLevel === item;
+            return (
+              <TouchableOpacity key={item} style={[styles.categoryTile, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]} onPress={() => setClassLevel(item)}>
+                <Text style={[styles.categoryText, { color: active ? colors.accent : colors.text }]}>Class {item}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        <Text style={[styles.subHeader, { color: colors.text }]}>Favourite Subjects</Text>
+        <View style={styles.categoryGrid}>
+          {subjects.slice(0, 8).map((item) => {
+            const active = favoriteSubjects.includes(item);
+            return (
+              <TouchableOpacity key={item} style={[styles.categoryTile, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]} onPress={() => toggleFavoriteSubject(item)}>
+                <Text style={[styles.categoryText, { color: active ? colors.accent : colors.text }]}>{item}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
         <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => explore()} disabled={loading}>
           {loading ? <ActivityIndicator color={colors.accentText} /> : <Ionicons name="sparkles" size={18} color={colors.accentText} />}
           <Text style={[styles.primaryText, { color: colors.accentText }]}>{loading ? "Exploring..." : "Start AI Career Quiz"}</Text>

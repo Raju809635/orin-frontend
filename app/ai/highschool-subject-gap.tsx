@@ -1,13 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useAppTheme } from "@/context/ThemeContext";
 import { useLearner } from "@/context/LearnerContext";
 import { getAppErrorMessage } from "@/lib/appError";
 import { api } from "@/lib/api";
 
-type SubjectName = "Mathematics" | "Science" | "English";
+type SubjectName = string;
+type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
+type AcademicChapter = { title?: string; name?: string };
+type AcademicSubjectResponse = { subject?: { chapters?: AcademicChapter[] }; chapters?: AcademicChapter[] };
 
 type GapQuestion = {
   id: string;
@@ -59,11 +62,25 @@ const SUBJECT_META: Record<SubjectName, { icon: keyof typeof Ionicons.glyphMap; 
   English: { icon: "book", color: "#F59E0B", bg: "#FEF3C7" }
 };
 
-const SUBJECT_TOPICS: Record<SubjectName, string[]> = {
+const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
+
+const SUBJECT_TOPICS: Record<string, string[]> = {
   Mathematics: ["Fractions", "Algebra", "Geometry", "Numbers"],
   Science: ["Electricity", "Plants", "Forces", "Life Processes"],
-  English: ["Grammar", "Reading", "Vocabulary", "Writing Skills"]
+  English: ["Grammar", "Reading", "Vocabulary", "Writing Skills"],
+  "Social Science": ["Resources", "Democracy", "National Movement", "Economics"],
+  Telugu: ["Grammar", "Poetry", "Reading", "Writing"],
+  Hindi: ["Vyakaran", "Gadya", "Padya", "Patra Lekhan"]
 };
+
+function subjectLabel(item: AcademicSubject | string) {
+  if (typeof item === "string") return item;
+  return String(item.name || item.subject || item.key || item.slug || "").trim();
+}
+
+function getSubjectMeta(subject: string) {
+  return SUBJECT_META[subject] || { icon: "school" as keyof typeof Ionicons.glyphMap, color: "#0F766E", bg: "#ECFDF3" };
+}
 
 const FALLBACK_QUESTIONS: GapQuestion[] = [
   {
@@ -307,16 +324,55 @@ export default function HighSchoolSubjectGapScreen() {
   const [loadingReport, setLoadingReport] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [quizStarted, setQuizStarted] = useState(false);
+  const [board] = useState("CBSE");
+  const [selectedClass, setSelectedClass] = useState(className || "10");
+  const [subjects, setSubjects] = useState<string[]>(Object.keys(SUBJECT_TOPICS));
+  const [subjectTopics, setSubjectTopics] = useState<Record<string, string[]>>(SUBJECT_TOPICS);
+  const [loadingAcademicContext, setLoadingAcademicContext] = useState(false);
   const [selectedSubject, setSelectedSubject] = useState<SubjectName>("Mathematics");
   const [selectedTopic, setSelectedTopic] = useState("Algebra");
 
   const currentQuestion = activeQuestions[currentIndex];
   const progress = activeQuestions.length ? Math.round(((currentIndex + 1) / activeQuestions.length) * 100) : 0;
-  const availableTopics = SUBJECT_TOPICS[selectedSubject] || [];
+  const availableTopics = subjectTopics[selectedSubject] || SUBJECT_TOPICS[selectedSubject] || [];
 
   const localReport = useMemo(() => buildLocalReport(activeQuestions, answers), [activeQuestions, answers]);
   const displayedReport = showReport ? report : localReport;
   const { overallScore, subjectRows, weakRows, strengthRows, averageRows } = displayedReport;
+
+  const loadAcademicSubjects = useCallback(async () => {
+    try {
+      setLoadingAcademicContext(true);
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[] }>(`/api/academics/${board}/class/${selectedClass}/subjects`);
+      const nextSubjects = (data?.subjects || []).map(subjectLabel).filter(Boolean);
+      if (nextSubjects.length) {
+        setSubjects(nextSubjects);
+        if (!nextSubjects.includes(selectedSubject)) setSelectedSubject(nextSubjects[0]);
+      }
+    } catch {
+      setSubjects(Object.keys(SUBJECT_TOPICS));
+    } finally {
+      setLoadingAcademicContext(false);
+    }
+  }, [board, selectedClass, selectedSubject]);
+
+  const loadAcademicTopics = useCallback(async () => {
+    if (!selectedSubject) return;
+    try {
+      const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${selectedClass}/subject/${encodeURIComponent(selectedSubject)}`);
+      const chapters = data?.subject?.chapters || data?.chapters || [];
+      const nextTopics = chapters.map((item) => String(item.title || item.name || "").trim()).filter(Boolean).slice(0, 12);
+      if (nextTopics.length) {
+        setSubjectTopics((prev) => ({ ...prev, [selectedSubject]: nextTopics }));
+        if (!nextTopics.includes(selectedTopic)) setSelectedTopic(nextTopics[0]);
+      }
+    } catch {
+      setSubjectTopics((prev) => ({ ...SUBJECT_TOPICS, ...prev }));
+    }
+  }, [board, selectedClass, selectedSubject, selectedTopic]);
+
+  useFocusEffect(useCallback(() => { loadAcademicSubjects(); }, [loadAcademicSubjects]));
+  useFocusEffect(useCallback(() => { loadAcademicTopics(); }, [loadAcademicTopics]));
 
   async function loadQuiz(subject: SubjectName = selectedSubject, focusTopic: string | null = selectedTopic) {
     setLoadingQuiz(true);
@@ -329,7 +385,7 @@ export default function HighSchoolSubjectGapScreen() {
       }>("/api/ai/highschool/subject-gap/quiz", {
         subjects: [subject],
         questionCount: focusTopic ? 5 : 9,
-        classLevel: className || "High School",
+        classLevel: selectedClass || className || "High School",
         focusTopic: focusTopic || undefined
       });
       const nextQuestions = Array.isArray(data?.quiz?.questions) && data.quiz.questions.length ? data.quiz.questions : FALLBACK_QUESTIONS;
@@ -434,21 +490,37 @@ export default function HighSchoolSubjectGapScreen() {
             <Text style={[styles.eyebrow, { color: colors.accent }]}>Step 1 - Select Focus</Text>
             <Text style={[styles.heroTitle, { color: colors.text }]}>Choose subject and topic</Text>
             <Text style={[styles.heroSubtitle, { color: colors.textMuted }]}>
-              ORIN will create a short AI quiz for this topic, then detect gaps from your score.
+              Choose class, subject, and topic. ORIN creates a short AI quiz, then detects gaps from your score.
             </Text>
 
-            <Text style={[styles.setupLabel, { color: colors.text }]}>Subject</Text>
+            <Text style={[styles.setupLabel, { color: colors.text }]}>Class</Text>
+            <View style={styles.topicWrap}>
+              {CLASS_OPTIONS.map((item) => {
+                const active = selectedClass === item;
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.topicChip, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]}
+                    onPress={() => setSelectedClass(item)}
+                  >
+                    <Text style={[styles.topicChipText, { color: active ? colors.accent : colors.textMuted }]}>Class {item}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <Text style={[styles.setupLabel, { color: colors.text }]}>Subject {loadingAcademicContext ? "(loading...)" : ""}</Text>
             <View style={styles.selectorGrid}>
-              {(Object.keys(SUBJECT_TOPICS) as SubjectName[]).map((subject) => {
+              {subjects.slice(0, 8).map((subject) => {
                 const active = selectedSubject === subject;
-                const meta = SUBJECT_META[subject];
+                const meta = getSubjectMeta(subject);
                 return (
                   <TouchableOpacity
                     key={subject}
                     style={[styles.selectorTile, { backgroundColor: active ? meta.bg : colors.surfaceAlt, borderColor: active ? meta.color : colors.border }]}
                     onPress={() => {
                       setSelectedSubject(subject);
-                      setSelectedTopic(SUBJECT_TOPICS[subject][0]);
+                      setSelectedTopic((subjectTopics[subject] || SUBJECT_TOPICS[subject] || ["Core Concepts"])[0]);
                     }}
                   >
                     <Ionicons name={meta.icon} size={20} color={active ? meta.color : colors.textMuted} />
@@ -583,7 +655,7 @@ export default function HighSchoolSubjectGapScreen() {
             <View style={[styles.reportCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <SectionHeader icon="stats-chart" title="Overall Performance by Subject" color="#12B76A" />
               {subjectRows.map((row) => {
-                const meta = SUBJECT_META[row.label as SubjectName];
+                const meta = getSubjectMeta(row.label);
                 return (
                   <ScoreBar
                     key={row.key}

@@ -1,9 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import React, { useMemo, useState } from "react";
+import { useFocusEffect } from "expo-router";
+import React, { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
+import { useLearner } from "@/context/LearnerContext";
 
 type StrategyTopic = {
   subject: string;
@@ -37,6 +39,13 @@ const SUBJECTS = [
   "Chemistry",
   "Biology"
 ];
+const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
+type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
+
+function subjectLabel(item: AcademicSubject | string) {
+  if (typeof item === "string") return item;
+  return String(item.name || item.subject || item.key || item.slug || "").trim();
+}
 
 const SUBJECT_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   Mathematics: "calculator",
@@ -60,10 +69,13 @@ function priorityColor(priority: string) {
 
 export default function ExamStrategyBuilderScreen() {
   const { colors, isDark } = useAppTheme();
+  const { className } = useLearner();
+  const [board] = useState("CBSE");
   const [examName, setExamName] = useState("Half Yearly Exam");
   const [examDate, setExamDate] = useState("25 June 2026");
-  const [classLevel, setClassLevel] = useState("Class 10");
+  const [classLevel, setClassLevel] = useState(className || "10");
   const [syllabus, setSyllabus] = useState("CBSE 2024-25");
+  const [subjectPool, setSubjectPool] = useState(SUBJECTS);
   const [selectedSubjects, setSelectedSubjects] = useState(["Mathematics", "Science", "English", "Social Studies"]);
   const [strategy, setStrategy] = useState<StrategyResponse | null>(null);
   const [source, setSource] = useState<"ai" | "fallback">("fallback");
@@ -71,6 +83,21 @@ export default function ExamStrategyBuilderScreen() {
   const [error, setError] = useState("");
 
   const selectedLabel = useMemo(() => selectedSubjects.join(", "), [selectedSubjects]);
+
+  const loadSubjects = useCallback(async () => {
+    try {
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[] }>(`/api/academics/${board}/class/${classLevel}/subjects`);
+      const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
+      if (next.length) {
+        setSubjectPool(next);
+        setSelectedSubjects((prev) => prev.filter((item) => next.includes(item)).length ? prev.filter((item) => next.includes(item)) : next.slice(0, 4));
+      }
+    } catch {
+      setSubjectPool(SUBJECTS);
+    }
+  }, [board, classLevel]);
+
+  useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
 
   function toggleSubject(subject: string) {
     setSelectedSubjects((prev) => {
@@ -138,16 +165,27 @@ export default function ExamStrategyBuilderScreen() {
         <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={examName} onChangeText={setExamName} placeholder="Exam name" placeholderTextColor={colors.textMuted} />
         <View style={styles.twoCol}>
           <TextInput style={[styles.input, styles.flexInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={examDate} onChangeText={setExamDate} placeholder="Exam date" placeholderTextColor={colors.textMuted} />
-          <TextInput style={[styles.input, styles.flexInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={classLevel} onChangeText={setClassLevel} placeholder="Class" placeholderTextColor={colors.textMuted} />
+          <TextInput style={[styles.input, styles.flexInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={`Class ${classLevel}`} editable={false} placeholder="Class" placeholderTextColor={colors.textMuted} />
         </View>
         <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={syllabus} onChangeText={setSyllabus} placeholder="Syllabus" placeholderTextColor={colors.textMuted} />
+        <Text style={[styles.cardMeta, { color: colors.textMuted }]}>Class</Text>
+        <View style={styles.subjectGrid}>
+          {CLASS_OPTIONS.map((item) => {
+            const active = classLevel === item;
+            return (
+              <TouchableOpacity key={item} style={[styles.subjectTile, { backgroundColor: active ? "#FFF7ED" : colors.surfaceAlt, borderColor: active ? "#FB923C" : colors.border }]} onPress={() => setClassLevel(item)}>
+                <Text style={[styles.subjectText, { color: active ? "#9A3412" : colors.text }]}>Class {item}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
 
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Text style={[styles.cardTitle, { color: colors.text }]}>All Subjects Covered</Text>
         <Text style={[styles.cardMeta, { color: colors.textMuted }]}>Selected: {selectedLabel || "None"}</Text>
         <View style={styles.subjectGrid}>
-          {SUBJECTS.map((subject) => {
+          {subjectPool.map((subject) => {
             const active = selectedSubjects.includes(subject);
             return (
               <TouchableOpacity
