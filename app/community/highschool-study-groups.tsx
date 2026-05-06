@@ -37,6 +37,7 @@ export default function HighSchoolStudyGroupsScreen() {
 
   return (
     <StageCommunityScaffold
+      eyebrow="High School Community"
       title="Study Groups"
       subtitle="Keep the same collaboration engine, but guide learners into school-focused groups and institution-first discussion."
       loading={loading}

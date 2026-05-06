@@ -41,6 +41,7 @@ export default function HighSchoolAchievementsScreen() {
 
   return (
     <StageCommunityScaffold
+      eyebrow="High School Community"
       title="Achievements"
       subtitle="Recognition, progress, and school standings stay connected to the existing leaderboard and certification systems."
       loading={loading}

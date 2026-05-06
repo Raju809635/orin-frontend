@@ -4,13 +4,15 @@ import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
 import { EmptyState, StageCommunityScaffold, StageListCard, StageSection, StageStatRow } from "@/components/community/stage-community-data-ui";
 
-type ChallengeItem = { id: string; title: string; domain?: string; participantsCount?: number; deadline?: string; mentor?: { name?: string } | null; isActive?: boolean };
+type ChallengeItem = { _id?: string; id?: string; title: string; domain?: string; participantsCount?: number; deadline?: string; mentor?: { name?: string } | null; isActive?: boolean };
 type LeaderboardResponse = { collegeTop?: { rank: number; name: string; score: number }[] };
+type AcademicSubjectSummary = { key: string; subject: string; chapterCount?: number };
 
 export default function HighSchoolSchoolChallengesScreen() {
   const router = useRouter();
   const [items, setItems] = useState<ChallengeItem[]>([]);
   const [leaders, setLeaders] = useState<{ rank: number; name: string; score: number }[]>([]);
+  const [subjects, setSubjects] = useState<AcademicSubjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,12 +21,14 @@ export default function HighSchoolSchoolChallengesScreen() {
     try {
       if (refresh) setRefreshing(true); else setLoading(true);
       setError(null);
-      const [challengeRes, boardRes] = await Promise.allSettled([
+      const [challengeRes, boardRes, subjectRes] = await Promise.allSettled([
         api.get<ChallengeItem[]>("/api/network/challenges"),
-        api.get<LeaderboardResponse>("/api/network/leaderboard")
+        api.get<LeaderboardResponse>("/api/network/leaderboard"),
+        api.get<{ subjects: AcademicSubjectSummary[] }>("/api/academics/CBSE/class/10/subjects")
       ]);
       setItems((challengeRes.status === "fulfilled" ? challengeRes.value.data || [] : []).filter((item) => item.isActive !== false));
       setLeaders(boardRes.status === "fulfilled" ? boardRes.value.data?.collegeTop || [] : []);
+      setSubjects(subjectRes.status === "fulfilled" ? subjectRes.value.data?.subjects || [] : []);
     } catch (e) {
       setError(getAppErrorMessage(e, "Failed to load school challenges."));
     } finally {
@@ -37,8 +41,9 @@ export default function HighSchoolSchoolChallengesScreen() {
 
   return (
     <StageCommunityScaffold
+      eyebrow="High School Community"
       title="School Challenges"
-      subtitle="Academic and institution challenges continue using the current ORIN challenge system, but with study-oriented entry points."
+      subtitle="Academic challenges, quiz battles, and institution competitions connected to real subject areas."
       loading={loading}
       error={error}
       refreshing={refreshing}
@@ -46,23 +51,28 @@ export default function HighSchoolSchoolChallengesScreen() {
     >
       <StageStatRow items={[
         { label: "Active", value: String(items.length) },
-        { label: "Top ranks", value: String(leaders.length) }
+        { label: "Subjects", value: String(subjects.length) },
+        { label: "Ranks", value: String(leaders.length) }
       ]} />
-      <StageSection title="Quiz Battle & Study Games" icon="game-controller" actionLabel="Play now" onAction={() => router.push("/community/learning-games" as never)}>
-        <StageListCard
-          title="Quiz Battle, Speed Math, Tournament Mode"
-          meta="Practice subjects, earn XP, and climb the school leaderboard"
-          note="Use games for fast revision, formula practice, vocabulary, and daily streaks."
-          tone="highschool"
-        />
+      <StageSection title="Subject Practice Entry" icon="game-controller" actionLabel="Start quiz" onAction={() => router.push("/ai/highschool-subject-gap" as never)}>
+        {subjects.length ? subjects.slice(0, 5).map((subject) => (
+          <StageListCard
+            key={subject.key}
+            title={subject.subject}
+            meta={`${subject.chapterCount || 0} chapters | CBSE Class 10 demo`}
+            note="Start with subject/topic quiz, then ORIN detects your weak areas."
+            tone="highschool"
+            onPress={() => router.push(`/ai/highschool-subject-gap?subject=${encodeURIComponent(subject.subject)}` as never)}
+          />
+        )) : <EmptyState label="Academic subjects are not connected yet." />}
       </StageSection>
       <StageSection title="Challenge Board" icon="trophy" actionLabel="Open full" onAction={() => router.push("/community/challenges" as never)}>
         {items.length ? items.slice(0, 6).map((item) => (
           <StageListCard
-            key={item.id}
+            key={item._id || item.id || item.title}
             title={item.title}
-            meta={`${item.domain || "School"} · ${item.participantsCount || 0} joined`}
-            note={`Mentor: ${item.mentor?.name || "Guide"}${item.deadline ? ` · ${new Date(item.deadline).toLocaleDateString("en-IN")}` : ""}`}
+            meta={`${item.domain || "School"} | ${item.participantsCount || 0} joined`}
+            note={`Mentor: ${item.mentor?.name || "Guide"}${item.deadline ? ` | ${new Date(item.deadline).toLocaleDateString("en-IN")}` : ""}`}
             tone="highschool"
           />
         )) : <EmptyState label="No school challenges yet." />}

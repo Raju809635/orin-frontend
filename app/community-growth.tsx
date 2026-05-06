@@ -85,7 +85,7 @@ export default function CommunityGrowthScreen() {
             : "Participate in monthly challenges and competitions.",
       icon: isKid || isHighSchool ? "game-controller" : "trophy",
       emoji: isKid ? "🎮" : isHighSchool ? "⚔️" : undefined,
-      path: isTeacherMentor || isHeadMentor || isKid || isHighSchool ? "/community/learning-games" : "/community/challenges",
+      path: isTeacherMentor || isHeadMentor || isKid ? "/community/learning-games" : isHighSchool ? "/community/highschool-school-challenges" : "/community/challenges",
       iconColor: "#C98A00",
       iconBg: "#FFF4CC",
       darkIconBg: "rgba(201,138,0,0.18)",

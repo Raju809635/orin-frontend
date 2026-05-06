@@ -31,7 +31,7 @@ export default function HighSchoolLeaderboardScreen() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   return (
-    <StageCommunityScaffold title="School Leaderboard" subtitle="Friendly class and school ranking based on activity, XP, and challenges." loading={loading} error={error} refreshing={refreshing} onRefresh={() => load(true)}>
+    <StageCommunityScaffold eyebrow="High School Community" title="School Leaderboard" subtitle="Friendly class and school ranking based on activity, XP, and challenges." loading={loading} error={error} refreshing={refreshing} onRefresh={() => load(true)}>
       <StageStatRow items={[{ label: "School", value: schoolName || "School" }, { label: "Ranks", value: String(leaders.length) }]} />
       <StageSection title="Top Students" icon="podium">
         {leaders.length ? leaders.slice(0, 5).map((entry) => <StageListCard key={`${entry.rank}-${entry.name}`} title={`#${entry.rank} ${entry.name}`} meta={`${entry.score} points`} tone="highschool" />) : <EmptyState label="No school ranks yet." />}

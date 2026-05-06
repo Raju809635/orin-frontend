@@ -121,7 +121,7 @@ function RootDrawer() {
   const globalParams = useGlobalSearchParams<Record<string, string | string[]>>();
   const { colors, isDark } = useAppTheme();
   const { user, isAuthenticated, isBootstrapping, logout } = useAuth();
-  const { learnerStage } = useLearner();
+  const { learnerStage, loading: learnerLoading } = useLearner();
   const [isBackendReady, setIsBackendReady] = useState(false);
   const [isCheckingBackend, setIsCheckingBackend] = useState(true);
   const [drawerPhotoUrl, setDrawerPhotoUrl] = useState("");
@@ -517,6 +517,17 @@ function RootDrawer() {
     );
   }
 
+  if (isAuthenticated && user?.role === "student" && learnerLoading && !pathname.startsWith("/learner-onboarding")) {
+    return (
+      <OrinStartupScreen
+        colors={colors}
+        title="ORIN"
+        subtitle="Preparing your learning space..."
+        showSpinner
+      />
+    );
+  }
+
   if (isAuthenticated && (isCheckingBackend || !isBackendReady)) {
     return (
       <OrinStartupScreen
@@ -730,22 +741,8 @@ function RootDrawer() {
     if (!user) return;
     const tabKey = tab.key as AppTabKey;
     const fallbackPath = getDefaultTabPath(tabKey, user);
-    if (tabKey === "journey") {
-      tabHistoryRef.current.journey = [fallbackPath];
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        window.location.assign(fallbackPath);
-        return;
-      }
-      router.push(fallbackPath as never);
-      return;
-    }
-    const tabHistory = tabHistoryRef.current[tabKey];
-    const candidatePath = tabHistory?.[tabHistory.length - 1] || fallbackPath;
-    const candidateBasePath = String(candidatePath || "").split("?")[0];
-    const targetPath = candidateBasePath ? candidatePath : fallbackPath;
-
-    if (trackedRoute === targetPath) return;
-    router.replace(targetPath as never);
+    tabHistoryRef.current[tabKey] = [fallbackPath];
+    router.replace(fallbackPath as never);
   }
 
   return (

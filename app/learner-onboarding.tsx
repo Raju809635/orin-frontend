@@ -147,10 +147,6 @@ export default function LearnerOnboardingScreen() {
 
   function finishOnboardingNavigation() {
     const target = "/student-dashboard?section=overview";
-    if (typeof window !== "undefined") {
-      window.location.assign(target);
-      return;
-    }
     router.replace(target as never);
   }
 
