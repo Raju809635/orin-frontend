@@ -1,18 +1,18 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
-import { EmptyState, StageCommunityScaffold, StageListCard, StageSection, StageStatRow } from "@/components/community/stage-community-data-ui";
+import {
+  AcademicCard,
+  AcademicEmpty,
+  CommunitySection,
+  HighSchoolCommunityShell
+} from "@/components/community/highschool-ui";
 
-type FeedPost = {
-  _id: string;
-  content: string;
-  authorId?: { name?: string } | null;
-  commentCount?: number;
-};
-
+type FeedPost = { _id: string; content: string; authorId?: { name?: string } | null; commentCount?: number };
 type MentorGroupItem = {
   id: string;
+  _id?: string;
   name: string;
   domain?: string;
   description?: string;
@@ -24,6 +24,10 @@ type MentorGroupItem = {
   requestPending?: boolean;
 };
 
+function groupId(group: MentorGroupItem) {
+  return String(group.id || group._id || "");
+}
+
 export default function HighSchoolStudyGroupsScreen() {
   const router = useRouter();
   const [groups, setGroups] = useState<MentorGroupItem[]>([]);
@@ -31,6 +35,7 @@ export default function HighSchoolStudyGroupsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [joiningId, setJoiningId] = useState<string | null>(null);
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -51,109 +56,113 @@ export default function HighSchoolStudyGroupsScreen() {
     }
   }, []);
 
-  async function joinGroup(groupId: string) {
-    try {
-      await api.post(`/api/network/mentor-groups/${groupId}/join`);
-      await load(true);
-    } catch (e) {
-      handleAppError(e, {
-        mode: "alert",
-        title: "Study Groups",
-        fallbackMessage: "Unable to send group join request right now."
-      });
-    }
-  }
-
-  function openGroup(group: MentorGroupItem) {
-    if (group.joined) {
-      router.push(`/mentor-group-chat/${group.id}` as never);
-      return;
-    }
-    if (group.requestPending) return;
-    joinGroup(group.id);
-  }
-
-  const joinedGroups = groups.filter((item) => item.joined);
-
   useFocusEffect(
     useCallback(() => {
       load();
     }, [load])
   );
 
+  const joinedGroups = useMemo(() => groups.filter((item) => item.joined), [groups]);
+  const recommendedGroups = useMemo(() => groups.filter((item) => !item.joined).slice(0, 6), [groups]);
+
+  async function joinGroup(group: MentorGroupItem) {
+    const id = groupId(group);
+    if (!id || group.requestPending) return;
+    try {
+      setJoiningId(id);
+      await api.post(`/api/network/mentor-groups/${id}/join`);
+      await load(true);
+    } catch (e) {
+      handleAppError(e, { mode: "alert", title: "Study Groups", fallbackMessage: "Unable to send group join request right now." });
+    } finally {
+      setJoiningId(null);
+    }
+  }
+
+  function openGroup(group: MentorGroupItem) {
+    const id = groupId(group);
+    if (!id) return;
+    if (group.joined) {
+      router.push(`/mentor-group-chat/${id}` as never);
+      return;
+    }
+    joinGroup(group);
+  }
+
   return (
-    <StageCommunityScaffold
-      eyebrow="High School Community"
+    <HighSchoolCommunityShell
       title="Study Groups"
-      subtitle="Join mentor-led academic groups and chat directly in each group like a focused study circle."
+      subtitle="Real mentor-group data with WhatsApp-like academic group entry. Joined groups open the existing group chat directly."
+      stats={[
+        { icon: "people", label: "Groups", value: String(groups.length) },
+        { icon: "chatbubbles", label: "Joined", value: String(joinedGroups.length) },
+        { icon: "newspaper", label: "School posts", value: String(posts.length) }
+      ]}
       loading={loading}
       error={error}
       refreshing={refreshing}
       onRefresh={() => load(true)}
     >
-      <StageStatRow
-        items={[
-          { label: "Groups", value: String(groups.length) },
-          { label: "Joined", value: String(joinedGroups.length) },
-          { label: "School posts", value: String(posts.length) }
-        ]}
-      />
-
-      <StageSection title="Joined Groups" icon="chatbubbles">
+      <CommunitySection title="Joined Groups" subtitle="Tap to open real group chat." icon="chatbubbles">
         {joinedGroups.length ? (
-          joinedGroups.slice(0, 5).map((group) => (
-            <StageListCard
-              key={`joined-${group.id}`}
+          joinedGroups.map((group) => (
+            <AcademicCard
+              key={`joined-${groupId(group)}`}
+              icon="chatbubbles-outline"
               title={group.name}
-              meta={`${group.domain || "Study Group"} · Mentor: ${group.mentor?.name || "Guide"} · Members: ${group.membersCount || 0}`}
-              note={`${group.schedule || "Weekly"} · Tap to open group chat`}
-              tone="highschool"
-              onPress={() => router.push(`/mentor-group-chat/${group.id}` as never)}
-            />
-          ))
-        ) : (
-          <EmptyState label="You have not joined any study group yet." />
-        )}
-      </StageSection>
-
-      <StageSection title="Available Study Groups" icon="people" actionLabel="Open full" onAction={() => router.push("/community/collaboration" as never)}>
-        {groups.length ? (
-          groups.slice(0, 8).map((group) => (
-            <StageListCard
-              key={`all-${group.id}`}
-              title={group.name}
-              meta={`${group.domain || "Academic Group"} · Mentor: ${group.mentor?.name || "Guide"} · Members: ${group.membersCount || 0}`}
-              note={
-                group.joined
-                  ? "Joined · Tap to open chat"
-                  : group.requestPending
-                    ? "Request sent · Awaiting mentor approval"
-                    : "Tap to request join"
-              }
-              tone="highschool"
+              meta={`${group.domain || "Study Group"} · Mentor: ${group.mentor?.name || "Guide"} · ${group.membersCount || 0} members`}
+              note={`${group.schedule || "Weekly guidance"} · ${(group.topicTags || []).slice(0, 3).join(", ") || "Academic discussion"}`}
+              badge="Joined"
+              badgeTone="success"
+              actionLabel="Open Chat"
               onPress={() => openGroup(group)}
             />
           ))
         ) : (
-          <EmptyState label="No study groups yet." />
+          <AcademicEmpty label="You have not joined any study group yet. Request a group below." />
         )}
-      </StageSection>
+      </CommunitySection>
 
-      <StageSection title="School Feed" icon="newspaper" actionLabel="Open full" onAction={() => router.push("/network?section=institution" as never)}>
+      <CommunitySection title="Recommended Subject & Exam Groups" subtitle="Uses the same mentor group backend. No fake group cards." icon="people">
+        {recommendedGroups.length ? (
+          recommendedGroups.map((group) => {
+            const id = groupId(group);
+            return (
+              <AcademicCard
+                key={`recommended-${id}`}
+                icon="school-outline"
+                title={group.name}
+                meta={`${group.domain || "Academic Group"} · Mentor: ${group.mentor?.name || "Guide"} · ${group.membersCount || 0} members`}
+                note={group.description || (group.requestPending ? "Request already sent. Waiting for mentor approval." : "Request to join this study group.")}
+                badge={group.requestPending ? "Pending" : "Request"}
+                badgeTone={group.requestPending ? "warning" : "primary"}
+                actionLabel={joiningId === id ? "Requesting..." : group.requestPending ? "Pending" : "Request Join"}
+                onPress={() => openGroup(group)}
+              />
+            );
+          })
+        ) : (
+          <AcademicEmpty label="No recommended groups are available right now." />
+        )}
+      </CommunitySection>
+
+      <CommunitySection title="School Feed Signals" subtitle="Institution posts that can guide group discussion." icon="newspaper">
         {posts.length ? (
-          posts.slice(0, 4).map((post) => (
-            <StageListCard
+          posts.slice(0, 5).map((post) => (
+            <AcademicCard
               key={post._id}
+              icon="megaphone-outline"
               title={post.authorId?.name || "School update"}
               meta={`${post.commentCount || 0} comments`}
               note={post.content}
-              tone="highschool"
+              badge="Post"
+              onPress={() => router.push("/network?section=institution" as never)}
             />
           ))
         ) : (
-          <EmptyState label="No school feed updates yet." />
+          <AcademicEmpty label="No school feed updates yet." />
         )}
-      </StageSection>
-    </StageCommunityScaffold>
+      </CommunitySection>
+    </HighSchoolCommunityShell>
   );
 }

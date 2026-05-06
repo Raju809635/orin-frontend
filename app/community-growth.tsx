@@ -71,7 +71,7 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "challenges",
-      label: isTeacherMentor ? "Class Challenges" : isHeadMentor ? "Inter-Class Competitions" : isKid ? "Learning Games" : isHighSchool ? "Quiz Battle & Study Games" : "Challenges",
+      label: isTeacherMentor ? "Class Challenges" : isHeadMentor ? "Inter-Class Competitions" : isKid ? "Learning Games" : isHighSchool ? "School Challenges" : "Challenges",
       description: isTeacherMentor
         ? "Run daily quiz challenges, streak missions, topper awards, and classroom competitions."
         : isHeadMentor
@@ -81,7 +81,7 @@ export default function CommunityGrowthScreen() {
             : isKid
           ? "Play quiz battles, speed math, word games, streak missions, and reward tasks."
           : isHighSchool
-            ? "Practice quiz battles, speed math, subject games, and school tournaments."
+            ? "Open the school challenge board. Quiz Battle is a dedicated live-room CTA inside this page."
             : "Participate in monthly challenges and competitions.",
       icon: isKid || isHighSchool ? "game-controller" : "trophy",
       emoji: isKid ? "🎮" : isHighSchool ? "⚔️" : undefined,
