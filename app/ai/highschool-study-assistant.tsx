@@ -37,6 +37,29 @@ function fallbackTitle(prompt: string) {
   return clean.length > 42 ? `${clean.slice(0, 42)}...` : clean;
 }
 
+function isGreetingPrompt(prompt: string) {
+  return /^(hi|hii|hello|hey|namaste|good\s*(morning|afternoon|evening)|yo)[\s!.]*$/i.test(String(prompt || "").trim());
+}
+
+function localFallbackAnswer(prompt: string, mode: AssistantMode, classLevel: string, subject: string) {
+  if (isGreetingPrompt(prompt)) {
+    return [
+      "Hi! Welcome to ORIN.",
+      "",
+      mode === "general"
+        ? "Ask me anything: school doubts, explanations, planning, writing, ideas, or general questions."
+        : `Ask me any academic doubt for Class ${classLevel}${subject ? `, ${subject}` : ""}.`,
+      "",
+      "For example: what is photosynthesis?"
+    ].join("\n");
+  }
+  return [
+    "I’m having trouble reaching the AI service right now, but I’m still here.",
+    "",
+    "Please send the question again, and I’ll answer it directly. If it is academic, include the subject or chapter for a better answer."
+  ].join("\n");
+}
+
 function formatHistoryDate(value?: string) {
   if (!value) return "Recent";
   const date = new Date(value);
@@ -72,7 +95,6 @@ export default function HighSchoolStudyAssistantScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [board, setBoard] = useState("CBSE");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [subject, setSubject] = useState("Science");
   const [chapter, setChapter] = useState("");
@@ -133,7 +155,7 @@ export default function HighSchoolStudyAssistantScreen() {
         message: prompt,
         conversationId: conversationId || undefined,
         assistantMode: mode,
-        academicContext: mode === "academic" ? { board, classLevel, subject, chapter } : undefined
+        academicContext: mode === "academic" ? { classLevel, subject, chapter } : undefined
       });
 
       const nextId = String(data?.conversationId || conversationId || "").trim();
@@ -147,7 +169,7 @@ export default function HighSchoolStudyAssistantScreen() {
           item === pending
             ? {
                 ...pending,
-                response: "I could not answer right now. Please retry, or rephrase your question in one line."
+                response: localFallbackAnswer(prompt, mode, classLevel, subject)
               }
             : item
         )
@@ -203,7 +225,7 @@ export default function HighSchoolStudyAssistantScreen() {
         <View style={styles.headerTextWrap}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>High School Assistant</Text>
           <Text style={[styles.headerMeta, { color: colors.textMuted }]}>
-            {mode === "academic" ? `${board} • Class ${classLevel}${subject ? ` • ${subject}` : ""}` : "General mode"}
+            {mode === "academic" ? `Class ${classLevel}${subject ? ` • ${subject}` : ""}` : "General mode"}
           </Text>
         </View>
       </View>
@@ -289,7 +311,6 @@ export default function HighSchoolStudyAssistantScreen() {
             {mode === "academic" ? (
               <View style={[styles.contextCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
                 <Text style={[styles.contextTitle, { color: colors.text }]}>Academic Context</Text>
-                <TextInput style={[styles.contextInput, { borderColor: colors.border, color: colors.text }]} value={board} onChangeText={setBoard} placeholder="Board" placeholderTextColor={colors.textMuted} />
                 <TextInput style={[styles.contextInput, { borderColor: colors.border, color: colors.text }]} value={classLevel} onChangeText={setClassLevel} placeholder="Class" placeholderTextColor={colors.textMuted} />
                 <TextInput style={[styles.contextInput, { borderColor: colors.border, color: colors.text }]} value={subject} onChangeText={setSubject} placeholder="Subject" placeholderTextColor={colors.textMuted} />
                 <TextInput style={[styles.contextInput, { borderColor: colors.border, color: colors.text }]} value={chapter} onChangeText={setChapter} placeholder="Chapter (optional)" placeholderTextColor={colors.textMuted} />

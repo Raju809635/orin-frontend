@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
@@ -41,6 +41,12 @@ const SUBJECTS = [
 ];
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
 type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
+type TopicOption = { subject: string; chapter: string; topic: string };
+type AcademicSubjectResponse = {
+  subject?: {
+    chapters?: { chapter_name?: string; topics?: { topic_name?: string }[] }[];
+  };
+};
 
 function subjectLabel(item: AcademicSubject | string) {
   if (typeof item === "string") return item;
@@ -70,13 +76,15 @@ function priorityColor(priority: string) {
 export default function ExamStrategyBuilderScreen() {
   const { colors, isDark } = useAppTheme();
   const { className } = useLearner();
-  const [board] = useState("CBSE");
   const [examName, setExamName] = useState("Half Yearly Exam");
   const [examDate, setExamDate] = useState("25 June 2026");
   const [classLevel, setClassLevel] = useState(className || "10");
-  const [syllabus, setSyllabus] = useState("CBSE 2024-25");
+  const [syllabus, setSyllabus] = useState("Class 10 academic syllabus");
+  const [subjectOptions, setSubjectOptions] = useState<AcademicSubject[]>([]);
   const [subjectPool, setSubjectPool] = useState(SUBJECTS);
   const [selectedSubjects, setSelectedSubjects] = useState(["Mathematics", "Science", "English", "Social Studies"]);
+  const [topicPool, setTopicPool] = useState<TopicOption[]>([]);
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [strategy, setStrategy] = useState<StrategyResponse | null>(null);
   const [source, setSource] = useState<"ai" | "fallback">("fallback");
   const [loading, setLoading] = useState(false);
@@ -86,23 +94,76 @@ export default function ExamStrategyBuilderScreen() {
 
   const loadSubjects = useCallback(async () => {
     try {
-      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[] }>(`/api/academics/${board}/class/${classLevel}/subjects`);
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/class/${classLevel}/subjects`);
       const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
       if (next.length) {
+        setSubjectOptions((data?.subjects || []).filter((item): item is AcademicSubject => typeof item !== "string"));
         setSubjectPool(next);
         setSelectedSubjects((prev) => prev.filter((item) => next.includes(item)).length ? prev.filter((item) => next.includes(item)) : next.slice(0, 4));
+        setError("");
+      } else if (data?.message) {
+        setSubjectOptions([]);
+        setSubjectPool([]);
+        setSelectedSubjects([]);
+        setTopicPool([]);
+        setSelectedTopics([]);
+        setError(data.message);
       }
     } catch {
+      setSubjectOptions([]);
       setSubjectPool(SUBJECTS);
     }
-  }, [board, classLevel]);
+  }, [classLevel]);
 
   useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
+
+  const loadTopics = useCallback(async () => {
+    const subjectsToLoad = selectedSubjects.slice(0, 6);
+    if (!subjectsToLoad.length) {
+      setTopicPool([]);
+      setSelectedTopics([]);
+      return;
+    }
+    const results = await Promise.allSettled(
+      subjectsToLoad.map(async (subject) => {
+        const option = subjectOptions.find((item) => subjectLabel(item) === subject);
+        const key = option?.key || option?.slug || subject;
+        const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/class/${classLevel}/subject/${encodeURIComponent(key)}`);
+        const chapters = data?.subject?.chapters || (data as any)?.chapters || [];
+        return chapters.flatMap((chapter: any) => {
+          const chapterName = String(chapter?.chapter_name || chapter?.name || "").trim();
+          const topics = Array.isArray(chapter?.topics) ? chapter.topics : [];
+          if (!topics.length && chapterName) return [{ subject, chapter: chapterName, topic: chapterName }];
+          return topics
+            .map((topic: any) => ({
+              subject,
+              chapter: chapterName,
+              topic: String(topic?.topic_name || topic?.name || topic || "").trim()
+            }))
+            .filter((item: TopicOption) => item.topic);
+        });
+      })
+    );
+    const next = results.flatMap((result) => (result.status === "fulfilled" ? result.value : [])).slice(0, 80);
+    setTopicPool(next);
+    setSelectedTopics((prev) => prev.filter((topic) => next.some((item) => item.topic === topic)).slice(0, 16));
+  }, [classLevel, selectedSubjects, subjectOptions]);
+
+  useEffect(() => {
+    void loadTopics();
+  }, [loadTopics]);
 
   function toggleSubject(subject: string) {
     setSelectedSubjects((prev) => {
       if (prev.includes(subject)) return prev.filter((item) => item !== subject);
       return [...prev, subject];
+    });
+  }
+
+  function toggleTopic(topic: string) {
+    setSelectedTopics((prev) => {
+      if (prev.includes(topic)) return prev.filter((item) => item !== topic);
+      return [...prev, topic].slice(0, 16);
     });
   }
 
@@ -124,7 +185,8 @@ export default function ExamStrategyBuilderScreen() {
         examDate,
         classLevel,
         syllabus,
-        subjects: selectedSubjects
+        subjects: selectedSubjects,
+        topics: selectedTopics
       });
       setStrategy(data.strategy || null);
       setSource(data.source === "ai" ? "ai" : "fallback");
@@ -201,6 +263,32 @@ export default function ExamStrategyBuilderScreen() {
             );
           })}
         </View>
+      </View>
+
+      <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.cardTitle, { color: colors.text }]}>Topics From Academic Dataset</Text>
+        <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
+          Pick focus topics after selecting class and subject. Class 10 Mathematics, Science, Social Science, and Telugu work now; future PDFs/data will appear here automatically.
+        </Text>
+        {topicPool.length ? (
+          <View style={styles.topicChipGrid}>
+            {topicPool.slice(0, 42).map((item) => {
+              const active = selectedTopics.includes(item.topic);
+              return (
+                <TouchableOpacity
+                  key={`${item.subject}-${item.chapter}-${item.topic}`}
+                  style={[styles.topicChip, { backgroundColor: active ? "#FFF7ED" : colors.surfaceAlt, borderColor: active ? "#FB923C" : colors.border }]}
+                  onPress={() => toggleTopic(item.topic)}
+                >
+                  <Text style={[styles.topicChipTitle, { color: active ? "#9A3412" : colors.text }]} numberOfLines={2}>{item.topic}</Text>
+                  <Text style={[styles.topicChipMeta, { color: colors.textMuted }]} numberOfLines={1}>{item.subject} · {item.chapter}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <Text style={[styles.cardMeta, { color: colors.textMuted }]}>No enriched topics found yet for the selected class/subject. Strategy will still use subject-safe fallback topics.</Text>
+        )}
       </View>
 
       {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
@@ -313,6 +401,10 @@ const styles = StyleSheet.create({
   subjectTile: { width: "30.5%", minHeight: 92, borderWidth: 1, borderRadius: 18, padding: 9, alignItems: "center", justifyContent: "center", gap: 7 },
   subjectIcon: { width: 40, height: 40, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   subjectText: { textAlign: "center", fontSize: 11, fontWeight: "900" },
+  topicChipGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  topicChip: { width: "48%", minHeight: 76, borderWidth: 1, borderRadius: 16, padding: 10, gap: 5 },
+  topicChipTitle: { fontSize: 12, lineHeight: 16, fontWeight: "900" },
+  topicChipMeta: { fontSize: 10, fontWeight: "800" },
   error: { fontWeight: "800" },
   primaryBtn: { minHeight: 54, borderRadius: 999, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
   primaryText: { color: "#FFFFFF", fontWeight: "900", fontSize: 16 },

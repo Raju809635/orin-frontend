@@ -99,7 +99,6 @@ function barColor(value: number) {
 export default function HighSchoolStudyPlannerScreen() {
   const { colors, isDark } = useAppTheme();
   const { className } = useLearner();
-  const [board] = useState("CBSE");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [subjects, setSubjects] = useState<string[]>(SUBJECTS);
   const [chapters, setChapters] = useState<string[]>([]);
@@ -122,30 +121,35 @@ export default function HighSchoolStudyPlannerScreen() {
 
   const loadSubjects = useCallback(async () => {
     try {
-      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[] }>(`/api/academics/${board}/class/${classLevel}/subjects`);
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/class/${classLevel}/subjects`);
       const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
       if (next.length) {
         setSubjects(next);
         if (!next.includes(subject)) setSubject(next[0]);
+      } else if (data?.message) {
+        setSubjects([]);
+        setChapters([]);
+        setStatusMessage(data.message);
       }
     } catch {
       setSubjects(SUBJECTS);
     }
-  }, [board, classLevel, subject]);
+  }, [classLevel, subject]);
 
   const loadChapters = useCallback(async () => {
     try {
-      const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${classLevel}/subject/${encodeURIComponent(subject)}`);
+      const { data } = await api.get<AcademicSubjectResponse & { message?: string }>(`/api/academics/class/${classLevel}/subject/${encodeURIComponent(subject)}`);
       const next = (data?.subject?.chapters || data?.chapters || [])
-        .map((item) => String(item.title || item.name || "").trim())
+        .map((item: any) => String(item.chapter_name || item.title || item.name || "").trim())
         .filter(Boolean)
         .slice(0, 10);
       setChapters(next);
       if (next.length && skills === "basics, revision, practice tests") setSkills(next.slice(0, 3).join(", "));
+      if (!next.length && data?.message) setStatusMessage(data.message);
     } catch {
       setChapters([]);
     }
-  }, [board, classLevel, skills, subject]);
+  }, [classLevel, skills, subject]);
 
   useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
   useFocusEffect(useCallback(() => { loadChapters(); }, [loadChapters]));

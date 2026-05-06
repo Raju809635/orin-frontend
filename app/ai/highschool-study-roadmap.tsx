@@ -127,7 +127,6 @@ export default function HighSchoolStudyRoadmapScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
   const { className } = useLearner();
-  const [board] = useState("CBSE");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [subjects, setSubjects] = useState<string[]>(FALLBACK_SUBJECTS);
   const [subject, setSubject] = useState("Mathematics");
@@ -155,33 +154,39 @@ export default function HighSchoolStudyRoadmapScreen() {
   const loadSubjects = useCallback(async () => {
     try {
       setLoadingContext(true);
-      const { data } = await api.get<{ subjects?: AcademicSubject[] | string[] }>(`/api/academics/${board}/class/${classLevel}/subjects`);
+      const { data } = await api.get<{ subjects?: AcademicSubject[] | string[]; message?: string }>(`/api/academics/class/${classLevel}/subjects`);
       const nextSubjects = (data?.subjects || []).map(normalizeSubjectLabel).filter(Boolean);
       if (nextSubjects.length) {
         setSubjects(nextSubjects);
         if (!nextSubjects.includes(subject)) setSubject(nextSubjects[0]);
+      } else if (data?.message) {
+        setSubjects([]);
+        setChapters([]);
+        setChapter("");
+        setStatusMessage(data.message);
       }
     } catch {
       setSubjects(FALLBACK_SUBJECTS);
     } finally {
       setLoadingContext(false);
     }
-  }, [board, classLevel, subject]);
+  }, [classLevel, subject]);
 
   const loadChapters = useCallback(async () => {
     if (!subject) return;
     try {
       const subjectKey = encodeURIComponent(subject);
-      const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${classLevel}/subject/${subjectKey}`);
+      const { data } = await api.get<AcademicSubjectResponse & { message?: string }>(`/api/academics/class/${classLevel}/subject/${subjectKey}`);
       const rawChapters = data?.subject?.chapters || data?.chapters || [];
-      const nextChapters = rawChapters.map((item) => String(item.title || item.name || "").trim()).filter(Boolean).slice(0, 12);
+      const nextChapters = rawChapters.map((item: any) => String(item.chapter_name || item.title || item.name || "").trim()).filter(Boolean).slice(0, 12);
       setChapters(nextChapters);
       setChapter((prev) => prev && nextChapters.includes(prev) ? prev : nextChapters[0] || "");
+      if (!nextChapters.length && data?.message) setStatusMessage(data.message);
     } catch {
       setChapters([]);
       setChapter("");
     }
-  }, [board, classLevel, subject]);
+  }, [classLevel, subject]);
 
   const loadInstitutionRoadmaps = useCallback(async () => {
     try {
@@ -210,7 +215,6 @@ export default function HighSchoolStudyRoadmapScreen() {
     const fallback = buildLocalRoadmap(subject, classLevel, chapter, goal);
     try {
       const { data } = await api.post<{ source?: "ai" | "fallback"; roadmap?: StudyRoadmap }>("/api/ai/highschool/study-roadmap", {
-        board,
         classLevel,
         subject,
         chapter,

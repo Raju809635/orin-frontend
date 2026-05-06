@@ -104,7 +104,6 @@ function barColor(value: number) {
 export default function CareerExplorerScreen() {
   const { colors } = useAppTheme();
   const { className } = useLearner();
-  const [board] = useState("CBSE");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [subjects, setSubjects] = useState(FALLBACK_SUBJECTS);
   const [favoriteSubjects, setFavoriteSubjects] = useState(["Science", "Mathematics"]);
@@ -120,16 +119,21 @@ export default function CareerExplorerScreen() {
 
   const loadSubjects = useCallback(async () => {
     try {
-      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[] }>(`/api/academics/${board}/class/${classLevel}/subjects`);
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/class/${classLevel}/subjects`);
       const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
       if (next.length) {
         setSubjects(next);
         setFavoriteSubjects((prev) => prev.filter((item) => next.includes(item)).length ? prev.filter((item) => next.includes(item)) : next.slice(0, 2));
+        setStatusMessage("");
+      } else if (data?.message) {
+        setSubjects([]);
+        setFavoriteSubjects([]);
+        setStatusMessage(data.message);
       }
     } catch {
       setSubjects(FALLBACK_SUBJECTS);
     }
-  }, [board, classLevel]);
+  }, [classLevel]);
 
   useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
 

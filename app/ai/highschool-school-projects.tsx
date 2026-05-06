@@ -8,8 +8,8 @@ import { useAppTheme } from "@/context/ThemeContext";
 import { useLearner } from "@/context/LearnerContext";
 
 type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
-type AcademicChapter = { title?: string; name?: string };
-type AcademicSubjectResponse = { subject?: { chapters?: AcademicChapter[] }; chapters?: AcademicChapter[] };
+type AcademicChapter = { chapter_name?: string; title?: string; name?: string };
+type AcademicSubjectResponse = { subject?: { chapters?: AcademicChapter[] }; chapters?: AcademicChapter[]; message?: string };
 type SchoolProject = {
   id: string;
   title: string;
@@ -41,7 +41,6 @@ export default function HighSchoolSchoolProjectsScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const { className } = useLearner();
-  const [board] = useState("CBSE");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [subjects, setSubjects] = useState<string[]>(FALLBACK_SUBJECTS);
   const [subject, setSubject] = useState("Science");
@@ -57,33 +56,43 @@ export default function HighSchoolSchoolProjectsScreen() {
   const loadSubjects = useCallback(async () => {
     try {
       setLoadingContext(true);
-      const { data } = await api.get<{ subjects?: AcademicSubject[] | string[] }>(`/api/academics/${board}/class/${classLevel}/subjects`);
+      const { data } = await api.get<{ subjects?: AcademicSubject[] | string[]; message?: string }>(`/api/academics/class/${classLevel}/subjects`);
       const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
       if (next.length) {
         setSubjects(next);
         if (!next.includes(subject)) setSubject(next[0]);
+        setStatus("");
+      } else if (data?.message) {
+        setSubjects([]);
+        setStatus(data.message);
       }
     } catch {
       setSubjects(FALLBACK_SUBJECTS);
     } finally {
       setLoadingContext(false);
     }
-  }, [board, classLevel, subject]);
+  }, [classLevel, subject]);
 
   const loadChapters = useCallback(async () => {
     try {
-      const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${classLevel}/subject/${encodeURIComponent(subject)}`);
+      if (!subject) {
+        setChapters([]);
+        setChapter("");
+        return;
+      }
+      const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/class/${classLevel}/subject/${encodeURIComponent(subject)}`);
       const next = (data?.subject?.chapters || data?.chapters || [])
-        .map((item) => String(item.title || item.name || "").trim())
+        .map((item) => String(item.chapter_name || item.title || item.name || "").trim())
         .filter(Boolean)
         .slice(0, 12);
       setChapters(next);
       setChapter((prev) => prev && next.includes(prev) ? prev : next[0] || "");
+      if (data?.message) setStatus(data.message);
     } catch {
       setChapters([]);
       setChapter("");
     }
-  }, [board, classLevel, subject]);
+  }, [classLevel, subject]);
 
   useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
   useFocusEffect(useCallback(() => { loadChapters(); }, [loadChapters]));
@@ -93,7 +102,6 @@ export default function HighSchoolSchoolProjectsScreen() {
     setStatus("");
     try {
       const { data } = await api.post<{ source?: "ai" | "fallback"; result?: SchoolProjectsResult }>("/api/ai/highschool/school-projects", {
-        board,
         classLevel,
         subject,
         chapter,

@@ -324,7 +324,6 @@ export default function HighSchoolSubjectGapScreen() {
   const [loadingReport, setLoadingReport] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [quizStarted, setQuizStarted] = useState(false);
-  const [board] = useState("CBSE");
   const [selectedClass, setSelectedClass] = useState(className || "10");
   const [subjects, setSubjects] = useState<string[]>(Object.keys(SUBJECT_TOPICS));
   const [subjectTopics, setSubjectTopics] = useState<Record<string, string[]>>(SUBJECT_TOPICS);
@@ -343,33 +342,39 @@ export default function HighSchoolSubjectGapScreen() {
   const loadAcademicSubjects = useCallback(async () => {
     try {
       setLoadingAcademicContext(true);
-      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[] }>(`/api/academics/${board}/class/${selectedClass}/subjects`);
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/class/${selectedClass}/subjects`);
       const nextSubjects = (data?.subjects || []).map(subjectLabel).filter(Boolean);
       if (nextSubjects.length) {
         setSubjects(nextSubjects);
         if (!nextSubjects.includes(selectedSubject)) setSelectedSubject(nextSubjects[0]);
+      } else if (data?.message) {
+        setSubjects([]);
+        setSubjectTopics({});
+        setStatusMessage(data.message);
       }
     } catch {
       setSubjects(Object.keys(SUBJECT_TOPICS));
     } finally {
       setLoadingAcademicContext(false);
     }
-  }, [board, selectedClass, selectedSubject]);
+  }, [selectedClass, selectedSubject]);
 
   const loadAcademicTopics = useCallback(async () => {
     if (!selectedSubject) return;
     try {
-      const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${selectedClass}/subject/${encodeURIComponent(selectedSubject)}`);
+      const { data } = await api.get<AcademicSubjectResponse & { message?: string }>(`/api/academics/class/${selectedClass}/subject/${encodeURIComponent(selectedSubject)}`);
       const chapters = data?.subject?.chapters || data?.chapters || [];
-      const nextTopics = chapters.map((item) => String(item.title || item.name || "").trim()).filter(Boolean).slice(0, 12);
+      const nextTopics = chapters.map((item: any) => String(item.chapter_name || item.title || item.name || "").trim()).filter(Boolean).slice(0, 12);
       if (nextTopics.length) {
         setSubjectTopics((prev) => ({ ...prev, [selectedSubject]: nextTopics }));
         if (!nextTopics.includes(selectedTopic)) setSelectedTopic(nextTopics[0]);
+      } else if (data?.message) {
+        setStatusMessage(data.message);
       }
     } catch {
       setSubjectTopics((prev) => ({ ...SUBJECT_TOPICS, ...prev }));
     }
-  }, [board, selectedClass, selectedSubject, selectedTopic]);
+  }, [selectedClass, selectedSubject, selectedTopic]);
 
   useFocusEffect(useCallback(() => { loadAcademicSubjects(); }, [loadAcademicSubjects]));
   useFocusEffect(useCallback(() => { loadAcademicTopics(); }, [loadAcademicTopics]));
