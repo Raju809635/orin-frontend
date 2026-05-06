@@ -64,7 +64,7 @@ export default function HighSchoolResourceLibraryScreen() {
 
       if (nextSelectedKey) {
         const subjectRes = await api.get<AcademicSubjectResponse>(`/api/academics/${DEMO_BOARD}/class/${DEMO_CLASS}/subject/${nextSelectedKey}`);
-        setAcademicSubject(subjectRes.data?.subject || null);
+        setAcademicSubject(subjectRes.data?.subject || (subjectRes.data as any) || null);
       } else {
         setAcademicSubject(null);
       }
@@ -80,7 +80,7 @@ export default function HighSchoolResourceLibraryScreen() {
     try {
       setSelectedSubjectKey(subjectKey);
       const subjectRes = await api.get<AcademicSubjectResponse>(`/api/academics/${DEMO_BOARD}/class/${DEMO_CLASS}/subject/${subjectKey}`);
-      setAcademicSubject(subjectRes.data?.subject || null);
+      setAcademicSubject(subjectRes.data?.subject || (subjectRes.data as any) || null);
     } catch (e) {
       setError(getAppErrorMessage(e, "Failed to load academic subject."));
     }
