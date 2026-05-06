@@ -28,13 +28,15 @@ type ResourceItem = {
   supportingDocuments?: string[];
 };
 type LibraryResponse = { institutionResources?: ResourceItem[]; roadmapResources?: ResourceItem[]; domainResources?: ResourceItem[] };
-type AcademicSubjectSummary = { key: string; subject: string; verificationStatus?: string; chapterCount?: number };
+type AcademicSubjectSummary = { key: string; slug?: string; name?: string; subject?: string; available?: boolean; message?: string; verificationStatus?: string; chapterCount?: number };
 type AcademicSubjectResponse = {
-  subject?: {
-    metadata?: { subject?: string; verification_status?: string };
-    chapters?: { chapter_no?: number; chapter_name?: string; unit?: string; topics?: { topic_name?: string; subtopics?: string[] }[] }[];
-  };
+  available?: boolean;
+  message?: string;
+  subject?: { metadata?: { subject?: string; verification_status?: string } };
+  chapters?: { chapter_no?: number; chapter_name?: string; unit?: string; topics?: { topic_name?: string; subtopics?: string[] }[] }[];
 };
+type AcademicPdf = { id: string; title: string; fileName: string; subject: string; board: string; pdfUrl: string; sizeBytes?: number };
+type AcademicPdfResponse = { available?: boolean; message?: string; pdfs?: AcademicPdf[] };
 
 const DEMO_BOARD = "CBSE";
 const DEMO_CLASS = 10;
@@ -60,7 +62,8 @@ export default function HighSchoolResourceLibraryScreen() {
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [subjects, setSubjects] = useState<AcademicSubjectSummary[]>([]);
   const [selectedSubjectKey, setSelectedSubjectKey] = useState("mathematics");
-  const [academicSubject, setAcademicSubject] = useState<AcademicSubjectResponse["subject"] | null>(null);
+  const [academicSubject, setAcademicSubject] = useState<AcademicSubjectResponse | null>(null);
+  const [academicPdfs, setAcademicPdfs] = useState<AcademicPdf[]>([]);
   const [selectedResource, setSelectedResource] = useState<ResourceItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,7 +71,7 @@ export default function HighSchoolResourceLibraryScreen() {
 
   const pdfResources = useMemo(() => resources.filter((item) => Boolean(firstPdfUrl(item))), [resources]);
   const selectedSubject = useMemo(() => subjects.find((item) => item.key === selectedSubjectKey) || subjects[0], [selectedSubjectKey, subjects]);
-  const chapters = academicSubject?.chapters || [];
+  const chapters = academicSubject?.available === false ? [] : academicSubject?.chapters || [];
 
   const openPdf = useCallback(async (item: ResourceItem) => {
     const url = normalizeUrl(firstPdfUrl(item));
@@ -90,8 +93,12 @@ export default function HighSchoolResourceLibraryScreen() {
   const loadSubject = useCallback(async (subjectKey: string) => {
     try {
       setSelectedSubjectKey(subjectKey);
-      const subjectRes = await api.get<AcademicSubjectResponse>(`/api/academics/${DEMO_BOARD}/class/${DEMO_CLASS}/subject/${subjectKey}`);
-      setAcademicSubject(subjectRes.data?.subject || (subjectRes.data as any) || null);
+      const [subjectRes, pdfRes] = await Promise.all([
+        api.get<AcademicSubjectResponse>(`/api/academics/class/${DEMO_CLASS}/subject/${subjectKey}/topics`),
+        api.get<AcademicPdfResponse>(`/api/academics/class/${DEMO_CLASS}/subject/${subjectKey}/pdfs`)
+      ]);
+      setAcademicSubject(subjectRes.data || null);
+      setAcademicPdfs(pdfRes.data?.pdfs || []);
     } catch (e) {
       setError(getAppErrorMessage(e, "Failed to load academic subject."));
     }
@@ -104,7 +111,7 @@ export default function HighSchoolResourceLibraryScreen() {
       setError(null);
       const [libraryRes, subjectsRes] = await Promise.allSettled([
         api.get<LibraryResponse>("/api/network/knowledge-library"),
-        api.get<{ subjects: AcademicSubjectSummary[] }>(`/api/academics/${DEMO_BOARD}/class/${DEMO_CLASS}/subjects`)
+        api.get<{ subjects: AcademicSubjectSummary[] }>(`/api/academics/class/${DEMO_CLASS}/subjects`)
       ]);
       const library = libraryRes.status === "fulfilled" ? libraryRes.value.data || {} : {};
       setResources([...(library.institutionResources || []), ...(library.domainResources || []), ...(library.roadmapResources || [])]);
@@ -130,11 +137,11 @@ export default function HighSchoolResourceLibraryScreen() {
     <HighSchoolCommunityShell
       eyebrow={`${DEMO_BOARD} Class ${DEMO_CLASS}`}
       title="Resource Library"
-      subtitle="PDF-first school resources plus syllabus browsing. No random links are shown here."
+      subtitle="Real PDF files from teachers and connected textbooks. No random links or fake syllabus topics are shown here."
       stats={[
         { icon: "book", label: "Subjects", value: String(subjects.length) },
         { icon: "library", label: "Chapters", value: String(chapters.length) },
-        { icon: "document-text", label: "PDFs", value: String(pdfResources.length) }
+        { icon: "document-text", label: "PDFs", value: String(academicPdfs.length + pdfResources.length) }
       ]}
       loading={loading}
       error={error}
@@ -156,16 +163,18 @@ export default function HighSchoolResourceLibraryScreen() {
                     ]}
                     onPress={() => loadSubject(subject.key)}
                   >
-                    <Text style={[styles.subjectText, { color: active ? "#15803D" : colors.textMuted }]}>{subject.subject}</Text>
+                    <Text style={[styles.subjectText, { color: active ? "#15803D" : colors.textMuted }]}>{subject.subject || subject.name}</Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
             <View style={styles.badgeRow}>
-              <StatusBadge label={selectedSubject?.subject || "Selected subject"} tone="success" />
-              <StatusBadge label={academicSubject?.metadata?.verification_status || selectedSubject?.verificationStatus || "dataset"} tone="primary" />
+              <StatusBadge label={selectedSubject?.subject || selectedSubject?.name || "Selected subject"} tone="success" />
+              <StatusBadge label={academicSubject?.available === false ? "Verification pending" : academicSubject?.subject?.metadata?.verification_status || selectedSubject?.verificationStatus || "dataset"} tone={academicSubject?.available === false ? "warning" : "primary"} />
             </View>
-            {chapters.slice(0, 8).map((chapter) => (
+            {academicSubject?.available === false ? (
+              <AcademicEmpty label={academicSubject.message || "Verified topics for this subject will appear after PDF extraction review."} />
+            ) : chapters.slice(0, 8).map((chapter) => (
               <AcademicCard
                 key={`${chapter.chapter_no}-${chapter.chapter_name}`}
                 icon="book-outline"
@@ -177,15 +186,38 @@ export default function HighSchoolResourceLibraryScreen() {
                 secondaryLabel="Practice Topic"
                 onPress={() =>
                   router.push(
-                    `/ai/highschool-study-roadmap?subject=${encodeURIComponent(selectedSubject?.subject || "")}&chapter=${encodeURIComponent(chapter.chapter_name || "")}` as never
+                    `/ai/highschool-study-roadmap?subject=${encodeURIComponent(selectedSubject?.subject || selectedSubject?.name || "")}&chapter=${encodeURIComponent(chapter.chapter_name || "")}` as never
                   )
                 }
-                onSecondaryPress={() => router.push(`/ai/highschool-subject-gap?subject=${encodeURIComponent(selectedSubject?.subject || "")}` as never)}
+                onSecondaryPress={() => router.push(`/ai/highschool-subject-gap?subject=${encodeURIComponent(selectedSubject?.subject || selectedSubject?.name || "")}` as never)}
               />
             ))}
           </>
         ) : (
           <AcademicEmpty label="Academic dataset is not connected yet." />
+        )}
+      </CommunitySection>
+
+      <CommunitySection title="Academic PDFs" subtitle="Connected textbook PDFs from the academic pipeline." icon="reader">
+        {academicPdfs.length ? (
+          academicPdfs.map((item) => {
+            const absoluteUrl = normalizeUrl(item.pdfUrl);
+            return (
+              <AcademicCard
+                key={item.id}
+                icon="document-text-outline"
+                title={item.title || item.fileName}
+                meta={`${item.board} Class ${DEMO_CLASS} · ${item.subject} · PDF`}
+                note={item.fileName}
+                badge="Real PDF"
+                badgeTone="success"
+                actionLabel="Open PDF"
+                onPress={() => openPdf({ title: item.title, documentUrl: absoluteUrl })}
+              />
+            );
+          })
+        ) : (
+          <AcademicEmpty label="No connected academic PDFs found for this subject on the backend." />
         )}
       </CommunitySection>
 
