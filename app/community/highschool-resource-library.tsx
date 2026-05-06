@@ -1,24 +1,34 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
 import { EmptyState, StageCommunityScaffold, StageListCard, StageSection, StageStatRow } from "@/components/community/stage-community-data-ui";
 
-type ResourceItem = { _id?: string; id?: string; title: string; domain?: string; type?: string; description?: string; mentor?: { name?: string } | null };
+type ResourceItem = {
+  _id?: string;
+  id?: string;
+  title: string;
+  domain?: string;
+  type?: string;
+  description?: string;
+  mentor?: { name?: string } | null;
+  documentUrl?: string;
+  url?: string;
+};
 type LibraryResponse = { institutionResources?: ResourceItem[]; roadmapResources?: ResourceItem[]; domainResources?: ResourceItem[] };
 type InstitutionRoadmapItem = { _id?: string; id?: string; title: string; domain?: string; className?: string; mentor?: { name?: string } | null; weeks?: { id: string }[] };
 type AcademicSubjectSummary = { key: string; subject: string; verificationStatus?: string; chapterCount?: number };
 type AcademicSubjectResponse = {
   subject?: {
     metadata?: { subject?: string; verification_status?: string };
-    chapters?: Array<{
+    chapters?: {
       chapter_no?: number;
       chapter_name?: string;
       unit?: string;
-      topics?: Array<{ topic_name?: string; subtopics?: string[] }>;
-    }>;
+      topics?: { topic_name?: string; subtopics?: string[] }[];
+    }[];
   };
 };
 
@@ -42,6 +52,20 @@ export default function HighSchoolResourceLibraryScreen() {
     () => subjects.find((item) => item.key === selectedSubjectKey) || subjects[0],
     [selectedSubjectKey, subjects]
   );
+
+  const isPdfResource = useCallback((item: ResourceItem) => {
+    const documentUrl = String(item.documentUrl || "").toLowerCase().trim();
+    const externalUrl = String(item.url || "").toLowerCase().trim();
+    return documentUrl.includes(".pdf") || externalUrl.includes(".pdf");
+  }, []);
+
+  const openPdf = useCallback((item: ResourceItem) => {
+    const documentUrl = String(item.documentUrl || "").trim();
+    if (!documentUrl) return;
+    Linking.openURL(documentUrl).catch(() => {
+      setError("Unable to open PDF document.");
+    });
+  }, []);
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -144,23 +168,25 @@ export default function HighSchoolResourceLibraryScreen() {
       </StageSection>
 
       <StageSection title="Teacher & Institution Resources" icon="document-text" actionLabel="Open full" onAction={() => router.push("/community/knowledge-library" as never)}>
-        {institutionItems.length ? institutionItems.slice(0, 4).map((item) => (
+        {(institutionItems.filter(isPdfResource).length || domainItems.filter(isPdfResource).length) ? institutionItems.filter(isPdfResource).slice(0, 4).map((item) => (
           <StageListCard
             key={item._id || item.id || item.title}
             title={item.title}
-            meta={`${item.domain || "School"} | ${item.type || "Resource"}`}
-            note={item.description || `Uploaded by ${item.mentor?.name || "Mentor"}`}
+            meta={`${item.domain || "School"} | ${item.type || "Resource"} | PDF`}
+            note={item.description || `Uploaded by ${item.mentor?.name || "Mentor"} · Tap to open PDF`}
             tone="highschool"
+            onPress={() => openPdf(item)}
           />
-        )) : domainItems.length ? domainItems.slice(0, 4).map((item) => (
+        )) : domainItems.filter(isPdfResource).length ? domainItems.filter(isPdfResource).slice(0, 4).map((item) => (
           <StageListCard
             key={item._id || item.id || item.title}
             title={item.title}
-            meta={`${item.domain || "Study"} | ${item.type || "Guide"}`}
-            note={item.description}
+            meta={`${item.domain || "Study"} | ${item.type || "Guide"} | PDF`}
+            note={`${item.description || "Academic resource"} · Tap to open PDF`}
             tone="highschool"
+            onPress={() => openPdf(item)}
           />
-        )) : <EmptyState label="No teacher resources yet." />}
+        )) : <EmptyState label="No PDF resources yet. Upload document PDFs in Knowledge Library." />}
       </StageSection>
 
       <StageSection title="Institution Roadmaps" icon="map" actionLabel="Open full" onAction={() => router.push("/ai/career-roadmap?section=institution" as never)}>

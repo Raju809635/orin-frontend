@@ -814,6 +814,7 @@ function RootDrawer() {
           <Drawer.Screen name="community/kid-star-rewards" options={{ title: "Star Rewards", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/kid-class-resources" options={{ title: "Class Resources", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/highschool-study-groups" options={{ title: "Study Groups", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="community/highschool-quiz-battle" options={{ title: "Quiz Battle", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/highschool-school-challenges" options={{ title: "School Challenges", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/highschool-resource-library" options={{ title: "Resource Library", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="community/highschool-achievements" options={{ title: "Achievements", drawerItemStyle: { display: "none" } }} />

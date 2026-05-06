@@ -9,14 +9,20 @@ type Dashboard = {
   streakDays?: number;
   xp?: number;
   dailyQuiz?: { completedToday?: boolean; attemptsLeft?: number; domain?: string };
-  skillRadar?: { domain?: string; skills?: Array<{ name: string; score: number }> };
+  skillRadar?: { domain?: string; skills?: { name: string; score: number }[] };
   careerIntelligence?: { strength?: string; needsImprovement?: string[]; recommendedNextStep?: string } | null;
 };
 type AcademicSubjectSummary = { key: string; subject: string; chapterCount?: number };
+type LeaderboardResponse = {
+  collegeName?: string;
+  stateName?: string;
+  me?: { collegeRank?: number | null; stateRank?: number | null; globalRank?: number | null; score?: number };
+};
 
 export default function HighSchoolProgressScreen() {
   const [reputation, setReputation] = useState<ReputationSummary | null>(null);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardResponse | null>(null);
   const [subjects, setSubjects] = useState<AcademicSubjectSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -26,14 +32,16 @@ export default function HighSchoolProgressScreen() {
     try {
       if (refresh) setRefreshing(true); else setLoading(true);
       setError(null);
-      const [repRes, dashRes, subjectRes] = await Promise.allSettled([
+      const [repRes, dashRes, subjectRes, boardRes] = await Promise.allSettled([
         api.get<ReputationSummary>("/api/network/reputation-summary"),
         api.get<Dashboard>("/api/network/daily-dashboard"),
-        api.get<{ subjects: AcademicSubjectSummary[] }>("/api/academics/CBSE/class/10/subjects")
+        api.get<{ subjects: AcademicSubjectSummary[] }>("/api/academics/CBSE/class/10/subjects"),
+        api.get<LeaderboardResponse>("/api/network/leaderboard")
       ]);
       setReputation(repRes.status === "fulfilled" ? repRes.value.data || null : null);
       setDashboard(dashRes.status === "fulfilled" ? dashRes.value.data || null : null);
       setSubjects(subjectRes.status === "fulfilled" ? subjectRes.value.data?.subjects || [] : []);
+      setLeaderboard(boardRes.status === "fulfilled" ? boardRes.value.data || null : null);
     } catch (e) {
       setError(getAppErrorMessage(e, "Unable to load school progress."));
     } finally {
@@ -59,7 +67,8 @@ export default function HighSchoolProgressScreen() {
       <StageStatRow items={[
         { label: "Score", value: String(reputation?.score || 0) },
         { label: "Streak", value: String(dashboard?.streakDays || 0) },
-        { label: "XP", value: String(dashboard?.xp || 0) }
+        { label: "XP", value: String(dashboard?.xp || 0) },
+        { label: "School rank", value: leaderboard?.me?.collegeRank ? `#${leaderboard.me.collegeRank}` : "-" }
       ]} />
       <StageSection title="Progress Snapshot" icon="stats-chart">
         {reputation || dashboard ? (
@@ -77,6 +86,20 @@ export default function HighSchoolProgressScreen() {
         )) : subjects.length ? subjects.slice(0, 5).map((subject) => (
           <StageListCard key={subject.key} title={subject.subject} meta={`${subject.chapterCount || 0} chapters`} note="Take subject quizzes to unlock score-based radar." tone="highschool" />
         )) : <EmptyState label="Take a quiz to unlock subject progress." />}
+      </StageSection>
+      <StageSection title="Rank Position" icon="podium">
+        <StageListCard
+          title={leaderboard?.collegeName || "Your School"}
+          meta={`School rank: ${leaderboard?.me?.collegeRank ? `#${leaderboard.me.collegeRank}` : "-"}`}
+          note="School leaderboard is based on academic quiz, streak, challenge, and roadmap activity."
+          tone="highschool"
+        />
+        <StageListCard
+          title={leaderboard?.stateName || "Your State"}
+          meta={`State rank: ${leaderboard?.me?.stateRank ? `#${leaderboard.me.stateRank}` : "-"}`}
+          note={`Global rank: ${leaderboard?.me?.globalRank ? `#${leaderboard.me.globalRank}` : "-"}`}
+          tone="highschool"
+        />
       </StageSection>
       {skills.length ? (
         <StageSection title="Improvement Bars" icon="trending-up">

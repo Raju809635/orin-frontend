@@ -80,7 +80,7 @@ const highSchoolGames: GameCard[] = [
     emoji: "⚔️",
     icon: "trophy",
     reward: "+50 XP",
-    path: "/ai/highschool-subject-gap",
+    path: "/community/highschool-quiz-battle",
     colors: ["#0F766E", "#0F172A"]
   },
   {
