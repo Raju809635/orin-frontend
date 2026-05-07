@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Alert, Image, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Alert, Image, Platform, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -53,8 +53,8 @@ type PublicProfileLite = {
     careerGoals?: string;
   };
   socialPreview?: {
-    followers?: Array<{ _id?: string; name?: string; role?: string }>;
-    following?: Array<{ _id?: string; name?: string; role?: string }>;
+    followers?: { _id?: string; name?: string; role?: string }[];
+    following?: { _id?: string; name?: string; role?: string }[];
   };
 };
 
@@ -227,6 +227,12 @@ export default function MyProfileScreen() {
   }
 
   function confirmDelete(postId: string) {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      if (window.confirm("Delete this post permanently?")) {
+        removePost(postId);
+      }
+      return;
+    }
     Alert.alert("Delete post?", "This will permanently remove your post.", [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: () => removePost(postId) }

@@ -39,7 +39,7 @@ type AcademicPdf = { id: string; title: string; fileName: string; subject: strin
 type AcademicPdfResponse = { available?: boolean; message?: string; pdfs?: AcademicPdf[] };
 
 const DEMO_BOARD = "CBSE";
-const DEMO_CLASS = 10;
+const CLASS_OPTIONS = [6, 7, 8, 9, 10, 11, 12];
 
 function firstPdfUrl(item: ResourceItem) {
   const candidates = [item.documentUrl, item.url, item.fileUrl, ...(item.supportingDocuments || [])]
@@ -61,6 +61,7 @@ export default function HighSchoolResourceLibraryScreen() {
   const { colors } = useAppTheme();
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [subjects, setSubjects] = useState<AcademicSubjectSummary[]>([]);
+  const [classNumber, setClassNumber] = useState(10);
   const [selectedSubjectKey, setSelectedSubjectKey] = useState("mathematics");
   const [academicSubject, setAcademicSubject] = useState<AcademicSubjectResponse | null>(null);
   const [academicPdfs, setAcademicPdfs] = useState<AcademicPdf[]>([]);
@@ -94,15 +95,15 @@ export default function HighSchoolResourceLibraryScreen() {
     try {
       setSelectedSubjectKey(subjectKey);
       const [subjectRes, pdfRes] = await Promise.all([
-        api.get<AcademicSubjectResponse>(`/api/academics/class/${DEMO_CLASS}/subject/${subjectKey}/topics`),
-        api.get<AcademicPdfResponse>(`/api/academics/class/${DEMO_CLASS}/subject/${subjectKey}/pdfs`)
+        api.get<AcademicSubjectResponse>(`/api/academics/class/${classNumber}/subject/${subjectKey}/topics`),
+        api.get<AcademicPdfResponse>(`/api/academics/class/${classNumber}/subject/${subjectKey}/pdfs`)
       ]);
       setAcademicSubject(subjectRes.data || null);
       setAcademicPdfs(pdfRes.data?.pdfs || []);
     } catch (e) {
       setError(getAppErrorMessage(e, "Failed to load academic subject."));
     }
-  }, []);
+  }, [classNumber]);
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -111,7 +112,7 @@ export default function HighSchoolResourceLibraryScreen() {
       setError(null);
       const [libraryRes, subjectsRes] = await Promise.allSettled([
         api.get<LibraryResponse>("/api/network/knowledge-library"),
-        api.get<{ subjects: AcademicSubjectSummary[] }>(`/api/academics/class/${DEMO_CLASS}/subjects`)
+        api.get<{ subjects: AcademicSubjectSummary[] }>(`/api/academics/class/${classNumber}/subjects`)
       ]);
       const library = libraryRes.status === "fulfilled" ? libraryRes.value.data || {} : {};
       setResources([...(library.institutionResources || []), ...(library.domainResources || []), ...(library.roadmapResources || [])]);
@@ -125,7 +126,7 @@ export default function HighSchoolResourceLibraryScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [loadSubject, selectedSubjectKey]);
+  }, [classNumber, loadSubject, selectedSubjectKey]);
 
   useFocusEffect(
     useCallback(() => {
@@ -135,7 +136,7 @@ export default function HighSchoolResourceLibraryScreen() {
 
   return (
     <HighSchoolCommunityShell
-      eyebrow={`${DEMO_BOARD} Class ${DEMO_CLASS}`}
+      eyebrow={`${DEMO_BOARD} Class ${classNumber}`}
       title="Resource Library"
       subtitle="Real PDF files from teachers and connected textbooks. No random links or fake syllabus topics are shown here."
       stats={[
@@ -149,6 +150,27 @@ export default function HighSchoolResourceLibraryScreen() {
       onRefresh={() => load(true)}
     >
       <CommunitySection title="Academic Source Browser" subtitle="Use syllabus context for roadmap, practice and assistant prompts." icon="library">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subjectRow}>
+          {CLASS_OPTIONS.map((item) => {
+            const active = item === classNumber;
+            return (
+              <TouchableOpacity
+                key={item}
+                style={[
+                  styles.classChip,
+                  { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }
+                ]}
+                onPress={() => {
+                  setClassNumber(item);
+                  setAcademicSubject(null);
+                  setAcademicPdfs([]);
+                }}
+              >
+                <Text style={[styles.subjectText, { color: active ? "#15803D" : colors.textMuted }]}>Class {item}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
         {subjects.length ? (
           <>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subjectRow}>
@@ -186,10 +208,10 @@ export default function HighSchoolResourceLibraryScreen() {
                 secondaryLabel="Practice Topic"
                 onPress={() =>
                   router.push(
-                    `/ai/highschool-study-roadmap?subject=${encodeURIComponent(selectedSubject?.subject || selectedSubject?.name || "")}&chapter=${encodeURIComponent(chapter.chapter_name || "")}` as never
+                    `/ai/highschool-study-roadmap?classNumber=${classNumber}&subject=${encodeURIComponent(selectedSubject?.subject || selectedSubject?.name || "")}&chapter=${encodeURIComponent(chapter.chapter_name || "")}` as never
                   )
                 }
-                onSecondaryPress={() => router.push(`/ai/highschool-subject-gap?subject=${encodeURIComponent(selectedSubject?.subject || selectedSubject?.name || "")}` as never)}
+                onSecondaryPress={() => router.push(`/ai/highschool-subject-gap?classNumber=${classNumber}&subject=${encodeURIComponent(selectedSubject?.subject || selectedSubject?.name || "")}` as never)}
               />
             ))}
           </>
@@ -207,7 +229,7 @@ export default function HighSchoolResourceLibraryScreen() {
                 key={item.id}
                 icon="document-text-outline"
                 title={item.title || item.fileName}
-                meta={`${item.board} Class ${DEMO_CLASS} · ${item.subject} · PDF`}
+                meta={`${item.board} Class ${classNumber} · ${item.subject} · PDF`}
                 note={item.fileName}
                 badge="Real PDF"
                 badgeTone="success"
@@ -266,6 +288,7 @@ export default function HighSchoolResourceLibraryScreen() {
 
 const styles = StyleSheet.create({
   subjectRow: { gap: 8, paddingBottom: 2 },
+  classChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 },
   subjectChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   subjectText: { fontWeight: "900", fontSize: 13 },
   badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

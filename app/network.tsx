@@ -638,6 +638,12 @@ export default function NetworkScreen() {
   }
 
   function confirmDeletePost(postId: string) {
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      if (window.confirm("Delete this post permanently?")) {
+        removePost(postId);
+      }
+      return;
+    }
     Alert.alert("Delete post?", "This will remove your post permanently.", [
       { text: "Cancel", style: "cancel" },
       { text: "Delete", style: "destructive", onPress: () => removePost(postId) }
