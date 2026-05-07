@@ -1,14 +1,13 @@
 import * as WebBrowser from "expo-web-browser";
 import React, { useCallback, useMemo, useState } from "react";
-import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity } from "react-native";
+import { useFocusEffect } from "expo-router";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
 import {
   AcademicCard,
   AcademicEmpty,
-  ActionButton,
   CommunitySection,
   HighSchoolCommunityShell,
   StatusBadge
@@ -27,18 +26,37 @@ type ResourceItem = {
   fileUrl?: string;
   supportingDocuments?: string[];
 };
-type LibraryResponse = { institutionResources?: ResourceItem[]; roadmapResources?: ResourceItem[]; domainResources?: ResourceItem[] };
-type AcademicSubjectSummary = { key: string; slug?: string; name?: string; subject?: string; available?: boolean; message?: string; verificationStatus?: string; chapterCount?: number };
+
+type LibraryResponse = {
+  institutionResources?: ResourceItem[];
+  domainResources?: ResourceItem[];
+};
+
+type AcademicSubjectSummary = {
+  key: string;
+  name?: string;
+  subject?: string;
+  available?: boolean;
+  verificationStatus?: string;
+};
+
 type AcademicSubjectResponse = {
   available?: boolean;
   message?: string;
   subject?: { metadata?: { subject?: string; verification_status?: string } };
-  chapters?: { chapter_no?: number; chapter_name?: string; unit?: string; topics?: { topic_name?: string; subtopics?: string[] }[] }[];
 };
-type AcademicPdf = { id: string; title: string; fileName: string; subject: string; board: string; pdfUrl: string; sizeBytes?: number };
-type AcademicPdfResponse = { available?: boolean; message?: string; pdfs?: AcademicPdf[] };
 
-const DEMO_BOARD = "CBSE";
+type AcademicPdf = {
+  id: string;
+  title: string;
+  fileName: string;
+  subject: string;
+  board: string;
+  pdfUrl: string;
+};
+
+type AcademicPdfResponse = { pdfs?: AcademicPdf[] };
+
 const CLASS_OPTIONS = [6, 7, 8, 9, 10, 11, 12];
 
 function firstPdfUrl(item: ResourceItem) {
@@ -57,7 +75,6 @@ function normalizeUrl(rawUrl?: string) {
 }
 
 export default function HighSchoolResourceLibraryScreen() {
-  const router = useRouter();
   const { colors } = useAppTheme();
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [subjects, setSubjects] = useState<AcademicSubjectSummary[]>([]);
@@ -65,17 +82,18 @@ export default function HighSchoolResourceLibraryScreen() {
   const [selectedSubjectKey, setSelectedSubjectKey] = useState("mathematics");
   const [academicSubject, setAcademicSubject] = useState<AcademicSubjectResponse | null>(null);
   const [academicPdfs, setAcademicPdfs] = useState<AcademicPdf[]>([]);
-  const [selectedResource, setSelectedResource] = useState<ResourceItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const pdfResources = useMemo(() => resources.filter((item) => Boolean(firstPdfUrl(item))), [resources]);
-  const selectedSubject = useMemo(() => subjects.find((item) => item.key === selectedSubjectKey) || subjects[0], [selectedSubjectKey, subjects]);
-  const chapters = academicSubject?.available === false ? [] : academicSubject?.chapters || [];
+  const selectedSubject = useMemo(
+    () => subjects.find((item) => item.key === selectedSubjectKey) || subjects[0],
+    [selectedSubjectKey, subjects]
+  );
 
-  const openPdf = useCallback(async (item: ResourceItem) => {
-    const url = normalizeUrl(firstPdfUrl(item));
+  const openPdfUrl = useCallback(async (rawUrl?: string) => {
+    const url = normalizeUrl(rawUrl);
     if (!url) {
       setError("This resource does not include a valid PDF URL.");
       return;
@@ -101,7 +119,7 @@ export default function HighSchoolResourceLibraryScreen() {
       setAcademicSubject(subjectRes.data || null);
       setAcademicPdfs(pdfRes.data?.pdfs || []);
     } catch (e) {
-      setError(getAppErrorMessage(e, "Failed to load academic subject."));
+      setError(getAppErrorMessage(e, "Failed to load academic PDFs."));
     }
   }, [classNumber]);
 
@@ -110,12 +128,14 @@ export default function HighSchoolResourceLibraryScreen() {
       if (refresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
+
       const [libraryRes, subjectsRes] = await Promise.allSettled([
         api.get<LibraryResponse>("/api/network/knowledge-library"),
         api.get<{ subjects: AcademicSubjectSummary[] }>(`/api/academics/class/${classNumber}/subjects`)
       ]);
       const library = libraryRes.status === "fulfilled" ? libraryRes.value.data || {} : {};
-      setResources([...(library.institutionResources || []), ...(library.domainResources || []), ...(library.roadmapResources || [])]);
+      setResources([...(library.institutionResources || []), ...(library.domainResources || [])]);
+
       const nextSubjects = subjectsRes.status === "fulfilled" ? subjectsRes.value.data?.subjects || [] : [];
       setSubjects(nextSubjects);
       const nextKey = nextSubjects.find((item) => item.key === selectedSubjectKey)?.key || nextSubjects[0]?.key || selectedSubjectKey;
@@ -136,12 +156,11 @@ export default function HighSchoolResourceLibraryScreen() {
 
   return (
     <HighSchoolCommunityShell
-      eyebrow={`${DEMO_BOARD} Class ${classNumber}`}
+      eyebrow={`Class ${classNumber}`}
       title="Resource Library"
-      subtitle="Real PDF files from teachers and connected textbooks. No random links or fake syllabus topics are shown here."
+      subtitle="Real PDF files from teachers and connected textbooks. Choose class and subject, then open the PDF directly."
       stats={[
         { icon: "book", label: "Subjects", value: String(subjects.length) },
-        { icon: "library", label: "Chapters", value: String(chapters.length) },
         { icon: "document-text", label: "PDFs", value: String(academicPdfs.length + pdfResources.length) }
       ]}
       loading={loading}
@@ -149,15 +168,15 @@ export default function HighSchoolResourceLibraryScreen() {
       refreshing={refreshing}
       onRefresh={() => load(true)}
     >
-      <CommunitySection title="Academic Source Browser" subtitle="Use syllabus context for roadmap, practice and assistant prompts." icon="library">
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subjectRow}>
+      <CommunitySection title="Academic PDF Browser" subtitle="Select a class and subject to show only connected textbook PDFs." icon="library">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
           {CLASS_OPTIONS.map((item) => {
             const active = item === classNumber;
             return (
               <TouchableOpacity
                 key={item}
                 style={[
-                  styles.classChip,
+                  styles.chip,
                   { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }
                 ]}
                 onPress={() => {
@@ -166,131 +185,86 @@ export default function HighSchoolResourceLibraryScreen() {
                   setAcademicPdfs([]);
                 }}
               >
-                <Text style={[styles.subjectText, { color: active ? "#15803D" : colors.textMuted }]}>Class {item}</Text>
+                <Text style={[styles.chipText, { color: active ? "#15803D" : colors.textMuted }]}>Class {item}</Text>
               </TouchableOpacity>
             );
           })}
         </ScrollView>
+
         {subjects.length ? (
           <>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subjectRow}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
               {subjects.map((subject) => {
                 const active = subject.key === selectedSubjectKey;
                 return (
                   <TouchableOpacity
                     key={subject.key}
                     style={[
-                      styles.subjectChip,
+                      styles.chip,
                       { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }
                     ]}
                     onPress={() => loadSubject(subject.key)}
                   >
-                    <Text style={[styles.subjectText, { color: active ? "#15803D" : colors.textMuted }]}>{subject.subject || subject.name}</Text>
+                    <Text style={[styles.chipText, { color: active ? "#15803D" : colors.textMuted }]}>{subject.subject || subject.name}</Text>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-            <View style={styles.badgeRow}>
-              <StatusBadge label={selectedSubject?.subject || selectedSubject?.name || "Selected subject"} tone="success" />
-              <StatusBadge label={academicSubject?.available === false ? "Verification pending" : academicSubject?.subject?.metadata?.verification_status || selectedSubject?.verificationStatus || "dataset"} tone={academicSubject?.available === false ? "warning" : "primary"} />
-            </View>
-            {academicSubject?.available === false ? (
-              <AcademicEmpty label={academicSubject.message || "Verified topics for this subject will appear after PDF extraction review."} />
-            ) : chapters.slice(0, 8).map((chapter) => (
-              <AcademicCard
-                key={`${chapter.chapter_no}-${chapter.chapter_name}`}
-                icon="book-outline"
-                title={`${chapter.chapter_no || ""}. ${chapter.chapter_name || "Chapter"}`}
-                meta={`${chapter.unit || "Syllabus"} · ${chapter.topics?.length || 0} topics`}
-                note={(chapter.topics || []).slice(0, 3).map((topic) => topic.topic_name).filter(Boolean).join(", ") || "Open this chapter in academic roadmap."}
-                badge="Roadmap"
-                actionLabel="Use in Roadmap"
-                secondaryLabel="Practice Topic"
-                onPress={() =>
-                  router.push(
-                    `/ai/highschool-study-roadmap?classNumber=${classNumber}&subject=${encodeURIComponent(selectedSubject?.subject || selectedSubject?.name || "")}&chapter=${encodeURIComponent(chapter.chapter_name || "")}` as never
-                  )
-                }
-                onSecondaryPress={() => router.push(`/ai/highschool-subject-gap?classNumber=${classNumber}&subject=${encodeURIComponent(selectedSubject?.subject || selectedSubject?.name || "")}` as never)}
-              />
-            ))}
+            <StatusBadge
+              label={academicSubject?.available === false ? "PDF extraction pending" : selectedSubject?.subject || selectedSubject?.name || "Selected subject"}
+              tone={academicSubject?.available === false ? "warning" : "success"}
+            />
           </>
         ) : (
-          <AcademicEmpty label="Academic dataset is not connected yet." />
+          <AcademicEmpty label="No academic subjects are connected for this class yet." />
         )}
       </CommunitySection>
 
-      <CommunitySection title="Academic PDFs" subtitle="Connected textbook PDFs from the academic pipeline." icon="reader">
+      <CommunitySection title="Academic PDFs" subtitle="Textbook PDFs uploaded to Firebase Storage." icon="reader">
         {academicPdfs.length ? (
-          academicPdfs.map((item) => {
-            const absoluteUrl = normalizeUrl(item.pdfUrl);
-            return (
-              <AcademicCard
-                key={item.id}
-                icon="document-text-outline"
-                title={item.title || item.fileName}
-                meta={`${item.board} Class ${classNumber} · ${item.subject} · PDF`}
-                note={item.fileName}
-                badge="Real PDF"
-                badgeTone="success"
-                actionLabel="Open PDF"
-                onPress={() => openPdf({ title: item.title, documentUrl: absoluteUrl })}
-              />
-            );
-          })
+          academicPdfs.map((item) => (
+            <AcademicCard
+              key={item.id}
+              icon="document-text-outline"
+              title={item.title || item.fileName}
+              meta={`${item.board} Class ${classNumber} - ${item.subject} - PDF`}
+              note={item.fileName}
+              badge="Real PDF"
+              badgeTone="success"
+              actionLabel="Open PDF"
+              onPress={() => openPdfUrl(item.pdfUrl)}
+            />
+          ))
         ) : (
-          <AcademicEmpty label="No connected academic PDFs found for this subject on the backend." />
+          <AcademicEmpty label="No PDFs found for this class and subject yet." />
         )}
       </CommunitySection>
 
-      <CommunitySection title="Teacher PDFs" subtitle="Only resources with valid PDF URLs appear here." icon="document-text">
+      <CommunitySection title="Teacher PDFs" subtitle="Only teacher resources with valid PDF URLs appear here." icon="document-text">
         {pdfResources.length ? (
           pdfResources.slice(0, 12).map((item) => (
             <AcademicCard
               key={item._id || item.id || item.title}
               icon="document-attach-outline"
               title={item.title}
-              meta={`${item.domain || "School"} · ${item.type || "Resource"} · PDF`}
+              meta={`${item.domain || "School"} - ${item.type || "Resource"} - PDF`}
               note={item.description || `Uploaded by ${item.mentor?.name || "Mentor"}`}
               badge="PDF"
               badgeTone="success"
               actionLabel="Open PDF"
-              secondaryLabel="Details"
-              onPress={() => openPdf(item)}
-              onSecondaryPress={() => setSelectedResource(item)}
+              onPress={() => openPdfUrl(firstPdfUrl(item))}
             />
           ))
         ) : (
-          <AcademicEmpty label="No PDF resources uploaded yet. High school Resource Library hides non-PDF links by design." />
+          <AcademicEmpty label="No teacher PDF resources uploaded yet. Non-PDF links are hidden in this library." />
         )}
       </CommunitySection>
-
-      {selectedResource ? (
-        <CommunitySection title="Resource Detail" subtitle="After-12 knowledge detail style, academic actions." icon="reader">
-          <AcademicCard
-            icon="document-text"
-            title={selectedResource.title}
-            meta={`${selectedResource.domain || "School"} · ${selectedResource.type || "Resource"}`}
-            note={selectedResource.description || `Uploaded by ${selectedResource.mentor?.name || "Mentor"}`}
-            badge="PDF"
-            badgeTone="success"
-          />
-          <View style={styles.actions}>
-            <ActionButton label="Open PDF" icon="open-outline" onPress={() => openPdf(selectedResource)} />
-            <ActionButton label="Use in Roadmap" icon="map-outline" variant="secondary" onPress={() => router.push("/ai/highschool-study-roadmap" as never)} />
-            <ActionButton label="Practice Topic" icon="fitness-outline" variant="ghost" onPress={() => router.push("/ai/highschool-subject-gap" as never)} />
-          </View>
-        </CommunitySection>
-      ) : null}
     </HighSchoolCommunityShell>
   );
 }
 
 const styles = StyleSheet.create({
-  subjectRow: { gap: 8, paddingBottom: 2 },
-  classChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 },
-  subjectChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  subjectText: { fontWeight: "900", fontSize: 13 },
-  badgeRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  actions: { gap: 10 }
+  row: { gap: 8, paddingBottom: 2 },
+  chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 10 },
+  chipText: { fontWeight: "900", fontSize: 13 }
 });
