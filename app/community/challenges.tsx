@@ -90,6 +90,8 @@ export default function CommunityChallengesPage() {
   const [proofFiles, setProofFiles] = useState<string[]>([]);
   const [uploadingProofFile, setUploadingProofFile] = useState(false);
   const [submittingProof, setSubmittingProof] = useState(false);
+  const mentorAudienceStage = user?.role === "mentor" && user?.mentorOrgRole === "institution_teacher" ? "highschool" : "after12";
+  const globalAudienceLabel = mentorAudienceStage === "highschool" ? "Global - High School" : "Global - After 12";
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -524,7 +526,7 @@ export default function CommunityChallengesPage() {
                   onPress={() => setSubmitForm((prev) => ({ ...prev, scope, className: scope === "class" ? prev.className : "" }))}
                 >
                   <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>
-                    {scope === "institution" ? "My Institution" : scope === "class" ? "Specific Class" : "Global"}
+                    {scope === "institution" ? "Institution" : scope === "class" ? "Class" : globalAudienceLabel}
                   </Text>
                 </TouchableOpacity>
               );
@@ -565,6 +567,7 @@ export default function CommunityChallengesPage() {
                   domain: submitForm.domain.trim(),
                   className: submitForm.scope === "class" ? submitForm.className.trim() : "",
                   scope: submitForm.scope,
+                  audienceStage: user?.role === "mentor" ? mentorAudienceStage : undefined,
                   description: submitForm.description.trim(),
                   deadline: submitForm.deadline.trim().replace(" ", "T"),
                   bannerImageUrl: submitForm.bannerImageUrl.trim(),

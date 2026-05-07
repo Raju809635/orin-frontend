@@ -402,10 +402,9 @@ const mentorGrowthSections: { id: MentorGrowthSectionId; label: string }[] = [
 const teacherSectionOrder: { id: SectionId; label: string }[] = [
   { id: "overview", label: "Home" },
   { id: "classes", label: "Classes" },
-  { id: "assign", label: "Assign Work" },
+  { id: "assign", label: "Create" },
   { id: "reviews", label: "Reviews" },
-  { id: "adminChat", label: "Admin Chat" },
-  { id: "growth", label: "Global Tools" }
+  { id: "growth", label: "Global Teacher Tools" }
 ];
 
 const headSectionOrder: { id: SectionId; label: string }[] = [
@@ -565,9 +564,9 @@ export default function MentorDashboard() {
     : [];
   const mentorModeLabel =
     mentorOrgRole === "organisation_head"
-      ? "Organisation Head"
+      ? "Legacy Organisation Head"
       : mentorOrgRole === "institution_teacher"
-        ? "Institution Teacher"
+        ? "Global Teacher"
         : "Global Mentor";
   const mentorMode =
     mentorOrgRole === "organisation_head"
@@ -1539,16 +1538,16 @@ export default function MentorDashboard() {
         <Text style={[styles.heroEyebrow, { color: colors.accent }]}>Mentor Workspace</Text>
         <Text style={[styles.heroTitle, { color: colors.text }]}>
           {mentorOrgRole === "organisation_head"
-            ? "Run Your Institution From One Place"
+            ? "Legacy Institution Management"
             : mentorOrgRole === "institution_teacher"
-              ? "Run Your Teacher Workspace From One Place"
+              ? "Run Your Global Teacher Workspace"
               : "Run Your Mentor Journey From One Place"}
         </Text>
         <Text style={[styles.heroSubTitle, { color: colors.textMuted }]}>
           {mentorOrgRole === "organisation_head"
-            ? "Track teachers, students, classes, resources, roadmaps, competitions, and institution progress without disturbing global mentor tools."
+            ? "This legacy workspace remains available for existing accounts, but new signups now use Global Mentor or Global Teacher."
             : mentorOrgRole === "institution_teacher"
-              ? "Manage assigned classes, student submissions, resources, activities, and guidance while keeping your global mentor access."
+              ? "Create high-school resources, challenges, roadmaps, programs, announcements, and review student work from one academic workspace."
               : "Create sessions, review bookings, manage pricing, publish live events, and stay updated without hunting through the app."}
         </Text>
       </View>
@@ -1588,7 +1587,7 @@ export default function MentorDashboard() {
         </View>
       </View>
 
-      <Text style={[styles.sectionHeader, { color: colors.text }]}>Institution Role</Text>
+      <Text style={[styles.sectionHeader, { color: colors.text }]}>{mentorMode === "teacher" ? "Global Teacher Role" : "Institution Role"}</Text>
       <View style={styles.focusStack}>
         <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/mentor-profile" as never)}>
           <Text style={[styles.focusCardTitle, { color: colors.text }]}>{mentorModeLabel}</Text>
@@ -1607,7 +1606,7 @@ export default function MentorDashboard() {
               <Text style={[styles.meta, { color: colors.textMuted }]}>
                 Resources: {mentorResources.length} | Roadmaps: {institutionRoadmaps.length} | Reviews: {resourceSubmissions.length + institutionRoadmapSubmissions.length}
               </Text>
-              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Review assigned class submissions and award XP</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Review high-school submissions and award XP</Text>
             </TouchableOpacity>
           </>
         ) : null}
@@ -1632,7 +1631,7 @@ export default function MentorDashboard() {
 
       {mentorMode === "teacher" ? (
         <>
-          <Text style={[styles.sectionHeader, { color: colors.text }]}>Teacher Command Center</Text>
+          <Text style={[styles.sectionHeader, { color: colors.text }]}>Global Teacher Command Center</Text>
           <View style={styles.roleHeroGrid}>
             <TouchableOpacity style={[styles.roleHeroCard, styles.teacherHeroCard]} onPress={() => openSection("classes")}>
               <View style={styles.roleHeroIcon}>
@@ -1640,7 +1639,7 @@ export default function MentorDashboard() {
               </View>
               <Text style={[styles.roleHeroTitle, { color: colors.text }]}>Class Dashboard</Text>
               <Text style={[styles.roleHeroMeta, { color: colors.textMuted }]}>
-                Track class activity, top performers, weak students, streaks, and daily quiz participation.
+                Track assigned classes, student activity, weak areas, top effort, and daily academic participation.
               </Text>
               <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open classes</Text>
             </TouchableOpacity>
@@ -1650,7 +1649,7 @@ export default function MentorDashboard() {
               </View>
               <Text style={[styles.roleHeroTitle, { color: colors.text }]}>Review & Award XP</Text>
               <Text style={[styles.roleHeroMeta, { color: colors.textMuted }]}>
-                Review proofs, give feedback, award XP, and recommend certificates for completed work.
+                Review resource proofs, challenge submissions, roadmap proofs, and opportunity applications.
               </Text>
               <Text style={[styles.focusCardAccent, { color: colors.accent }]}>{pendingReviewCount} pending reviews</Text>
             </TouchableOpacity>
@@ -1686,7 +1685,7 @@ export default function MentorDashboard() {
                   </View>
                 ))
               ) : (
-                <Text style={[styles.meta, { color: colors.textMuted }]}>No student submissions waiting. Use Assign Work to create the next activity.</Text>
+                <Text style={[styles.meta, { color: colors.textMuted }]}>No student submissions waiting. Use Create to publish the next activity.</Text>
               )}
               <TouchableOpacity style={styles.inlineActionButton} onPress={() => openSection("assign")}>
                 <Text style={styles.inlineActionText}>Assign next class activity</Text>
@@ -1979,7 +1978,7 @@ export default function MentorDashboard() {
 
       {!isLoading && activeSection === "overview" && mentorMode === "teacher" ? (
         <View style={[styles.panel, styles.panelOverview]}>
-          <Text style={[styles.panelTitle, styles.panelTitleOverview]}>Class Teacher Home</Text>
+          <Text style={[styles.panelTitle, styles.panelTitleOverview]}>Global Teacher Home</Text>
           <Text style={[styles.meta, { color: colors.textMuted }]}>
             {mentorInstitutionName || "Institution not linked yet"} {mentorAssignedClasses.length ? `| Classes: ${mentorAssignedClasses.join(", ")}` : "| Add assigned classes in profile"}
           </Text>
@@ -1994,7 +1993,7 @@ export default function MentorDashboard() {
             </View>
             <View style={styles.metricCard}>
               <Text style={[styles.metricValue, { color: colors.accent }]}>{mentorResources.length}</Text>
-              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Resources</Text>
+              <Text style={[styles.metricLabel, { color: colors.textMuted }]}>Recent Uploads</Text>
             </View>
           </View>
           <View style={styles.focusStack}>
@@ -2009,9 +2008,9 @@ export default function MentorDashboard() {
               <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Review submissions</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.focusCard} onPress={() => openSection("assign")}>
-              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Assign Work</Text>
-              <Text style={[styles.meta, { color: colors.textMuted }]}>Create class resources, activities, challenges, announcements, and certificate templates.</Text>
-              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open assign tools</Text>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Create High School Content</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Create resources, challenges, academic roadmaps, programs, and announcements.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open create tools</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2106,23 +2105,28 @@ export default function MentorDashboard() {
 
       {!isLoading && activeSection === "assign" ? (
         <View style={[styles.panel, styles.panelGrowth]}>
-          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Assign Work</Text>
-          <Text style={[styles.meta, { color: colors.textMuted }]}>Create and assign class resources, activities, competitions, and certificates from existing ORIN tools.</Text>
+          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Create</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Publish high-school content to Global High School, a selected institution, or a specific class.</Text>
           <View style={styles.focusStack}>
             <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/community/knowledge-library" as never)}>
-              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Class Resources</Text>
-              <Text style={[styles.meta, { color: colors.textMuted }]}>Upload worksheets, links, files, images, and activity resources for assigned classes.</Text>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Create High School Resource</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Upload worksheets, PDFs, links, images, and academic activity resources.</Text>
               <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open resource manager</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/ai/career-roadmap?section=institution" as never)}>
-              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Activities & Roadmaps</Text>
-              <Text style={[styles.meta, { color: colors.textMuted }]}>Create weekly tasks, proof requirements, XP, and class activities.</Text>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Create Academic Roadmap</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Create weekly missions, proof requirements, XP, and high-school activities.</Text>
               <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open roadmap tools</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/community/challenges" as never)}>
-              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Class Challenges</Text>
-              <Text style={[styles.meta, { color: colors.textMuted }]}>Run quiz, drawing, speaking, project, or activity challenges for assigned classes.</Text>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Create Challenge</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Run quiz, exam, subject, speaking, project, or activity challenges.</Text>
               <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open challenges</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.focusCard} onPress={() => router.push("/community-growth" as never)}>
+              <Text style={[styles.focusCardTitle, { color: colors.text }]}>Create Program / Opportunity</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Publish workshops, olympiad prep, academic bootcamps, or school programs.</Text>
+              <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Open programs</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -2131,7 +2135,7 @@ export default function MentorDashboard() {
       {!isLoading && activeSection === "reviews" ? (
         <View style={[styles.panel, styles.panelGrowth]}>
           <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Reviews</Text>
-          <Text style={[styles.meta, { color: colors.textMuted }]}>Review class submissions, give marks, award XP, add feedback, and recommend certificates.</Text>
+          <Text style={[styles.meta, { color: colors.textMuted }]}>Review resource proofs, challenge submissions, roadmap proofs, and opportunity applications for your high-school content.</Text>
           <View style={styles.metricsRow}>
             <View style={styles.metricCard}>
               <Text style={[styles.metricValue, { color: colors.accent }]}>{resourceSubmissions.length}</Text>
@@ -2149,7 +2153,7 @@ export default function MentorDashboard() {
           <View style={styles.focusStack}>
             <TouchableOpacity style={styles.focusCard} onPress={() => openSection("growth", "community")}>
               <Text style={[styles.focusCardTitle, { color: colors.text }]}>Open Review Tools</Text>
-              <Text style={[styles.meta, { color: colors.textMuted }]}>Use the existing review forms for resource and roadmap submissions.</Text>
+              <Text style={[styles.meta, { color: colors.textMuted }]}>Use the existing review forms for resource and roadmap submissions. Challenge and opportunity reviews stay owned by the uploader/admin.</Text>
               <Text style={[styles.focusCardAccent, { color: colors.accent }]}>Go to review forms</Text>
             </TouchableOpacity>
           </View>
@@ -2229,7 +2233,7 @@ export default function MentorDashboard() {
 
       {!isLoading && activeSection === "growth" ? (
         <View style={[styles.panel, styles.panelGrowth]}>
-          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>Growth & Community</Text>
+          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>{mentorMode === "teacher" ? "Global Teacher Tools" : "Growth & Community"}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavRow}>
             {mentorGrowthSections.map((item) => {
               const active = mentorGrowthSection === item.id;

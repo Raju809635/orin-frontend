@@ -191,6 +191,8 @@ export default function CommunityLibraryPage() {
   });
   const [resourceReviewDrafts, setResourceReviewDrafts] = useState<Record<string, { xpAwarded: string; notes: string; issueCertificate: boolean }>>({});
   const [reviewingSubmissionId, setReviewingSubmissionId] = useState<string | null>(null);
+  const mentorAudienceStage = user?.role === "mentor" && user?.mentorOrgRole === "institution_teacher" ? "highschool" : "after12";
+  const globalAudienceLabel = mentorAudienceStage === "highschool" ? "Global - High School" : "Global - After 12";
 
   useEffect(() => {
     const requestedSection = String(params.section || "").trim().toLowerCase();
@@ -856,7 +858,7 @@ export default function CommunityLibraryPage() {
                     onPress={() => setSubmitForm((prev) => ({ ...prev, scope, className: scope === "class" ? prev.className : "" }))}
                   >
                     <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>
-                      {scope === "institution" ? "My Institution" : scope === "class" ? "Specific Class" : "Global"}
+                      {scope === "institution" ? "Institution" : scope === "class" ? "Class" : globalAudienceLabel}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -906,6 +908,7 @@ export default function CommunityLibraryPage() {
                     url: submitForm.url.trim(),
                     className: submitForm.scope === "class" ? submitForm.className.trim() : "",
                     scope: submitForm.scope,
+                    audienceStage: user?.role === "mentor" ? mentorAudienceStage : undefined,
                     bannerImageUrl: submitForm.bannerImageUrl.trim(),
                     documentUrl: submitForm.documentUrl.trim()
                   });
@@ -1031,6 +1034,7 @@ export default function CommunityLibraryPage() {
                   url: submitForm.url.trim(),
                   className: "",
                   scope: "institution",
+                  audienceStage: user?.role === "mentor" ? mentorAudienceStage : undefined,
                   bannerImageUrl: submitForm.bannerImageUrl.trim(),
                   documentUrl: submitForm.documentUrl.trim()
                 });

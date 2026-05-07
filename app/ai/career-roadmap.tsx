@@ -208,6 +208,7 @@ export default function AiCareerRoadmapPage() {
   const [mentorInstitutionSubmissions, setMentorInstitutionSubmissions] = useState<InstitutionRoadmapSubmissionItem[]>([]);
   const [institutionReviewDrafts, setInstitutionReviewDrafts] = useState<Record<string, { xpAwarded: string; notes: string; issueCertificate: boolean }>>({});
   const [reviewingInstitutionSubmissionId, setReviewingInstitutionSubmissionId] = useState<string | null>(null);
+  const mentorAudienceStage = user?.role === "mentor" && user?.mentorOrgRole === "institution_teacher" ? "highschool" : "after12";
 
   useEffect(() => {
     const requestedSection = String(params.section || "").trim().toLowerCase();
@@ -655,6 +656,7 @@ export default function AiCareerRoadmapPage() {
         description: institutionRoadmapDescription.trim(),
         domain: institutionRoadmapDomain.trim(),
         className: institutionRoadmapClassName.trim(),
+        audienceStage: user?.role === "mentor" ? mentorAudienceStage : undefined,
         weeks
       });
       setInstitutionRoadmapTitle("");
@@ -671,7 +673,7 @@ export default function AiCareerRoadmapPage() {
     } finally {
       setCreatingInstitutionRoadmap(false);
     }
-  }, [institutionRoadmapClassName, institutionRoadmapDescription, institutionRoadmapDomain, institutionRoadmapTitle, institutionRoadmapWeekOne, institutionRoadmapWeekThree, institutionRoadmapWeekTwo, load]);
+  }, [institutionRoadmapClassName, institutionRoadmapDescription, institutionRoadmapDomain, institutionRoadmapTitle, institutionRoadmapWeekOne, institutionRoadmapWeekThree, institutionRoadmapWeekTwo, load, mentorAudienceStage, user?.role]);
 
   const updateInstitutionReviewDraft = useCallback((submissionId: string, patch: Partial<{ xpAwarded: string; notes: string; issueCertificate: boolean }>) => {
     setInstitutionReviewDrafts((prev) => ({

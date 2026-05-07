@@ -24,20 +24,14 @@ const MENTOR_ROLE_OPTIONS: { value: MentorOrgRole; label: string; note: string; 
   {
     value: "global_mentor",
     label: "Global Mentor",
-    note: "Public mentorship, sessions, sprints, and global guidance.",
+    note: "For after-12 students: public mentorship, sessions, sprints, and career guidance.",
     icon: "globe-outline"
   },
   {
     value: "institution_teacher",
-    label: "Class Teacher",
-    note: "Assigned class students, quiz monitoring, submissions, XP, and certificates.",
+    label: "Global Teacher",
+    note: "For high-school students: classes, academic resources, challenges, roadmaps, and reviews.",
     icon: "school-outline"
-  },
-  {
-    value: "organisation_head",
-    label: "Organisation Head",
-    note: "Principal or management view for teachers, classes, reports, and school growth.",
-    icon: "business-outline"
   }
 ];
 
@@ -347,7 +341,7 @@ export default function RegisterScreen() {
 
           {mentorOrgRole !== "global_mentor" ? (
             <>
-              <Text style={styles.label}>{mentorOrgRole === "organisation_head" ? "Focus Classes (optional)" : "Assigned Classes"}</Text>
+              <Text style={styles.label}>Assigned Classes</Text>
               <ClassSectionSelector value={assignedClassPick} onChange={setAssignedClassPick} />
               <TouchableOpacity
                 style={[styles.classAddButton, !assignedClassPick && styles.classAddButtonDisabled]}

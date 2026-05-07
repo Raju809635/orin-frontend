@@ -169,9 +169,8 @@ const INSTITUTION_TYPE_OPTIONS = [
   "University"
 ];
 const MENTOR_ORG_ROLE_OPTIONS: { value: MentorProfile["mentorOrgRole"]; label: string; note: string }[] = [
-  { value: "global_mentor", label: "Global Mentor", note: "Keep current global mentorship access." },
-  { value: "institution_teacher", label: "Institution Teacher", note: "Manage assigned classes, reviews, resources, and activities." },
-  { value: "organisation_head", label: "Organisation Head", note: "Oversee institution teachers, students, classes, and analytics." }
+  { value: "global_mentor", label: "Global Mentor", note: "After-12 mentorship, paid sessions, sprints, pricing, and bookings." },
+  { value: "institution_teacher", label: "Global Teacher", note: "High-school classes, academic resources, challenges, roadmaps, and reviews." }
 ];
 
 export default function MentorProfileScreen() {

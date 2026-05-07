@@ -8,12 +8,12 @@ const MODE_COPY: Record<string, { title: string; body: string }> = {
     body: "Your global mentor registration is submitted. Admin will review your profile before public mentorship tools unlock."
   },
   institution_teacher: {
-    title: "Class Teacher Review",
-    body: "Your class teacher registration is submitted. Admin will verify your institution and assigned class before teacher tools unlock."
+    title: "Global Teacher Review",
+    body: "Your global teacher registration is submitted. Admin will verify your institution and assigned classes before high-school teacher tools unlock."
   },
   organisation_head: {
-    title: "Organisation Head Review",
-    body: "Your organisation head registration is submitted. Admin will verify your school or institution authority before management tools unlock."
+    title: "Legacy Organisation Head Review",
+    body: "Your legacy organisation head registration is submitted. Admin will verify your school or institution authority before management tools unlock."
   }
 };
 
