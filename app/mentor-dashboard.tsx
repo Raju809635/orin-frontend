@@ -541,6 +541,7 @@ export default function MentorDashboard() {
   const [sprintMeetingProvider, setSprintMeetingProvider] = useState<"manual" | "jitsi">("manual");
   const [sprintMeetingLink, setSprintMeetingLink] = useState("");
   const [sprintMode, setSprintMode] = useState<"free" | "paid">("paid");
+  const teacherProgramDefaultsAppliedRef = useRef(false);
   const [sprintPrice, setSprintPrice] = useState("1999");
   const [sprintMinParticipants, setSprintMinParticipants] = useState("5");
   const [sprintMaxParticipants, setSprintMaxParticipants] = useState("20");
@@ -575,6 +576,13 @@ export default function MentorDashboard() {
         ? "teacher"
         : "global";
   const roleSectionOrder = mentorMode === "teacher" ? teacherSectionOrder : mentorMode === "head" ? headSectionOrder : sectionOrder;
+  useEffect(() => {
+    if (mentorMode === "teacher" && !teacherProgramDefaultsAppliedRef.current) {
+      setLiveSessionMode("free");
+      setSprintMode("free");
+      teacherProgramDefaultsAppliedRef.current = true;
+    }
+  }, [mentorMode]);
   const pendingReviewCount = resourceSubmissions.length + institutionRoadmapSubmissions.length;
   const assignedClassCount = mentorAssignedClasses.length;
   const reviewStudentHighlights = useMemo(() => {
@@ -1659,7 +1667,7 @@ export default function MentorDashboard() {
 
           <View style={styles.playbookGrid}>
             <View style={styles.playbookCard}>
-              <Text style={[styles.playbookTitle, { color: colors.text }]}>Daily Teacher Checklist</Text>
+              <Text style={[styles.playbookTitle, { color: colors.text }]}>Global Teacher Checklist</Text>
               {teacherChecklist.map((item, index) => (
                 <View key={item.label} style={styles.checklistRow}>
                   <View style={[styles.checklistBadge, { backgroundColor: index < 2 ? "#DCFCE7" : "#EAF2FF" }]}>
@@ -1690,7 +1698,7 @@ export default function MentorDashboard() {
                 <Text style={[styles.meta, { color: colors.textMuted }]}>No student submissions waiting. Use Create to publish the next activity.</Text>
               )}
               <TouchableOpacity style={styles.inlineActionButton} onPress={() => openSection("assign")}>
-                <Text style={styles.inlineActionText}>Assign next class activity</Text>
+                <Text style={styles.inlineActionText}>Create next academic activity</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2276,7 +2284,7 @@ export default function MentorDashboard() {
 
       {!isLoading && activeSection === "growth" ? (
         <View style={[styles.panel, styles.panelGrowth]}>
-          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>{mentorMode === "teacher" ? "Global Teacher Tools" : "Growth & Community"}</Text>
+          <Text style={[styles.panelTitle, styles.panelTitleGrowth]}>{mentorMode === "teacher" ? "Global Tools" : "Growth & Community"}</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionNavRow}>
             {mentorGrowthSections.map((item) => {
               const active = mentorGrowthSection === item.id;
