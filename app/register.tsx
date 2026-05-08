@@ -1,24 +1,13 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { LEARNER_ONBOARDING_PENDING_KEY } from "@/lib/learnerExperience";
-import { api } from "@/lib/api";
-import ClassSectionSelector from "@/components/ClassSectionSelector";
 
 type Role = "student" | "mentor";
 type MentorOrgRole = "global_mentor" | "institution_teacher" | "organisation_head";
-
-type InstitutionSearchResult = {
-  id: string;
-  name: string;
-  institutionType: string;
-  district?: string;
-  state?: string;
-  source?: string;
-};
 
 const MENTOR_ROLE_OPTIONS: { value: MentorOrgRole; label: string; note: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   {
@@ -30,17 +19,10 @@ const MENTOR_ROLE_OPTIONS: { value: MentorOrgRole; label: string; note: string; 
   {
     value: "institution_teacher",
     label: "Global Teacher",
-    note: "For high-school students: classes, academic resources, challenges, roadmaps, and reviews.",
+    note: "For ORIN high-school students: create global, institution, or class-targeted academic content.",
     icon: "school-outline"
   }
 ];
-
-function parseCommaSeparated(value: string) {
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -53,13 +35,6 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<Role>("student");
   const [mentorOrgRole, setMentorOrgRole] = useState<MentorOrgRole>("global_mentor");
-  const [institutionQuery, setInstitutionQuery] = useState("");
-  const [selectedInstitution, setSelectedInstitution] = useState<InstitutionSearchResult | null>(null);
-  const [institutionResults, setInstitutionResults] = useState<InstitutionSearchResult[]>([]);
-  const [institutionFocused, setInstitutionFocused] = useState(false);
-  const [searchingInstitutions, setSearchingInstitutions] = useState(false);
-  const [assignedClassesDraft, setAssignedClassesDraft] = useState("");
-  const [assignedClassPick, setAssignedClassPick] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,12 +46,6 @@ export default function RegisterScreen() {
     setShowPassword(false);
     setRole("student");
     setMentorOrgRole("global_mentor");
-    setInstitutionQuery("");
-    setSelectedInstitution(null);
-    setInstitutionResults([]);
-    setInstitutionFocused(false);
-    setAssignedClassesDraft("");
-    setAssignedClassPick("");
     setError(null);
     setIsSubmitting(false);
   }, []);
@@ -87,43 +56,6 @@ export default function RegisterScreen() {
     }, [resetForm])
   );
 
-  useEffect(() => {
-    if (role !== "mentor" || mentorOrgRole === "global_mentor" || !institutionFocused) {
-      setInstitutionResults([]);
-      setSearchingInstitutions(false);
-      return;
-    }
-
-    const query = institutionQuery.trim();
-    if (query.length < 2) {
-      setInstitutionResults([]);
-      setSearchingInstitutions(false);
-      return;
-    }
-
-    let active = true;
-    const timer = setTimeout(async () => {
-      try {
-        setSearchingInstitutions(true);
-        const { data } = await api.get("/api/auth/institutions/search", {
-          params: { q: query, limit: 8 }
-        });
-        if (active) {
-          setInstitutionResults(Array.isArray(data?.results) ? data.results : []);
-        }
-      } catch {
-        if (active) setInstitutionResults([]);
-      } finally {
-        if (active) setSearchingInstitutions(false);
-      }
-    }, 250);
-
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [institutionFocused, institutionQuery, mentorOrgRole, role]);
-
   async function handleRegister() {
     const normalizedPhone = phoneNumber.trim();
     const normalizedEmail = email.trim().toLowerCase();
@@ -131,18 +63,7 @@ export default function RegisterScreen() {
       setError("Phone number is required for mentor signup.");
       return;
     }
-    if (role === "mentor" && mentorOrgRole !== "global_mentor" && !selectedInstitution?.name) {
-      setError("Please select your institution from the list.");
-      return;
-    }
-    const selectedAssignedClasses = [
-      ...parseCommaSeparated(assignedClassesDraft),
-      ...(assignedClassPick.trim() ? [assignedClassPick.trim()] : [])
-    ].filter((item, index, arr) => arr.indexOf(item) === index);
-    if (role === "mentor" && mentorOrgRole === "institution_teacher" && selectedAssignedClasses.length === 0) {
-      setError("Please add at least one assigned class.");
-      return;
-    }
+    const selectedAssignedClasses: string[] = [];
 
     try {
       setIsSubmitting(true);
@@ -154,10 +75,10 @@ export default function RegisterScreen() {
         role,
         phoneNumber: role === "mentor" ? normalizedPhone : "",
         mentorOrgRole: role === "mentor" ? mentorOrgRole : undefined,
-        institutionName: role === "mentor" && selectedInstitution ? selectedInstitution.name : "",
-        institutionType: role === "mentor" && selectedInstitution ? selectedInstitution.institutionType : "",
-        institutionDistrict: role === "mentor" && selectedInstitution ? selectedInstitution.district || "" : "",
-        institutionSource: role === "mentor" && selectedInstitution ? selectedInstitution.source || "" : "",
+        institutionName: "",
+        institutionType: "",
+        institutionDistrict: "",
+        institutionSource: "",
         assignedClasses: role === "mentor" ? selectedAssignedClasses : []
       });
       if (!response) {
@@ -293,83 +214,10 @@ export default function RegisterScreen() {
             value={phoneNumber}
             onChangeText={setPhoneNumber}
           />
-          {mentorOrgRole !== "global_mentor" ? (
-            <>
-              <Text style={styles.label}>Institution</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Search and select your school / institution"
-                placeholderTextColor="#6B7280"
-                value={institutionQuery}
-                onFocus={() => setInstitutionFocused(true)}
-                onChangeText={(value) => {
-                  setInstitutionQuery(value);
-                  setSelectedInstitution(null);
-                  setInstitutionFocused(true);
-                }}
-              />
-              {searchingInstitutions ? <ActivityIndicator size="small" color="#1F7A4C" style={styles.searchLoader} /> : null}
-              {institutionFocused && institutionResults.length > 0 ? (
-                <View style={styles.suggestionBox}>
-                  {institutionResults.map((item) => (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={styles.suggestionItem}
-                      onPress={() => {
-                        setSelectedInstitution(item);
-                        setInstitutionQuery(item.name);
-                        setInstitutionResults([]);
-                        setInstitutionFocused(false);
-                      }}
-                    >
-                      <Text style={styles.suggestionTitle}>{item.name}</Text>
-                      <Text style={styles.suggestionMeta}>
-                        {[item.institutionType, item.district, item.state].filter(Boolean).join(" | ")}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
-              {institutionFocused && !searchingInstitutions && institutionQuery.trim().length >= 2 && institutionResults.length === 0 ? (
-                <Text style={styles.smallHint}>No match yet. Select from suggestions when your institution appears.</Text>
-              ) : null}
-              {selectedInstitution ? (
-                <Text style={styles.smallHint}>Selected: {selectedInstitution.name}</Text>
-              ) : null}
-            </>
-          ) : null}
-
-          {mentorOrgRole !== "global_mentor" ? (
-            <>
-              <Text style={styles.label}>Assigned Classes</Text>
-              <ClassSectionSelector value={assignedClassPick} onChange={setAssignedClassPick} />
-              <TouchableOpacity
-                style={[styles.classAddButton, !assignedClassPick && styles.classAddButtonDisabled]}
-                disabled={!assignedClassPick}
-                onPress={() => {
-                  const nextClass = assignedClassPick.trim();
-                  if (!nextClass) return;
-                  const existing = parseCommaSeparated(assignedClassesDraft);
-                  if (!existing.includes(nextClass)) {
-                    setAssignedClassesDraft([...existing, nextClass].join(", "));
-                  }
-                  setAssignedClassPick("");
-                }}
-              >
-                <Text style={styles.classAddButtonText}>Add Class</Text>
-              </TouchableOpacity>
-              <View style={styles.classChipWrap}>
-                {parseCommaSeparated(assignedClassesDraft).map((item) => (
-                  <TouchableOpacity
-                    key={item}
-                    style={styles.classChip}
-                    onPress={() => setAssignedClassesDraft(parseCommaSeparated(assignedClassesDraft).filter((classItem) => classItem !== item).join(", "))}
-                  >
-                    <Text style={styles.classChipText}>{item} x</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </>
+          {mentorOrgRole === "institution_teacher" ? (
+            <Text style={styles.smallHint}>
+              Global Teacher is an ORIN high-school creator. You will choose Global High School, institution, or class target while uploading each resource, competition, roadmap, or program.
+            </Text>
           ) : null}
 
           <View style={styles.infoCard}>

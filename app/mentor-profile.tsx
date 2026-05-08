@@ -170,7 +170,7 @@ const INSTITUTION_TYPE_OPTIONS = [
 ];
 const MENTOR_ORG_ROLE_OPTIONS: { value: MentorProfile["mentorOrgRole"]; label: string; note: string }[] = [
   { value: "global_mentor", label: "Global Mentor", note: "After-12 mentorship, paid sessions, sprints, pricing, and bookings." },
-  { value: "institution_teacher", label: "Global Teacher", note: "High-school classes, academic resources, challenges, roadmaps, and reviews." }
+  { value: "institution_teacher", label: "Global Teacher", note: "ORIN high-school creator. Select Global High School, institution, or class while uploading each item." }
 ];
 
 export default function MentorProfileScreen() {
@@ -762,6 +762,14 @@ export default function MentorProfileScreen() {
         {MENTOR_ORG_ROLE_OPTIONS.find((item) => item.value === profile.mentorOrgRole)?.note}
       </Text>
 
+      {profile.mentorOrgRole === "institution_teacher" ? (
+        <Text style={[styles.hint, { color: colors.textMuted }]}>
+          Global Teachers are not tied to one school here. Choose the target institution or class inside each upload form.
+        </Text>
+      ) : null}
+
+      {profile.mentorOrgRole === "organisation_head" ? (
+        <>
       <Text style={[styles.label, { color: colors.text }]}>Institution Type</Text>
       <View style={styles.selectionWrap}>
         {INSTITUTION_TYPE_OPTIONS.map((type) => {
@@ -877,6 +885,9 @@ export default function MentorProfileScreen() {
           <Text style={[styles.hint, { color: colors.textMuted }]}>
             Select class number and section, then add it. Tap an added class to remove it.
           </Text>
+        </>
+      ) : null}
+
         </>
       ) : null}
 

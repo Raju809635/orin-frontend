@@ -27,7 +27,7 @@ import {
   StatPill,
   StatusBadge
 } from "@/components/community/ui";
-import ClassSectionSelector from "@/components/ClassSectionSelector";
+import MentorAudienceSelector, { MentorAudienceValue } from "@/components/MentorAudienceSelector";
 
 type ChallengeItem = {
   id: string;
@@ -75,8 +75,9 @@ export default function CommunityChallengesPage() {
   const [submitForm, setSubmitForm] = useState({
     title: "",
     domain: "",
+    institutionName: "",
     className: "",
-    scope: "institution" as "global" | "institution" | "class",
+    scope: "global" as "global" | "institution" | "class",
     description: "",
     deadline: "",
     bannerImageUrl: "",
@@ -91,7 +92,11 @@ export default function CommunityChallengesPage() {
   const [uploadingProofFile, setUploadingProofFile] = useState(false);
   const [submittingProof, setSubmittingProof] = useState(false);
   const mentorAudienceStage = user?.role === "mentor" && user?.mentorOrgRole === "institution_teacher" ? "highschool" : "after12";
-  const globalAudienceLabel = mentorAudienceStage === "highschool" ? "Global - High School" : "Global - After 12";
+  const submitAudience: MentorAudienceValue = {
+    scope: submitForm.scope,
+    institutionName: submitForm.institutionName,
+    className: submitForm.className
+  };
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -516,27 +521,13 @@ export default function CommunityChallengesPage() {
           subtitle="Create global, institution, or class competitions here instead of using the mentor dashboard as a full editor."
           icon="add-circle"
         >
-          <View style={styles.tagRow}>
-            {(["institution", "class", "global"] as const).map((scope) => {
-              const active = submitForm.scope === scope;
-              return (
-                <TouchableOpacity
-                  key={`challenge-scope-${scope}`}
-                  style={[styles.dayChip, active && styles.dayChipActive]}
-                  onPress={() => setSubmitForm((prev) => ({ ...prev, scope, className: scope === "class" ? prev.className : "" }))}
-                >
-                  <Text style={[styles.dayChipText, active && styles.dayChipTextActive]}>
-                    {scope === "institution" ? "Institution" : scope === "class" ? "Class" : globalAudienceLabel}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <MentorAudienceSelector
+            value={submitAudience}
+            audienceStage={mentorAudienceStage}
+            onChange={(audience) => setSubmitForm((prev) => ({ ...prev, ...audience }))}
+          />
           <TextInput style={styles.input} placeholder="Challenge title" value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />
           <TextInput style={styles.input} placeholder="Domain (optional)" value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
-          {submitForm.scope === "class" ? (
-            <ClassSectionSelector value={submitForm.className} onChange={(className) => setSubmitForm((prev) => ({ ...prev, className }))} />
-          ) : null}
           <View style={styles.uploadRow}>
             <TouchableOpacity style={styles.uploadBtn} onPress={uploadBanner} disabled={uploadingBanner}>
               <Text style={styles.uploadBtnText}>{uploadingBanner ? "Uploading..." : submitForm.bannerImageUrl ? "Change Banner" : "Upload Banner"}</Text>
@@ -561,10 +552,19 @@ export default function CommunityChallengesPage() {
                   Alert.alert("Deadline required", "Please enter a deadline like 2026-03-25 18:30");
                   return;
                 }
+                if (submitForm.scope !== "global" && !submitForm.institutionName.trim()) {
+                  Alert.alert("Institution required", "Please select the institution this competition is for.");
+                  return;
+                }
+                if (submitForm.scope === "class" && !submitForm.className.trim()) {
+                  Alert.alert("Class required", "Please select class and section.");
+                  return;
+                }
                 setSubmitting(true);
                 await api.post("/api/network/challenges/submit", {
                   title: submitForm.title.trim(),
                   domain: submitForm.domain.trim(),
+                  institutionName: submitForm.scope === "global" ? "" : submitForm.institutionName.trim(),
                   className: submitForm.scope === "class" ? submitForm.className.trim() : "",
                   scope: submitForm.scope,
                   audienceStage: user?.role === "mentor" ? mentorAudienceStage : undefined,
@@ -575,7 +575,7 @@ export default function CommunityChallengesPage() {
                   proofInstructions: submitForm.proofInstructions.trim()
                 });
                 Alert.alert("Submitted", "Challenge idea sent to admin for review.");
-                setSubmitForm({ title: "", domain: "", className: "", scope: "institution", description: "", deadline: "", bannerImageUrl: "", participantLimit: "", proofInstructions: "" });
+                setSubmitForm({ title: "", domain: "", institutionName: "", className: "", scope: "global", description: "", deadline: "", bannerImageUrl: "", participantLimit: "", proofInstructions: "" });
                 await load(true);
               } catch (e: any) {
                 handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit challenge." });

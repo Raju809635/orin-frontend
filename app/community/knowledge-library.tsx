@@ -32,7 +32,7 @@ import {
   StatPill,
   StatusBadge
 } from "@/components/community/ui";
-import ClassSectionSelector from "@/components/ClassSectionSelector";
+import MentorAudienceSelector, { MentorAudienceValue } from "@/components/MentorAudienceSelector";
 
 type LibraryItem = {
   id: string;
@@ -184,6 +184,7 @@ export default function CommunityLibraryPage() {
     title: "",
     description: "",
     url: "",
+    institutionName: "",
     className: "",
     scope: "institution" as "global" | "institution" | "class",
     bannerImageUrl: "",
@@ -192,7 +193,11 @@ export default function CommunityLibraryPage() {
   const [resourceReviewDrafts, setResourceReviewDrafts] = useState<Record<string, { xpAwarded: string; notes: string; issueCertificate: boolean }>>({});
   const [reviewingSubmissionId, setReviewingSubmissionId] = useState<string | null>(null);
   const mentorAudienceStage = user?.role === "mentor" && user?.mentorOrgRole === "institution_teacher" ? "highschool" : "after12";
-  const globalAudienceLabel = mentorAudienceStage === "highschool" ? "Global - High School" : "Global - After 12";
+  const submitAudience: MentorAudienceValue = {
+    scope: submitForm.scope,
+    institutionName: submitForm.institutionName,
+    className: submitForm.className
+  };
 
   useEffect(() => {
     const requestedSection = String(params.section || "").trim().toLowerCase();
@@ -841,33 +846,15 @@ export default function CommunityLibraryPage() {
         <>
           <CommunitySection
             title="Manage Library Resources"
-            subtitle="Create institution or class resources here, then review the student work tied to your resources."
+            subtitle="Create Global High School, institution, or class resources. Student proof returns to the mentor who uploaded it."
             icon="construct"
           >
-            <View style={styles.chips}>
-              {(["institution", "class", "global"] as const).map((scope) => {
-                const active = submitForm.scope === scope;
-                return (
-                  <TouchableOpacity
-                    key={`resource-scope-${scope}`}
-                    style={[
-                      styles.chip,
-                      { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border },
-                      active && [styles.chipActive, { backgroundColor: "#EEF2FF", borderColor: colors.accent }]
-                    ]}
-                    onPress={() => setSubmitForm((prev) => ({ ...prev, scope, className: scope === "class" ? prev.className : "" }))}
-                  >
-                    <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>
-                      {scope === "institution" ? "Institution" : scope === "class" ? "Class" : globalAudienceLabel}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <MentorAudienceSelector
+              value={submitAudience}
+              audienceStage={mentorAudienceStage}
+              onChange={(audience) => setSubmitForm((prev) => ({ ...prev, ...audience }))}
+            />
             <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} value={submitForm.domain} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, domain: text }))} />
-            {submitForm.scope === "class" ? (
-              <ClassSectionSelector value={submitForm.className} onChange={(className) => setSubmitForm((prev) => ({ ...prev, className }))} />
-            ) : null}
             <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Type (roadmap, interview_questions, coding_resource, career_guide, other)" placeholderTextColor={colors.textMuted} value={submitForm.type} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, type: text }))} />
             <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Title" placeholderTextColor={colors.textMuted} value={submitForm.title} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, title: text }))} />
             <TextInput style={[styles.input, styles.textArea, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} placeholder="Short description" placeholderTextColor={colors.textMuted} value={submitForm.description} onChangeText={(text) => setSubmitForm((prev) => ({ ...prev, description: text }))} multiline />
@@ -899,6 +886,14 @@ export default function CommunityLibraryPage() {
                     Alert.alert("Title required", "Please enter a title for the resource.");
                     return;
                   }
+                  if (submitForm.scope !== "global" && !submitForm.institutionName.trim()) {
+                    Alert.alert("Institution required", "Please select the institution this resource is for.");
+                    return;
+                  }
+                  if (submitForm.scope === "class" && !submitForm.className.trim()) {
+                    Alert.alert("Class required", "Please select class and section.");
+                    return;
+                  }
                   setSubmitting(true);
                   await api.post("/api/network/knowledge-library/submit", {
                     domain: submitForm.domain.trim(),
@@ -906,6 +901,7 @@ export default function CommunityLibraryPage() {
                     title: submitForm.title.trim(),
                     description: submitForm.description.trim(),
                     url: submitForm.url.trim(),
+                    institutionName: submitForm.scope === "global" ? "" : submitForm.institutionName.trim(),
                     className: submitForm.scope === "class" ? submitForm.className.trim() : "",
                     scope: submitForm.scope,
                     audienceStage: user?.role === "mentor" ? mentorAudienceStage : undefined,
@@ -913,7 +909,7 @@ export default function CommunityLibraryPage() {
                     documentUrl: submitForm.documentUrl.trim()
                   });
                   Alert.alert("Submitted", "Resource sent to admin for review.");
-                  setSubmitForm({ domain: "", type: "other", title: "", description: "", url: "", className: "", scope: "institution", bannerImageUrl: "", documentUrl: "" });
+                  setSubmitForm({ domain: "", type: "other", title: "", description: "", url: "", institutionName: "", className: "", scope: "global", bannerImageUrl: "", documentUrl: "" });
                   await load(true);
                 } catch (e: any) {
                   handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit resource." });
@@ -1033,13 +1029,14 @@ export default function CommunityLibraryPage() {
                   description: submitForm.description.trim(),
                   url: submitForm.url.trim(),
                   className: "",
-                  scope: "institution",
+                  institutionName: "",
+                  scope: "global",
                   audienceStage: user?.role === "mentor" ? mentorAudienceStage : undefined,
                   bannerImageUrl: submitForm.bannerImageUrl.trim(),
                   documentUrl: submitForm.documentUrl.trim()
                 });
                 Alert.alert("Submitted", "Resource sent to admin for review.");
-                setSubmitForm({ domain: "", type: "other", title: "", description: "", url: "", className: "", scope: "institution", bannerImageUrl: "", documentUrl: "" });
+                setSubmitForm({ domain: "", type: "other", title: "", description: "", url: "", institutionName: "", className: "", scope: "global", bannerImageUrl: "", documentUrl: "" });
               } catch (e: any) {
                 handleAppError(e, { mode: "alert", title: "Failed", fallbackMessage: "Unable to submit resource." });
               } finally {

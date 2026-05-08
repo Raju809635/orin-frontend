@@ -24,7 +24,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { saveAiItem } from "@/utils/aiSaves";
-import ClassSectionSelector from "@/components/ClassSectionSelector";
+import MentorAudienceSelector, { MentorAudienceValue } from "@/components/MentorAudienceSelector";
 
 const AI_GOLD = "#D4A017";
 const AI_GOLD_SOFT = "#FFF4CC";
@@ -199,6 +199,8 @@ export default function AiCareerRoadmapPage() {
   const [recentInstitutionRoadmapIds, setRecentInstitutionRoadmapIds] = useState<string[]>([]);
   const [institutionRoadmapTitle, setInstitutionRoadmapTitle] = useState("");
   const [institutionRoadmapDomain, setInstitutionRoadmapDomain] = useState("");
+  const [institutionRoadmapScope, setInstitutionRoadmapScope] = useState<"global" | "institution" | "class">("global");
+  const [institutionRoadmapInstitutionName, setInstitutionRoadmapInstitutionName] = useState("");
   const [institutionRoadmapClassName, setInstitutionRoadmapClassName] = useState("");
   const [institutionRoadmapDescription, setInstitutionRoadmapDescription] = useState("");
   const [institutionRoadmapWeekOne, setInstitutionRoadmapWeekOne] = useState("");
@@ -209,6 +211,11 @@ export default function AiCareerRoadmapPage() {
   const [institutionReviewDrafts, setInstitutionReviewDrafts] = useState<Record<string, { xpAwarded: string; notes: string; issueCertificate: boolean }>>({});
   const [reviewingInstitutionSubmissionId, setReviewingInstitutionSubmissionId] = useState<string | null>(null);
   const mentorAudienceStage = user?.role === "mentor" && user?.mentorOrgRole === "institution_teacher" ? "highschool" : "after12";
+  const institutionRoadmapAudience: MentorAudienceValue = {
+    scope: institutionRoadmapScope,
+    institutionName: institutionRoadmapInstitutionName,
+    className: institutionRoadmapClassName
+  };
 
   useEffect(() => {
     const requestedSection = String(params.section || "").trim().toLowerCase();
@@ -648,6 +655,14 @@ export default function AiCareerRoadmapPage() {
       notify("Add a roadmap title and at least one week.");
       return;
     }
+    if (institutionRoadmapScope !== "global" && !institutionRoadmapInstitutionName.trim()) {
+      notify("Select the institution this roadmap is for.");
+      return;
+    }
+    if (institutionRoadmapScope === "class" && !institutionRoadmapClassName.trim()) {
+      notify("Select class and section for this roadmap.");
+      return;
+    }
 
     try {
       setCreatingInstitutionRoadmap(true);
@@ -655,13 +670,17 @@ export default function AiCareerRoadmapPage() {
         title: institutionRoadmapTitle.trim(),
         description: institutionRoadmapDescription.trim(),
         domain: institutionRoadmapDomain.trim(),
-        className: institutionRoadmapClassName.trim(),
+        scope: institutionRoadmapScope,
+        institutionName: institutionRoadmapScope === "global" ? "" : institutionRoadmapInstitutionName.trim(),
+        className: institutionRoadmapScope === "class" ? institutionRoadmapClassName.trim() : "",
         audienceStage: user?.role === "mentor" ? mentorAudienceStage : undefined,
         weeks
       });
       setInstitutionRoadmapTitle("");
       setInstitutionRoadmapDescription("");
       setInstitutionRoadmapDomain("");
+      setInstitutionRoadmapScope("global");
+      setInstitutionRoadmapInstitutionName("");
       setInstitutionRoadmapClassName("");
       setInstitutionRoadmapWeekOne("");
       setInstitutionRoadmapWeekTwo("");
@@ -673,7 +692,7 @@ export default function AiCareerRoadmapPage() {
     } finally {
       setCreatingInstitutionRoadmap(false);
     }
-  }, [institutionRoadmapClassName, institutionRoadmapDescription, institutionRoadmapDomain, institutionRoadmapTitle, institutionRoadmapWeekOne, institutionRoadmapWeekThree, institutionRoadmapWeekTwo, load, mentorAudienceStage, user?.role]);
+  }, [institutionRoadmapClassName, institutionRoadmapDescription, institutionRoadmapDomain, institutionRoadmapInstitutionName, institutionRoadmapScope, institutionRoadmapTitle, institutionRoadmapWeekOne, institutionRoadmapWeekThree, institutionRoadmapWeekTwo, load, mentorAudienceStage, user?.role]);
 
   const updateInstitutionReviewDraft = useCallback((submissionId: string, patch: Partial<{ xpAwarded: string; notes: string; issueCertificate: boolean }>) => {
     setInstitutionReviewDrafts((prev) => ({
@@ -882,16 +901,24 @@ export default function AiCareerRoadmapPage() {
           <Ionicons name="build" size={16} color={AI_INDIGO} />
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Mentor Roadmap Control</Text>
         </View>
-        <Text style={[styles.meta, { color: colors.textMuted }]}>Create institution or class roadmaps here. Students will consume them on the same roadmap page and submit proof back to you.</Text>
+        <Text style={[styles.meta, { color: colors.textMuted }]}>Create Global High School, institution, or class roadmaps. Students submit proof back to the mentor who uploaded the roadmap.</Text>
+        <MentorAudienceSelector
+          value={institutionRoadmapAudience}
+          audienceStage={mentorAudienceStage}
+          onChange={(audience) => {
+            setInstitutionRoadmapScope(audience.scope);
+            setInstitutionRoadmapInstitutionName(audience.institutionName);
+            setInstitutionRoadmapClassName(audience.className);
+          }}
+        />
         <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapTitle} onChangeText={setInstitutionRoadmapTitle} placeholder="Roadmap title" placeholderTextColor={colors.textMuted} />
         <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapDomain} onChangeText={setInstitutionRoadmapDomain} placeholder="Domain (optional)" placeholderTextColor={colors.textMuted} />
-        <ClassSectionSelector value={institutionRoadmapClassName} onChange={setInstitutionRoadmapClassName} optionalSection />
         <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapDescription} onChangeText={setInstitutionRoadmapDescription} placeholder="Roadmap description" placeholderTextColor={colors.textMuted} multiline />
         <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapWeekOne} onChangeText={setInstitutionRoadmapWeekOne} placeholder="Week 1 title" placeholderTextColor={colors.textMuted} />
         <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapWeekTwo} onChangeText={setInstitutionRoadmapWeekTwo} placeholder="Week 2 title" placeholderTextColor={colors.textMuted} />
         <TextInput style={[styles.input, { backgroundColor: isDark ? colors.surfaceAlt : "#FFFFFF", borderColor: colors.border, color: colors.text }]} value={institutionRoadmapWeekThree} onChangeText={setInstitutionRoadmapWeekThree} placeholder="Week 3 title" placeholderTextColor={colors.textMuted} />
         <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: AI_INDIGO }]} onPress={createInstitutionRoadmap} disabled={creatingInstitutionRoadmap}>
-          <Text style={styles.primaryBtnText}>{creatingInstitutionRoadmap ? "Creating..." : "Create Institution Roadmap"}</Text>
+          <Text style={styles.primaryBtnText}>{creatingInstitutionRoadmap ? "Creating..." : "Create Roadmap"}</Text>
         </TouchableOpacity>
       </View>
       ) : null}
