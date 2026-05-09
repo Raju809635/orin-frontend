@@ -167,10 +167,10 @@ export default function CommunityReputationPage() {
           <Text style={[styles.sectionTitle, { color: colors.text }]}>How to Earn XP</Text>
         </View>
         <View style={styles.earnList}>
-          <Text style={[styles.earnItem, { color: colors.text }]}>Post updates -> +10 XP</Text>
-          <Text style={[styles.earnItem, { color: colors.text }]}>Add a project -> +30 XP</Text>
-          <Text style={[styles.earnItem, { color: colors.text }]}>Help in your circle -> +20 XP</Text>
-          <Text style={[styles.earnItem, { color: colors.text }]}>Daily login / quiz streak -> +5 XP and bonus streak rewards</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>{"Post updates -> +10 XP"}</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>{"Add a project -> +30 XP"}</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>{"Help in your circle -> +20 XP"}</Text>
+          <Text style={[styles.earnItem, { color: colors.text }]}>{"Daily login / quiz streak -> +5 XP and bonus streak rewards"}</Text>
         </View>
       </View>
 
