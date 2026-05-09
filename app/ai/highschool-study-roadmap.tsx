@@ -350,7 +350,7 @@ export default function HighSchoolStudyRoadmapScreen() {
     setStatusMessage("");
     const fallback = buildLocalRoadmap(subject, classLevel, chapter, goal);
     try {
-      const { data } = await api.post<{ source?: "ai" | "fallback"; roadmap?: StudyRoadmap }>("/api/ai/highschool/study-roadmap", {
+      const { data } = await api.post<{ source?: "ai" | "fallback" | "lesson_dataset"; roadmap?: StudyRoadmap }>("/api/ai/highschool/study-roadmap", {
         classLevel,
         board,
         subject,
