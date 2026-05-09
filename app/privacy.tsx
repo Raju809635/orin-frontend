@@ -5,31 +5,42 @@ const POLICY_SECTIONS: { title: string; body: string[] }[] = [
   {
     title: "Overview",
     body: [
-      "ORIN is a mentorship, learning, networking, AI guidance, and community platform for students, graduates, job seekers, mentors, and administrators.",
+      "ORIN is an adaptive learning, mentorship, AI guidance, academic resource, and community platform for high-school learners, after-12 learners, Global Teachers, Global Mentors, and administrators.",
       "This policy explains what information ORIN collects, how it is used, when it may be shared with service providers, how it is protected, and what choices you have."
     ]
   },
   {
     title: "Information We Collect",
     body: [
-      "Account and identity information such as name, email address, password, role, education details, profile type, institution, state, and profile photo.",
-      "Profile and community information such as bio, skills, interests, posts, comments, reactions, follows, connections, certificates, challenges, opportunity submissions, knowledge-library submissions, and mentor-group participation.",
-      "Mentorship and program information such as 1:1 session bookings, mentor availability, live-session bookings, sprint enrollments, session notes, ratings, reviews, meeting links, and attendance-related workflow data.",
+      "Account and identity information such as name, email address, password, role, learner stage, mentor type, education details, institution, class, state, and profile photo.",
+      "Profile and community information such as bio, skills, interests, posts, comments, reactions, follows, connections, certificates, achievements, quiz battle activity, challenge submissions, opportunity applications, knowledge-library submissions, study-group participation, and mentor-group participation.",
+      "Academic information such as board, class, subject, chapter, topic, syllabus selections, study plans, roadmaps, subject-gap inputs, exam strategy inputs, quiz answers, progress, XP, streaks, and resource usage.",
+      "Mentorship and teaching information such as Global Mentor bookings, mentor availability, live-session bookings, sprint enrollments, Global Teacher assigned classes, teacher-created resources, challenges, roadmaps, opportunities, review notes, ratings, meeting links, and attendance-related workflow data.",
       "Payment and payout information such as Razorpay payment references, manual payment screenshots, transaction references, payout UPI details, payout QR codes, and payout status records.",
-      "Uploaded files and media such as profile photos, challenge proof files, posters, curriculum documents, resumes, certificates, screenshots, and support attachments.",
-      "AI and learning inputs such as prompts, roadmap preferences, skill-gap inputs, project-idea requests, resume-builder inputs, and AI-generated outputs saved by the user.",
+      "Uploaded files and media such as profile photos, challenge proof files, roadmap proof files, posters, academic PDFs, curriculum documents, resumes, certificates, screenshots, and support attachments.",
+      "AI and learning inputs such as prompts, academic context, roadmap preferences, subject-gap inputs, exam strategy requests, career exploration inputs, project or activity requests, resume-builder inputs, and AI-generated outputs saved by the user.",
       "Technical and usage information such as device/browser data, app version, log information, timestamps, basic analytics needed to secure and operate the app, and security-related records."
     ]
   },
   {
     title: "How We Use Information",
     body: [
-      "To create and manage accounts, authenticate users, and provide role-based access for students, mentors, and administrators.",
-      "To operate features including mentorship sessions, live sessions, sprint programs, certificates, community spaces, chat, knowledge library, opportunities, complaints, and notifications.",
+      "To create and manage accounts, authenticate users, and provide stage-based or role-based access for students, Global Teachers, Global Mentors, and administrators.",
+      "To operate features including high-school academic tools, after-12 career tools, mentorship sessions, live sessions, sprint programs, certificates, achievements, quiz battles, study groups, community spaces, chat, knowledge library, opportunities, complaints, and notifications.",
+      "To show the right content to the right audience, such as high-school resources for high-school learners, after-12 content for after-12 learners, institution content for matching institutions, and class content for matching classes.",
       "To process and verify payments, manual payment reviews, mentor payouts, and financial records connected to paid services.",
-      "To generate AI responses, recommendations, skill-gap insights, project ideas, resumes, roadmaps, and other personalized learning support.",
+      "To generate AI responses, recommendations, subject-gap insights, study planners, exam strategies, academic roadmaps, career guidance, project ideas, resumes, and other personalized learning support.",
       "To moderate content, review approvals, prevent abuse, investigate complaints, enforce policies, and maintain platform safety.",
       "To improve feature quality, reliability, personalization, fraud prevention, and customer support."
+    ]
+  },
+  {
+    title: "High School, Global Teacher, And Academic Data",
+    body: [
+      "High-school features may use academic selections such as class, subject, chapter, topic, quiz answers, roadmap progress, study-group activity, and PDF resource usage to provide learning support.",
+      "Global Teachers may create or review high-school resources, challenges, roadmaps, opportunities, announcements, and submissions for global high-school audiences, selected institutions, or selected classes.",
+      "ORIN may process uploaded academic PDFs and structured syllabus data to power resource browsing, topic selection, AI prompts, study roadmaps, and exam strategy features.",
+      "Students should avoid uploading unnecessary personal documents as academic proof unless the app specifically requests them."
     ]
   },
   {
@@ -51,9 +62,10 @@ const POLICY_SECTIONS: { title: string; body: string[] }[] = [
   {
     title: "Data Sharing Inside ORIN",
     body: [
-      "Some information is visible to other users by design, such as public profile details, posts, comments, certificates, community submissions, mentor program information, and meeting availability where applicable.",
-      "Mentors and students may see each other's relevant session and program details when they are participating in the same mentorship activity.",
-      "Administrators may access records needed for moderation, approvals, support, complaint handling, payment verification, fraud prevention, and operational review."
+      "Some information is visible to other users by design, such as public profile details, posts, comments, certificates, achievements, leaderboard entries, community submissions, mentor program information, teacher-created content, and meeting availability where applicable.",
+      "Global Teachers and students may see relevant class, institution, resource, challenge, roadmap, study-group, proof, and review details when they are participating in the same academic activity.",
+      "Global Mentors and students may see each other's relevant session and program details when they are participating in the same mentorship activity.",
+      "Administrators may access records needed for moderation, approvals, support, complaint handling, payment verification, academic content review, fraud prevention, and operational review."
     ]
   },
   {
@@ -81,6 +93,7 @@ const POLICY_SECTIONS: { title: string; body: string[] }[] = [
   {
     title: "Children",
     body: [
+      "ORIN currently focuses on high-school and after-12 learning experiences. Kids entry points may exist in product code for future use, but normal public onboarding is focused on high school and after-12 users.",
       "ORIN is not intended for children below the minimum age required under applicable law to use the service independently. If you believe personal data from a child has been provided improperly, contact support so it can be reviewed."
     ]
   },
@@ -99,11 +112,11 @@ export default function PrivacyScreen() {
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.card}>
         <Text style={styles.title}>Privacy Policy</Text>
-        <Text style={styles.meta}>Effective date: April 14, 2026</Text>
+        <Text style={styles.meta}>Effective date: May 9, 2026</Text>
         <Text style={styles.intro}>
-          This in-app privacy policy reflects the current ORIN mobile experience, including mentorship sessions,
-          live sessions, sprint programs, community features, AI tools, file uploads, payments, certificates, and
-          mentor-managed meeting links.
+          This in-app privacy policy reflects the current ORIN mobile experience, including high-school academic tools,
+          after-12 mentorship tools, Global Teacher workflows, AI features, academic PDFs, community features, file
+          uploads, payments, certificates, and mentor-managed meeting links.
         </Text>
 
         {POLICY_SECTIONS.map((section) => (
