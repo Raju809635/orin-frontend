@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -32,6 +32,8 @@ type RoadmapStep = {
   focus?: string;
   outcome?: string;
   xpReward?: number;
+  lessonSectionIds?: string[];
+  quizQuestions?: QuizQuestion[];
   tasks?: { id: string; type: string; title: string; duration?: string; completed?: boolean }[];
 };
 
@@ -52,6 +54,20 @@ type StudyRoadmap = {
   certificatePrompt?: string;
   reminders?: string[];
 };
+
+type LessonSection = { id: string; title: string; summary?: string[]; keyPoints?: string[]; pageRange?: string };
+type QuizQuestion = { id: string; question: string; options: string[]; correct: string; explanation?: string };
+type LessonChapter = {
+  chapter_name: string;
+  source_pages?: { start?: number; end?: number } | null;
+  lessonSections?: LessonSection[];
+  definitions?: { term: string; meaning: string }[];
+  diagrams?: { title: string; whatToLearn?: string }[];
+  activities?: { title: string; steps?: string[] }[];
+  weeklyPlan?: { id: string; title: string; lessonSectionIds?: string[]; focus?: string }[];
+  quizQuestions?: QuizQuestion[];
+};
+type LessonResponse = { available?: boolean; message?: string; chapter?: LessonChapter | null };
 
 type InstitutionRoadmap = {
   id: string;
@@ -114,7 +130,7 @@ function normalizeStep(step: RoadmapStep, index: number): RoadmapStep {
     completed: status === "completed" || Boolean(step.completed),
     canStart: status === "active" && !step.startedAt,
     canSubmitProof: status === "active" && Boolean(step.startedAt),
-    proofRequired: true,
+    proofRequired: typeof step.proofRequired === "boolean" ? step.proofRequired : true,
     proofStatus: step.proofStatus || "not_submitted",
     tasks: Array.isArray(step.tasks) ? step.tasks : []
   };
@@ -175,6 +191,11 @@ export default function HighSchoolStudyRoadmapScreen() {
   const [institutionRoadmaps, setInstitutionRoadmaps] = useState<InstitutionRoadmap[]>([]);
   const [proofText, setProofText] = useState("");
   const [proofLink, setProofLink] = useState("");
+  const [selectedWeek, setSelectedWeek] = useState<RoadmapStep | null>(null);
+  const [lesson, setLesson] = useState<LessonChapter | null>(null);
+  const [lessonLoading, setLessonLoading] = useState(false);
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
+  const [quizMessage, setQuizMessage] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingContext, setLoadingContext] = useState(false);
   const [loadingInstitution, setLoadingInstitution] = useState(false);
@@ -187,6 +208,7 @@ export default function HighSchoolStudyRoadmapScreen() {
   const completedSteps = roadmap?.steps.filter((step) => step.status === "completed" || step.completed).length || 0;
   const totalSteps = roadmap?.steps.length || 0;
   const percent = progressPercent(roadmap);
+  const isLessonRoadmap = Boolean(roadmap?.steps?.some((step) => (step.lessonSectionIds || []).length || (step.quizQuestions || []).length));
   const drawerItems = useMemo<HighSchoolDrawerItem[]>(
     () => [
       {
@@ -293,6 +315,36 @@ export default function HighSchoolStudyRoadmapScreen() {
     loadChapters();
   }, [loadChapters]));
 
+  function clearRoadmapForContextChange() {
+    setRoadmap(null);
+    setSelectedWeek(null);
+    setLesson(null);
+    setQuizAnswers({});
+    setQuizMessage("");
+    setProofText("");
+    setProofLink("");
+  }
+
+  function selectBoard(value: string) {
+    setBoard(value);
+    clearRoadmapForContextChange();
+  }
+
+  function selectClassLevel(value: string) {
+    setClassLevel(value);
+    clearRoadmapForContextChange();
+  }
+
+  function selectSubject(value: string) {
+    setSubject(value);
+    clearRoadmapForContextChange();
+  }
+
+  function selectChapter(value: string) {
+    setChapter(value);
+    clearRoadmapForContextChange();
+  }
+
   async function createRoadmap() {
     setLoading(true);
     setStatusMessage("");
@@ -310,9 +362,13 @@ export default function HighSchoolStudyRoadmapScreen() {
       });
       const next = data?.roadmap || fallback;
       setRoadmap({ ...next, steps: (next.steps || []).map(normalizeStep) });
-      setStatusMessage(data?.source === "ai" ? "AI created your academic mission roadmap." : "Using a safe roadmap until AI is available.");
+      setStatusMessage(String(data?.source || "").includes("lesson") ? "ORIN created a lesson-backed weekly roadmap from textbook content." : data?.source === "ai" ? "AI created your academic mission roadmap." : "Using a safe roadmap until AI is available.");
       setProofText("");
       setProofLink("");
+      setSelectedWeek(null);
+      setLesson(null);
+      setQuizAnswers({});
+      setQuizMessage("");
     } catch (error) {
       setRoadmap(fallback);
       setStatusMessage(getAppErrorMessage(error, "AI roadmap is unavailable, so ORIN loaded a safe mission roadmap."));
@@ -340,6 +396,11 @@ export default function HighSchoolStudyRoadmapScreen() {
   }
 
   async function startMission(stepId: string) {
+    const step = roadmap?.steps.find((item) => item.id === stepId) || null;
+    if (step && ((step.lessonSectionIds || []).length || (step.quizQuestions || []).length || isLessonRoadmap)) {
+      await openLessonWeek(step);
+      return;
+    }
     try {
       await api.post(`/api/network/career-roadmap/${encodeURIComponent(stepId)}/start`);
       notify("Mission started. Complete the work, then submit proof.");
@@ -367,6 +428,71 @@ export default function HighSchoolStudyRoadmapScreen() {
     } catch (error) {
       handleAppError(error, { fallbackMessage: "Unable to submit proof right now." });
     }
+  }
+
+  async function openLessonWeek(step: RoadmapStep) {
+    setSelectedWeek(step);
+    setQuizAnswers({});
+    setQuizMessage("");
+    try {
+      setLessonLoading(true);
+      const { data } = await api.get<LessonResponse>(
+        `/api/academics/${board}/class/${classLevel}/subject/${encodeURIComponent(subject)}/chapter/${encodeURIComponent(chapter)}/lesson`
+      );
+      if (data?.available && data.chapter) {
+        setLesson(data.chapter);
+      } else {
+        setLesson(null);
+        setQuizMessage(data?.message || "Lesson details are not available yet.");
+      }
+    } catch (error) {
+      setLesson(null);
+      setQuizMessage(getAppErrorMessage(error, "Unable to load lesson details right now."));
+    } finally {
+      setLessonLoading(false);
+    }
+  }
+
+  function completeLessonWeek() {
+    if (!selectedWeek) return;
+    const questions = selectedWeek.quizQuestions?.length ? selectedWeek.quizQuestions : lesson?.quizQuestions || [];
+    const allAnswered = questions.length > 0 && questions.every((item) => quizAnswers[item.id]);
+    const allCorrect = questions.length > 0 && questions.every((item) => quizAnswers[item.id] === item.correct);
+    if (!allAnswered) {
+      setQuizMessage("Answer every question first.");
+      return;
+    }
+    if (!allCorrect) {
+      setQuizMessage("Some answers are incorrect. Review the lesson and try again.");
+      return;
+    }
+    setRoadmap((prev) => {
+      if (!prev) return prev;
+      const stepIndex = prev.steps.findIndex((item) => item.id === selectedWeek.id);
+      const nextSteps = prev.steps.map((item, index) => {
+        if (index === stepIndex) {
+          return { ...item, status: "completed" as const, completed: true, completedAt: new Date().toISOString(), canStart: false };
+        }
+        if (index === stepIndex + 1) {
+          return { ...item, status: "active" as const, canStart: true, unlockedAt: new Date().toISOString() };
+        }
+        return item;
+      });
+      const completedSteps = nextSteps.filter((item) => item.completed || item.status === "completed").length;
+      return {
+        ...prev,
+        steps: nextSteps,
+        progress: {
+          ...(prev.progress || {}),
+          completedSteps,
+          totalSteps: nextSteps.length,
+          progressPercent: nextSteps.length ? Math.round((completedSteps / nextSteps.length) * 100) : 0,
+          currentStepId: nextSteps.find((item) => item.status === "active")?.id || ""
+        }
+      };
+    });
+    notify("Week completed. Next week unlocked.");
+    setSelectedWeek(null);
   }
 
   return (
@@ -429,7 +555,7 @@ export default function HighSchoolStudyRoadmapScreen() {
           {BOARD_OPTIONS.map((item) => {
             const active = item === board;
             return (
-              <TouchableOpacity key={item} style={[styles.subjectChip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surfaceAlt }]} onPress={() => setBoard(item)}>
+              <TouchableOpacity key={item} style={[styles.subjectChip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surfaceAlt }]} onPress={() => selectBoard(item)}>
                 <Text style={[styles.subjectText, { color: active ? colors.accent : colors.textMuted }]}>{item}</Text>
               </TouchableOpacity>
             );
@@ -437,18 +563,18 @@ export default function HighSchoolStudyRoadmapScreen() {
         </View>
 
         <Text style={[styles.label, { color: colors.text }]}>Class</Text>
-          <ChipRow values={CLASS_OPTIONS} selected={classLevel} onSelect={setClassLevel} colors={colors} />
+          <ChipRow values={CLASS_OPTIONS} selected={classLevel} onSelect={selectClassLevel} colors={colors} />
 
           <Text style={[styles.label, { color: colors.text }]}>Subject {loadingContext ? "(loading...)" : ""}</Text>
-          <ChipRow values={subjects} selected={subject} onSelect={setSubject} colors={colors} />
+          <ChipRow values={subjects} selected={subject} onSelect={selectSubject} colors={colors} />
 
           <Text style={[styles.label, { color: colors.text }]}>Chapter / Topic</Text>
           {chapters.length ? (
-            <ChipRow values={chapters.slice(0, 8)} selected={chapter} onSelect={setChapter} colors={colors} />
+            <ChipRow values={chapters.slice(0, 8)} selected={chapter} onSelect={selectChapter} colors={colors} />
           ) : (
             <TextInput
               value={chapter}
-              onChangeText={setChapter}
+              onChangeText={selectChapter}
               placeholder="Example: Algebra, Life Processes, Grammar"
               placeholderTextColor={colors.textMuted}
               style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
@@ -503,7 +629,12 @@ export default function HighSchoolStudyRoadmapScreen() {
                   </View>
                 ))}
 
-                {!activeMission.startedAt ? (
+                {isLessonRoadmap ? (
+                  <TouchableOpacity style={[styles.primaryButton, { backgroundColor: "#0F766E" }]} onPress={() => openLessonWeek(activeMission)}>
+                    <Ionicons name="book" size={18} color="#FFFFFF" />
+                    <Text style={[styles.primaryButtonText, { color: "#FFFFFF" }]}>Open Week + Quiz</Text>
+                  </TouchableOpacity>
+                ) : !activeMission.startedAt ? (
                   <TouchableOpacity style={[styles.primaryButton, { backgroundColor: "#0F766E" }]} onPress={() => startMission(activeMission.id)}>
                     <Ionicons name="play" size={18} color="#FFFFFF" />
                     <Text style={[styles.primaryButtonText, { color: "#FFFFFF" }]}>Start Mission</Text>
@@ -536,7 +667,7 @@ export default function HighSchoolStudyRoadmapScreen() {
 
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <SectionHeader icon="map" title="Mission Timeline" color="#7C3AED" />
-              {roadmap.steps.map((step) => <MissionRow key={step.id} step={step} colors={colors} />)}
+              {roadmap.steps.map((step) => <MissionRow key={step.id} step={step} colors={colors} onPress={isLessonRoadmap ? () => openLessonWeek(step) : undefined} />)}
             </View>
 
             <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -571,6 +702,21 @@ export default function HighSchoolStudyRoadmapScreen() {
         </View>
         ) : null}
       </ScrollView>
+      <LessonWeekModal
+        visible={Boolean(selectedWeek)}
+        step={selectedWeek}
+        lesson={lesson}
+        loading={lessonLoading}
+        message={quizMessage}
+        answers={quizAnswers}
+        colors={colors}
+        onAnswer={(questionId, answer) => {
+          setQuizMessage("");
+          setQuizAnswers((prev) => ({ ...prev, [questionId]: answer }));
+        }}
+        onComplete={completeLessonWeek}
+        onClose={() => setSelectedWeek(null)}
+      />
       <HighSchoolSideDrawer
         visible={drawerVisible}
         title="High School Roadmaps"
@@ -607,23 +753,124 @@ function ChipRow({ values, selected, onSelect, colors }: { values: string[]; sel
   );
 }
 
-function MissionRow({ step, colors }: { step: RoadmapStep; colors: any }) {
+function MissionRow({ step, colors, onPress }: { step: RoadmapStep; colors: any; onPress?: () => void }) {
   const done = step.status === "completed" || step.completed;
   const active = step.status === "active";
   const color = done ? "#12B76A" : active ? "#0EA5E9" : "#98A2B3";
+  const Wrapper: any = onPress ? TouchableOpacity : View;
   return (
-    <View style={[styles.missionRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+    <Wrapper activeOpacity={0.9} onPress={onPress} style={[styles.missionRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
       <View style={[styles.missionNumber, { backgroundColor: `${color}22` }]}>
         <Text style={[styles.missionNumberText, { color }]}>{step.stepNumber}</Text>
       </View>
       <View style={{ flex: 1 }}>
         <Text style={[styles.missionTitle, { color: colors.text }]}>{step.title}</Text>
-        <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{done ? "Completed with proof." : active ? "Active mission. Start and submit proof." : "Locked until previous mission is complete."}</Text>
+        <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
+          {done ? "Completed." : active ? ((step.lessonSectionIds || []).length ? "Open, learn, and pass quiz." : "Active mission. Start and submit proof.") : "Locked until previous mission is complete."}
+        </Text>
       </View>
       <View style={[styles.statusPill, { backgroundColor: `${color}22` }]}>
         <Text style={[styles.statusText, { color }]}>{done ? "Done" : active ? "Active" : "Locked"}</Text>
       </View>
-    </View>
+    </Wrapper>
+  );
+}
+
+function LessonWeekModal({
+  visible,
+  step,
+  lesson,
+  loading,
+  message,
+  answers,
+  colors,
+  onAnswer,
+  onComplete,
+  onClose
+}: {
+  visible: boolean;
+  step: RoadmapStep | null;
+  lesson: LessonChapter | null;
+  loading: boolean;
+  message: string;
+  answers: Record<string, string>;
+  colors: any;
+  onAnswer: (questionId: string, answer: string) => void;
+  onComplete: () => void;
+  onClose: () => void;
+}) {
+  const sectionIds = step?.lessonSectionIds || [];
+  const sections = lesson?.lessonSections?.filter((item) => !sectionIds.length || sectionIds.includes(item.id)) || [];
+  const questions = step?.quizQuestions?.length ? step.quizQuestions : lesson?.quizQuestions || [];
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <View style={[styles.modalRoot, { backgroundColor: colors.background }]}>
+        <View style={[styles.topBar, { backgroundColor: colors.background }]}>
+          <TouchableOpacity style={styles.topIconBtn} onPress={onClose}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.topTitle, { color: colors.text }]}>Lesson Week</Text>
+          <View style={styles.topIconBtn} />
+        </View>
+        <ScrollView contentContainerStyle={styles.modalContent} showsVerticalScrollIndicator={false}>
+          <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.eyebrow, { color: colors.accent }]}>{lesson?.chapter_name || "Academic Lesson"}</Text>
+            <Text style={[styles.heroTitle, { color: colors.text }]}>{step?.title || "Week"}</Text>
+            <Text style={[styles.heroSubtitle, { color: colors.textMuted }]}>{step?.focus || "Study the lesson, then complete the quiz."}</Text>
+          </View>
+
+          {loading ? <ActivityIndicator color={colors.accent} /> : null}
+          {message ? <Text style={[styles.noticeText, { color: colors.textMuted }]}>{message}</Text> : null}
+
+          {sections.map((section) => (
+            <View key={section.id} style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <SectionHeader icon="book" title={section.title} color={colors.accent} />
+              {(section.summary || []).map((item) => <Text key={item} style={[styles.lessonText, { color: colors.text }]}>{item}</Text>)}
+              {(section.keyPoints || []).slice(0, 5).map((item) => <Text key={item} style={[styles.bulletText, { color: colors.textMuted }]}>- {item}</Text>)}
+            </View>
+          ))}
+
+          {lesson?.definitions?.length ? (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <SectionHeader icon="reader" title="Definitions" color="#7C3AED" />
+              {lesson.definitions.slice(0, 6).map((item) => (
+                <Text key={item.term} style={[styles.lessonText, { color: colors.text }]}><Text style={{ fontWeight: "900" }}>{item.term}: </Text>{item.meaning}</Text>
+              ))}
+            </View>
+          ) : null}
+
+          {lesson?.diagrams?.length ? (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <SectionHeader icon="analytics" title="Diagrams / Processes" color="#0EA5E9" />
+              {lesson.diagrams.slice(0, 5).map((item) => (
+                <Text key={item.title} style={[styles.bulletText, { color: colors.textMuted }]}>- {item.title}: {item.whatToLearn || "Practice labels and process flow."}</Text>
+              ))}
+            </View>
+          ) : null}
+
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <SectionHeader icon="help-circle" title="Quiz" color="#F59E0B" />
+            {questions.map((question) => (
+              <View key={question.id} style={styles.quizBlock}>
+                <Text style={[styles.missionTitle, { color: colors.text }]}>{question.question}</Text>
+                {question.options.map((option) => {
+                  const active = answers[question.id] === option;
+                  return (
+                    <TouchableOpacity key={option} style={[styles.quizOption, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surfaceAlt }]} onPress={() => onAnswer(question.id, option)}>
+                      <Text style={[styles.quizOptionText, { color: active ? colors.accent : colors.text }]}>{option}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ))}
+            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={onComplete}>
+              <Ionicons name="checkmark-circle" size={18} color={colors.accentText} />
+              <Text style={[styles.primaryButtonText, { color: colors.accentText }]}>Complete Week</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    </Modal>
   );
 }
 
@@ -637,6 +884,8 @@ function ProgressTrack({ value, color = "#12B76A" }: { value: number; color?: st
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
+  modalRoot: { flex: 1 },
+  modalContent: { padding: 16, paddingBottom: 36, gap: 14 },
   topBar: { minHeight: 58, paddingHorizontal: 14, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   topIconBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   topTitle: { fontSize: 18, fontWeight: "900" },
@@ -680,6 +929,11 @@ const styles = StyleSheet.create({
   taskText: { flex: 1, fontSize: 13, fontWeight: "900" },
   taskDuration: { fontSize: 11, fontWeight: "800" },
   proofBox: { gap: 10 },
+  lessonText: { fontSize: 14, lineHeight: 21, fontWeight: "700" },
+  bulletText: { fontSize: 13, lineHeight: 20, fontWeight: "700" },
+  quizBlock: { gap: 8 },
+  quizOption: { borderWidth: 1, borderRadius: 14, padding: 11 },
+  quizOptionText: { fontSize: 13, lineHeight: 18, fontWeight: "800" },
   institutionBox: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 6 },
   institutionWeek: { fontSize: 12, fontWeight: "700", lineHeight: 18 }
 });
