@@ -40,6 +40,7 @@ type CareerExplorer = {
 };
 
 const INTERESTS = ["Science", "Commerce", "Arts", "Tech", "Law", "Design", "Defense", "Other"];
+const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
 const CLASS_OPTIONS = ["8", "9", "10", "11", "12"];
 const FALLBACK_SUBJECTS = ["Mathematics", "Science", "Social Science", "English", "Computer", "Biology", "Commerce"];
 type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
@@ -104,6 +105,7 @@ function barColor(value: number) {
 export default function CareerExplorerScreen() {
   const { colors } = useAppTheme();
   const { className } = useLearner();
+  const [board, setBoard] = useState("SSC");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [subjects, setSubjects] = useState(FALLBACK_SUBJECTS);
   const [favoriteSubjects, setFavoriteSubjects] = useState(["Science", "Mathematics"]);
@@ -119,7 +121,7 @@ export default function CareerExplorerScreen() {
 
   const loadSubjects = useCallback(async () => {
     try {
-      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/class/${classLevel}/subjects`);
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/${board}/class/${classLevel}/subjects`);
       const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
       if (next.length) {
         setSubjects(next);
@@ -133,7 +135,7 @@ export default function CareerExplorerScreen() {
     } catch {
       setSubjects(FALLBACK_SUBJECTS);
     }
-  }, [classLevel]);
+  }, [board, classLevel]);
 
   useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
 
@@ -150,6 +152,7 @@ export default function CareerExplorerScreen() {
         interest: nextInterest,
         strengths: [strengths, favoriteSubjects.length ? `favorite subjects: ${favoriteSubjects.join(", ")}` : ""].filter(Boolean).join("; "),
         academicSubjects: favoriteSubjects,
+        board,
         classLevel
       });
       const nextExplorer = data?.explorer || fallbackExplorer();
@@ -201,6 +204,17 @@ export default function CareerExplorerScreen() {
           placeholderTextColor={colors.textMuted}
           style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
         />
+        <Text style={[styles.subHeader, { color: colors.text }]}>Board</Text>
+        <View style={styles.categoryGrid}>
+          {BOARD_OPTIONS.map((item) => {
+            const active = board === item;
+            return (
+              <TouchableOpacity key={item} style={[styles.categoryTile, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]} onPress={() => setBoard(item)}>
+                <Text style={[styles.categoryText, { color: active ? colors.accent : colors.text }]}>{item}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
         <Text style={[styles.subHeader, { color: colors.text }]}>Class</Text>
         <View style={styles.categoryGrid}>
           {CLASS_OPTIONS.map((item) => {

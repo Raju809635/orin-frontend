@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "830760289363",
+    "project_id": "orin-raju",
+    "storage_bucket": "orin-raju.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:830760289363:android:2d1a557546ce4a15edf2a6",
+        "android_client_info": {
+          "package_name": "com.orin.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAU74yMRmKB-601EIOlFFb89a4krNX3VK0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

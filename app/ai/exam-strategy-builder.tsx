@@ -40,6 +40,7 @@ const SUBJECTS = [
   "Biology"
 ];
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
+const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
 type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
 type TopicOption = { subject: string; chapter: string; topic: string };
 type AcademicSubjectResponse = {
@@ -78,6 +79,7 @@ export default function ExamStrategyBuilderScreen() {
   const { className } = useLearner();
   const [examName, setExamName] = useState("Half Yearly Exam");
   const [examDate, setExamDate] = useState("25 June 2026");
+  const [board, setBoard] = useState("SSC");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [syllabus, setSyllabus] = useState("Class 10 academic syllabus");
   const [subjectOptions, setSubjectOptions] = useState<AcademicSubject[]>([]);
@@ -94,7 +96,7 @@ export default function ExamStrategyBuilderScreen() {
 
   const loadSubjects = useCallback(async () => {
     try {
-      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/class/${classLevel}/subjects`);
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/${board}/class/${classLevel}/subjects`);
       const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
       if (next.length) {
         setSubjectOptions((data?.subjects || []).filter((item): item is AcademicSubject => typeof item !== "string"));
@@ -113,7 +115,7 @@ export default function ExamStrategyBuilderScreen() {
       setSubjectOptions([]);
       setSubjectPool(SUBJECTS);
     }
-  }, [classLevel]);
+  }, [board, classLevel]);
 
   useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
 
@@ -128,7 +130,7 @@ export default function ExamStrategyBuilderScreen() {
       subjectsToLoad.map(async (subject) => {
         const option = subjectOptions.find((item) => subjectLabel(item) === subject);
         const key = option?.key || option?.slug || subject;
-        const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/class/${classLevel}/subject/${encodeURIComponent(key)}`);
+        const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${classLevel}/subject/${encodeURIComponent(key)}/topics`);
         const chapters = data?.subject?.chapters || (data as any)?.chapters || [];
         return chapters.flatMap((chapter: any) => {
           const chapterName = String(chapter?.chapter_name || chapter?.name || "").trim();
@@ -147,7 +149,7 @@ export default function ExamStrategyBuilderScreen() {
     const next = results.flatMap((result) => (result.status === "fulfilled" ? result.value : [])).slice(0, 80);
     setTopicPool(next);
     setSelectedTopics((prev) => prev.filter((topic) => next.some((item) => item.topic === topic)).slice(0, 16));
-  }, [classLevel, selectedSubjects, subjectOptions]);
+  }, [board, classLevel, selectedSubjects, subjectOptions]);
 
   useEffect(() => {
     void loadTopics();
@@ -185,6 +187,7 @@ export default function ExamStrategyBuilderScreen() {
         examDate,
         classLevel,
         syllabus,
+        board,
         subjects: selectedSubjects,
         topics: selectedTopics
       });
@@ -230,6 +233,18 @@ export default function ExamStrategyBuilderScreen() {
           <TextInput style={[styles.input, styles.flexInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={`Class ${classLevel}`} editable={false} placeholder="Class" placeholderTextColor={colors.textMuted} />
         </View>
         <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={syllabus} onChangeText={setSyllabus} placeholder="Syllabus" placeholderTextColor={colors.textMuted} />
+        <Text style={[styles.cardMeta, { color: colors.textMuted }]}>Board</Text>
+        <View style={styles.subjectGrid}>
+          {BOARD_OPTIONS.map((item) => {
+            const active = board === item;
+            return (
+              <TouchableOpacity key={item} style={[styles.subjectTile, { backgroundColor: active ? "#FFF7ED" : colors.surfaceAlt, borderColor: active ? "#FB923C" : colors.border }]} onPress={() => setBoard(item)}>
+                <Text style={[styles.subjectText, { color: active ? "#9A3412" : colors.text }]}>{item}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <Text style={[styles.cardMeta, { color: colors.textMuted }]}>Class</Text>
         <View style={styles.subjectGrid}>
           {CLASS_OPTIONS.map((item) => {

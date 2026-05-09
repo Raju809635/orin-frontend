@@ -5,6 +5,7 @@ import { useFocusEffect } from "expo-router";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
+import { HighSchoolSideDrawer, type HighSchoolDrawerItem } from "@/components/community/highschool-side-drawer";
 import {
   AcademicCard,
   AcademicEmpty,
@@ -56,8 +57,10 @@ type AcademicPdf = {
 };
 
 type AcademicPdfResponse = { pdfs?: AcademicPdf[] };
+type ResourceView = "app" | "teacher";
 
 const CLASS_OPTIONS = [6, 7, 8, 9, 10, 11, 12];
+const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
 
 function firstPdfUrl(item: ResourceItem) {
   const candidates = [item.documentUrl, item.url, item.fileUrl, ...(item.supportingDocuments || [])]
@@ -76,8 +79,11 @@ function normalizeUrl(rawUrl?: string) {
 
 export default function HighSchoolResourceLibraryScreen() {
   const { colors } = useAppTheme();
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [resourceView, setResourceView] = useState<ResourceView>("app");
   const [resources, setResources] = useState<ResourceItem[]>([]);
   const [subjects, setSubjects] = useState<AcademicSubjectSummary[]>([]);
+  const [board, setBoard] = useState("SSC");
   const [classNumber, setClassNumber] = useState(10);
   const [selectedSubjectKey, setSelectedSubjectKey] = useState("mathematics");
   const [academicSubject, setAcademicSubject] = useState<AcademicSubjectResponse | null>(null);
@@ -90,6 +96,27 @@ export default function HighSchoolResourceLibraryScreen() {
   const selectedSubject = useMemo(
     () => subjects.find((item) => item.key === selectedSubjectKey) || subjects[0],
     [selectedSubjectKey, subjects]
+  );
+  const drawerItems = useMemo<HighSchoolDrawerItem[]>(
+    () => [
+      {
+        key: "app-resources",
+        label: "App Resources",
+        meta: "ORIN textbook PDFs by board, class, subject and chapter dataset",
+        icon: "book",
+        badge: String(academicPdfs.length),
+        onPress: () => setResourceView("app")
+      },
+      {
+        key: "teacher-resources",
+        label: "Teacher Resources",
+        meta: "PDF resources uploaded by Global Teachers for high-school students",
+        icon: "school",
+        badge: String(pdfResources.length),
+        onPress: () => setResourceView("teacher")
+      }
+    ],
+    [academicPdfs.length, pdfResources.length]
   );
 
   const openPdfUrl = useCallback(async (rawUrl?: string) => {
@@ -113,15 +140,15 @@ export default function HighSchoolResourceLibraryScreen() {
     try {
       setSelectedSubjectKey(subjectKey);
       const [subjectRes, pdfRes] = await Promise.all([
-        api.get<AcademicSubjectResponse>(`/api/academics/class/${classNumber}/subject/${subjectKey}/topics`),
-        api.get<AcademicPdfResponse>(`/api/academics/class/${classNumber}/subject/${subjectKey}/pdfs`)
+        api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${classNumber}/subject/${subjectKey}/topics`),
+        api.get<AcademicPdfResponse>(`/api/academics/${board}/class/${classNumber}/subject/${subjectKey}/pdfs`)
       ]);
       setAcademicSubject(subjectRes.data || null);
       setAcademicPdfs(pdfRes.data?.pdfs || []);
     } catch (e) {
       setError(getAppErrorMessage(e, "Failed to load academic PDFs."));
     }
-  }, [classNumber]);
+  }, [board, classNumber]);
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -131,7 +158,7 @@ export default function HighSchoolResourceLibraryScreen() {
 
       const [libraryRes, subjectsRes] = await Promise.allSettled([
         api.get<LibraryResponse>("/api/network/knowledge-library"),
-        api.get<{ subjects: AcademicSubjectSummary[] }>(`/api/academics/class/${classNumber}/subjects`)
+        api.get<{ subjects: AcademicSubjectSummary[] }>(`/api/academics/${board}/class/${classNumber}/subjects`)
       ]);
       const library = libraryRes.status === "fulfilled" ? libraryRes.value.data || {} : {};
       setResources([...(library.institutionResources || []), ...(library.domainResources || [])]);
@@ -146,7 +173,7 @@ export default function HighSchoolResourceLibraryScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [classNumber, loadSubject, selectedSubjectKey]);
+  }, [board, classNumber, loadSubject, selectedSubjectKey]);
 
   useFocusEffect(
     useCallback(() => {
@@ -155,20 +182,71 @@ export default function HighSchoolResourceLibraryScreen() {
   );
 
   return (
+    <>
     <HighSchoolCommunityShell
-      eyebrow={`Class ${classNumber}`}
-      title="Resource Library"
-      subtitle="Real PDF files from teachers and connected textbooks. Choose class and subject, then open the PDF directly."
+      eyebrow={`${board} • Class ${classNumber}`}
+      title={resourceView === "teacher" ? "Teacher Resources" : "App Resources"}
+      subtitle="Choose App Resources for ORIN textbook PDFs or Teacher Resources for Global Teacher uploads."
       stats={[
         { icon: "book", label: "Subjects", value: String(subjects.length) },
-        { icon: "document-text", label: "PDFs", value: String(academicPdfs.length + pdfResources.length) }
+        { icon: "document-text", label: resourceView === "teacher" ? "Teacher PDFs" : "App PDFs", value: String(resourceView === "teacher" ? pdfResources.length : academicPdfs.length) }
       ]}
       loading={loading}
       error={error}
       refreshing={refreshing}
       onRefresh={() => load(true)}
     >
+      <CommunitySection title="Resource Type" subtitle="This page has two resource libraries: app resources and teacher resources." icon="menu">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+          {[
+            { key: "app" as const, label: "App Resources", count: academicPdfs.length },
+            { key: "teacher" as const, label: "Teacher Resources", count: pdfResources.length }
+          ].map((item) => {
+            const active = resourceView === item.key;
+            return (
+              <TouchableOpacity
+                key={item.key}
+                style={[
+                  styles.chip,
+                  { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }
+                ]}
+                onPress={() => setResourceView(item.key)}
+              >
+                <Text style={[styles.chipText, { color: active ? "#15803D" : colors.textMuted }]}>{item.label} ({item.count})</Text>
+              </TouchableOpacity>
+            );
+          })}
+          <TouchableOpacity style={[styles.chip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => setDrawerVisible(true)}>
+            <Text style={[styles.chipText, { color: colors.textMuted }]}>Open Drawer</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </CommunitySection>
+
+      {resourceView === "app" ? (
+      <>
       <CommunitySection title="Academic PDF Browser" subtitle="Select a class and subject to show only connected textbook PDFs." icon="library">
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+          {BOARD_OPTIONS.map((item) => {
+            const active = item === board;
+            return (
+              <TouchableOpacity
+                key={item}
+                style={[
+                  styles.chip,
+                  { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }
+                ]}
+                onPress={() => {
+                  setBoard(item);
+                  setAcademicSubject(null);
+                  setAcademicPdfs([]);
+                }}
+              >
+                <Text style={[styles.chipText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
           {CLASS_OPTIONS.map((item) => {
             const active = item === classNumber;
@@ -239,7 +317,10 @@ export default function HighSchoolResourceLibraryScreen() {
           <AcademicEmpty label="No PDFs found for this class and subject yet." />
         )}
       </CommunitySection>
+      </>
+      ) : null}
 
+      {resourceView === "teacher" ? (
       <CommunitySection title="Teacher PDFs" subtitle="Only teacher resources with valid PDF URLs appear here." icon="document-text">
         {pdfResources.length ? (
           pdfResources.slice(0, 12).map((item) => (
@@ -259,7 +340,17 @@ export default function HighSchoolResourceLibraryScreen() {
           <AcademicEmpty label="No teacher PDF resources uploaded yet. Non-PDF links are hidden in this library." />
         )}
       </CommunitySection>
+      ) : null}
     </HighSchoolCommunityShell>
+    <HighSchoolSideDrawer
+      visible={drawerVisible}
+      title="Resources"
+      subtitle="Choose app textbook PDFs or Global Teacher uploads"
+      activeKey={resourceView === "teacher" ? "teacher-resources" : "app-resources"}
+      items={drawerItems}
+      onClose={() => setDrawerVisible(false)}
+    />
+    </>
   );
 }
 

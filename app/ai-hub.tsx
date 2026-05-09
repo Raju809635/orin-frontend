@@ -241,6 +241,21 @@ export default function AiHubScreen() {
         </>
       )}
 
+      {!isMentor ? (
+        <TouchableOpacity activeOpacity={0.9} onPress={() => router.push("/premium" as never)}>
+          <View style={[styles.premiumCard, { backgroundColor: isDark ? "#17251F" : "#ECFDF3", borderColor: colors.border }]}>
+            <View style={[styles.premiumIcon, { backgroundColor: colors.accent }]}>
+              <Ionicons name="sparkles" size={18} color={colors.accentText} />
+            </View>
+            <View style={styles.premiumTextWrap}>
+              <Text style={[styles.premiumTitle, { color: colors.text }]}>Unlock ORIN Premium</Text>
+              <Text style={[styles.premiumSub, { color: colors.textMuted }]}>More AI chats, full study tools, certificates, and premium challenges.</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+          </View>
+        </TouchableOpacity>
+      ) : null}
+
       <View style={styles.moduleStack}>
         {filteredModules.map((item) => {
           const stageStyled = isKid || isHighSchool || isTeacherMentor || isHeadMentor;
@@ -286,6 +301,24 @@ const styles = StyleSheet.create({
   container: { padding: 16, backgroundColor: "#F3F6FB", gap: 10 },
   title: { fontSize: 28, fontWeight: "800", color: "#11261E" },
   sub: { color: "#475467" },
+  premiumCard: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
+  },
+  premiumIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  premiumTextWrap: { flex: 1, gap: 2 },
+  premiumTitle: { fontSize: 15, fontWeight: "900" },
+  premiumSub: { fontSize: 12, lineHeight: 17, fontWeight: "600" },
   moduleStack: { gap: 10 },
   moduleCard: {
     borderWidth: 1,

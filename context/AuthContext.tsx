@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { api, setApiAuthToken } from "@/lib/api";
+import { recordAppMetric } from "@/lib/appMetrics";
+import { registerForPushNotifications, unregisterLastPushToken } from "@/lib/pushNotifications";
 import {
   AuthUser,
   clearAuthSession,
@@ -103,6 +105,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         } else {
           setUser(session.user);
         }
+
+        registerForPushNotifications().catch(() => null);
       } finally {
         if (mounted) {
           setIsBootstrapping(false);
@@ -118,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const logout = useCallback(async () => {
+    await unregisterLastPushToken();
     setToken(null);
     setRefreshToken(null);
     setUser(null);
@@ -132,6 +137,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(data.user);
     setApiAuthToken(data.token);
     await saveAuthSession(data.token, data.refreshToken, data.user);
+    recordAppMetric("login", { role: data.user.role, learnerStage: (data.user as any)?.learnerStage || "" });
+    registerForPushNotifications().catch(() => null);
   }, []);
 
   const register = useCallback(async (payload: RegisterPayload) => {

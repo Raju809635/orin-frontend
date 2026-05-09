@@ -30,6 +30,7 @@ type SchoolProjectsResult = {
 };
 
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
+const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
 const FALLBACK_SUBJECTS = ["Mathematics", "Science", "Social Science", "English", "Telugu", "Hindi"];
 
 function subjectLabel(item: AcademicSubject | string) {
@@ -41,6 +42,7 @@ export default function HighSchoolSchoolProjectsScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const { className } = useLearner();
+  const [board, setBoard] = useState("SSC");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [subjects, setSubjects] = useState<string[]>(FALLBACK_SUBJECTS);
   const [subject, setSubject] = useState("Science");
@@ -56,7 +58,7 @@ export default function HighSchoolSchoolProjectsScreen() {
   const loadSubjects = useCallback(async () => {
     try {
       setLoadingContext(true);
-      const { data } = await api.get<{ subjects?: AcademicSubject[] | string[]; message?: string }>(`/api/academics/class/${classLevel}/subjects`);
+      const { data } = await api.get<{ subjects?: AcademicSubject[] | string[]; message?: string }>(`/api/academics/${board}/class/${classLevel}/subjects`);
       const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
       if (next.length) {
         setSubjects(next);
@@ -71,7 +73,7 @@ export default function HighSchoolSchoolProjectsScreen() {
     } finally {
       setLoadingContext(false);
     }
-  }, [classLevel, subject]);
+  }, [board, classLevel, subject]);
 
   const loadChapters = useCallback(async () => {
     try {
@@ -80,7 +82,7 @@ export default function HighSchoolSchoolProjectsScreen() {
         setChapter("");
         return;
       }
-      const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/class/${classLevel}/subject/${encodeURIComponent(subject)}`);
+      const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${classLevel}/subject/${encodeURIComponent(subject)}/topics`);
       const next = (data?.subject?.chapters || data?.chapters || [])
         .map((item) => String(item.chapter_name || item.title || item.name || "").trim())
         .filter(Boolean)
@@ -92,7 +94,7 @@ export default function HighSchoolSchoolProjectsScreen() {
       setChapters([]);
       setChapter("");
     }
-  }, [classLevel, subject]);
+  }, [board, classLevel, subject]);
 
   useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
   useFocusEffect(useCallback(() => { loadChapters(); }, [loadChapters]));
@@ -103,6 +105,7 @@ export default function HighSchoolSchoolProjectsScreen() {
     try {
       const { data } = await api.post<{ source?: "ai" | "fallback"; result?: SchoolProjectsResult }>("/api/ai/highschool/school-projects", {
         classLevel,
+        board,
         subject,
         chapter,
         goal,
@@ -144,6 +147,9 @@ export default function HighSchoolSchoolProjectsScreen() {
         ) : null}
 
         <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[styles.label, { color: colors.text }]}>Board</Text>
+          <ChipRow values={BOARD_OPTIONS} selected={board} onSelect={setBoard} colors={colors} />
+
           <Text style={[styles.label, { color: colors.text }]}>Class</Text>
           <ChipRow values={CLASS_OPTIONS} selected={classLevel} onSelect={setClassLevel} colors={colors} />
 

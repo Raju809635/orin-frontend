@@ -21,6 +21,9 @@ import { useLearner } from "@/context/LearnerContext";
 import { notify } from "@/utils/notify";
 
 type AssistantMode = "general" | "academic";
+type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
+type AcademicChapter = { chapter_name?: string; title?: string; name?: string };
+type AcademicSubjectResponse = { subject?: { chapters?: AcademicChapter[] }; chapters?: AcademicChapter[]; message?: string };
 type HistoryItem = {
   conversationId: string;
   title: string;
@@ -30,6 +33,14 @@ type HistoryItem = {
   lastResponsePreview?: string;
 };
 type ThreadMessage = { id?: string; prompt: string; response: string; createdAt?: string };
+
+const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
+const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
+
+function subjectLabel(item: AcademicSubject | string) {
+  if (typeof item === "string") return item;
+  return String(item.name || item.subject || item.key || item.slug || "").trim();
+}
 
 function fallbackTitle(prompt: string) {
   const clean = String(prompt || "").trim().replace(/\s+/g, " ");
@@ -95,9 +106,12 @@ export default function HighSchoolStudyAssistantScreen() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [board, setBoard] = useState("SSC");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [subject, setSubject] = useState("Science");
   const [chapter, setChapter] = useState("");
+  const [subjects, setSubjects] = useState<string[]>([]);
+  const [chapters, setChapters] = useState<string[]>([]);
   const [renameFor, setRenameFor] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
 
@@ -139,6 +153,35 @@ export default function HighSchoolStudyAssistantScreen() {
     }, [loadHistory])
   );
 
+  const loadAcademicSubjects = useCallback(async () => {
+    try {
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[] }>(`/api/academics/${board}/class/${classLevel}/subjects`);
+      const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
+      setSubjects(next);
+      if (next.length && !next.includes(subject)) setSubject(next[0]);
+    } catch {
+      setSubjects([]);
+    }
+  }, [board, classLevel, subject]);
+
+  const loadAcademicChapters = useCallback(async () => {
+    if (!subject) return;
+    try {
+      const { data } = await api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${classLevel}/subject/${encodeURIComponent(subject)}/topics`);
+      const next = (data?.subject?.chapters || data?.chapters || [])
+        .map((item) => String(item.chapter_name || item.title || item.name || "").trim())
+        .filter(Boolean)
+        .slice(0, 12);
+      setChapters(next);
+      if (next.length && chapter && !next.includes(chapter)) setChapter(next[0]);
+    } catch {
+      setChapters([]);
+    }
+  }, [board, chapter, classLevel, subject]);
+
+  useFocusEffect(useCallback(() => { void loadAcademicSubjects(); }, [loadAcademicSubjects]));
+  useFocusEffect(useCallback(() => { void loadAcademicChapters(); }, [loadAcademicChapters]));
+
   async function sendPrompt(seed?: string) {
     const prompt = String(seed ?? message).trim();
     if (!prompt || sending) return;
@@ -155,7 +198,7 @@ export default function HighSchoolStudyAssistantScreen() {
         message: prompt,
         conversationId: conversationId || undefined,
         assistantMode: mode,
-        academicContext: mode === "academic" ? { classLevel, subject, chapter } : undefined
+        academicContext: mode === "academic" ? { board, classLevel, subject, chapter } : undefined
       });
 
       const nextId = String(data?.conversationId || conversationId || "").trim();
@@ -225,7 +268,7 @@ export default function HighSchoolStudyAssistantScreen() {
         <View style={styles.headerTextWrap}>
           <Text style={[styles.headerTitle, { color: colors.text }]}>High School Assistant</Text>
           <Text style={[styles.headerMeta, { color: colors.textMuted }]}>
-            {mode === "academic" ? `Class ${classLevel}${subject ? ` • ${subject}` : ""}` : "General mode"}
+            {mode === "academic" ? `${board} • Class ${classLevel}${subject ? ` • ${subject}` : ""}` : "General mode"}
           </Text>
         </View>
       </View>
@@ -311,9 +354,58 @@ export default function HighSchoolStudyAssistantScreen() {
             {mode === "academic" ? (
               <View style={[styles.contextCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
                 <Text style={[styles.contextTitle, { color: colors.text }]}>Academic Context</Text>
-                <TextInput style={[styles.contextInput, { borderColor: colors.border, color: colors.text }]} value={classLevel} onChangeText={setClassLevel} placeholder="Class" placeholderTextColor={colors.textMuted} />
-                <TextInput style={[styles.contextInput, { borderColor: colors.border, color: colors.text }]} value={subject} onChangeText={setSubject} placeholder="Subject" placeholderTextColor={colors.textMuted} />
-                <TextInput style={[styles.contextInput, { borderColor: colors.border, color: colors.text }]} value={chapter} onChangeText={setChapter} placeholder="Chapter (optional)" placeholderTextColor={colors.textMuted} />
+                <Text style={[styles.historyTitle, { color: colors.textMuted, marginBottom: 0 }]}>Board</Text>
+                <View style={styles.chipRow}>
+                  {BOARD_OPTIONS.map((item) => {
+                    const active = board === item;
+                    return (
+                      <TouchableOpacity key={item} style={[styles.chip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surface }]} onPress={() => setBoard(item)}>
+                        <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>{item}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={[styles.historyTitle, { color: colors.textMuted, marginBottom: 0 }]}>Class</Text>
+                <View style={styles.chipRow}>
+                  {CLASS_OPTIONS.map((item) => {
+                    const active = classLevel === item;
+                    return (
+                      <TouchableOpacity key={item} style={[styles.chip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surface }]} onPress={() => setClassLevel(item)}>
+                        <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>{item}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={[styles.historyTitle, { color: colors.textMuted, marginBottom: 0 }]}>Subject</Text>
+                {subjects.length ? (
+                  <View style={styles.chipRow}>
+                    {subjects.slice(0, 10).map((item) => {
+                      const active = subject === item;
+                      return (
+                        <TouchableOpacity key={item} style={[styles.chip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surface }]} onPress={() => setSubject(item)}>
+                          <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>{item}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <TextInput style={[styles.contextInput, { borderColor: colors.border, color: colors.text }]} value={subject} onChangeText={setSubject} placeholder="Subject" placeholderTextColor={colors.textMuted} />
+                )}
+                <Text style={[styles.historyTitle, { color: colors.textMuted, marginBottom: 0 }]}>Chapter / Topic</Text>
+                {chapters.length ? (
+                  <View style={styles.chipRow}>
+                    {chapters.slice(0, 10).map((item) => {
+                      const active = chapter === item;
+                      return (
+                        <TouchableOpacity key={item} style={[styles.chip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surface }]} onPress={() => setChapter(item)}>
+                          <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>{item}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <TextInput style={[styles.contextInput, { borderColor: colors.border, color: colors.text }]} value={chapter} onChangeText={setChapter} placeholder="Chapter (optional)" placeholderTextColor={colors.textMuted} />
+                )}
               </View>
             ) : null}
 

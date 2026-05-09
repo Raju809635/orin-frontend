@@ -47,6 +47,7 @@ type AcademicChapter = { title?: string; name?: string };
 type AcademicSubjectResponse = { subject?: { chapters?: AcademicChapter[] }; chapters?: AcademicChapter[] };
 
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
+const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
 const SUBJECTS = ["Mathematics", "Science", "Social Science", "English", "Telugu", "Hindi", "Computer"];
 const LEVELS = ["Basics", "Average", "Strong"];
 const TIMES = ["30-45 min", "1-2 hours", "2+ hours"];
@@ -99,6 +100,7 @@ function barColor(value: number) {
 export default function HighSchoolStudyPlannerScreen() {
   const { colors, isDark } = useAppTheme();
   const { className } = useLearner();
+  const [board, setBoard] = useState("SSC");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [subjects, setSubjects] = useState<string[]>(SUBJECTS);
   const [chapters, setChapters] = useState<string[]>([]);
@@ -121,7 +123,7 @@ export default function HighSchoolStudyPlannerScreen() {
 
   const loadSubjects = useCallback(async () => {
     try {
-      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/class/${classLevel}/subjects`);
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/${board}/class/${classLevel}/subjects`);
       const next = (data?.subjects || []).map(subjectLabel).filter(Boolean);
       if (next.length) {
         setSubjects(next);
@@ -134,11 +136,11 @@ export default function HighSchoolStudyPlannerScreen() {
     } catch {
       setSubjects(SUBJECTS);
     }
-  }, [classLevel, subject]);
+  }, [board, classLevel, subject]);
 
   const loadChapters = useCallback(async () => {
     try {
-      const { data } = await api.get<AcademicSubjectResponse & { message?: string }>(`/api/academics/class/${classLevel}/subject/${encodeURIComponent(subject)}`);
+      const { data } = await api.get<AcademicSubjectResponse & { message?: string }>(`/api/academics/${board}/class/${classLevel}/subject/${encodeURIComponent(subject)}/topics`);
       const next = (data?.subject?.chapters || data?.chapters || [])
         .map((item: any) => String(item.chapter_name || item.title || item.name || "").trim())
         .filter(Boolean)
@@ -149,7 +151,7 @@ export default function HighSchoolStudyPlannerScreen() {
     } catch {
       setChapters([]);
     }
-  }, [classLevel, skills, subject]);
+  }, [board, classLevel, skills, subject]);
 
   useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
   useFocusEffect(useCallback(() => { loadChapters(); }, [loadChapters]));
@@ -175,6 +177,7 @@ export default function HighSchoolStudyPlannerScreen() {
         skills,
         currentLevel,
         timePerDay,
+        board,
         classLevel
       });
       setPlan(data?.plan || fallback);
@@ -207,6 +210,18 @@ export default function HighSchoolStudyPlannerScreen() {
       ) : null}
 
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <Text style={[styles.label, { color: colors.text }]}>Board</Text>
+        <View style={styles.subjectRow}>
+          {BOARD_OPTIONS.map((item) => {
+            const active = item === board;
+            return (
+              <TouchableOpacity key={item} style={[styles.subjectChip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surfaceAlt }]} onPress={() => setBoard(item)}>
+                <Text style={[styles.subjectText, { color: active ? colors.accent : colors.textMuted }]}>{item}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <Text style={[styles.label, { color: colors.text }]}>Class</Text>
         <View style={styles.subjectRow}>
           {CLASS_OPTIONS.map((item) => {

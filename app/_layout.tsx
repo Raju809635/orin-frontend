@@ -23,6 +23,7 @@ import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { LearnerProvider, useLearner } from "@/context/LearnerContext";
 import { ThemeProvider, useAppTheme } from "@/context/ThemeContext";
 import { api, pingBackendReady } from "@/lib/api";
+import { recordAppMetric } from "@/lib/appMetrics";
 import { LEARNER_ONBOARDING_COMPLETING_KEY, LEARNER_ONBOARDING_PENDING_KEY } from "@/lib/learnerExperience";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -140,6 +141,10 @@ function RootDrawer() {
     community: []
   });
 
+  useEffect(() => {
+    recordAppMetric("app_open");
+  }, []);
+
   const trackedRoute = buildTrackedRoute(pathname, globalParams);
 
   useEffect(() => {
@@ -251,6 +256,7 @@ function RootDrawer() {
       pathname.startsWith("/mentor/") ||
       pathname.startsWith("/settings") ||
       pathname.startsWith("/notifications") ||
+      pathname.startsWith("/premium") ||
       pathname.startsWith("/my-profile") ||
       pathname.startsWith("/learner-onboarding") ||
       pathname.startsWith("/institution-management") ||
@@ -615,6 +621,7 @@ function RootDrawer() {
           <DrawerItem {...drawerItemTheme} label="Profile" icon={({ color, size }) => <Ionicons name="person-outline" size={size} color={color} />} onPress={() => openDrawerRoute(profilePath)} />
           <DrawerItem {...drawerItemTheme} label="News & Updates" icon={({ color, size }) => <Ionicons name="newspaper-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/news-updates")} />
           <DrawerItem {...drawerItemTheme} label="Certificates" icon={({ color, size }) => <Ionicons name="ribbon-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/community/certifications")} />
+          <DrawerItem {...drawerItemTheme} label="ORIN Premium" icon={({ color, size }) => <Ionicons name="sparkles-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/premium")} />
           <DrawerItem {...drawerItemTheme} label="Saved" icon={({ color, size }) => <Ionicons name="bookmark-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/saved-posts")} />
           <DrawerItem {...drawerItemTheme} label="Settings" icon={({ color, size }) => <Ionicons name="settings-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/settings")} />
           <DrawerItem {...drawerItemTheme} label="Notifications" icon={({ color, size }) => <Ionicons name="notifications-outline" size={size} color={color} />} onPress={() => openDrawerRoute("/notifications")} />
@@ -783,6 +790,7 @@ function RootDrawer() {
           <Drawer.Screen name="help" options={{ title: "Help & Support", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="settings" options={{ title: "Settings", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="notifications" options={{ title: "Notifications", drawerItemStyle: { display: "none" } }} />
+          <Drawer.Screen name="premium" options={{ title: "ORIN Premium", drawerItemStyle: { display: "none" }, headerShown: false }} />
           <Drawer.Screen name="saved-ai" options={{ title: "Saved AI", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="saved-posts" options={{ title: "Saved Posts", drawerItemStyle: { display: "none" } }} />
           <Drawer.Screen name="student-dashboard" options={{ title: "Student Dashboard", drawerItemStyle: { display: "none" }, headerShown: false }} />

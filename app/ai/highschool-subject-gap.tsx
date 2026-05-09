@@ -63,6 +63,7 @@ const SUBJECT_META: Record<SubjectName, { icon: keyof typeof Ionicons.glyphMap; 
 };
 
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
+const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
 
 const SUBJECT_TOPICS: Record<string, string[]> = {
   Mathematics: ["Fractions", "Algebra", "Geometry", "Numbers"],
@@ -324,6 +325,7 @@ export default function HighSchoolSubjectGapScreen() {
   const [loadingReport, setLoadingReport] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [quizStarted, setQuizStarted] = useState(false);
+  const [selectedBoard, setSelectedBoard] = useState("SSC");
   const [selectedClass, setSelectedClass] = useState(className || "10");
   const [subjects, setSubjects] = useState<string[]>(Object.keys(SUBJECT_TOPICS));
   const [subjectTopics, setSubjectTopics] = useState<Record<string, string[]>>(SUBJECT_TOPICS);
@@ -342,7 +344,7 @@ export default function HighSchoolSubjectGapScreen() {
   const loadAcademicSubjects = useCallback(async () => {
     try {
       setLoadingAcademicContext(true);
-      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/class/${selectedClass}/subjects`);
+      const { data } = await api.get<{ subjects?: (AcademicSubject | string)[]; message?: string }>(`/api/academics/${selectedBoard}/class/${selectedClass}/subjects`);
       const nextSubjects = (data?.subjects || []).map(subjectLabel).filter(Boolean);
       if (nextSubjects.length) {
         setSubjects(nextSubjects);
@@ -357,12 +359,12 @@ export default function HighSchoolSubjectGapScreen() {
     } finally {
       setLoadingAcademicContext(false);
     }
-  }, [selectedClass, selectedSubject]);
+  }, [selectedBoard, selectedClass, selectedSubject]);
 
   const loadAcademicTopics = useCallback(async () => {
     if (!selectedSubject) return;
     try {
-      const { data } = await api.get<AcademicSubjectResponse & { message?: string }>(`/api/academics/class/${selectedClass}/subject/${encodeURIComponent(selectedSubject)}`);
+      const { data } = await api.get<AcademicSubjectResponse & { message?: string }>(`/api/academics/${selectedBoard}/class/${selectedClass}/subject/${encodeURIComponent(selectedSubject)}/topics`);
       const chapters = data?.subject?.chapters || data?.chapters || [];
       const nextTopics = chapters.map((item: any) => String(item.chapter_name || item.title || item.name || "").trim()).filter(Boolean).slice(0, 12);
       if (nextTopics.length) {
@@ -374,7 +376,7 @@ export default function HighSchoolSubjectGapScreen() {
     } catch {
       setSubjectTopics((prev) => ({ ...SUBJECT_TOPICS, ...prev }));
     }
-  }, [selectedClass, selectedSubject, selectedTopic]);
+  }, [selectedBoard, selectedClass, selectedSubject, selectedTopic]);
 
   useFocusEffect(useCallback(() => { loadAcademicSubjects(); }, [loadAcademicSubjects]));
   useFocusEffect(useCallback(() => { loadAcademicTopics(); }, [loadAcademicTopics]));
@@ -390,6 +392,7 @@ export default function HighSchoolSubjectGapScreen() {
       }>("/api/ai/highschool/subject-gap/quiz", {
         subjects: [subject],
         questionCount: focusTopic ? 5 : 9,
+        board: selectedBoard,
         classLevel: selectedClass || className || "High School",
         focusTopic: focusTopic || undefined
       });
@@ -498,6 +501,22 @@ export default function HighSchoolSubjectGapScreen() {
               Choose class, subject, and topic. ORIN creates a short AI quiz, then detects gaps from your score.
             </Text>
 
+            <Text style={[styles.setupLabel, { color: colors.text }]}>Board</Text>
+            <View style={styles.topicWrap}>
+              {BOARD_OPTIONS.map((item) => {
+                const active = selectedBoard === item;
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.topicChip, { backgroundColor: active ? colors.accentSoft : colors.surfaceAlt, borderColor: active ? colors.accent : colors.border }]}
+                    onPress={() => setSelectedBoard(item)}
+                  >
+                    <Text style={[styles.topicChipText, { color: active ? colors.accent : colors.textMuted }]}>{item}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             <Text style={[styles.setupLabel, { color: colors.text }]}>Class</Text>
             <View style={styles.topicWrap}>
               {CLASS_OPTIONS.map((item) => {
@@ -515,7 +534,7 @@ export default function HighSchoolSubjectGapScreen() {
             </View>
 
             <Text style={[styles.setupLabel, { color: colors.text }]}>Subject {loadingAcademicContext ? "(loading...)" : ""}</Text>
-            <View style={styles.selectorGrid}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subjectScroll}>
               {subjects.slice(0, 8).map((subject) => {
                 const active = selectedSubject === subject;
                 const meta = getSubjectMeta(subject);
@@ -533,7 +552,7 @@ export default function HighSchoolSubjectGapScreen() {
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
 
             <Text style={[styles.setupLabel, { color: colors.text }]}>Topic</Text>
             <View style={styles.topicWrap}>
@@ -836,9 +855,10 @@ const styles = StyleSheet.create({
   loadingText: { textAlign: "center", lineHeight: 20, fontWeight: "700" },
   setupCard: { borderWidth: 1, borderRadius: 26, padding: 17, gap: 14 },
   setupLabel: { fontSize: 14, fontWeight: "900", marginTop: 4 },
-  selectorGrid: { flexDirection: "row", gap: 10 },
-  selectorTile: { flex: 1, minHeight: 82, borderWidth: 1, borderRadius: 18, alignItems: "center", justifyContent: "center", gap: 7, padding: 10 },
-  selectorText: { fontWeight: "900", fontSize: 12, textAlign: "center" },
+  selectorGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  subjectScroll: { gap: 10, paddingRight: 8, paddingBottom: 2 },
+  selectorTile: { width: 132, minHeight: 78, borderWidth: 1, borderRadius: 18, alignItems: "center", justifyContent: "center", gap: 7, paddingHorizontal: 12, paddingVertical: 10 },
+  selectorText: { fontWeight: "900", fontSize: 12, lineHeight: 16, textAlign: "center" },
   topicWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   topicChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   topicChipText: { fontWeight: "900" },
