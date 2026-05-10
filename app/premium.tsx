@@ -201,7 +201,7 @@ export default function PremiumScreen() {
 
       <View style={[styles.hero, { backgroundColor: isDark ? "#14251D" : "#EAFBF1", borderColor: colors.border }]}>
         <View style={styles.heroText}>
-          <Text style={[styles.eyebrow, { color: colors.accent }]}>Mission Vishnu</Text>
+          <Text style={[styles.eyebrow, { color: colors.accent }]}>ORIN Premium</Text>
           <Text style={[styles.title, { color: colors.text }]}>Full academic year support</Text>
           <Text style={[styles.subtitle, { color: colors.textMuted }]}>
             Premium unlocks the ORIN AI study suite, community growth tools, certificates, and higher daily AI support.
