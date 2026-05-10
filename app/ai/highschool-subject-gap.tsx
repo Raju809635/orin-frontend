@@ -320,10 +320,11 @@ export default function HighSchoolSubjectGapScreen() {
   const [infoVisible, setInfoVisible] = useState(false);
   const [practiceTopic, setPracticeTopic] = useState<string | null>(null);
   const [report, setReport] = useState<GapReport>(() => buildLocalReport(FALLBACK_QUESTIONS, {}));
-  const [quizSource, setQuizSource] = useState<"ai" | "fallback">("fallback");
+  const [quizSource, setQuizSource] = useState<"dataset_ai" | "dataset_deterministic" | "data_pending">("data_pending");
   const [loadingQuiz, setLoadingQuiz] = useState(false);
   const [loadingReport, setLoadingReport] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [, setDataPendingReason] = useState("");
   const [quizStarted, setQuizStarted] = useState(false);
   const [selectedBoard, setSelectedBoard] = useState("SSC");
   const [selectedClass, setSelectedClass] = useState(className || "10");
@@ -387,25 +388,42 @@ export default function HighSchoolSubjectGapScreen() {
     setQuizStarted(true);
     try {
       const { data } = await api.post<{
-        source?: "ai" | "fallback";
+        source?: "dataset_ai" | "dataset_deterministic" | "data_pending";
+        dataPendingReason?: string;
+        isTopicGrounded?: boolean;
+        datasetScope?: { board?: string; classLevel?: string; subject?: string; chapter?: string };
         quiz?: { questions?: GapQuestion[] };
       }>("/api/ai/highschool/subject-gap/quiz", {
         subjects: [subject],
-        questionCount: focusTopic ? 5 : 9,
+        questionCount: 12,
         board: selectedBoard,
         classLevel: selectedClass || className || "High School",
         focusTopic: focusTopic || undefined
       });
-      const nextQuestions = Array.isArray(data?.quiz?.questions) && data.quiz.questions.length ? data.quiz.questions : FALLBACK_QUESTIONS;
-      setActiveQuestions(nextQuestions);
-      setQuizSource(data?.source === "ai" ? "ai" : "fallback");
-      setStatusMessage(data?.source === "ai" ? "AI created this quiz from high-school subject intelligence." : "Using safe offline questions until AI is available.");
+      const nextSource = data?.source || "data_pending";
+      setQuizSource(nextSource);
+      setDataPendingReason(String(data?.dataPendingReason || ""));
+      const nextQuestions = Array.isArray(data?.quiz?.questions) ? data.quiz.questions : [];
+      if (nextSource === "data_pending") {
+        setActiveQuestions([]);
+        setQuizStarted(false);
+      } else {
+        setActiveQuestions(nextQuestions.length ? nextQuestions : FALLBACK_QUESTIONS);
+      }
+      setStatusMessage(
+        nextSource === "dataset_ai"
+          ? "AI created SSC 10 topic-grounded MCQs from extracted academics."
+          : nextSource === "dataset_deterministic"
+            ? "Using verified SSC 10 topic dataset questions."
+            : (data?.dataPendingReason || "SSC 10 topic data is pending for this board/class/subject selection.")
+      );
     } catch (error) {
       const fallback = focusTopic
         ? FALLBACK_QUESTIONS.filter((question) => question.subject === subject && question.topic === focusTopic)
         : FALLBACK_QUESTIONS.filter((question) => question.subject === subject);
       setActiveQuestions(fallback.length ? fallback : FALLBACK_QUESTIONS);
-      setQuizSource("fallback");
+      setQuizSource("data_pending");
+      setDataPendingReason("");
       setStatusMessage(getAppErrorMessage(error, "AI quiz is unavailable, so ORIN loaded safe offline questions."));
     } finally {
       setAnswers({});
@@ -420,12 +438,25 @@ export default function HighSchoolSubjectGapScreen() {
     setStatusMessage("");
     const fallbackReport = buildLocalReport(activeQuestions, answers);
     try {
-      const { data } = await api.post<{ source?: "ai" | "fallback"; report?: GapReport }>("/api/ai/highschool/subject-gap/analyze", {
+      const { data } = await api.post<{
+        source?: "dataset_ai" | "dataset_deterministic" | "data_pending";
+        dataPendingReason?: string;
+        report?: GapReport;
+      }>("/api/ai/highschool/subject-gap/analyze", {
         questions: activeQuestions,
-        answers
+        answers,
+        board: selectedBoard,
+        classLevel: selectedClass || className || "10"
       });
       setReport(data?.report || fallbackReport);
-      setStatusMessage(data?.source === "ai" ? "AI converted your real quiz data into a focus plan." : "Report is calculated from your real answers with safe local planning.");
+      const nextSource = data?.source || "data_pending";
+      setStatusMessage(
+        nextSource === "dataset_ai"
+          ? "AI converted your SSC 10 topic quiz data into a focus plan."
+          : nextSource === "dataset_deterministic"
+            ? "Focus plan built from verified SSC 10 topic performance."
+            : (data?.dataPendingReason || "Topic-grounded focus analysis is pending for this board/class.")
+      );
     } catch (error) {
       setReport(fallbackReport);
       setStatusMessage(getAppErrorMessage(error, "Report is calculated locally from your real answers."));

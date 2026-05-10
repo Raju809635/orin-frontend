@@ -88,7 +88,7 @@ export default function ExamStrategyBuilderScreen() {
   const [topicPool, setTopicPool] = useState<TopicOption[]>([]);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [strategy, setStrategy] = useState<StrategyResponse | null>(null);
-  const [source, setSource] = useState<"ai" | "fallback">("fallback");
+  const [source, setSource] = useState<"dataset_ai" | "dataset_deterministic" | "data_pending">("data_pending");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -182,7 +182,13 @@ export default function ExamStrategyBuilderScreen() {
     try {
       setLoading(true);
       setError("");
-      const { data } = await api.post<{ source?: "ai" | "fallback"; strategy?: StrategyResponse }>("/api/ai/highschool/exam-strategy", {
+      const { data } = await api.post<{
+        source?: "dataset_ai" | "dataset_deterministic" | "data_pending";
+        isTopicGrounded?: boolean;
+        datasetScope?: { board?: string; classLevel?: string; subject?: string; chapter?: string };
+        dataPendingReason?: string;
+        strategy?: StrategyResponse;
+      }>("/api/ai/highschool/exam-strategy", {
         examName,
         examDate,
         classLevel,
@@ -192,7 +198,10 @@ export default function ExamStrategyBuilderScreen() {
         topics: selectedTopics
       });
       setStrategy(data.strategy || null);
-      setSource(data.source === "ai" ? "ai" : "fallback");
+      setSource(data.source || "data_pending");
+      if (!data?.strategy && data?.dataPendingReason) {
+        setError(data.dataPendingReason);
+      }
     } catch (err) {
       setError(getAppErrorMessage(err, "Unable to build exam strategy. Please try again."));
       setStrategy(null);
@@ -322,7 +331,13 @@ export default function ExamStrategyBuilderScreen() {
             <View style={{ flex: 1 }}>
               <Text style={[styles.cardTitle, { color: colors.text }]}>Your Exam Strategy</Text>
               <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{strategy.summary}</Text>
-              <Text style={[styles.aiMeta, { color: colors.textMuted }]}>{source === "ai" ? "AI-powered strategy" : "Safe strategy fallback"}</Text>
+              <Text style={[styles.aiMeta, { color: colors.textMuted }]}>
+                {source === "dataset_ai"
+                  ? "AI-powered strategy on extracted SSC 10 topics"
+                  : source === "dataset_deterministic"
+                    ? "Verified SSC 10 topic strategy"
+                    : "Data pending for this board/class selection"}
+              </Text>
             </View>
           </View>
 

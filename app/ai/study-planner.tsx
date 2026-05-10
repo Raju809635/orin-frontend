@@ -171,7 +171,13 @@ export default function HighSchoolStudyPlannerScreen() {
     setStatusMessage("");
     const fallback = buildLocalPlan(subject, goal, skills);
     try {
-      const { data } = await api.post<{ source?: "ai" | "fallback"; plan?: StudyPlan }>("/api/ai/highschool/study-planner", {
+      const { data } = await api.post<{
+        source?: "dataset_ai" | "dataset_deterministic" | "data_pending";
+        isTopicGrounded?: boolean;
+        datasetScope?: { board?: string; classLevel?: string; subject?: string; chapter?: string };
+        dataPendingReason?: string;
+        plan?: StudyPlan;
+      }>("/api/ai/highschool/study-planner", {
         subject,
         goal,
         skills,
@@ -182,7 +188,14 @@ export default function HighSchoolStudyPlannerScreen() {
       });
       setPlan(data?.plan || fallback);
       setChecked({});
-      setStatusMessage(data?.source === "ai" ? "AI created this adaptive study plan." : "Using a safe study plan until AI is available.");
+      const source = data?.source || "data_pending";
+      setStatusMessage(
+        source === "dataset_ai"
+          ? "AI created an SSC 10 topic-grounded adaptive study plan."
+          : source === "dataset_deterministic"
+            ? "Using verified SSC 10 extracted topics for this study plan."
+            : (data?.dataPendingReason || "Topic-aware planning is currently available for SSC Class 10 only.")
+      );
     } catch (err) {
       setPlan(fallback);
       setChecked({});
