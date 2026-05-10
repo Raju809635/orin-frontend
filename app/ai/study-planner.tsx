@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -23,6 +23,18 @@ type PlanWeek = {
   progress: number;
   focus: string;
   tasks: PlanTask[];
+  detail?: {
+    source?: "lesson_dataset" | "topic_dataset" | string;
+    heading?: string;
+    description?: string;
+    summary?: string[];
+    keyPoints?: string[];
+    definitions?: { term: string; meaning: string }[];
+    diagrams?: { title: string; whatToLearn?: string }[];
+    activities?: string[];
+    practice?: string[];
+    quizQuestions?: { id?: string; question: string; options: string[]; correct: string; explanation?: string }[];
+  };
 };
 
 type StudyPlan = {
@@ -111,6 +123,7 @@ export default function HighSchoolStudyPlannerScreen() {
   const [timePerDay, setTimePerDay] = useState("1-2 hours");
   const [plan, setPlan] = useState<StudyPlan | null>(null);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [selectedWeek, setSelectedWeek] = useState<PlanWeek | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
@@ -327,7 +340,7 @@ export default function HighSchoolStudyPlannerScreen() {
 
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <SectionHeader icon="calendar" title="Week View" color="#12B76A" />
-            {plan.weeks.map((week) => <WeekRow key={week.id} week={week} colors={colors} />)}
+            {plan.weeks.map((week) => <WeekRow key={week.id} week={week} colors={colors} onPress={() => setSelectedWeek(week)} />)}
           </View>
 
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -354,8 +367,10 @@ export default function HighSchoolStudyPlannerScreen() {
               <Text style={[styles.adaptiveTitle, { color: colors.text }]}>{plan.adaptivePlan.newFocus}</Text>
               <Text style={[styles.adaptiveText, { color: colors.textMuted }]}>{plan.adaptivePlan.reason}</Text>
             </View>
-            {plan.adaptivePlan.updatedWeeks.slice(0, 4).map((week) => <WeekRow key={`adaptive-${week.id}`} week={week} colors={colors} />)}
+            {plan.adaptivePlan.updatedWeeks.slice(0, 4).map((week) => <WeekRow key={`adaptive-${week.id}`} week={week} colors={colors} onPress={() => setSelectedWeek(week)} />)}
           </View>
+
+          <WeekDetailModal week={selectedWeek} colors={colors} isDark={isDark} onClose={() => setSelectedWeek(null)} />
         </>
       ) : null}
     </ScrollView>
@@ -386,21 +401,120 @@ function SectionHeader({ icon, title, color }: { icon: keyof typeof Ionicons.gly
   );
 }
 
-function WeekRow({ week, colors }: { week: PlanWeek; colors: any }) {
+function WeekRow({ week, colors, onPress }: { week: PlanWeek; colors: any; onPress: () => void }) {
   const statusColor = week.status === "completed" ? "#12B76A" : week.status === "active" ? "#0EA5E9" : "#98A2B3";
   return (
-    <View style={[styles.weekRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+    <TouchableOpacity style={[styles.weekRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={onPress} activeOpacity={0.82}>
       <View style={styles.weekTop}>
         <View style={{ flex: 1 }}>
           <Text style={[styles.weekLabel, { color: colors.textMuted }]}>{week.week}</Text>
           <Text style={[styles.weekTitle, { color: colors.text }]}>{week.title}</Text>
           <Text style={[styles.weekFocus, { color: colors.textMuted }]}>{week.focus}</Text>
         </View>
-        <View style={[styles.statusPill, { backgroundColor: `${statusColor}22` }]}>
-          <Text style={[styles.statusText, { color: statusColor }]}>{week.status}</Text>
+        <View style={styles.weekActions}>
+          <View style={[styles.statusPill, { backgroundColor: `${statusColor}22` }]}>
+            <Text style={[styles.statusText, { color: statusColor }]}>{week.status}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
         </View>
       </View>
       <ProgressTrack value={week.progress} color={statusColor} />
+    </TouchableOpacity>
+  );
+}
+
+function WeekDetailModal({ week, colors, isDark, onClose }: { week: PlanWeek | null; colors: any; isDark: boolean; onClose: () => void }) {
+  const detail = week?.detail;
+  const hasLesson = Boolean(detail?.description || detail?.summary?.length || detail?.keyPoints?.length);
+  return (
+    <Modal visible={Boolean(week)} animationType="slide" transparent onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalSheet, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.modalHeader}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.weekLabel, { color: colors.accent }]}>{week?.week || "Week"}</Text>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>{detail?.heading || week?.title}</Text>
+              <Text style={[styles.planMeta, { color: colors.textMuted }]}>
+                {detail?.source === "lesson_dataset" ? "Extracted lesson content" : "Verified topic path"}
+              </Text>
+            </View>
+            <TouchableOpacity style={[styles.closeButton, { backgroundColor: colors.surfaceAlt }]} onPress={onClose}>
+              <Ionicons name="close" size={20} color={colors.text} />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
+            {hasLesson ? (
+              <>
+                {detail?.description ? <DetailSection title="Topic Explanation" items={[detail.description]} colors={colors} paragraph /> : null}
+                {detail?.summary?.length ? <DetailSection title="Textbook Summary" items={detail.summary} colors={colors} paragraph /> : null}
+                {detail?.keyPoints?.length ? <DetailSection title="Key Points" items={detail.keyPoints} colors={colors} /> : null}
+                {detail?.definitions?.length ? (
+                  <View style={styles.detailBlock}>
+                    <Text style={[styles.detailTitle, { color: colors.text }]}>Definitions</Text>
+                    {detail.definitions.map((item) => (
+                      <View key={`${item.term}-${item.meaning}`} style={[styles.definitionRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                        <Text style={[styles.definitionTerm, { color: colors.text }]}>{item.term}</Text>
+                        <Text style={[styles.definitionMeaning, { color: colors.textMuted }]}>{item.meaning}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {detail?.diagrams?.length ? (
+                  <View style={styles.detailBlock}>
+                    <Text style={[styles.detailTitle, { color: colors.text }]}>Diagrams / Processes</Text>
+                    {detail.diagrams.map((item) => (
+                      <View key={item.title} style={[styles.definitionRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                        <Text style={[styles.definitionTerm, { color: colors.text }]}>{item.title}</Text>
+                        <Text style={[styles.definitionMeaning, { color: colors.textMuted }]}>{item.whatToLearn || "Practice labels, process order, and explanation."}</Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {detail?.activities?.length ? <DetailSection title="Activities From Lesson" items={detail.activities} colors={colors} /> : null}
+                {detail?.practice?.length ? <DetailSection title="Practice For This Week" items={detail.practice} colors={colors} /> : null}
+                {detail?.quizQuestions?.length ? (
+                  <View style={styles.detailBlock}>
+                    <Text style={[styles.detailTitle, { color: colors.text }]}>Quick Quiz Preview</Text>
+                    {detail.quizQuestions.map((item, index) => (
+                      <View key={item.id || `${item.question}-${index}`} style={[styles.quizCard, { backgroundColor: isDark ? "rgba(14,165,233,0.12)" : "#F0F9FF", borderColor: colors.border }]}>
+                        <Text style={[styles.quizQuestion, { color: colors.text }]}>{index + 1}. {item.question}</Text>
+                        {item.options.map((option) => (
+                          <Text key={option} style={[styles.quizOption, { color: option === item.correct ? "#12B76A" : colors.textMuted }]}>- {option}</Text>
+                        ))}
+                        {item.explanation ? <Text style={[styles.quizExplain, { color: colors.textMuted }]}>{item.explanation}</Text> : null}
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <View style={[styles.pendingDetail, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                <Ionicons name="document-text" size={24} color={colors.accent} />
+                <Text style={[styles.detailTitle, { color: colors.text }]}>Full lesson extraction is pending</Text>
+                <Text style={[styles.definitionMeaning, { color: colors.textMuted }]}>
+                  ORIN found the selected topic path, but the full PDF explanation for this exact week is not ready yet. Use the Resource Library PDF for now.
+                </Text>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function DetailSection({ title, items, colors, paragraph = false }: { title: string; items?: string[]; colors: any; paragraph?: boolean }) {
+  const cleanItems = (items || []).map((item) => String(item || "").trim()).filter(Boolean);
+  if (!cleanItems.length) return null;
+  return (
+    <View style={styles.detailBlock}>
+      <Text style={[styles.detailTitle, { color: colors.text }]}>{title}</Text>
+      {cleanItems.map((item) => (
+        <Text key={item} style={[paragraph ? styles.detailParagraph : styles.detailBullet, { color: colors.textMuted }]}>
+          {paragraph ? item : `- ${item}`}
+        </Text>
+      ))}
     </View>
   );
 }
@@ -475,6 +589,7 @@ const styles = StyleSheet.create({
   weekLabel: { fontSize: 11, fontWeight: "900" },
   weekTitle: { fontSize: 14, fontWeight: "900", marginTop: 2 },
   weekFocus: { fontSize: 12, lineHeight: 17, fontWeight: "700", marginTop: 3 },
+  weekActions: { alignItems: "flex-end", gap: 8 },
   statusPill: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 5 },
   statusText: { fontSize: 10, fontWeight: "900", textTransform: "capitalize" },
   taskRow: { minHeight: 56, borderWidth: 1, borderRadius: 16, padding: 10, flexDirection: "row", alignItems: "center", gap: 10 },
@@ -492,5 +607,23 @@ const styles = StyleSheet.create({
   adaptiveFocus: { borderRadius: 18, padding: 13, gap: 4 },
   adaptiveLabel: { fontSize: 11, fontWeight: "900", textTransform: "uppercase" },
   adaptiveTitle: { fontSize: 17, fontWeight: "900" },
-  adaptiveText: { fontWeight: "700", lineHeight: 19 }
+  adaptiveText: { fontWeight: "700", lineHeight: 19 },
+  modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,0.48)" },
+  modalSheet: { maxHeight: "88%", borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, padding: 16, gap: 12 },
+  modalHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  modalTitle: { fontSize: 20, lineHeight: 26, fontWeight: "900" },
+  closeButton: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  modalContent: { gap: 14, paddingBottom: 28 },
+  detailBlock: { gap: 8 },
+  detailTitle: { fontSize: 15, fontWeight: "900" },
+  detailParagraph: { fontSize: 13, lineHeight: 20, fontWeight: "700" },
+  detailBullet: { fontSize: 13, lineHeight: 20, fontWeight: "700" },
+  definitionRow: { borderWidth: 1, borderRadius: 14, padding: 11, gap: 5 },
+  definitionTerm: { fontSize: 13, fontWeight: "900" },
+  definitionMeaning: { fontSize: 12, lineHeight: 18, fontWeight: "700" },
+  quizCard: { borderWidth: 1, borderRadius: 14, padding: 11, gap: 6 },
+  quizQuestion: { fontSize: 13, fontWeight: "900", lineHeight: 19 },
+  quizOption: { fontSize: 12, lineHeight: 18, fontWeight: "800" },
+  quizExplain: { fontSize: 12, lineHeight: 18, fontWeight: "700", marginTop: 2 },
+  pendingDetail: { borderWidth: 1, borderRadius: 16, padding: 14, gap: 8, alignItems: "flex-start" }
 });
