@@ -57,10 +57,7 @@ export function LearnerProvider({ children }: { children: React.ReactNode }) {
       setInstitutionType(String(profile?.institutionType || "").trim());
       await AsyncStorage.setItem(LEARNER_STAGE_CACHE_KEY, nextStage);
     } catch {
-      setLearnerStage("after12");
-      setInstitutionName("");
-      setClassName("");
-      setInstitutionType("");
+      // Keep last known learner context on transient failures to avoid stage/dashboard flicker.
     } finally {
       setHasLoadedProfile(true);
       setLoading(false);
