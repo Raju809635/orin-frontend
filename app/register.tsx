@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
@@ -8,6 +8,17 @@ import { LEARNER_ONBOARDING_PENDING_KEY } from "@/lib/learnerExperience";
 
 type Role = "student" | "mentor";
 type MentorOrgRole = "global_mentor" | "institution_teacher" | "organisation_head";
+type LearnerStage = "highschool" | "after12";
+type InstitutionSearchResult = {
+  id: string;
+  name: string;
+  institutionType: string;
+  district?: string;
+  state?: string;
+  source?: string;
+};
+
+const AFTER12_YEAR_OPTIONS = ["1st Year", "2nd Year", "3rd Year", "4th Year", "Passout"];
 
 const MENTOR_ROLE_OPTIONS: { value: MentorOrgRole; label: string; note: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   {
@@ -34,6 +45,12 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [role, setRole] = useState<Role>("student");
+  const [learnerStage, setLearnerStage] = useState<LearnerStage>("after12");
+  const [after12Year, setAfter12Year] = useState("1st Year");
+  const [institutionQuery, setInstitutionQuery] = useState("");
+  const [selectedInstitution, setSelectedInstitution] = useState<InstitutionSearchResult | null>(null);
+  const [institutionResults, setInstitutionResults] = useState<InstitutionSearchResult[]>([]);
+  const [searchingInstitutions, setSearchingInstitutions] = useState(false);
   const [mentorOrgRole, setMentorOrgRole] = useState<MentorOrgRole>("global_mentor");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +62,11 @@ export default function RegisterScreen() {
     setPassword("");
     setShowPassword(false);
     setRole("student");
+    setLearnerStage("after12");
+    setAfter12Year("1st Year");
+    setInstitutionQuery("");
+    setSelectedInstitution(null);
+    setInstitutionResults([]);
     setMentorOrgRole("global_mentor");
     setError(null);
     setIsSubmitting(false);
@@ -64,6 +86,11 @@ export default function RegisterScreen() {
       return;
     }
     const selectedAssignedClasses: string[] = [];
+    const selectedInstitutionName = String(selectedInstitution?.name || "").trim();
+    if (role === "student" && learnerStage === "after12" && !selectedInstitutionName) {
+      setError("Please select your institution from the list.");
+      return;
+    }
 
     try {
       setIsSubmitting(true);
@@ -73,12 +100,14 @@ export default function RegisterScreen() {
         email: normalizedEmail,
         password,
         role,
+        learnerStage: role === "student" ? learnerStage : undefined,
+        studentYear: role === "student" && learnerStage === "after12" ? after12Year : undefined,
         phoneNumber: role === "mentor" ? normalizedPhone : "",
         mentorOrgRole: role === "mentor" ? mentorOrgRole : undefined,
-        institutionName: "",
-        institutionType: "",
-        institutionDistrict: "",
-        institutionSource: "",
+        institutionName: role === "student" ? selectedInstitutionName : "",
+        institutionType: role === "student" ? String(selectedInstitution?.institutionType || "") : "",
+        institutionDistrict: role === "student" ? String(selectedInstitution?.district || "") : "",
+        institutionSource: role === "student" ? String(selectedInstitution?.source || "") : "",
         assignedClasses: role === "mentor" ? selectedAssignedClasses : []
       });
       if (!response) {
@@ -111,6 +140,46 @@ export default function RegisterScreen() {
       setIsSubmitting(false);
     }
   }
+
+  useEffect(() => {
+    if (role !== "student" || learnerStage !== "after12") {
+      setInstitutionResults([]);
+      setSearchingInstitutions(false);
+      return;
+    }
+
+    const query = institutionQuery.trim();
+    if (query.length < 2) {
+      setInstitutionResults([]);
+      setSearchingInstitutions(false);
+      return;
+    }
+
+    let cancelled = false;
+    setSearchingInstitutions(true);
+    const timer = setTimeout(async () => {
+      try {
+        const { data } = await api.get("/api/auth/institutions/search", {
+          params: {
+            q: query,
+            limit: 8
+          }
+        });
+        if (cancelled) return;
+        const results = Array.isArray(data?.results) ? data.results : [];
+        setInstitutionResults(results);
+      } catch {
+        if (!cancelled) setInstitutionResults([]);
+      } finally {
+        if (!cancelled) setSearchingInstitutions(false);
+      }
+    }, 220);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [institutionQuery, learnerStage, role]);
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
@@ -186,13 +255,6 @@ export default function RegisterScreen() {
                   style={[styles.mentorRoleCard, active && styles.mentorRoleCardActive]}
                   onPress={() => {
                     setMentorOrgRole(item.value);
-                  if (item.value === "global_mentor") {
-                    setInstitutionQuery("");
-                    setSelectedInstitution(null);
-                    setInstitutionResults([]);
-                    setAssignedClassesDraft("");
-                    setAssignedClassPick("");
-                  }
                   }}
                 >
                   <View style={styles.mentorRoleHeader}>
@@ -225,6 +287,83 @@ export default function RegisterScreen() {
               Mentor registrations are reviewed by admin. Your selected mode decides which dashboard tools unlock after approval.
             </Text>
           </View>
+        </>
+      ) : null}
+
+      {role === "student" ? (
+        <>
+          <Text style={styles.label}>Learning Stage</Text>
+          <View style={styles.roleRow}>
+            <TouchableOpacity
+              style={[styles.roleButton, learnerStage === "highschool" && styles.roleButtonActive]}
+              onPress={() => setLearnerStage("highschool")}
+            >
+              <Text style={[styles.roleButtonText, learnerStage === "highschool" && styles.roleButtonTextActive]}>
+                High School
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.roleButton, learnerStage === "after12" && styles.roleButtonActive]}
+              onPress={() => setLearnerStage("after12")}
+            >
+              <Text style={[styles.roleButtonText, learnerStage === "after12" && styles.roleButtonTextActive]}>
+                After 12
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {learnerStage === "after12" ? (
+            <>
+              <Text style={styles.label}>Institution</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Search institution from list"
+                placeholderTextColor="#6B7280"
+                value={institutionQuery}
+                onChangeText={(value) => {
+                  setInstitutionQuery(value);
+                  const current = String(selectedInstitution?.name || "");
+                  if (value.trim() !== current.trim()) setSelectedInstitution(null);
+                }}
+              />
+              {searchingInstitutions ? <ActivityIndicator size="small" color="#1F7A4C" style={styles.searchLoader} /> : null}
+              {institutionResults.length ? (
+                <View style={styles.suggestionBox}>
+                  {institutionResults.map((item) => (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={styles.suggestionItem}
+                      onPress={() => {
+                        setSelectedInstitution(item);
+                        setInstitutionQuery(item.name);
+                        setInstitutionResults([]);
+                      }}
+                    >
+                      <Text style={styles.suggestionTitle}>{item.name}</Text>
+                      <Text style={styles.suggestionMeta}>{[item.institutionType, item.district, item.state].filter(Boolean).join(" | ")}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+              <Text style={styles.smallHint}>Pick from list only, typing free-form is disabled for after-12 signup.</Text>
+
+              <Text style={styles.label}>Year</Text>
+              <View style={styles.selectionWrap}>
+                {AFTER12_YEAR_OPTIONS.map((option) => {
+                  const active = after12Year === option;
+                  return (
+                    <TouchableOpacity
+                      key={option}
+                      style={[styles.optionChip, active && styles.optionChipActive]}
+                      onPress={() => setAfter12Year(option)}
+                    >
+                      <Text style={[styles.optionText, active && styles.optionTextActive]}>{option}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
         </>
       ) : null}
 
@@ -386,6 +525,32 @@ const styles = StyleSheet.create({
     paddingVertical: 8
   },
   classChipText: {
+    color: "#1F7A4C",
+    fontWeight: "800"
+  },
+  selectionWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12
+  },
+  optionChip: {
+    borderWidth: 1,
+    borderColor: "#D0D5DD",
+    backgroundColor: "#FFF",
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8
+  },
+  optionChipActive: {
+    borderColor: "#1F7A4C",
+    backgroundColor: "#E8F5EE"
+  },
+  optionText: {
+    color: "#344054",
+    fontWeight: "600"
+  },
+  optionTextActive: {
     color: "#1F7A4C",
     fontWeight: "800"
   },

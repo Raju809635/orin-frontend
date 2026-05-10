@@ -13,13 +13,11 @@ import {
 } from "react-native";
 import { api } from "@/lib/api";
 import { learnerStageLabel, normalizeLearnerStage, type LearnerStage } from "@/lib/learnerExperience";
-import { useLearner } from "@/context/LearnerContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
 import { pickAndUploadProfilePhoto } from "@/utils/profilePhotoUpload";
 import { pickAndUploadResumeFile } from "@/utils/resumeUpload";
 import DateField from "@/components/profile/date-field";
-import { useRouter } from "expo-router";
 import ClassSectionSelector from "@/components/ClassSectionSelector";
 
 type ProfileProject = {
@@ -166,14 +164,7 @@ const INSTITUTION_TYPE_OPTIONS = [
   "University"
 ];
 const PROFILE_TYPE_OPTIONS: StudentProfile["profileType"][] = ["student", "graduate", "job_seeker"];
-const LEARNER_STAGE_OPTIONS: { value: LearnerStage; label: string }[] = [
-  { value: "highschool", label: "High School" },
-  { value: "after12", label: "After 12" }
-];
-
 export default function StudentProfileScreen() {
-  const router = useRouter();
-  const { refresh: refreshLearner } = useLearner();
   const { colors } = useAppTheme();
   const [profile, setProfile] = useState<StudentProfile>(emptyProfile);
   const [loading, setLoading] = useState(true);
@@ -355,40 +346,6 @@ export default function StudentProfileScreen() {
     }));
   };
 
-  async function persistLearnerStage(nextStage: LearnerStage) {
-    const normalizedStage = normalizeLearnerStage(nextStage) === "kid" ? "highschool" : normalizeLearnerStage(nextStage);
-    const selectedInstitutionName = String(profile.institutionName || profile.collegeName || "").trim();
-    const nextInstitutionType =
-      normalizedStage === "kid" || normalizedStage === "highschool"
-        ? profile.institutionType || "School"
-        : profile.institutionType;
-
-    setProfile((prev) => ({
-      ...prev,
-      learnerStage: normalizedStage,
-      institutionType: nextInstitutionType
-    }));
-
-    try {
-      setSaving(true);
-      setError(null);
-      await api.patch("/api/profiles/student/me", {
-        learnerStage: normalizedStage,
-        institutionName: selectedInstitutionName,
-        collegeName: selectedInstitutionName,
-        institutionType: nextInstitutionType,
-        className: String(profile.className || "").trim(),
-        state: String(profile.state || "").trim()
-      });
-      await refreshLearner();
-      notify("Learning stage updated");
-    } catch (e: any) {
-      setError(e?.response?.data?.message || "Unable to update learning stage");
-    } finally {
-      setSaving(false);
-    }
-  }
-
   async function save() {
     try {
       setSaving(true);
@@ -408,7 +365,6 @@ export default function StudentProfileScreen() {
         institutionDistrict: String(profile.institutionDistrict || "").trim(),
         institutionSource: String(profile.institutionSource || "").trim(),
         className: String(profile.className || "").trim(),
-        learnerStage: normalizeLearnerStage(profile.learnerStage),
         collegeName: selectedInstitutionName,
         state: String(profile.state || "").trim(),
         skills: parseCommaSeparated(skillsDraft),
@@ -600,9 +556,9 @@ export default function StudentProfileScreen() {
               {profile.className ? ` | ${profile.className}` : ""}
             </Text>
           </View>
-          <TouchableOpacity style={[styles.changeBtn, { backgroundColor: colors.accentSoft }]} onPress={() => router.push("/learner-onboarding" as never)}>
-            <Text style={[styles.changeBtnText, { color: colors.accent }]}>Change</Text>
-          </TouchableOpacity>
+          <View style={[styles.changeBtn, { backgroundColor: colors.surfaceAlt }]}>
+            <Text style={[styles.changeBtnText, { color: colors.textMuted }]}>Locked</Text>
+          </View>
         </View>
       </View>
 
@@ -661,29 +617,14 @@ export default function StudentProfileScreen() {
 
       <Text style={[styles.label, { color: colors.text }]}>Learning Stage</Text>
       <View style={styles.selectionWrap}>
-        {LEARNER_STAGE_OPTIONS.map((option) => {
-          const active = profile.learnerStage === option.value;
-          return (
-            <TouchableOpacity
-              key={option.value}
-              style={[
-                styles.optionChip,
-                { backgroundColor: colors.surfaceAlt, borderColor: colors.border },
-                active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]
-              ]}
-              onPress={() =>
-                void persistLearnerStage(option.value)
-              }
-            >
-              <Text style={[styles.optionText, { color: colors.textMuted }, active && [styles.optionTextActive, { color: colors.accent }]]}>
-                {option.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+        <View style={[styles.optionChip, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
+          <Text style={[styles.optionTextActive, { color: colors.accent }]}>
+            {learnerStageLabel(profile.learnerStage)}
+          </Text>
+        </View>
       </View>
       <Text style={[styles.helperText, { color: colors.textMuted }]}>
-        Existing ORIN users stay in After 12 mode by default. Tapping a stage updates it immediately.
+        Learning stage is set during onboarding and cannot be changed from profile.
       </Text>
 
       <Text style={[styles.label, { color: colors.text }]}>Institution Type</Text>

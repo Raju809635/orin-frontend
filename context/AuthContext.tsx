@@ -14,6 +14,8 @@ type RegisterPayload = {
   email: string;
   password: string;
   role: "student" | "mentor";
+  learnerStage?: "highschool" | "after12";
+  studentYear?: string;
   phoneNumber?: string;
   mentorOrgRole?: "global_mentor" | "institution_teacher" | "organisation_head";
   institutionName?: string;
