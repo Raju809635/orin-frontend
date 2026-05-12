@@ -324,6 +324,7 @@ export default function HighSchoolSubjectGapScreen() {
   const [loadingQuiz, setLoadingQuiz] = useState(false);
   const [loadingReport, setLoadingReport] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [engineStatus, setEngineStatus] = useState("");
   const [, setDataPendingReason] = useState("");
   const [quizStarted, setQuizStarted] = useState(false);
   const [selectedBoard, setSelectedBoard] = useState("SSC");
@@ -393,6 +394,7 @@ export default function HighSchoolSubjectGapScreen() {
         isTopicGrounded?: boolean;
         datasetScope?: { board?: string; classLevel?: string; subject?: string; chapter?: string };
         quiz?: { questions?: GapQuestion[] };
+        meta?: { aiEngine?: { enabled?: boolean; reason?: string; hits?: number } };
       }>("/api/ai/highschool/subject-gap/quiz", {
         subjects: [subject],
         questionCount: 12,
@@ -417,6 +419,14 @@ export default function HighSchoolSubjectGapScreen() {
             ? "Using verified SSC 10 topic dataset questions."
             : (data?.dataPendingReason || "SSC 10 topic data is pending for this board/class/subject selection.")
       );
+      const aiEngine = data?.meta?.aiEngine;
+      setEngineStatus(
+        aiEngine
+          ? aiEngine.enabled
+            ? `AI Engine connected • ${aiEngine.hits || 0} context hits`
+            : `AI Engine fallback • ${aiEngine.reason || "deterministic dataset used"}`
+          : ""
+      );
     } catch (error) {
       const fallback = focusTopic
         ? FALLBACK_QUESTIONS.filter((question) => question.subject === subject && question.topic === focusTopic)
@@ -425,6 +435,7 @@ export default function HighSchoolSubjectGapScreen() {
       setQuizSource("data_pending");
       setDataPendingReason("");
       setStatusMessage(getAppErrorMessage(error, "AI quiz is unavailable, so ORIN loaded safe offline questions."));
+      setEngineStatus("");
     } finally {
       setAnswers({});
       setCurrentIndex(0);
@@ -442,6 +453,7 @@ export default function HighSchoolSubjectGapScreen() {
         source?: "dataset_ai" | "dataset_deterministic" | "data_pending";
         dataPendingReason?: string;
         report?: GapReport;
+        meta?: { aiEngine?: { enabled?: boolean; reason?: string; hits?: number } };
       }>("/api/ai/highschool/subject-gap/analyze", {
         questions: activeQuestions,
         answers,
@@ -457,9 +469,18 @@ export default function HighSchoolSubjectGapScreen() {
             ? "Focus plan built from verified SSC 10 topic performance."
             : (data?.dataPendingReason || "Topic-grounded focus analysis is pending for this board/class.")
       );
+      const aiEngine = data?.meta?.aiEngine;
+      setEngineStatus(
+        aiEngine
+          ? aiEngine.enabled
+            ? `AI Engine connected • ${aiEngine.hits || 0} context hits`
+            : `AI Engine fallback • ${aiEngine.reason || "deterministic dataset used"}`
+          : ""
+      );
     } catch (error) {
       setReport(fallbackReport);
       setStatusMessage(getAppErrorMessage(error, "Report is calculated locally from your real answers."));
+      setEngineStatus("");
     } finally {
       setLoadingReport(false);
       setShowReport(true);
@@ -519,8 +540,11 @@ export default function HighSchoolSubjectGapScreen() {
       <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
         {statusMessage ? (
           <View style={[styles.aiNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Ionicons name={quizSource === "ai" ? "sparkles" : "shield-checkmark"} size={18} color={colors.accent} />
-            <Text style={[styles.aiNoticeText, { color: colors.textMuted }]}>{statusMessage}</Text>
+            <Ionicons name={quizSource === "dataset_ai" ? "sparkles" : "shield-checkmark"} size={18} color={colors.accent} />
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={[styles.aiNoticeText, { color: colors.textMuted }]}>{statusMessage}</Text>
+              {engineStatus ? <Text style={[styles.aiNoticeText, { color: colors.accent }]}>{engineStatus}</Text> : null}
+            </View>
           </View>
         ) : null}
 
