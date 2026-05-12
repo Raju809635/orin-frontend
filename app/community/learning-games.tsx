@@ -93,16 +93,16 @@ const highSchoolGames: GameCard[] = [
     colors: ["#1D4ED8", "#111827"]
   },
   {
-    title: "Memory Match",
-    subtitle: "Formula, vocabulary, and concept matching.",
+    title: "Formula Match",
+    subtitle: "Match formulas, units, and examples from your subject.",
     emoji: "🧩",
     icon: "albums",
     reward: "+20 XP",
     colors: ["#6D28D9", "#111827"]
   },
   {
-    title: "Word Builder",
-    subtitle: "English vocabulary and grammar speed round.",
+    title: "Vocabulary Duel",
+    subtitle: "Telugu, Hindi, and English word battles.",
     emoji: "📚",
     icon: "text",
     reward: "+20 XP",
@@ -110,17 +110,17 @@ const highSchoolGames: GameCard[] = [
     colors: ["#B45309", "#111827"]
   },
   {
-    title: "Daily Challenge",
-    subtitle: "Complete daily quiz, build streak, climb board.",
+    title: "Diagram Labeling",
+    subtitle: "Practice labels from real textbook images.",
     emoji: "🎯",
-    icon: "flash",
-    reward: "streak XP",
-    path: "/student-dashboard?section=overview&openQuiz=1",
+    icon: "image",
+    reward: "+30 XP",
+    path: "/ai/highschool-study-roadmap",
     colors: ["#BE123C", "#111827"]
   },
   {
-    title: "Tournament Mode",
-    subtitle: "Class vs class and school weekly cups.",
+    title: "Timeline Race",
+    subtitle: "Social Studies events, dates, and sequence rounds.",
     emoji: "🏅",
     icon: "podium",
     reward: "badge + certificate",

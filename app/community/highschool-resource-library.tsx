@@ -38,6 +38,8 @@ type AcademicSubjectSummary = {
   name?: string;
   subject?: string;
   available?: boolean;
+  hasAcademicPdf?: boolean;
+  pdfCount?: number;
   verificationStatus?: string;
 };
 
@@ -59,7 +61,7 @@ type AcademicPdf = {
 type AcademicPdfResponse = { pdfs?: AcademicPdf[] };
 type ResourceView = "app" | "teacher";
 
-const CLASS_OPTIONS = [6, 7, 8, 9, 10, 11, 12];
+const CLASS_OPTIONS = [6, 7, 8, 9, 10];
 const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
 
 function firstPdfUrl(item: ResourceItem) {
@@ -139,12 +141,16 @@ export default function HighSchoolResourceLibraryScreen() {
   const loadSubject = useCallback(async (subjectKey: string) => {
     try {
       setSelectedSubjectKey(subjectKey);
-      const [subjectRes, pdfRes] = await Promise.all([
+      const [subjectRes, pdfRes] = await Promise.allSettled([
         api.get<AcademicSubjectResponse>(`/api/academics/${board}/class/${classNumber}/subject/${subjectKey}/topics`),
         api.get<AcademicPdfResponse>(`/api/academics/${board}/class/${classNumber}/subject/${subjectKey}/pdfs`)
       ]);
-      setAcademicSubject(subjectRes.data || null);
-      setAcademicPdfs(pdfRes.data?.pdfs || []);
+      setAcademicSubject(subjectRes.status === "fulfilled" ? subjectRes.value.data || null : null);
+      const pdfs = pdfRes.status === "fulfilled" ? pdfRes.value.data?.pdfs || [] : [];
+      setAcademicPdfs(pdfs);
+      if (subjectRes.status === "rejected" && !pdfs.length) {
+        setError(getAppErrorMessage(subjectRes.reason, "Failed to load academic PDFs."));
+      }
     } catch (e) {
       setError(getAppErrorMessage(e, "Failed to load academic PDFs."));
     }
@@ -163,7 +169,9 @@ export default function HighSchoolResourceLibraryScreen() {
       const library = libraryRes.status === "fulfilled" ? libraryRes.value.data || {} : {};
       setResources([...(library.institutionResources || []), ...(library.domainResources || [])]);
 
-      const nextSubjects = subjectsRes.status === "fulfilled" ? subjectsRes.value.data?.subjects || [] : [];
+      const rawSubjects = subjectsRes.status === "fulfilled" ? subjectsRes.value.data?.subjects || [] : [];
+      const pdfBackedSubjects = rawSubjects.filter((item) => item.hasAcademicPdf || Number(item.pdfCount || 0) > 0);
+      const nextSubjects = pdfBackedSubjects.length ? pdfBackedSubjects : rawSubjects;
       setSubjects(nextSubjects);
       const nextKey = nextSubjects.find((item) => item.key === selectedSubjectKey)?.key || nextSubjects[0]?.key || selectedSubjectKey;
       if (nextKey) await loadSubject(nextKey);
@@ -186,7 +194,7 @@ export default function HighSchoolResourceLibraryScreen() {
     <HighSchoolCommunityShell
       eyebrow={`${board} • Class ${classNumber}`}
       title={resourceView === "teacher" ? "Teacher Resources" : "App Resources"}
-      subtitle="Choose App Resources for ORIN textbook PDFs or Teacher Resources for Global Teacher uploads."
+      subtitle="Choose App Resources for SSC Classes 6-10 textbook PDFs or Teacher Resources for Global Teacher uploads."
       stats={[
         { icon: "book", label: "Subjects", value: String(subjects.length) },
         { icon: "document-text", label: resourceView === "teacher" ? "Teacher PDFs" : "App PDFs", value: String(resourceView === "teacher" ? pdfResources.length : academicPdfs.length) }
@@ -224,7 +232,7 @@ export default function HighSchoolResourceLibraryScreen() {
 
       {resourceView === "app" ? (
       <>
-      <CommunitySection title="Academic PDF Browser" subtitle="Select a class and subject to show only connected textbook PDFs." icon="library">
+      <CommunitySection title="Academic PDF Browser" subtitle="Select SSC Class 6-10 and subject to show connected textbook PDFs." icon="library">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
           {BOARD_OPTIONS.map((item) => {
             const active = item === board;
@@ -289,7 +297,7 @@ export default function HighSchoolResourceLibraryScreen() {
               })}
             </ScrollView>
             <StatusBadge
-              label={academicSubject?.available === false ? "PDF extraction pending" : selectedSubject?.subject || selectedSubject?.name || "Selected subject"}
+              label={academicSubject?.available === false ? "PDF available, topic extraction pending" : selectedSubject?.subject || selectedSubject?.name || "Selected subject"}
               tone={academicSubject?.available === false ? "warning" : "success"}
             />
           </>
@@ -298,7 +306,7 @@ export default function HighSchoolResourceLibraryScreen() {
         )}
       </CommunitySection>
 
-      <CommunitySection title="Academic PDFs" subtitle="Textbook PDFs uploaded to Firebase Storage." icon="reader">
+      <CommunitySection title="Academic PDFs" subtitle="SSC Classes 6-10 textbook PDFs connected to ORIN resources." icon="reader">
         {academicPdfs.length ? (
           academicPdfs.map((item) => (
             <AcademicCard

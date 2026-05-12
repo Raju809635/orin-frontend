@@ -22,7 +22,7 @@ const SECTION_CONTENT: Record<
     note: "Short, school-friendly challenge spaces powered by the existing ORIN challenge system.",
     cards: [
       {
-        title: "Open School Challenges",
+        title: "Open Challenges",
         description: "See institution and class-friendly challenge cards with simpler labels.",
         path: "/community/challenges",
         icon: "trophy"

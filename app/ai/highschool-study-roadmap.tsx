@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -62,7 +62,8 @@ type LessonChapter = {
   source_pages?: { start?: number; end?: number } | null;
   lessonSections?: LessonSection[];
   definitions?: { term: string; meaning: string }[];
-  diagrams?: { title: string; whatToLearn?: string }[];
+  diagrams?: { title: string; whatToLearn?: string; imageUrl?: string; page?: number }[];
+  images?: { id?: string; title?: string; caption?: string; page?: number; imageUrl: string }[];
   activities?: { title: string; steps?: string[] }[];
   weeklyPlan?: { id: string; title: string; lessonSectionIds?: string[]; focus?: string }[];
   quizQuestions?: QuizQuestion[];
@@ -94,6 +95,13 @@ function sortSubjectsForSchool(values: string[]) {
     const bi = SUBJECT_PRIORITY.findIndex((item) => item.toLowerCase() === b.toLowerCase());
     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.localeCompare(b);
   });
+}
+
+function academicMediaUrl(value = "") {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  const baseURL = String(api.defaults.baseURL || "").replace(/\/$/, "");
+  return `${baseURL}${value.startsWith("/") ? value : `/${value}`}`;
 }
 
 function roadmapTopicsForSubject(subject: string, chapter: string) {
@@ -848,6 +856,21 @@ function LessonWeekModal({
             </View>
           ) : null}
 
+          {lesson?.images?.length ? (
+            <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <SectionHeader icon="image" title="Textbook Images" color="#0EA5E9" />
+              {lesson.images.slice(0, 6).map((item, index) => (
+                <View key={item.id || item.imageUrl || `${item.title}-${index}`} style={[styles.imageCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                  <Image source={{ uri: academicMediaUrl(item.imageUrl) }} style={styles.lessonImage} resizeMode="cover" />
+                  <Text style={[styles.missionTitle, { color: colors.text }]}>{item.title || "Textbook image"}</Text>
+                  {item.caption || item.page ? (
+                    <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{[item.caption, item.page ? `Page ${item.page}` : ""].filter(Boolean).join(" | ")}</Text>
+                  ) : null}
+                </View>
+              ))}
+            </View>
+          ) : null}
+
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <SectionHeader icon="help-circle" title="Quiz" color="#F59E0B" />
             {questions.map((question) => (
@@ -931,6 +954,8 @@ const styles = StyleSheet.create({
   proofBox: { gap: 10 },
   lessonText: { fontSize: 14, lineHeight: 21, fontWeight: "700" },
   bulletText: { fontSize: 13, lineHeight: 20, fontWeight: "700" },
+  imageCard: { borderWidth: 1, borderRadius: 16, padding: 10, gap: 8 },
+  lessonImage: { width: "100%", height: 180, borderRadius: 12, backgroundColor: "#F8FAFC" },
   quizBlock: { gap: 8 },
   quizOption: { borderWidth: 1, borderRadius: 14, padding: 11 },
   quizOptionText: { fontSize: 13, lineHeight: 18, fontWeight: "800" },

@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as Speech from "expo-speech";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -30,7 +31,8 @@ type PlanWeek = {
     summary?: string[];
     keyPoints?: string[];
     definitions?: { term: string; meaning: string }[];
-    diagrams?: { title: string; whatToLearn?: string; page?: number; pdfUrl?: string }[];
+    diagrams?: { title: string; whatToLearn?: string; page?: number; imageUrl?: string; pdfUrl?: string }[];
+    images?: { id?: string; title?: string; caption?: string; page?: number; imageUrl: string; sourcePdf?: string }[];
     pageRefs?: { page?: number; preview?: string; pdfUrl?: string }[];
     activities?: string[];
     practice?: string[];
@@ -58,6 +60,17 @@ type StudyPlan = {
 type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
 type AcademicChapter = { title?: string; name?: string };
 type AcademicSubjectResponse = { subject?: { chapters?: AcademicChapter[] }; chapters?: AcademicChapter[] };
+type StudyProfileTopic = { topic: string; score?: number; sources?: string[] };
+type StudyProfile = {
+  hasUsefulHistory: boolean;
+  activityCount: number;
+  weakTopics: StudyProfileTopic[];
+  wrongAnswerTopics: StudyProfileTopic[];
+  recentDoubts: string[];
+  examFocusTopics: StudyProfileTopic[];
+  pendingRoadmapTopics: StudyProfileTopic[];
+  strongTopics: StudyProfileTopic[];
+};
 
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
 const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
@@ -110,6 +123,13 @@ function barColor(value: number) {
   return "#12B76A";
 }
 
+function academicMediaUrl(value = "") {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  const baseURL = String(api.defaults.baseURL || "").replace(/\/$/, "");
+  return `${baseURL}${value.startsWith("/") ? value : `/${value}`}`;
+}
+
 export default function HighSchoolStudyPlannerScreen() {
   const { colors, isDark } = useAppTheme();
   const { className } = useLearner();
@@ -122,6 +142,9 @@ export default function HighSchoolStudyPlannerScreen() {
   const [skills, setSkills] = useState("basics, revision, practice tests");
   const [currentLevel, setCurrentLevel] = useState("Basics");
   const [timePerDay, setTimePerDay] = useState("1-2 hours");
+  const [plannerMode, setPlannerMode] = useState<"manual" | "adaptive">("manual");
+  const [studyProfile, setStudyProfile] = useState<StudyProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const [plan, setPlan] = useState<StudyPlan | null>(null);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [selectedWeek, setSelectedWeek] = useState<PlanWeek | null>(null);
@@ -170,13 +193,36 @@ export default function HighSchoolStudyPlannerScreen() {
   useFocusEffect(useCallback(() => { loadSubjects(); }, [loadSubjects]));
   useFocusEffect(useCallback(() => { loadChapters(); }, [loadChapters]));
 
+  const loadStudyProfile = useCallback(async () => {
+    if (plannerMode !== "adaptive") return;
+    setProfileLoading(true);
+    try {
+      const { data } = await api.get<{ profile?: StudyProfile }>("/api/ai/highschool/study-profile", {
+        params: { board, classLevel, subject }
+      });
+      setStudyProfile(data?.profile || null);
+    } catch {
+      setStudyProfile(null);
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [board, classLevel, plannerMode, subject]);
+
+  useEffect(() => {
+    void loadStudyProfile();
+  }, [loadStudyProfile]);
+
   async function generatePlan() {
-    if (!goal.trim()) {
+    if (plannerMode === "manual" && !goal.trim()) {
       setError("Please add your study goal.");
       return;
     }
-    if (!skills.split(",").map((item) => item.trim()).filter(Boolean).length) {
+    if (plannerMode === "manual" && !skills.split(",").map((item) => item.trim()).filter(Boolean).length) {
       setError("Please add your current skills or chapters.");
+      return;
+    }
+    if (plannerMode === "adaptive" && studyProfile && !studyProfile.hasUsefulHistory) {
+      setError("Take Subject Gap Analyzer first to unlock Smart Plan.");
       return;
     }
 
@@ -186,12 +232,14 @@ export default function HighSchoolStudyPlannerScreen() {
     const fallback = buildLocalPlan(subject, goal, skills);
     try {
       const { data } = await api.post<{
-        source?: "dataset_ai" | "dataset_deterministic" | "data_pending";
+        source?: "dataset_ai" | "dataset_deterministic" | "data_pending" | "profile_empty";
         isTopicGrounded?: boolean;
         datasetScope?: { board?: string; classLevel?: string; subject?: string; chapter?: string };
         dataPendingReason?: string;
+        profile?: StudyProfile;
         plan?: StudyPlan;
       }>("/api/ai/highschool/study-planner", {
+        mode: plannerMode,
         subject,
         goal,
         skills,
@@ -200,15 +248,24 @@ export default function HighSchoolStudyPlannerScreen() {
         board,
         classLevel
       });
+      if (!data?.plan && plannerMode === "adaptive") {
+        setPlan(null);
+        setStudyProfile(data?.profile || studyProfile);
+        setStatusMessage(data?.dataPendingReason || "Take Subject Gap Analyzer first to unlock Smart Plan.");
+        return;
+      }
       setPlan(data?.plan || fallback);
+      if (data?.profile) setStudyProfile(data.profile);
       setChecked({});
       const source = data?.source || "data_pending";
       setStatusMessage(
-        source === "dataset_ai"
-          ? "AI created an SSC 10 topic-grounded adaptive study plan."
-          : source === "dataset_deterministic"
-            ? "Using verified SSC 10 extracted topics for this study plan."
-            : (data?.dataPendingReason || "Topic-aware planning is currently available for SSC Class 10 only.")
+        source === "profile_empty"
+          ? "Take Subject Gap Analyzer first to unlock Smart Plan."
+          : source === "dataset_ai"
+            ? plannerMode === "adaptive" ? "AI created a Smart Plan from your subject history." : "AI created an SSC 10 topic-grounded adaptive study plan."
+            : source === "dataset_deterministic"
+              ? "Using verified SSC 10 extracted topics for this study plan."
+              : (data?.dataPendingReason || "Topic-aware planning is currently available for SSC Class 10 only.")
       );
     } catch (err) {
       setPlan(fallback);
@@ -225,8 +282,22 @@ export default function HighSchoolStudyPlannerScreen() {
         <Text style={[styles.eyebrow, { color: colors.accent }]}>AI Study Planner</Text>
         <Text style={[styles.title, { color: colors.text }]}>Create Study Plan</Text>
         <Text style={[styles.subtitle, { color: colors.textMuted }]}>
-          Build a weekly timetable from class, subject, chapters, level, and available time.
+          Build a manual timetable, or let ORIN prioritize topics from your learning history.
         </Text>
+      </View>
+
+      <View style={[styles.modeSwitch, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {[
+          { label: "Manual Plan", value: "manual" as const },
+          { label: "AI Smart Plan", value: "adaptive" as const }
+        ].map((item) => {
+          const active = plannerMode === item.value;
+          return (
+            <TouchableOpacity key={item.value} style={[styles.modeButton, { backgroundColor: active ? colors.accent : colors.surfaceAlt }]} onPress={() => { setPlannerMode(item.value); setPlan(null); setError(""); }}>
+              <Text style={[styles.modeText, { color: active ? colors.accentText : colors.textMuted }]}>{item.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {statusMessage ? (
@@ -277,7 +348,7 @@ export default function HighSchoolStudyPlannerScreen() {
           })}
         </View>
 
-        {chapters.length ? (
+        {plannerMode === "manual" && chapters.length ? (
           <>
             <Text style={[styles.label, { color: colors.text }]}>Quick Chapter Focus</Text>
             <View style={styles.subjectRow}>
@@ -290,36 +361,42 @@ export default function HighSchoolStudyPlannerScreen() {
           </>
         ) : null}
 
-        <Text style={[styles.label, { color: colors.text }]}>Study Goal</Text>
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
-          placeholder="Example: prepare for board exam science chapters"
-          placeholderTextColor={colors.textMuted}
-          value={goal}
-          onChangeText={setGoal}
-        />
+        {plannerMode === "manual" ? (
+          <>
+            <Text style={[styles.label, { color: colors.text }]}>Study Goal</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+              placeholder="Example: prepare for board exam science chapters"
+              placeholderTextColor={colors.textMuted}
+              value={goal}
+              onChangeText={setGoal}
+            />
 
-        <Text style={[styles.label, { color: colors.text }]}>Current Skills / Chapters</Text>
-        <TextInput
-          style={[styles.input, styles.multiInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
-          placeholder="Example: algebra basics, electricity chapter, reading notes"
-          placeholderTextColor={colors.textMuted}
-          value={skills}
-          onChangeText={setSkills}
-          multiline
-        />
+            <Text style={[styles.label, { color: colors.text }]}>Current Skills / Chapters</Text>
+            <TextInput
+              style={[styles.input, styles.multiInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+              placeholder="Example: algebra basics, electricity chapter, reading notes"
+              placeholderTextColor={colors.textMuted}
+              value={skills}
+              onChangeText={setSkills}
+              multiline
+            />
 
-        <Text style={[styles.label, { color: colors.text }]}>Current Level</Text>
-        <SegmentRow values={LEVELS} selected={currentLevel} onSelect={setCurrentLevel} colors={colors} />
+            <Text style={[styles.label, { color: colors.text }]}>Current Level</Text>
+            <SegmentRow values={LEVELS} selected={currentLevel} onSelect={setCurrentLevel} colors={colors} />
 
-        <Text style={[styles.label, { color: colors.text }]}>Available Time per Day</Text>
-        <SegmentRow values={TIMES} selected={timePerDay} onSelect={setTimePerDay} colors={colors} />
+            <Text style={[styles.label, { color: colors.text }]}>Available Time per Day</Text>
+            <SegmentRow values={TIMES} selected={timePerDay} onSelect={setTimePerDay} colors={colors} />
+          </>
+        ) : (
+          <SmartProfilePanel profile={studyProfile} loading={profileLoading} colors={colors} />
+        )}
 
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
         <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={generatePlan} disabled={loading}>
           {loading ? <ActivityIndicator color={colors.accentText} /> : <Ionicons name="calendar" size={18} color={colors.accentText} />}
-          <Text style={[styles.primaryText, { color: colors.accentText }]}>{loading ? "Creating Smart Plan..." : "Create Study Plan"}</Text>
+          <Text style={[styles.primaryText, { color: colors.accentText }]}>{loading ? "Creating Plan..." : plannerMode === "adaptive" ? "Generate Smart Plan" : "Create Study Plan"}</Text>
         </TouchableOpacity>
       </View>
 
@@ -402,6 +479,68 @@ function SectionHeader({ icon, title, color }: { icon: keyof typeof Ionicons.gly
   );
 }
 
+function SmartProfilePanel({ profile, loading, colors }: { profile: StudyProfile | null; loading: boolean; colors: any }) {
+  const weak = [...(profile?.weakTopics || []), ...(profile?.wrongAnswerTopics || [])]
+    .map((item) => item.topic)
+    .filter(Boolean)
+    .slice(0, 8);
+  const focus = [...(profile?.examFocusTopics || []), ...(profile?.pendingRoadmapTopics || [])]
+    .map((item) => item.topic)
+    .filter(Boolean)
+    .slice(0, 8);
+
+  if (loading) {
+    return (
+      <View style={[styles.profileBox, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+        <ActivityIndicator color={colors.accent} />
+        <Text style={[styles.profileText, { color: colors.textMuted }]}>Reading your learning history...</Text>
+      </View>
+    );
+  }
+
+  if (!profile?.hasUsefulHistory) {
+    return (
+      <View style={[styles.profileBox, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+        <Ionicons name="lock-closed" size={20} color={colors.accent} />
+        <Text style={[styles.profileTitle, { color: colors.text }]}>Take Subject Gap Analyzer first to unlock Smart Plan.</Text>
+        <Text style={[styles.profileText, { color: colors.textMuted }]}>ORIN will use your real weak topics, wrong answers, doubts, roadmap, and exam focus for this subject.</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={[styles.profileBox, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+      <View style={styles.profileHeader}>
+        <Ionicons name="sparkles" size={20} color={colors.accent} />
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.profileTitle, { color: colors.text }]}>Based on your learning history</Text>
+          <Text style={[styles.profileText, { color: colors.textMuted }]}>{profile.activityCount} recent learning signals found for this subject.</Text>
+        </View>
+      </View>
+      <TopicPreview title="Weak topics" items={weak} colors={colors} />
+      <TopicPreview title="Recent doubts" items={profile.recentDoubts || []} colors={colors} />
+      <TopicPreview title="Roadmap & exam focus" items={focus} colors={colors} />
+    </View>
+  );
+}
+
+function TopicPreview({ title, items, colors }: { title: string; items: string[]; colors: any }) {
+  const clean = items.map((item) => String(item || "").trim()).filter(Boolean).slice(0, 6);
+  if (!clean.length) return null;
+  return (
+    <View style={styles.previewBlock}>
+      <Text style={[styles.previewTitle, { color: colors.text }]}>{title}</Text>
+      <View style={styles.subjectRow}>
+        {clean.map((item) => (
+          <View key={`${title}-${item}`} style={[styles.subjectChip, styles.flexChip, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+            <Text style={[styles.subjectText, { color: colors.textMuted }]}>{item}</Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 function WeekRow({ week, colors, onPress }: { week: PlanWeek; colors: any; onPress: () => void }) {
   const statusColor = week.status === "completed" ? "#12B76A" : week.status === "active" ? "#0EA5E9" : "#98A2B3";
   return (
@@ -427,6 +566,56 @@ function WeekRow({ week, colors, onPress }: { week: PlanWeek; colors: any; onPre
 function WeekDetailModal({ week, colors, isDark, onClose }: { week: PlanWeek | null; colors: any; isDark: boolean; onClose: () => void }) {
   const detail = week?.detail;
   const hasLesson = Boolean(detail?.description || detail?.summary?.length || detail?.keyPoints?.length);
+  const [reading, setReading] = useState(false);
+  const readText = useMemo(() => {
+    if (!week) return "";
+    const definitionText = (detail?.definitions || [])
+      .map((item) => `${item.term}: ${item.meaning}`)
+      .join(". ");
+    return [
+      detail?.heading || week.title,
+      detail?.description,
+      ...(detail?.summary || []),
+      ...(detail?.keyPoints || []),
+      definitionText,
+      ...(detail?.activities || []),
+      ...(detail?.practice || [])
+    ]
+      .map((item) => String(item || "").trim())
+      .filter(Boolean)
+      .join(". ")
+      .slice(0, 4200);
+  }, [detail, week]);
+
+  useEffect(() => {
+    if (!week) {
+      Speech.stop();
+      setReading(false);
+    }
+    return () => {
+      Speech.stop();
+      setReading(false);
+    };
+  }, [week]);
+
+  const toggleReader = useCallback(() => {
+    if (!readText) return;
+    if (reading) {
+      Speech.stop();
+      setReading(false);
+      return;
+    }
+    setReading(true);
+    Speech.speak(readText, {
+      language: "en-IN",
+      rate: 0.92,
+      pitch: 1,
+      onDone: () => setReading(false),
+      onStopped: () => setReading(false),
+      onError: () => setReading(false)
+    });
+  }, [readText, reading]);
+
   return (
     <Modal visible={Boolean(week)} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.modalOverlay}>
@@ -439,9 +628,17 @@ function WeekDetailModal({ week, colors, isDark, onClose }: { week: PlanWeek | n
                 {detail?.source === "lesson_dataset" ? "Extracted lesson content" : "Verified topic path"}
               </Text>
             </View>
-            <TouchableOpacity style={[styles.closeButton, { backgroundColor: colors.surfaceAlt }]} onPress={onClose}>
-              <Ionicons name="close" size={20} color={colors.text} />
-            </TouchableOpacity>
+            <View style={styles.modalActions}>
+              {readText ? (
+                <TouchableOpacity style={[styles.readerButton, { backgroundColor: reading ? "#FEE2E2" : colors.surfaceAlt }]} onPress={toggleReader}>
+                  <Ionicons name={reading ? "stop-circle" : "volume-high"} size={18} color={reading ? "#DC2626" : colors.accent} />
+                  <Text style={[styles.readerText, { color: reading ? "#DC2626" : colors.accent }]}>{reading ? "Stop" : "Listen"}</Text>
+                </TouchableOpacity>
+              ) : null}
+              <TouchableOpacity style={[styles.closeButton, { backgroundColor: colors.surfaceAlt }]} onPress={onClose}>
+                <Ionicons name="close" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.modalContent}>
@@ -470,6 +667,22 @@ function WeekDetailModal({ week, colors, isDark, onClose }: { week: PlanWeek | n
                         <Text style={[styles.definitionMeaning, { color: colors.textMuted }]}>
                           {item.whatToLearn || "Practice labels, process order, and explanation."}{item.page ? ` Page ${item.page}.` : ""}
                         </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {detail?.images?.length ? (
+                  <View style={styles.detailBlock}>
+                    <Text style={[styles.detailTitle, { color: colors.text }]}>Textbook Images</Text>
+                    {detail.images.map((item, index) => (
+                      <View key={item.id || item.imageUrl || `${item.title}-${index}`} style={[styles.imageCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                        <Image source={{ uri: academicMediaUrl(item.imageUrl) }} style={styles.lessonImage} resizeMode="cover" />
+                        <Text style={[styles.definitionTerm, { color: colors.text }]}>{item.title || "Textbook image"}</Text>
+                        {item.caption || item.page ? (
+                          <Text style={[styles.definitionMeaning, { color: colors.textMuted }]}>
+                            {[item.caption, item.page ? `Page ${item.page}` : ""].filter(Boolean).join(" | ")}
+                          </Text>
+                        ) : null}
                       </View>
                     ))}
                   </View>
@@ -577,11 +790,21 @@ const styles = StyleSheet.create({
   subtitle: { fontSize: 15, lineHeight: 22 },
   aiNotice: { borderWidth: 1, borderRadius: 18, padding: 12, flexDirection: "row", gap: 9, alignItems: "flex-start" },
   aiNoticeText: { flex: 1, fontSize: 12, lineHeight: 18, fontWeight: "800" },
+  modeSwitch: { borderWidth: 1, borderRadius: 18, padding: 6, flexDirection: "row", gap: 6 },
+  modeButton: { flex: 1, minHeight: 42, borderRadius: 14, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
+  modeText: { fontSize: 13, fontWeight: "900", textAlign: "center" },
   card: { borderWidth: 1, borderRadius: 22, padding: 15, gap: 13 },
   label: { fontSize: 14, fontWeight: "900" },
   subjectRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  subjectChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
-  subjectText: { fontWeight: "800" },
+  subjectChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8, maxWidth: "100%" },
+  flexChip: { flexShrink: 1 },
+  subjectText: { fontWeight: "800", flexShrink: 1, textAlign: "center" },
+  profileBox: { borderWidth: 1, borderRadius: 18, padding: 13, gap: 12 },
+  profileHeader: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
+  profileTitle: { fontSize: 14, lineHeight: 20, fontWeight: "900" },
+  profileText: { fontSize: 12, lineHeight: 18, fontWeight: "700" },
+  previewBlock: { gap: 7 },
+  previewTitle: { fontSize: 12, fontWeight: "900" },
   input: { borderWidth: 1, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 11 },
   multiInput: { minHeight: 86, textAlignVertical: "top" },
   segmentRow: { flexDirection: "row", gap: 8 },
@@ -626,7 +849,10 @@ const styles = StyleSheet.create({
   modalSheet: { maxHeight: "88%", borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, padding: 16, gap: 12 },
   modalHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   modalTitle: { fontSize: 20, lineHeight: 26, fontWeight: "900" },
+  modalActions: { alignItems: "flex-end", gap: 8 },
   closeButton: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
+  readerButton: { minHeight: 38, borderRadius: 19, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
+  readerText: { fontSize: 12, fontWeight: "900" },
   modalContent: { gap: 14, paddingBottom: 28 },
   detailBlock: { gap: 8 },
   detailTitle: { fontSize: 15, fontWeight: "900" },
@@ -636,6 +862,8 @@ const styles = StyleSheet.create({
   definitionTerm: { fontSize: 13, fontWeight: "900" },
   definitionMeaning: { fontSize: 12, lineHeight: 18, fontWeight: "700" },
   quizCard: { borderWidth: 1, borderRadius: 14, padding: 11, gap: 6 },
+  imageCard: { borderWidth: 1, borderRadius: 14, padding: 10, gap: 8 },
+  lessonImage: { width: "100%", height: 180, borderRadius: 12, backgroundColor: "#F8FAFC" },
   quizQuestion: { fontSize: 13, fontWeight: "900", lineHeight: 19 },
   quizOption: { fontSize: 12, lineHeight: 18, fontWeight: "800" },
   quizExplain: { fontSize: 12, lineHeight: 18, fontWeight: "700", marginTop: 2 },

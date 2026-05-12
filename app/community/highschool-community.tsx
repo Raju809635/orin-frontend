@@ -38,7 +38,7 @@ const MODULES: {
     badge: "Groups"
   },
   {
-    title: "School Challenges",
+    title: "Challenges",
     meta: "Challenges, proof and XP",
     note: "Academic competitions stay here. Quiz Battle is a separate live room CTA inside this page.",
     path: "/community/highschool-school-challenges",

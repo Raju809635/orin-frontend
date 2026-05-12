@@ -8,7 +8,7 @@ import { handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useLearner } from "@/context/LearnerContext";
 import { useAppTheme } from "@/context/ThemeContext";
-import { LEARNER_ONBOARDING_COMPLETING_KEY, LEARNER_ONBOARDING_PENDING_KEY, normalizeLearnerStage, type LearnerStage } from "@/lib/learnerExperience";
+import { LEARNER_ONBOARDING_COMPLETING_KEY, LEARNER_ONBOARDING_PENDING_KEY, LEARNER_STAGE_CACHE_KEY, normalizeLearnerStage, type LearnerStage } from "@/lib/learnerExperience";
 import ClassSectionSelector from "@/components/ClassSectionSelector";
 
 const STAGES: { value: LearnerStage; title: string; body: string; icon: keyof typeof Ionicons.glyphMap }[] = [
@@ -49,6 +49,7 @@ export default function LearnerOnboardingScreen() {
   const [className, setClassName] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [institutionError, setInstitutionError] = useState("");
 
   const isSchoolStage = stage === "kid" || stage === "highschool";
   const isVisibleSchoolStage = stage === "highschool";
@@ -141,6 +142,7 @@ export default function LearnerOnboardingScreen() {
   function selectInstitution(institution: InstitutionSearchResult) {
     setInstitutionName(institution.name);
     setInstitutionQuery(institution.name);
+    setInstitutionError("");
     setInstitutionFocused(false);
     setInstitutionResults([]);
   }
@@ -161,11 +163,10 @@ export default function LearnerOnboardingScreen() {
       const normalizedStage = normalizeLearnerStage(stage);
       const selectedInstitutionName = institutionName.trim();
       if (isSchoolStage && institutionQuery.trim() && institutionQuery.trim() !== selectedInstitutionName) {
-        handleAppError(new Error("Please select your institution from the list before continuing."), {
-          fallbackMessage: "Please select your institution from the list before continuing."
-        });
+        setInstitutionError("Select your school from the list, or clear this field and add it later.");
         return;
       }
+      setInstitutionError("");
       await api.patch("/api/profiles/student/me", {
         learnerStage: normalizedStage,
         institutionName: selectedInstitutionName,
@@ -173,9 +174,10 @@ export default function LearnerOnboardingScreen() {
         institutionType: isVisibleSchoolStage ? "School" : "",
         className: className.trim()
       });
+      await AsyncStorage.setItem(LEARNER_STAGE_CACHE_KEY, normalizedStage);
       await AsyncStorage.setItem(LEARNER_ONBOARDING_COMPLETING_KEY, "1");
       await AsyncStorage.removeItem(LEARNER_ONBOARDING_PENDING_KEY);
-      void refresh();
+      await refresh();
       finishOnboardingNavigation();
     } catch (error) {
       handleAppError(error);
@@ -188,7 +190,7 @@ export default function LearnerOnboardingScreen() {
     void (async () => {
       await AsyncStorage.setItem(LEARNER_ONBOARDING_COMPLETING_KEY, "1");
       await AsyncStorage.removeItem(LEARNER_ONBOARDING_PENDING_KEY);
-      void refresh();
+      await refresh();
       finishOnboardingNavigation();
     })();
   }
@@ -250,9 +252,11 @@ export default function LearnerOnboardingScreen() {
                 setInstitutionFocused(true);
                 if (value.trim() !== institutionName.trim()) {
                   setInstitutionName("");
+                  setInstitutionError("");
                 }
               }}
             />
+            {institutionError ? <Text style={[styles.fieldError, { color: colors.danger }]}>{institutionError}</Text> : null}
             {searchingInstitutions ? <ActivityIndicator size="small" color={colors.accent} style={styles.searchLoader} /> : null}
             {institutionFocused && institutionResults.length > 0 ? (
               <View style={[styles.suggestionBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -316,6 +320,7 @@ const styles = StyleSheet.create({
   formBlock: { borderTopWidth: 1, marginTop: 16, paddingTop: 16 },
   label: { fontSize: 14, fontWeight: "800", marginBottom: 8 },
   input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, marginBottom: 12 },
+  fieldError: { marginTop: -6, marginBottom: 10, fontSize: 12, fontWeight: "800", lineHeight: 17 },
   searchLoader: { marginBottom: 8 },
   suggestionBox: { borderWidth: 1, borderRadius: 14, overflow: "hidden", marginBottom: 8 },
   suggestionItem: { paddingHorizontal: 12, paddingVertical: 11, borderBottomWidth: 1 },

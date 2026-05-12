@@ -71,7 +71,7 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "challenges",
-      label: isTeacherMentor ? "Class Challenges" : isHeadMentor ? "Inter-Class Competitions" : isKid ? "Learning Games" : isHighSchool ? "School Challenges" : "Challenges",
+      label: isTeacherMentor ? "Class Challenges" : isHeadMentor ? "Inter-Class Competitions" : isKid ? "Learning Games" : "Challenges",
       description: isTeacherMentor
         ? "Run daily quiz challenges, streak missions, topper awards, and classroom competitions."
         : isHeadMentor
@@ -262,7 +262,7 @@ export default function CommunityGrowthScreen() {
         <HighSchoolHeader
           eyebrow="High School Community"
           title="Learn with your school"
-          subtitle="Study groups, school challenges, achievements, resources, and progress are grouped for academic growth instead of open social noise."
+          subtitle="Study groups, challenges, achievements, resources, and progress are grouped for academic growth instead of open social noise."
           chips={["Study groups", "Challenges", "Achievements"]}
         />
       ) : (

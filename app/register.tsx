@@ -4,7 +4,8 @@ import { ActivityIndicator, Platform, ScrollView, StyleSheet, Text, TextInput, T
 import { useFocusEffect, useRouter } from "expo-router";
 import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
-import { LEARNER_ONBOARDING_PENDING_KEY } from "@/lib/learnerExperience";
+import { api } from "@/lib/api";
+import { LEARNER_ONBOARDING_PENDING_KEY, LEARNER_STAGE_CACHE_KEY } from "@/lib/learnerExperience";
 
 type Role = "student" | "mentor";
 type MentorOrgRole = "global_mentor" | "institution_teacher" | "organisation_head";
@@ -124,6 +125,7 @@ export default function RegisterScreen() {
       if (role === "student") {
         // Auto-login so new students land in setup first, then Home (Android requirement).
         await login({ email: normalizedEmail, password });
+        await AsyncStorage.setItem(LEARNER_STAGE_CACHE_KEY, learnerStage);
         await AsyncStorage.setItem(LEARNER_ONBOARDING_PENDING_KEY, "1");
         router.replace("/learner-onboarding?new=1" as never);
       } else {

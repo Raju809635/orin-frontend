@@ -1790,7 +1790,7 @@ export default function StudentDashboard() {
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.institutionTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => router.push("/community/highschool-school-challenges" as never)}>
-              <Text style={[styles.institutionTileTitle, { color: isDark ? "#FDBA74" : "#163A2A" }]}>School Challenges</Text>
+              <Text style={[styles.institutionTileTitle, { color: isDark ? "#FDBA74" : "#163A2A" }]}>Challenges</Text>
               <Text style={[styles.institutionTileMeta, { color: colors.textMuted }]}>
                 {challenges.length ? `${challenges.length} challenge${challenges.length === 1 ? "" : "s"} active` : "Quizzes and competitions will appear here"}
               </Text>
@@ -2063,7 +2063,7 @@ export default function StudentDashboard() {
                 {challenges.length
                   ? `${challenges.length} active ${isKid ? "challenge" : "competition"}${challenges.length === 1 ? "" : "s"}`
                   : isKid
-                    ? "Fun school challenges will appear here"
+                    ? "Fun challenges will appear here"
                     : "School competitions will appear here"}
               </Text>
             </TouchableOpacity>
@@ -2623,7 +2623,7 @@ export default function StudentDashboard() {
       {growthSubSection === "community" ? (
       <>
       <Text style={[styles.groupTitle, { color: colors.text }]}>{isKid ? "School Activities" : isHighSchool ? "School Community" : "Community & Collaboration"}</Text>
-      <Text style={[styles.groupNote, { color: colors.textMuted }]}>{isKid ? "Join fun school challenges, collect rewards, and learn with groups." : "Learn together through challenges, certifications, and mentor-led groups."}</Text>
+      <Text style={[styles.groupNote, { color: colors.textMuted }]}>{isKid ? "Join fun challenges, collect rewards, and learn with groups." : "Learn together through challenges, certifications, and mentor-led groups."}</Text>
       <Text style={[styles.sectionHeader, { color: colors.text }]}>{isKid ? "Fun Challenges" : "Community Challenges"}</Text>
       <View style={styles.opportunityWrap}>
         {challenges.length === 0 ? (

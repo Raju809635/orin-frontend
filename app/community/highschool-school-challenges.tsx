@@ -53,7 +53,7 @@ export default function HighSchoolSchoolChallengesScreen() {
       const challengeRes = await api.get<ChallengeItem[]>("/api/network/challenges");
       setItems((challengeRes.data || []).filter((item) => item.isActive !== false));
     } catch (e) {
-      setError(getAppErrorMessage(e, "Failed to load school challenges."));
+      setError(getAppErrorMessage(e, "Failed to load challenges."));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -75,7 +75,7 @@ export default function HighSchoolSchoolChallengesScreen() {
       await load(true);
       setSelected((prev) => (prev && challengeId(prev) === id ? { ...prev, joined: true } : prev));
     } catch (e) {
-      handleAppError(e, { mode: "alert", title: "School Challenges", fallbackMessage: "Unable to join this challenge." });
+      handleAppError(e, { mode: "alert", title: "Challenges", fallbackMessage: "Unable to join this challenge." });
     } finally {
       setBusyId(null);
     }
@@ -98,7 +98,7 @@ export default function HighSchoolSchoolChallengesScreen() {
       setSelected((prev) => (prev ? { ...prev, submissionStatus: "submitted" } : prev));
       Alert.alert("Submitted", "Your challenge proof was sent for mentor review.");
     } catch (e) {
-      handleAppError(e, { mode: "alert", title: "School Challenges", fallbackMessage: "Unable to submit proof." });
+      handleAppError(e, { mode: "alert", title: "Challenges", fallbackMessage: "Unable to submit proof." });
     } finally {
       setBusyId(null);
     }
@@ -106,8 +106,8 @@ export default function HighSchoolSchoolChallengesScreen() {
 
   return (
     <HighSchoolCommunityShell
-      title="School Challenges"
-      subtitle="Real challenge data only. Quiz Battle is a separate live room, while school challenges keep join, proof, XP and mentor review."
+      title="Challenges"
+      subtitle="Real challenge data only. Quiz Battle is a separate live room, while challenges keep join, proof, XP and mentor review."
       stats={[
         { icon: "trophy", label: "Active", value: String(items.length) },
         { icon: "flash", label: "Battle", value: "Live" }
@@ -153,7 +153,7 @@ export default function HighSchoolSchoolChallengesScreen() {
             );
           })
         ) : (
-          <AcademicEmpty label="No school challenges are active right now." />
+          <AcademicEmpty label="No challenges are active right now." />
         )}
       </CommunitySection>
 

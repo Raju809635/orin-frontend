@@ -52,6 +52,7 @@ type LoginResponse = {
 type RefreshResponse = {
   token: string;
   refreshToken: string;
+  user?: AuthUser;
 };
 
 type RegisterResponse = {
@@ -105,7 +106,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(session.user);
           }
         } else {
-          setUser(session.user);
+          try {
+            const { data } = await api.get("/api/profiles/student/me");
+            const profile = data?.profile || {};
+            const learnerStage = profile?.learnerStage === "highschool" ? "highschool" : "after12";
+            const nextUser = {
+              ...session.user,
+              learnerStage,
+              className: profile?.className || "",
+              institutionName: profile?.institutionName || profile?.collegeName || "",
+              institutionType: profile?.institutionType || ""
+            } as AuthUser;
+            setUser(nextUser);
+            await saveAuthSession(session.token, session.refreshToken, nextUser);
+          } catch {
+            setUser(session.user);
+          }
         }
 
         registerForPushNotifications().catch(() => null);
@@ -206,7 +222,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setRefreshToken(nextRefreshToken);
               setApiAuthToken(nextToken);
 
-              if (user) {
+              if (data.user) {
+                setUser(data.user);
+                await saveAuthSession(nextToken, nextRefreshToken, data.user);
+              } else if (user) {
                 await saveAuthSession(nextToken, nextRefreshToken, user);
               }
 
@@ -220,7 +239,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           originalRequest.headers = originalRequest.headers || {};
           originalRequest.headers.Authorization = `Bearer ${nextToken}`;
           return api.request(originalRequest);
-        } catch (refreshError) {
+        } catch (refreshError: any) {
           const refreshStatus = refreshError?.response?.status;
           const isHardAuthFailure = refreshStatus === 401;
 

@@ -24,6 +24,11 @@ type StrategyResponse = {
   highPriorityTopics: StrategyTopic[];
   weeklyPlan: { week: string; title: string; tasks: string[] }[];
   reminders: string[];
+  questionExtractionStatus?: "available" | "pending";
+  importantQuestions?: {
+    available?: boolean;
+    groups?: Record<string, { subject: string; chapter?: string; question: string; source?: string; page?: number }[]>;
+  };
 };
 
 const SUBJECTS = [
@@ -68,6 +73,14 @@ const SUBJECT_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   Biology: "leaf"
 };
 
+const QUESTION_GROUP_LABELS: Record<string, string> = {
+  objective: "Objective / MCQ",
+  veryShort: "Very Short Answers",
+  short: "Short Answers",
+  long: "Long Answers",
+  diagram: "Diagrams / Maps / Problems"
+};
+
 function priorityColor(priority: string) {
   if (priority === "high") return "#F97316";
   if (priority === "medium") return "#F59E0B";
@@ -79,6 +92,8 @@ export default function ExamStrategyBuilderScreen() {
   const { className } = useLearner();
   const [examName, setExamName] = useState("Half Yearly Exam");
   const [examDate, setExamDate] = useState("25 June 2026");
+  const [targetScore, setTargetScore] = useState("85");
+  const [timePerDay, setTimePerDay] = useState("1-2 hours");
   const [board, setBoard] = useState("SSC");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [syllabus, setSyllabus] = useState("Class 10 academic syllabus");
@@ -87,12 +102,16 @@ export default function ExamStrategyBuilderScreen() {
   const [selectedSubjects, setSelectedSubjects] = useState(["Mathematics", "Science", "English", "Social Studies"]);
   const [topicPool, setTopicPool] = useState<TopicOption[]>([]);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [expandedSubjects, setExpandedSubjects] = useState<Record<string, boolean>>({});
   const [strategy, setStrategy] = useState<StrategyResponse | null>(null);
-  const [source, setSource] = useState<"dataset_ai" | "dataset_deterministic" | "data_pending">("data_pending");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const selectedLabel = useMemo(() => selectedSubjects.join(", "), [selectedSubjects]);
+  const groupedTopics = useMemo(() => selectedSubjects.map((subject) => ({
+    subject,
+    topics: topicPool.filter((item) => item.subject === subject).slice(0, 18)
+  })).filter((group) => group.topics.length), [selectedSubjects, topicPool]);
 
   const loadSubjects = useCallback(async () => {
     try {
@@ -195,10 +214,11 @@ export default function ExamStrategyBuilderScreen() {
         syllabus,
         board,
         subjects: selectedSubjects,
-        topics: selectedTopics
+        topics: selectedTopics,
+        targetScore,
+        timePerDay
       });
       setStrategy(data.strategy || null);
-      setSource(data.source || "data_pending");
       if (!data?.strategy && data?.dataPendingReason) {
         setError(data.dataPendingReason);
       }
@@ -218,7 +238,6 @@ export default function ExamStrategyBuilderScreen() {
             <Ionicons name="locate" size={30} color="#F97316" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.featureTag, { color: "#EA580C" }]}>Feature 3</Text>
             <Text style={[styles.title, { color: colors.text }]}>Exam Strategy Builder</Text>
             <Text style={[styles.subtitle, { color: colors.textMuted }]}>AI creates a marks-focused plan for your upcoming exams.</Text>
           </View>
@@ -234,13 +253,13 @@ export default function ExamStrategyBuilderScreen() {
       </View>
 
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Choose Your Exam</Text>
-        <Text style={[styles.cardMeta, { color: colors.textMuted }]}>Select exam details and subjects. ORIN analyzes syllabus, weightage, and study time.</Text>
+        <Text style={[styles.cardTitle, { color: colors.text }]}>Exam Setup</Text>
         <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={examName} onChangeText={setExamName} placeholder="Exam name" placeholderTextColor={colors.textMuted} />
         <View style={styles.twoCol}>
           <TextInput style={[styles.input, styles.flexInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={examDate} onChangeText={setExamDate} placeholder="Exam date" placeholderTextColor={colors.textMuted} />
-          <TextInput style={[styles.input, styles.flexInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={`Class ${classLevel}`} editable={false} placeholder="Class" placeholderTextColor={colors.textMuted} />
+          <TextInput style={[styles.input, styles.flexInput, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={targetScore} onChangeText={setTargetScore} placeholder="Target score %" placeholderTextColor={colors.textMuted} keyboardType="numeric" />
         </View>
+        <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={timePerDay} onChangeText={setTimePerDay} placeholder="Time per day" placeholderTextColor={colors.textMuted} />
         <TextInput style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]} value={syllabus} onChangeText={setSyllabus} placeholder="Syllabus" placeholderTextColor={colors.textMuted} />
         <Text style={[styles.cardMeta, { color: colors.textMuted }]}>Board</Text>
         <View style={styles.subjectGrid}>
@@ -268,7 +287,7 @@ export default function ExamStrategyBuilderScreen() {
       </View>
 
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.cardTitle, { color: colors.text }]}>All Subjects Covered</Text>
+        <Text style={[styles.cardTitle, { color: colors.text }]}>Subjects</Text>
         <Text style={[styles.cardMeta, { color: colors.textMuted }]}>Selected: {selectedLabel || "None"}</Text>
         <View style={styles.subjectGrid}>
           {subjectPool.map((subject) => {
@@ -290,23 +309,38 @@ export default function ExamStrategyBuilderScreen() {
       </View>
 
       <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.cardTitle, { color: colors.text }]}>Topics From Academic Dataset</Text>
+        <Text style={[styles.cardTitle, { color: colors.text }]}>Choose Focus Topics</Text>
         <Text style={[styles.cardMeta, { color: colors.textMuted }]}>
-          Pick focus topics after selecting class and subject. Class 10 Mathematics, Science, Social Science, and Telugu work now; future PDFs/data will appear here automatically.
+          Pick the chapters you want ORIN to prioritize in your exam plan.
         </Text>
-        {topicPool.length ? (
-          <View style={styles.topicChipGrid}>
-            {topicPool.slice(0, 42).map((item) => {
-              const active = selectedTopics.includes(item.topic);
+        {groupedTopics.length ? (
+          <View style={styles.topicGroups}>
+            {groupedTopics.map((group) => {
+              const expanded = expandedSubjects[group.subject] ?? true;
               return (
-                <TouchableOpacity
-                  key={`${item.subject}-${item.chapter}-${item.topic}`}
-                  style={[styles.topicChip, { backgroundColor: active ? "#FFF7ED" : colors.surfaceAlt, borderColor: active ? "#FB923C" : colors.border }]}
-                  onPress={() => toggleTopic(item.topic)}
-                >
-                  <Text style={[styles.topicChipTitle, { color: active ? "#9A3412" : colors.text }]} numberOfLines={2}>{item.topic}</Text>
-                  <Text style={[styles.topicChipMeta, { color: colors.textMuted }]} numberOfLines={1}>{item.subject} · {item.chapter}</Text>
-                </TouchableOpacity>
+                <View key={group.subject} style={[styles.topicGroup, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                  <TouchableOpacity style={styles.topicGroupHeader} onPress={() => setExpandedSubjects((prev) => ({ ...prev, [group.subject]: !expanded }))}>
+                    <Text style={[styles.topicGroupTitle, { color: colors.text }]}>{group.subject}</Text>
+                    <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={18} color={colors.textMuted} />
+                  </TouchableOpacity>
+                  {expanded ? (
+                    <View style={styles.topicChipGrid}>
+                      {group.topics.map((item) => {
+                        const active = selectedTopics.includes(item.topic);
+                        return (
+                          <TouchableOpacity
+                            key={`${item.subject}-${item.chapter}-${item.topic}`}
+                            style={[styles.topicChip, { backgroundColor: active ? "#FFF7ED" : colors.surface, borderColor: active ? "#FB923C" : colors.border }]}
+                            onPress={() => toggleTopic(item.topic)}
+                          >
+                            <Text style={[styles.topicChipTitle, { color: active ? "#9A3412" : colors.text }]}>{item.topic}</Text>
+                            <Text style={[styles.topicChipMeta, { color: colors.textMuted }]} numberOfLines={1}>{item.chapter}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </View>
               );
             })}
           </View>
@@ -329,15 +363,8 @@ export default function ExamStrategyBuilderScreen() {
               <Text style={[styles.scoreLabel, { color: colors.textMuted }]}>Expected</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.cardTitle, { color: colors.text }]}>Your Exam Strategy</Text>
+              <Text style={[styles.cardTitle, { color: colors.text }]}>Strategy Result</Text>
               <Text style={[styles.cardMeta, { color: colors.textMuted }]}>{strategy.summary}</Text>
-              <Text style={[styles.aiMeta, { color: colors.textMuted }]}>
-                {source === "dataset_ai"
-                  ? "AI-powered strategy on extracted SSC 10 topics"
-                  : source === "dataset_deterministic"
-                    ? "Verified SSC 10 topic strategy"
-                    : "Data pending for this board/class selection"}
-              </Text>
             </View>
           </View>
 
@@ -355,7 +382,7 @@ export default function ExamStrategyBuilderScreen() {
           </View>
 
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Time Allocation</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Exam Priorities</Text>
             {strategy.timeAllocation.map((item) => (
               <View key={item.subject} style={styles.allocationRow}>
                 <Text style={[styles.allocationName, { color: colors.text }]}>{item.subject}</Text>
@@ -368,7 +395,7 @@ export default function ExamStrategyBuilderScreen() {
           </View>
 
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Topic Priorities</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>High-Priority Topics</Text>
             {strategy.highPriorityTopics.slice(0, 10).map((item) => (
               <View key={`${item.subject}-${item.topic}`} style={[styles.topicRow, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
                 <View style={[styles.topicBadge, { backgroundColor: `${priorityColor(item.priority)}22` }]}>
@@ -376,7 +403,7 @@ export default function ExamStrategyBuilderScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.topicTitle, { color: colors.text }]}>{item.topic}</Text>
-                  <Text style={[styles.topicMeta, { color: colors.textMuted }]}>{item.subject} · Weightage: {item.weightageMarks} marks</Text>
+                  <Text style={[styles.topicMeta, { color: colors.textMuted }]}>{item.subject} - Weightage: {item.weightageMarks} marks</Text>
                   <Text style={[styles.topicReason, { color: colors.textMuted }]}>{item.reason}</Text>
                 </View>
               </View>
@@ -384,23 +411,48 @@ export default function ExamStrategyBuilderScreen() {
           </View>
 
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>Weekly Study Plan</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Revision Plan</Text>
             {strategy.weeklyPlan.map((week) => (
               <View key={week.week} style={[styles.weekCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-                <Text style={[styles.weekTitle, { color: colors.text }]}>{week.week} · {week.title}</Text>
+                <Text style={[styles.weekTitle, { color: colors.text }]}>{week.week} - {week.title}</Text>
                 {week.tasks.map((task) => (
-                  <Text key={task} style={[styles.weekTask, { color: colors.textMuted }]}>✓ {task}</Text>
+                  <Text key={task} style={[styles.weekTask, { color: colors.textMuted }]}>- {task}</Text>
                 ))}
               </View>
             ))}
           </View>
 
+          <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>Important Questions</Text>
+            {strategy.importantQuestions?.available ? (
+              Object.entries(strategy.importantQuestions.groups || {}).map(([groupKey, questions]) => {
+                const cleanQuestions = (questions || []).slice(0, 6);
+                if (!cleanQuestions.length) return null;
+                return (
+                  <View key={groupKey} style={styles.questionGroup}>
+                    <Text style={[styles.questionGroupTitle, { color: colors.text }]}>{QUESTION_GROUP_LABELS[groupKey] || groupKey}</Text>
+                    {cleanQuestions.map((item, index) => (
+                      <View key={`${groupKey}-${item.subject}-${item.chapter}-${index}`} style={[styles.questionCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                        <Text style={[styles.questionText, { color: colors.text }]}>{item.question}</Text>
+                        <Text style={[styles.topicMeta, { color: colors.textMuted }]}>
+                          {[item.subject, item.chapter, item.page ? `Page ${item.page}` : ""].filter(Boolean).join(" | ")}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={[styles.cardMeta, { color: colors.textMuted }]}>Question extraction from real academic PDFs is pending for this selection.</Text>
+            )}
+          </View>
+
           <View style={[styles.tipCard, { backgroundColor: "#FFF7ED", borderColor: "#FED7AA" }]}>
             <Ionicons name="trophy" size={22} color="#F97316" />
             <View style={{ flex: 1 }}>
-              <Text style={styles.tipTitle}>Plan smart. Prepare better. Score higher.</Text>
+              <Text style={styles.tipTitle}>Practice & Mock Tests</Text>
               {strategy.reminders.map((item) => (
-                <Text key={item} style={styles.tipText}>• {item}</Text>
+                <Text key={item} style={styles.tipText}>- {item}</Text>
               ))}
             </View>
           </View>
@@ -415,7 +467,6 @@ const styles = StyleSheet.create({
   hero: { borderWidth: 1, borderRadius: 28, padding: 18, gap: 16 },
   heroTop: { flexDirection: "row", alignItems: "center", gap: 14 },
   heroIcon: { width: 58, height: 58, borderRadius: 21, alignItems: "center", justifyContent: "center" },
-  featureTag: { fontSize: 12, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.8 },
   title: { fontSize: 32, lineHeight: 38, fontWeight: "900", marginTop: 2 },
   subtitle: { fontSize: 14, lineHeight: 21, fontWeight: "700", marginTop: 5 },
   benefitRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
@@ -428,12 +479,16 @@ const styles = StyleSheet.create({
   twoCol: { flexDirection: "row", gap: 10 },
   flexInput: { flex: 1 },
   subjectGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  subjectTile: { width: "30.5%", minHeight: 92, borderWidth: 1, borderRadius: 18, padding: 9, alignItems: "center", justifyContent: "center", gap: 7 },
+  subjectTile: { minWidth: 104, flexGrow: 1, flexBasis: "30%", minHeight: 82, borderWidth: 1, borderRadius: 18, padding: 9, alignItems: "center", justifyContent: "center", gap: 7 },
   subjectIcon: { width: 40, height: 40, borderRadius: 15, alignItems: "center", justifyContent: "center" },
-  subjectText: { textAlign: "center", fontSize: 11, fontWeight: "900" },
+  subjectText: { textAlign: "center", fontSize: 11, lineHeight: 15, fontWeight: "900", flexShrink: 1 },
+  topicGroups: { gap: 10 },
+  topicGroup: { borderWidth: 1, borderRadius: 16, padding: 10, gap: 10 },
+  topicGroupHeader: { minHeight: 32, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  topicGroupTitle: { fontSize: 14, fontWeight: "900", flexShrink: 1 },
   topicChipGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  topicChip: { width: "48%", minHeight: 76, borderWidth: 1, borderRadius: 16, padding: 10, gap: 5 },
-  topicChipTitle: { fontSize: 12, lineHeight: 16, fontWeight: "900" },
+  topicChip: { minWidth: 146, flexBasis: "48%", flexGrow: 1, minHeight: 76, borderWidth: 1, borderRadius: 16, padding: 10, gap: 5 },
+  topicChipTitle: { fontSize: 12, lineHeight: 17, fontWeight: "900", flexShrink: 1 },
   topicChipMeta: { fontSize: 10, fontWeight: "800" },
   error: { fontWeight: "800" },
   primaryBtn: { minHeight: 54, borderRadius: 999, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
@@ -460,6 +515,10 @@ const styles = StyleSheet.create({
   weekCard: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 6 },
   weekTitle: { fontWeight: "900" },
   weekTask: { lineHeight: 19, fontWeight: "700" },
+  questionGroup: { gap: 8 },
+  questionGroupTitle: { fontSize: 14, fontWeight: "900" },
+  questionCard: { borderWidth: 1, borderRadius: 14, padding: 11, gap: 5 },
+  questionText: { fontSize: 13, lineHeight: 19, fontWeight: "800" },
   tipCard: { borderWidth: 1, borderRadius: 22, padding: 14, flexDirection: "row", gap: 10 },
   tipTitle: { color: "#9A3412", fontWeight: "900", marginBottom: 5 },
   tipText: { color: "#7C2D12", lineHeight: 20, fontWeight: "700" }

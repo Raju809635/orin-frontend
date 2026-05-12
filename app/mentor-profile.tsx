@@ -172,6 +172,19 @@ const MENTOR_ORG_ROLE_OPTIONS: { value: MentorProfile["mentorOrgRole"]; label: s
   { value: "global_mentor", label: "Global Mentor", note: "After-12 mentorship, paid sessions, sprints, pricing, and bookings." },
   { value: "institution_teacher", label: "Global Teacher", note: "ORIN high-school creator. Select Global High School, institution, or class while uploading each item." }
 ];
+const HIGH_SCHOOL_TEACHER_SUBJECTS = [
+  "Telugu",
+  "Hindi",
+  "English",
+  "Mathematics",
+  "Science",
+  "Physical Science",
+  "Biological Science",
+  "Social Studies",
+  "Social Science",
+  "Computer",
+  "Sanskrit"
+];
 
 export default function MentorProfileScreen() {
   const { colors } = useAppTheme();
@@ -529,6 +542,11 @@ export default function MentorProfileScreen() {
       setError(null);
       const payload = {
         ...profile,
+        primaryCategory: profile.mentorOrgRole === "institution_teacher" ? "Academic" : profile.primaryCategory,
+        subCategory: profile.mentorOrgRole === "institution_teacher" ? "School" : profile.subCategory,
+        specializations: profile.mentorOrgRole === "institution_teacher"
+          ? profile.specializations.filter((item) => HIGH_SCHOOL_TEACHER_SUBJECTS.includes(item))
+          : profile.specializations,
         institutionName: String(profile.institutionName || institutionQuery || "").trim(),
         institutionType: String(profile.institutionType || "").trim(),
         institutionDistrict: String(profile.institutionDistrict || "").trim(),
@@ -541,7 +559,9 @@ export default function MentorProfileScreen() {
             ? ["manage_assigned_classes", "review_submissions", "award_xp", "recommend_certificates"]
             : [],
         state: String(profile.state || "").trim(),
-        expertiseDomains: profile.specializations,
+        expertiseDomains: profile.mentorOrgRole === "institution_teacher"
+          ? profile.specializations.filter((item) => HIGH_SCHOOL_TEACHER_SUBJECTS.includes(item))
+          : profile.specializations,
         education: profile.education.filter((item) => item.school || item.degree || item.year),
         achievements: profile.achievements.filter((item) => item.title || item.issuer || item.date || item.url),
         projects: profile.projects
@@ -607,8 +627,8 @@ export default function MentorProfileScreen() {
       setAssignedClassesDraft(
         (Array.isArray(profileData.assignedClasses) ? profileData.assignedClasses.filter(Boolean) : payload.assignedClasses).join(", ")
       );
-      const nextProjects = Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects;
-      setProjectTechDrafts(Object.fromEntries(nextProjects.map((item, index) => [index, item.tech.join(", ")])));
+      const nextProjects: ProfileProject[] = Array.isArray(profileData.projects) ? profileData.projects.map(normalizeProject) : payload.projects;
+      setProjectTechDrafts(Object.fromEntries(nextProjects.map((item: ProfileProject, index: number) => [index, item.tech.join(", ")])));
       try {
         await refreshAuthUser();
       } catch {
@@ -747,7 +767,12 @@ export default function MentorProfileScreen() {
                   prev
                     ? {
                         ...prev,
-                        mentorOrgRole: option.value
+                        mentorOrgRole: option.value,
+                        primaryCategory: option.value === "institution_teacher" ? "Academic" : prev.primaryCategory,
+                        subCategory: option.value === "institution_teacher" ? "School" : prev.subCategory,
+                        specializations: option.value === "institution_teacher"
+                          ? prev.specializations.filter((item) => HIGH_SCHOOL_TEACHER_SUBJECTS.includes(item))
+                          : prev.specializations
                       }
                     : prev
                 )
@@ -860,7 +885,7 @@ export default function MentorProfileScreen() {
         </Text>
       ) : null}
 
-      {profile.mentorOrgRole !== "global_mentor" ? (
+      {profile.mentorOrgRole === "organisation_head" ? (
         <>
           <Text style={[styles.label, { color: colors.text }]}>Assigned Classes</Text>
           <ClassSectionSelector value={assignedClassPick} onChange={setAssignedClassPick} />
@@ -929,82 +954,107 @@ export default function MentorProfileScreen() {
         onChangeText={(phoneNumber) => setProfile((prev) => (prev ? { ...prev, phoneNumber } : prev))}
       />
 
-      <Text style={[styles.label, { color: colors.text }]}>Primary Category</Text>
-      <View style={styles.selectionWrap}>
-        {categories.map((cat) => {
-          const active = profile.primaryCategory === cat.primary;
-          return (
-            <TouchableOpacity
-              key={cat.primary}
-              style={[styles.optionChip, active && styles.optionChipActive]}
-              onPress={() =>
-                setProfile((prev) =>
-                  prev
-                    ? {
-                        ...prev,
-                        primaryCategory: cat.primary,
-                        subCategory: "",
-                        specializations: []
-                      }
-                    : prev
-                )
-              }
-            >
-              <Text style={[styles.optionText, active && styles.optionTextActive]}>{cat.primary}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      {profile.mentorOrgRole === "institution_teacher" ? (
+        <>
+          <Text style={[styles.label, { color: colors.text }]}>High School Subjects</Text>
+          <Text style={[styles.hint, { color: colors.textMuted }]}>
+            These subjects control where high-school students see you as a Global Teacher.
+          </Text>
+          <View style={styles.selectionWrap}>
+            {HIGH_SCHOOL_TEACHER_SUBJECTS.map((spec) => {
+              const active = profile.specializations.includes(spec);
+              return (
+                <TouchableOpacity
+                  key={spec}
+                  style={[styles.optionChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
+                  onPress={() => toggleSpecialization(spec)}
+                >
+                  <Text style={[styles.optionText, { color: active ? colors.accent : colors.textMuted }, active && styles.optionTextActive]}>{spec}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </>
+      ) : (
+        <>
+          <Text style={[styles.label, { color: colors.text }]}>Primary Category</Text>
+          <View style={styles.selectionWrap}>
+            {categories.map((cat) => {
+              const active = profile.primaryCategory === cat.primary;
+              return (
+                <TouchableOpacity
+                  key={cat.primary}
+                  style={[styles.optionChip, active && styles.optionChipActive]}
+                  onPress={() =>
+                    setProfile((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            primaryCategory: cat.primary,
+                            subCategory: "",
+                            specializations: []
+                          }
+                        : prev
+                    )
+                  }
+                >
+                  <Text style={[styles.optionText, active && styles.optionTextActive]}>{cat.primary}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
 
-      <Text style={[styles.label, { color: colors.text }]}>Subcategory</Text>
-      <View style={styles.selectionWrap}>
-        {subCategoryOptions.length === 0 ? (
-          <Text style={[styles.hint, { color: colors.textMuted }]}>Choose primary category first.</Text>
-        ) : (
-          subCategoryOptions.map((sub) => {
-            const active = profile.subCategory === sub.sub;
-            return (
-              <TouchableOpacity
-                key={sub.sub}
-                style={[styles.optionChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
-                onPress={() =>
-                  setProfile((prev) =>
-                    prev
-                      ? {
-                          ...prev,
-                          subCategory: sub.sub,
-                          specializations: []
-                        }
-                      : prev
-                  )
-                }
-              >
-                <Text style={[styles.optionText, { color: active ? colors.accent : colors.textMuted }, active && styles.optionTextActive]}>{sub.sub}</Text>
-              </TouchableOpacity>
-            );
-          })
-        )}
-      </View>
+          <Text style={[styles.label, { color: colors.text }]}>Subcategory</Text>
+          <View style={styles.selectionWrap}>
+            {subCategoryOptions.length === 0 ? (
+              <Text style={[styles.hint, { color: colors.textMuted }]}>Choose primary category first.</Text>
+            ) : (
+              subCategoryOptions.map((sub) => {
+                const active = profile.subCategory === sub.sub;
+                return (
+                  <TouchableOpacity
+                    key={sub.sub}
+                    style={[styles.optionChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
+                    onPress={() =>
+                      setProfile((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              subCategory: sub.sub,
+                              specializations: []
+                            }
+                          : prev
+                      )
+                    }
+                  >
+                    <Text style={[styles.optionText, { color: active ? colors.accent : colors.textMuted }, active && styles.optionTextActive]}>{sub.sub}</Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </View>
 
-      <Text style={[styles.label, { color: colors.text }]}>Specializations</Text>
-      <View style={styles.selectionWrap}>
-        {specializationOptions.length === 0 ? (
-          <Text style={[styles.hint, { color: colors.textMuted }]}>Choose subcategory first.</Text>
-        ) : (
-          specializationOptions.map((spec) => {
-            const active = profile.specializations.includes(spec);
-            return (
-              <TouchableOpacity
-                key={spec}
-                style={[styles.optionChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
-                onPress={() => toggleSpecialization(spec)}
-              >
-                <Text style={[styles.optionText, { color: active ? colors.accent : colors.textMuted }, active && styles.optionTextActive]}>{spec}</Text>
-              </TouchableOpacity>
-            );
-          })
-        )}
-      </View>
+          <Text style={[styles.label, { color: colors.text }]}>Specializations</Text>
+          <View style={styles.selectionWrap}>
+            {specializationOptions.length === 0 ? (
+              <Text style={[styles.hint, { color: colors.textMuted }]}>Choose subcategory first.</Text>
+            ) : (
+              specializationOptions.map((spec) => {
+                const active = profile.specializations.includes(spec);
+                return (
+                  <TouchableOpacity
+                    key={spec}
+                    style={[styles.optionChip, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }, active && [styles.optionChipActive, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]]}
+                    onPress={() => toggleSpecialization(spec)}
+                  >
+                    <Text style={[styles.optionText, { color: active ? colors.accent : colors.textMuted }, active && styles.optionTextActive]}>{spec}</Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </View>
+        </>
+      )}
 
       <Text style={[styles.label, { color: colors.text }]}>Reorder Selected Specializations (drag)</Text>
       {profile.specializations.length === 0 ? <Text style={[styles.hint, { color: colors.textMuted }]}>Select at least one specialization.</Text> : null}

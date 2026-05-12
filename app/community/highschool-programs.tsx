@@ -97,7 +97,7 @@ export default function HighSchoolProgramsScreen() {
       refreshing={refreshing}
       onRefresh={() => load(true)}
     >
-      <CommunitySection title="Program Filters" subtitle="Challenges do not appear here. They stay in School Challenges." icon="options">
+      <CommunitySection title="Program Filters" subtitle="Challenges do not appear here. They stay in Challenges." icon="options">
         <View style={styles.filterRow}>
           {FILTERS.map((item) => {
             const active = filter === item.key;

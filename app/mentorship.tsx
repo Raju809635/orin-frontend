@@ -24,7 +24,18 @@ if (Platform.OS !== "web") {
 
 type MentorshipSectionId = "discovery" | "interaction" | "session_management";
 
-type VerifiedMentor = { mentorId: string; name: string; title?: string; rating?: number; verifiedBadge?: boolean };
+type VerifiedMentor = {
+  mentorId: string;
+  name: string;
+  title?: string;
+  rating?: number;
+  verifiedBadge?: boolean;
+  mentorOrgRole?: "global_mentor" | "institution_teacher" | "organisation_head";
+  expertiseDomains?: string[];
+  specializations?: string[];
+  primaryCategory?: string;
+  subCategory?: string;
+};
 type MentorGroupItem = { id: string; name: string; schedule?: string; membersCount?: number; mentor?: { name?: string } };
 type LiveSessionItem = {
   id: string;
@@ -101,6 +112,7 @@ type SessionItem = {
   time: string;
   amount: number;
   currency?: string;
+  paymentMode?: string;
   paymentStatus?: string;
   sessionStatus?: string;
   status?: string;
@@ -144,7 +156,9 @@ export default function MentorshipHubScreen() {
       else setLoading(true);
       setError(null);
       const [verifiedRes, groupsRes, liveRes, sprintRes, historyRes, sessionsRes, bookingsRes] = await Promise.allSettled([
-        api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
+        api.get<VerifiedMentor[]>("/api/network/verified-mentors", {
+          params: isHighSchool ? { audienceStage: "highschool" } : undefined
+        }),
         api.get<MentorGroupItem[]>("/api/network/mentor-groups"),
         api.get<LiveSessionItem[]>("/api/network/live-sessions"),
         api.get<SprintItem[]>("/api/network/sprints"),
@@ -165,7 +179,7 @@ export default function MentorshipHubScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [isMentor]);
+  }, [isHighSchool, isMentor]);
 
   useFocusEffect(
     useCallback(() => {
@@ -229,9 +243,12 @@ export default function MentorshipHubScreen() {
 
   const filteredVerifiedMentors = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    if (!query) return verifiedMentors;
-    return verifiedMentors.filter((item) => `${item.name || ""} ${item.title || ""}`.toLowerCase().includes(query));
-  }, [searchQuery, verifiedMentors]);
+    const scoped = isHighSchool ? verifiedMentors.filter((item) => item.mentorOrgRole === "institution_teacher") : verifiedMentors;
+    if (!query) return scoped;
+    return scoped.filter((item) =>
+      `${item.name || ""} ${item.title || ""} ${(item.expertiseDomains || []).join(" ")} ${(item.specializations || []).join(" ")}`.toLowerCase().includes(query)
+    );
+  }, [isHighSchool, searchQuery, verifiedMentors]);
 
   const filteredMentorGroups = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -636,7 +653,7 @@ export default function MentorshipHubScreen() {
           ) : (
             <>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/domains" as never)}>
-                <Text style={[styles.cardTitle, { color: colors.text }]}>{isHighSchool ? "Teacher Guidance" : isKid ? "Teachers & Subjects" : "Domains"}</Text>
+                <Text style={[styles.cardTitle, { color: colors.text }]}>{isHighSchool ? "Academic Subjects" : isKid ? "Teachers & Subjects" : "Domains"}</Text>
                 <Text style={[styles.meta, { color: colors.textMuted }]}>{isHighSchool ? "Browse subject teachers, academic guidance areas, and doubt-support categories." : isKid ? "Browse teachers and school-friendly learning categories." : "Browse mentorship categories and mentors."}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={[styles.card, getPanelCardStyle("blue")]} onPress={() => router.push("/domain-guide" as never)}>
@@ -649,9 +666,16 @@ export default function MentorshipHubScreen() {
                   <Text style={[styles.meta, { color: colors.textMuted }]}>{isHighSchool ? "Verified teachers will appear here after ORIN review." : "No verified mentors available now."}</Text>
                 ) : (
                   filteredVerifiedMentors.slice(0, 6).map((item) => (
-                    <Text key={item.mentorId} style={[styles.meta, { color: colors.textMuted }]}>
-                      {item.name} {item.verifiedBadge ? "(Verified)" : ""}{isHighSchool ? "" : ` | Rating ${item.rating || 0}`}
-                    </Text>
+                    <View key={item.mentorId} style={[styles.teacherMiniCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                      <Text style={[styles.cardTitle, { color: colors.text }]}>{item.name} {item.verifiedBadge ? "(Verified)" : ""}</Text>
+                      <Text style={[styles.meta, { color: colors.textMuted }]}>
+                        {isHighSchool
+                          ? (item.expertiseDomains?.length || item.specializations?.length
+                            ? [...(item.expertiseDomains || []), ...(item.specializations || [])].slice(0, 4).join(" | ")
+                            : item.title || "Academic Teacher")
+                          : `Rating ${item.rating || 0}`}
+                      </Text>
+                    </View>
                   ))
                 )}
               </View>
@@ -1007,6 +1031,13 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.78)",
     padding: 10,
     gap: 4,
+    marginTop: 8
+  },
+  teacherMiniCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 10,
+    gap: 3,
     marginTop: 8
   },
   liveSessionImage: {

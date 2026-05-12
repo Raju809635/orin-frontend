@@ -9,6 +9,10 @@ export type AuthUser = {
   name: string;
   email: string;
   role: "student" | "mentor";
+  learnerStage?: "highschool" | "after12";
+  className?: string;
+  institutionName?: string;
+  institutionType?: string;
   isAdmin?: boolean;
   approvalStatus?: "pending" | "approved" | "rejected";
   mentorOrgRole?: "global_mentor" | "institution_teacher" | "organisation_head";
