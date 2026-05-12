@@ -30,7 +30,8 @@ type PlanWeek = {
     summary?: string[];
     keyPoints?: string[];
     definitions?: { term: string; meaning: string }[];
-    diagrams?: { title: string; whatToLearn?: string }[];
+    diagrams?: { title: string; whatToLearn?: string; page?: number; pdfUrl?: string }[];
+    pageRefs?: { page?: number; preview?: string; pdfUrl?: string }[];
     activities?: string[];
     practice?: string[];
     quizQuestions?: { id?: string; question: string; options: string[]; correct: string; explanation?: string }[];
@@ -466,7 +467,20 @@ function WeekDetailModal({ week, colors, isDark, onClose }: { week: PlanWeek | n
                     {detail.diagrams.map((item) => (
                       <View key={item.title} style={[styles.definitionRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
                         <Text style={[styles.definitionTerm, { color: colors.text }]}>{item.title}</Text>
-                        <Text style={[styles.definitionMeaning, { color: colors.textMuted }]}>{item.whatToLearn || "Practice labels, process order, and explanation."}</Text>
+                        <Text style={[styles.definitionMeaning, { color: colors.textMuted }]}>
+                          {item.whatToLearn || "Practice labels, process order, and explanation."}{item.page ? ` Page ${item.page}.` : ""}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                ) : null}
+                {detail?.pageRefs?.length ? (
+                  <View style={styles.detailBlock}>
+                    <Text style={[styles.detailTitle, { color: colors.text }]}>Textbook Page References</Text>
+                    {detail.pageRefs.map((item, index) => (
+                      <View key={`${item.page || index}-${item.preview}`} style={[styles.definitionRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                        <Text style={[styles.definitionTerm, { color: colors.text }]}>Page {item.page || index + 1}</Text>
+                        {item.preview ? <Text style={[styles.definitionMeaning, { color: colors.textMuted }]}>{item.preview}</Text> : null}
                       </View>
                     ))}
                   </View>
