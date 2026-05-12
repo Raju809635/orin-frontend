@@ -208,6 +208,7 @@ export default function HighSchoolStudyRoadmapScreen() {
   const [loadingContext, setLoadingContext] = useState(false);
   const [loadingInstitution, setLoadingInstitution] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
+  const [engineStatus, setEngineStatus] = useState("");
 
   const activeMission = useMemo(
     () => roadmap?.steps.find((step) => step.status === "active") || roadmap?.steps.find((step) => !step.completed) || null,
@@ -358,7 +359,11 @@ export default function HighSchoolStudyRoadmapScreen() {
     setStatusMessage("");
     const fallback = buildLocalRoadmap(subject, classLevel, chapter, goal);
     try {
-      const { data } = await api.post<{ source?: "ai" | "fallback" | "lesson_dataset"; roadmap?: StudyRoadmap }>("/api/ai/highschool/study-roadmap", {
+      const { data } = await api.post<{
+        source?: "ai" | "fallback" | "lesson_dataset" | string;
+        roadmap?: StudyRoadmap;
+        meta?: { aiEngine?: { enabled?: boolean; reason?: string; hits?: number } };
+      }>("/api/ai/highschool/study-roadmap", {
         classLevel,
         board,
         subject,
@@ -371,6 +376,14 @@ export default function HighSchoolStudyRoadmapScreen() {
       const next = data?.roadmap || fallback;
       setRoadmap({ ...next, steps: (next.steps || []).map(normalizeStep) });
       setStatusMessage(String(data?.source || "").includes("lesson") ? "ORIN created a lesson-backed weekly roadmap from textbook content." : data?.source === "ai" ? "AI created your academic mission roadmap." : "Using a safe roadmap until AI is available.");
+      const aiEngine = data?.meta?.aiEngine;
+      setEngineStatus(
+        aiEngine
+          ? aiEngine.enabled
+            ? `AI Engine connected • ${aiEngine.hits || 0} context hits`
+            : `AI Engine fallback • ${aiEngine.reason || "deterministic dataset used"}`
+          : ""
+      );
       setProofText("");
       setProofLink("");
       setSelectedWeek(null);
@@ -380,6 +393,7 @@ export default function HighSchoolStudyRoadmapScreen() {
     } catch (error) {
       setRoadmap(fallback);
       setStatusMessage(getAppErrorMessage(error, "AI roadmap is unavailable, so ORIN loaded a safe mission roadmap."));
+      setEngineStatus("");
     } finally {
       setLoading(false);
     }
@@ -527,7 +541,10 @@ export default function HighSchoolStudyRoadmapScreen() {
         {statusMessage ? (
           <View style={[styles.notice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <Ionicons name="sparkles" size={18} color={colors.accent} />
-            <Text style={[styles.noticeText, { color: colors.textMuted }]}>{statusMessage}</Text>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={[styles.noticeText, { color: colors.textMuted }]}>{statusMessage}</Text>
+              {engineStatus ? <Text style={[styles.noticeText, { color: colors.accent }]}>{engineStatus}</Text> : null}
+            </View>
           </View>
         ) : null}
 
