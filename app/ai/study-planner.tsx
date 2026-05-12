@@ -151,6 +151,7 @@ export default function HighSchoolStudyPlannerScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [statusMessage, setStatusMessage] = useState("");
+  const [engineStatus, setEngineStatus] = useState("");
 
   const taskProgress = useMemo(() => {
     const tasks = plan?.dailyTasks || [];
@@ -238,6 +239,7 @@ export default function HighSchoolStudyPlannerScreen() {
         dataPendingReason?: string;
         profile?: StudyProfile;
         plan?: StudyPlan;
+        meta?: { aiEngine?: { enabled?: boolean; reason?: string; hits?: number } };
       }>("/api/ai/highschool/study-planner", {
         mode: plannerMode,
         subject,
@@ -252,6 +254,7 @@ export default function HighSchoolStudyPlannerScreen() {
         setPlan(null);
         setStudyProfile(data?.profile || studyProfile);
         setStatusMessage(data?.dataPendingReason || "Take Subject Gap Analyzer first to unlock Smart Plan.");
+        setEngineStatus("");
         return;
       }
       setPlan(data?.plan || fallback);
@@ -267,10 +270,19 @@ export default function HighSchoolStudyPlannerScreen() {
               ? "Using verified SSC 10 extracted topics for this study plan."
               : (data?.dataPendingReason || "Topic-aware planning is currently available for SSC Class 10 only.")
       );
+      const aiEngine = data?.meta?.aiEngine;
+      setEngineStatus(
+        aiEngine
+          ? aiEngine.enabled
+            ? `AI Engine connected • ${aiEngine.hits || 0} context hits`
+            : `AI Engine fallback • ${aiEngine.reason || "deterministic dataset used"}`
+          : ""
+      );
     } catch (err) {
       setPlan(fallback);
       setChecked({});
       setStatusMessage(getAppErrorMessage(err, "AI planner is unavailable, so ORIN loaded a safe study plan."));
+      setEngineStatus("");
     } finally {
       setLoading(false);
     }
@@ -303,7 +315,10 @@ export default function HighSchoolStudyPlannerScreen() {
       {statusMessage ? (
         <View style={[styles.aiNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <Ionicons name="sparkles" size={18} color={colors.accent} />
-          <Text style={[styles.aiNoticeText, { color: colors.textMuted }]}>{statusMessage}</Text>
+          <View style={{ flex: 1, gap: 4 }}>
+            <Text style={[styles.aiNoticeText, { color: colors.textMuted }]}>{statusMessage}</Text>
+            {engineStatus ? <Text style={[styles.aiNoticeText, { color: colors.accent }]}>{engineStatus}</Text> : null}
+          </View>
         </View>
       ) : null}
 

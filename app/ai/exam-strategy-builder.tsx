@@ -106,6 +106,7 @@ export default function ExamStrategyBuilderScreen() {
   const [strategy, setStrategy] = useState<StrategyResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [engineStatus, setEngineStatus] = useState("");
 
   const selectedLabel = useMemo(() => selectedSubjects.join(", "), [selectedSubjects]);
   const groupedTopics = useMemo(() => selectedSubjects.map((subject) => ({
@@ -207,6 +208,7 @@ export default function ExamStrategyBuilderScreen() {
         datasetScope?: { board?: string; classLevel?: string; subject?: string; chapter?: string };
         dataPendingReason?: string;
         strategy?: StrategyResponse;
+        meta?: { aiEngine?: { enabled?: boolean; reason?: string; hits?: number } };
       }>("/api/ai/highschool/exam-strategy", {
         examName,
         examDate,
@@ -219,12 +221,21 @@ export default function ExamStrategyBuilderScreen() {
         timePerDay
       });
       setStrategy(data.strategy || null);
+      const aiEngine = data?.meta?.aiEngine;
+      setEngineStatus(
+        aiEngine
+          ? aiEngine.enabled
+            ? `AI Engine connected • ${aiEngine.hits || 0} context hits`
+            : `AI Engine fallback • ${aiEngine.reason || "deterministic dataset used"}`
+          : ""
+      );
       if (!data?.strategy && data?.dataPendingReason) {
         setError(data.dataPendingReason);
       }
     } catch (err) {
       setError(getAppErrorMessage(err, "Unable to build exam strategy. Please try again."));
       setStrategy(null);
+      setEngineStatus("");
     } finally {
       setLoading(false);
     }
@@ -350,6 +361,12 @@ export default function ExamStrategyBuilderScreen() {
       </View>
 
       {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
+      {engineStatus ? (
+        <View style={[styles.engineNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Ionicons name="hardware-chip-outline" size={16} color="#F97316" />
+          <Text style={[styles.engineNoticeText, { color: colors.textMuted }]}>{engineStatus}</Text>
+        </View>
+      ) : null}
       <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: "#F97316" }]} onPress={buildStrategy} disabled={loading}>
         {loading ? <ActivityIndicator color="#FFFFFF" /> : <Ionicons name="flash" size={18} color="#FFFFFF" />}
         <Text style={styles.primaryText}>{loading ? "Building Strategy..." : "Generate Exam Strategy"}</Text>
@@ -491,6 +508,8 @@ const styles = StyleSheet.create({
   topicChipTitle: { fontSize: 12, lineHeight: 17, fontWeight: "900", flexShrink: 1 },
   topicChipMeta: { fontSize: 10, fontWeight: "800" },
   error: { fontWeight: "800" },
+  engineNotice: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 8 },
+  engineNoticeText: { fontSize: 12, fontWeight: "800", flex: 1 },
   primaryBtn: { minHeight: 54, borderRadius: 999, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 8 },
   primaryText: { color: "#FFFFFF", fontWeight: "900", fontSize: 16 },
   strategyHero: { borderWidth: 1, borderRadius: 24, padding: 16, flexDirection: "row", gap: 14, alignItems: "center" },
