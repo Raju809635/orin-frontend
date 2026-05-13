@@ -261,8 +261,8 @@ export default function ExamStrategyBuilderScreen() {
       setEngineStatus(
         aiEngine
           ? aiEngine.enabled
-            ? `AI Engine connected • ${aiEngine.hits || 0} context hits`
-            : `AI Engine fallback • ${aiEngine.reason || "deterministic dataset used"}`
+            ? `AI Engine connected - ${aiEngine.hits || 0} context hits`
+            : `AI Engine fallback - ${aiEngine.reason || "deterministic dataset used"}`
           : ""
       );
       if (!data?.strategy && data?.dataPendingReason) {
