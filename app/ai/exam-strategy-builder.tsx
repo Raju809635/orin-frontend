@@ -47,7 +47,14 @@ const SUBJECTS = [
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
 const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
 type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
-type TopicOption = { subject: string; chapter: string; topic: string };
+type TopicOption = {
+  subject: string;
+  chapter: string;
+  topic: string;
+  selectionKey: string;
+  displayTitle: string;
+  displayMeta: string;
+};
 type AcademicSubjectResponse = {
   subject?: {
     chapters?: { chapter_name?: string; topics?: { topic_name?: string }[] }[];
@@ -85,6 +92,39 @@ function priorityColor(priority: string) {
   if (priority === "high") return "#F97316";
   if (priority === "medium") return "#F59E0B";
   return "#12B76A";
+}
+
+function isGenericAcademicTopic(value: string) {
+  return /\b(lesson reading|meanings? and vocabulary|vocabulary|comprehension questions?|grammar|grammar or writing practice|revision quiz|project work|study skills|oral activity|writing)\b/i.test(
+    String(value || "").trim()
+  );
+}
+
+function buildTopicOption(subject: string, chapter: string, topic: string): TopicOption {
+  const safeChapter = String(chapter || "").trim();
+  const safeTopic = String(topic || "").trim();
+  const genericTopic = isGenericAcademicTopic(safeTopic);
+  const sameAsChapter = safeTopic && safeChapter && safeTopic.toLowerCase() === safeChapter.toLowerCase();
+  const displayTitle = genericTopic || sameAsChapter ? safeChapter || safeTopic : safeTopic || safeChapter;
+  const displayMeta = genericTopic && safeTopic
+    ? safeTopic
+    : safeChapter && safeTopic && !sameAsChapter
+      ? safeChapter
+      : subject;
+  const selectionKey = genericTopic
+    ? safeChapter || safeTopic
+    : safeChapter && safeTopic && !sameAsChapter
+      ? `${safeChapter} - ${safeTopic}`
+      : safeTopic || safeChapter;
+
+  return {
+    subject,
+    chapter: safeChapter,
+    topic: safeTopic,
+    selectionKey,
+    displayTitle,
+    displayMeta
+  };
 }
 
 export default function ExamStrategyBuilderScreen() {
@@ -155,20 +195,16 @@ export default function ExamStrategyBuilderScreen() {
         return chapters.flatMap((chapter: any) => {
           const chapterName = String(chapter?.chapter_name || chapter?.name || "").trim();
           const topics = Array.isArray(chapter?.topics) ? chapter.topics : [];
-          if (!topics.length && chapterName) return [{ subject, chapter: chapterName, topic: chapterName }];
+          if (!topics.length && chapterName) return [buildTopicOption(subject, chapterName, chapterName)];
           return topics
-            .map((topic: any) => ({
-              subject,
-              chapter: chapterName,
-              topic: String(topic?.topic_name || topic?.name || topic || "").trim()
-            }))
-            .filter((item: TopicOption) => item.topic);
+            .map((topic: any) => buildTopicOption(subject, chapterName, String(topic?.topic_name || topic?.name || topic || "").trim()))
+            .filter((item: TopicOption) => item.selectionKey);
         });
       })
     );
     const next = results.flatMap((result) => (result.status === "fulfilled" ? result.value : [])).slice(0, 80);
     setTopicPool(next);
-    setSelectedTopics((prev) => prev.filter((topic) => next.some((item) => item.topic === topic)).slice(0, 16));
+    setSelectedTopics((prev) => prev.filter((topic) => next.some((item) => item.selectionKey === topic)).slice(0, 16));
   }, [board, classLevel, selectedSubjects, subjectOptions]);
 
   useEffect(() => {
@@ -337,15 +373,15 @@ export default function ExamStrategyBuilderScreen() {
                   {expanded ? (
                     <View style={styles.topicChipGrid}>
                       {group.topics.map((item) => {
-                        const active = selectedTopics.includes(item.topic);
+                        const active = selectedTopics.includes(item.selectionKey);
                         return (
                           <TouchableOpacity
-                            key={`${item.subject}-${item.chapter}-${item.topic}`}
+                            key={`${item.subject}-${item.chapter}-${item.selectionKey}`}
                             style={[styles.topicChip, { backgroundColor: active ? "#FFF7ED" : colors.surface, borderColor: active ? "#FB923C" : colors.border }]}
-                            onPress={() => toggleTopic(item.topic)}
+                            onPress={() => toggleTopic(item.selectionKey)}
                           >
-                            <Text style={[styles.topicChipTitle, { color: active ? "#9A3412" : colors.text }]}>{item.topic}</Text>
-                            <Text style={[styles.topicChipMeta, { color: colors.textMuted }]} numberOfLines={1}>{item.chapter}</Text>
+                            <Text style={[styles.topicChipTitle, { color: active ? "#9A3412" : colors.text }]}>{item.displayTitle}</Text>
+                            <Text style={[styles.topicChipMeta, { color: colors.textMuted }]} numberOfLines={1}>{item.displayMeta}</Text>
                           </TouchableOpacity>
                         );
                       })}
