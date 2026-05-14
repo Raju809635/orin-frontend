@@ -80,11 +80,14 @@ function getTabKeyForPath(pathname: string): AppTabKey | null {
   return null;
 }
 
-type MentorOrgRole = "global_mentor" | "institution_teacher" | "organisation_head";
+type MentorOrgRole = "global_mentor" | "institution_teacher" | "organisation_head" | string;
 
-function getMentorMode(user?: { mentorOrgRole?: MentorOrgRole }) {
-  if (user?.mentorOrgRole === "organisation_head") return "head";
-  if (user?.mentorOrgRole === "institution_teacher") return "teacher";
+function getMentorMode(user?: { mentorOrgRole?: MentorOrgRole; primaryCategory?: string; subCategory?: string }) {
+  const role = String(user?.mentorOrgRole || "").trim().toLowerCase();
+  if (role === "organisation_head" || role === "organization_head" || role.includes("head")) return "head";
+  if (role === "institution_teacher" || role === "global_teacher" || role === "teacher" || role.includes("teacher")) return "teacher";
+  const category = `${user?.primaryCategory || ""} ${user?.subCategory || ""}`.toLowerCase();
+  if (category.includes("academic") && category.includes("school")) return "teacher";
   return "global";
 }
 
@@ -266,6 +269,7 @@ function RootDrawer() {
       pathname.startsWith("/my-profile") ||
       pathname.startsWith("/learner-onboarding") ||
       pathname.startsWith("/institution-management") ||
+      pathname.startsWith("/global-teacher") ||
       pathname.startsWith("/student-dashboard") ||
       pathname.startsWith("/mentor-dashboard") ||
       pathname.startsWith("/admin-dashboard") ||

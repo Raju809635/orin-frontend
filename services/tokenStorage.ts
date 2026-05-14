@@ -15,7 +15,7 @@ export type AuthUser = {
   institutionType?: string;
   isAdmin?: boolean;
   approvalStatus?: "pending" | "approved" | "rejected";
-  mentorOrgRole?: "global_mentor" | "institution_teacher" | "organisation_head";
+  mentorOrgRole?: "global_mentor" | "institution_teacher" | "organisation_head" | "global_teacher" | string;
   primaryCategory?: string;
   subCategory?: string;
   specializations?: string[];

@@ -17,6 +17,13 @@ import { useAuth } from "@/context/AuthContext";
 
 type SectionKey = "overview" | "community" | "mentorship" | "reviews";
 
+const SECTIONS: { key: SectionKey }[] = [
+  { key: "overview" },
+  { key: "community" },
+  { key: "mentorship" },
+  { key: "reviews" }
+];
+
 type AnyRow = Record<string, any>;
 type GroupRow = AnyRow & { id?: string; _id?: string; name?: string; membersCount?: number; joinRequests?: any[]; pendingRequests?: any[] };
 type SubmissionRow = AnyRow & {

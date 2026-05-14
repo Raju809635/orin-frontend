@@ -17,7 +17,7 @@ type RegisterPayload = {
   learnerStage?: "highschool" | "after12";
   studentYear?: string;
   phoneNumber?: string;
-  mentorOrgRole?: "global_mentor" | "institution_teacher" | "organisation_head";
+  mentorOrgRole?: "global_mentor" | "institution_teacher" | "organisation_head" | "global_teacher" | string;
   institutionName?: string;
   institutionType?: string;
   institutionDistrict?: string;
@@ -65,12 +65,18 @@ type RegisterResponse = {
 
 function mergeMentorProfileIntoUser(user: AuthUser, profilePayload: any, userPayload?: any): AuthUser {
   if (user.role !== "mentor") return user;
-  const mentorOrgRole = profilePayload?.mentorOrgRole;
+  const mentorOrgRole = String(profilePayload?.mentorOrgRole || userPayload?.mentorOrgRole || user.mentorOrgRole || "").trim();
+  const normalizedRole =
+    mentorOrgRole === "global_teacher" || mentorOrgRole === "teacher"
+      ? "institution_teacher"
+      : mentorOrgRole;
   return {
     ...user,
     approvalStatus: userPayload?.approvalStatus || userPayload?.status || user.approvalStatus,
-    mentorOrgRole: ["institution_teacher", "organisation_head", "global_mentor"].includes(mentorOrgRole)
-      ? mentorOrgRole
+    primaryCategory: userPayload?.primaryCategory || user.primaryCategory,
+    subCategory: userPayload?.subCategory || user.subCategory,
+    mentorOrgRole: ["institution_teacher", "organisation_head", "global_mentor"].includes(normalizedRole)
+      ? normalizedRole
       : user.mentorOrgRole || "global_mentor"
   };
 }
