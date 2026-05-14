@@ -1,7 +1,10 @@
 import React, { useCallback, useMemo, useState } from "react";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
+import { useAuth } from "@/context/AuthContext";
+import { useAppTheme } from "@/context/ThemeContext";
 import {
   AcademicCard,
   AcademicEmpty,
@@ -22,6 +25,10 @@ type MentorGroupItem = {
   schedule?: string;
   joined?: boolean;
   requestPending?: boolean;
+  ownedByMe?: boolean;
+  pendingRequestsCount?: number;
+  pendingRequests?: { id: string; name?: string; email?: string }[];
+  members?: { id: string; name?: string; email?: string }[];
 };
 
 function groupId(group: MentorGroupItem) {
@@ -30,12 +37,24 @@ function groupId(group: MentorGroupItem) {
 
 export default function HighSchoolStudyGroupsScreen() {
   const router = useRouter();
+  const { user } = useAuth();
+  const { colors } = useAppTheme();
   const [groups, setGroups] = useState<MentorGroupItem[]>([]);
   const [posts, setPosts] = useState<FeedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [joiningId, setJoiningId] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    domain: "",
+    description: "",
+    schedule: "",
+    maxStudents: "50",
+    topicTags: ""
+  });
 
   const load = useCallback(async (refresh = false) => {
     try {
@@ -63,7 +82,48 @@ export default function HighSchoolStudyGroupsScreen() {
   );
 
   const joinedGroups = useMemo(() => groups.filter((item) => item.joined), [groups]);
+  const isMentor = user?.role === "mentor";
+  const managedGroups = useMemo(() => groups.filter((item) => item.ownedByMe || String(item.mentor?.id || "") === String(user?.id || "")), [groups, user?.id]);
   const recommendedGroups = useMemo(() => groups.filter((item) => !item.joined).slice(0, 6), [groups]);
+
+  async function createGroup() {
+    const name = form.name.trim();
+    if (!name) {
+      Alert.alert("Create Group", "Group name is required.");
+      return;
+    }
+    try {
+      setCreating(true);
+      await api.post("/api/network/mentor-groups", {
+        name,
+        domain: form.domain.trim(),
+        description: form.description.trim(),
+        schedule: form.schedule.trim() || "Weekly sessions",
+        maxStudents: Number(form.maxStudents || 50),
+        topicTags: form.topicTags.split(",").map((item) => item.trim()).filter(Boolean)
+      });
+      setForm({ name: "", domain: "", description: "", schedule: "", maxStudents: "50", topicTags: "" });
+      await load(true);
+    } catch (e) {
+      handleAppError(e, { mode: "alert", title: "Create Group", fallbackMessage: "Unable to create the study group right now." });
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function respondToRequest(group: MentorGroupItem, studentId: string, action: "approve" | "reject") {
+    const id = groupId(group);
+    if (!id || !studentId) return;
+    try {
+      setRespondingId(`${id}-${studentId}`);
+      await api.patch(`/api/network/mentor-groups/${id}/requests/${studentId}`, { action });
+      await load(true);
+    } catch (e) {
+      handleAppError(e, { mode: "alert", title: "Join Request", fallbackMessage: "Unable to update this group request right now." });
+    } finally {
+      setRespondingId(null);
+    }
+  }
 
   async function joinGroup(group: MentorGroupItem) {
     const id = groupId(group);
@@ -82,10 +142,11 @@ export default function HighSchoolStudyGroupsScreen() {
   function openGroup(group: MentorGroupItem) {
     const id = groupId(group);
     if (!id) return;
-    if (group.joined) {
+    if (group.joined || group.ownedByMe || String(group.mentor?.id || "") === String(user?.id || "")) {
       router.push(`/mentor-group-chat/${id}` as never);
       return;
     }
+    if (isMentor) return;
     joinGroup(group);
   }
 
@@ -103,7 +164,68 @@ export default function HighSchoolStudyGroupsScreen() {
       refreshing={refreshing}
       onRefresh={() => load(true)}
     >
-      <CommunitySection title="Joined Groups" subtitle="Tap to open real group chat." icon="chatbubbles">
+      {isMentor ? (
+        <CommunitySection title="Create Study Group" subtitle="Create academic groups for students. Groups stay inside Community, not the bottom tabs." icon="add-circle">
+          <View style={[styles.formCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+            <Text style={[styles.formTitle, { color: colors.text }]}>New Group</Text>
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Group name, e.g. SSC 10 Maths Revision" placeholderTextColor={colors.textMuted} value={form.name} onChangeText={(name) => setForm((current) => ({ ...current, name }))} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Subject / domain" placeholderTextColor={colors.textMuted} value={form.domain} onChangeText={(domain) => setForm((current) => ({ ...current, domain }))} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Schedule, e.g. Mon-Wed 7 PM" placeholderTextColor={colors.textMuted} value={form.schedule} onChangeText={(schedule) => setForm((current) => ({ ...current, schedule }))} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Max students" placeholderTextColor={colors.textMuted} value={form.maxStudents} keyboardType="number-pad" onChangeText={(maxStudents) => setForm((current) => ({ ...current, maxStudents }))} />
+            <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Tags, comma separated" placeholderTextColor={colors.textMuted} value={form.topicTags} onChangeText={(topicTags) => setForm((current) => ({ ...current, topicTags }))} />
+            <TextInput style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="What will students do in this group?" placeholderTextColor={colors.textMuted} multiline value={form.description} onChangeText={(description) => setForm((current) => ({ ...current, description }))} />
+            <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={createGroup} disabled={creating}>
+              <Text style={styles.primaryButtonText}>{creating ? "Creating..." : "Create Group"}</Text>
+            </TouchableOpacity>
+          </View>
+        </CommunitySection>
+      ) : null}
+
+      {isMentor ? (
+        <CommunitySection title="My Study Groups" subtitle="Open group chat and manage student join requests." icon="people">
+          {managedGroups.length ? (
+            managedGroups.map((group) => (
+              <View key={`managed-${groupId(group)}`} style={styles.groupStack}>
+                <AcademicCard
+                  icon="chatbubbles-outline"
+                  title={group.name}
+                  meta={`${group.domain || "Study Group"} Â· ${group.membersCount || 0}/${group.maxStudents || 50} students Â· ${group.pendingRequestsCount || 0} requests`}
+                  note={`${group.schedule || "Weekly guidance"} Â· ${(group.topicTags || []).slice(0, 3).join(", ") || group.description || "Academic discussion"}`}
+                  badge="Managed"
+                  badgeTone="success"
+                  actionLabel="Open Chat"
+                  onPress={() => openGroup(group)}
+                />
+                {(group.pendingRequests || []).length ? (
+                  <View style={[styles.requestBox, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                    {(group.pendingRequests || []).map((student) => {
+                      const requestKey = `${groupId(group)}-${student.id}`;
+                      return (
+                        <View key={requestKey} style={styles.requestRow}>
+                          <View style={styles.requestText}>
+                            <Text style={[styles.requestName, { color: colors.text }]}>{student.name || "Student"}</Text>
+                            <Text style={[styles.requestMeta, { color: colors.textMuted }]}>{student.email || "Join request"}</Text>
+                          </View>
+                          <TouchableOpacity style={[styles.smallButton, { borderColor: colors.accent }]} onPress={() => respondToRequest(group, student.id, "approve")} disabled={respondingId === requestKey}>
+                            <Text style={[styles.smallButtonText, { color: colors.accent }]}>{respondingId === requestKey ? "..." : "Approve"}</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity style={[styles.smallButton, { borderColor: colors.danger }]} onPress={() => respondToRequest(group, student.id, "reject")} disabled={respondingId === requestKey}>
+                            <Text style={[styles.smallButtonText, { color: colors.danger }]}>Reject</Text>
+                          </TouchableOpacity>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </View>
+            ))
+          ) : (
+            <AcademicEmpty label="No study groups created yet." actionLabel="Create your first group" onAction={createGroup} />
+          )}
+        </CommunitySection>
+      ) : null}
+
+      {!isMentor ? <CommunitySection title="Joined Groups" subtitle="Tap to open real group chat." icon="chatbubbles">
         {joinedGroups.length ? (
           joinedGroups.map((group) => (
             <AcademicCard
@@ -121,9 +243,9 @@ export default function HighSchoolStudyGroupsScreen() {
         ) : (
           <AcademicEmpty label="You have not joined any study group yet. Request a group below." />
         )}
-      </CommunitySection>
+      </CommunitySection> : null}
 
-      <CommunitySection title="Recommended Subject & Exam Groups" subtitle="Uses the same mentor group backend. No fake group cards." icon="people">
+      <CommunitySection title={isMentor ? "All Active Study Groups" : "Recommended Subject & Exam Groups"} subtitle={isMentor ? "Browse active groups created by approved teachers and mentors." : "Uses the same mentor group backend. No fake group cards."} icon="people">
         {recommendedGroups.length ? (
           recommendedGroups.map((group) => {
             const id = groupId(group);
@@ -134,9 +256,9 @@ export default function HighSchoolStudyGroupsScreen() {
                 title={group.name}
                 meta={`${group.domain || "Academic Group"} · Mentor: ${group.mentor?.name || "Guide"} · ${group.membersCount || 0} members`}
                 note={group.description || (group.requestPending ? "Request already sent. Waiting for mentor approval." : "Request to join this study group.")}
-                badge={group.requestPending ? "Pending" : "Request"}
+                badge={isMentor ? "Active" : group.requestPending ? "Pending" : "Request"}
                 badgeTone={group.requestPending ? "warning" : "primary"}
-                actionLabel={joiningId === id ? "Requesting..." : group.requestPending ? "Pending" : "Request Join"}
+                actionLabel={isMentor ? "View" : joiningId === id ? "Requesting..." : group.requestPending ? "Pending" : "Request Join"}
                 onPress={() => openGroup(group)}
               />
             );
@@ -166,3 +288,70 @@ export default function HighSchoolStudyGroupsScreen() {
     </HighSchoolCommunityShell>
   );
 }
+
+const styles = StyleSheet.create({
+  formCard: {
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14,
+    gap: 10
+  },
+  formTitle: {
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  input: {
+    borderWidth: 1,
+    borderRadius: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 11,
+    fontWeight: "700"
+  },
+  textArea: {
+    minHeight: 82,
+    textAlignVertical: "top"
+  },
+  primaryButton: {
+    borderRadius: 14,
+    paddingVertical: 13,
+    alignItems: "center"
+  },
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "900"
+  },
+  groupStack: {
+    gap: 8
+  },
+  requestBox: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 10,
+    gap: 8
+  },
+  requestRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8
+  },
+  requestText: {
+    flex: 1
+  },
+  requestName: {
+    fontWeight: "900"
+  },
+  requestMeta: {
+    fontSize: 12,
+    fontWeight: "700"
+  },
+  smallButton: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7
+  },
+  smallButtonText: {
+    fontSize: 12,
+    fontWeight: "900"
+  }
+});
