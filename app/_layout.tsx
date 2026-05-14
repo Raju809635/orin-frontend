@@ -25,6 +25,7 @@ import { ThemeProvider, useAppTheme } from "@/context/ThemeContext";
 import { api, pingBackendReady } from "@/lib/api";
 import { recordAppMetric } from "@/lib/appMetrics";
 import { LEARNER_ONBOARDING_COMPLETING_KEY, LEARNER_ONBOARDING_PENDING_KEY } from "@/lib/learnerExperience";
+import { addNotificationTapListener } from "@/lib/pushNotifications";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 function defaultRouteByRole(role: "student" | "mentor") {
@@ -149,6 +150,13 @@ function RootDrawer() {
     ai: [],
     community: []
   });
+
+  useEffect(() => {
+    const subscription = addNotificationTapListener(() => {
+      router.push("/notifications" as never);
+    });
+    return () => subscription.remove();
+  }, [router]);
 
   useEffect(() => {
     recordAppMetric("app_open");

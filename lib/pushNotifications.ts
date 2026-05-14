@@ -89,3 +89,29 @@ export async function unregisterLastPushToken() {
     lastRegisteredToken = "";
   }
 }
+
+export async function setPushNotificationsEnabled(enabled: boolean) {
+  if (enabled) {
+    return registerForPushNotifications();
+  }
+  await unregisterLastPushToken();
+  return null;
+}
+
+export async function getPushNotificationStatus() {
+  if (Platform.OS === "web") return { available: false, granted: false, status: "web" };
+  if (!Device.isDevice) return { available: false, granted: false, status: "simulator" };
+  const permissions = await Notifications.getPermissionsAsync();
+  return {
+    available: true,
+    granted: permissions.status === "granted",
+    status: permissions.status
+  };
+}
+
+export function addNotificationTapListener(onOpen: (data: Record<string, any>) => void) {
+  return Notifications.addNotificationResponseReceivedListener((response) => {
+    const data = (response.notification.request.content.data || {}) as Record<string, any>;
+    onOpen(data);
+  });
+}

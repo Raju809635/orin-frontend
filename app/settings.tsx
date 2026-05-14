@@ -15,6 +15,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import { notify } from "@/utils/notify";
+import { getPushNotificationStatus, setPushNotificationsEnabled } from "@/lib/pushNotifications";
 
 type Preferences = {
   notificationPreferences: {
@@ -41,6 +42,8 @@ export default function SettingsScreen() {
   const [prefs, setPrefs] = useState<Preferences>(defaultPrefs);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testingPush, setTestingPush] = useState(false);
+  const [pushStatus, setPushStatus] = useState<string>("");
   const [changingPassword, setChangingPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -54,6 +57,18 @@ export default function SettingsScreen() {
       try {
         const { data } = await api.get<Preferences>("/api/settings/preferences");
         if (mounted) setPrefs(data);
+        const status = await getPushNotificationStatus();
+        if (mounted) {
+          setPushStatus(
+            status.granted
+              ? "Device permission granted"
+              : status.available
+                ? "Device permission not granted"
+                : status.status === "simulator"
+                  ? "Use a real phone to receive push notifications"
+                  : "Push notifications are unavailable here"
+          );
+        }
       } catch (e: any) {
         if (mounted) setError(e?.response?.data?.message || "Failed to load settings");
       } finally {
@@ -70,11 +85,40 @@ export default function SettingsScreen() {
       setSaving(true);
       setError(null);
       await api.patch("/api/settings/preferences", prefs);
+      await setPushNotificationsEnabled(prefs.notificationPreferences.push);
+      const status = await getPushNotificationStatus();
+      setPushStatus(status.granted ? "Device permission granted" : status.available ? "Device permission not granted" : pushStatus);
       notify("Preferences updated");
     } catch (e: any) {
       setError(e?.response?.data?.message || "Failed to update preferences");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function sendTestPush() {
+    try {
+      setTestingPush(true);
+      setError(null);
+      if (!prefs.notificationPreferences.push) {
+        setPrefs((p) => ({ ...p, notificationPreferences: { ...p.notificationPreferences, push: true } }));
+        await api.patch("/api/settings/preferences", {
+          notificationPreferences: { ...prefs.notificationPreferences, push: true }
+        });
+      }
+      const token = await setPushNotificationsEnabled(true);
+      if (!token) {
+        setPushStatus("Allow notification permission on this phone, then try again.");
+        return;
+      }
+      await api.post("/api/messages/notifications/test-push");
+      const status = await getPushNotificationStatus();
+      setPushStatus(status.granted ? "Test notification sent to this phone" : "Notification permission is not granted");
+      notify("Test notification sent");
+    } catch (e: any) {
+      setError(e?.response?.data?.message || e?.message || "Failed to send test notification");
+    } finally {
+      setTestingPush(false);
     }
   }
 
@@ -172,10 +216,19 @@ export default function SettingsScreen() {
           label="Push Notifications"
           labelColor={colors.text}
           value={prefs.notificationPreferences.push}
-          onValueChange={(value) =>
-            setPrefs((p) => ({ ...p, notificationPreferences: { ...p.notificationPreferences, push: value } }))
-          }
+          onValueChange={(value) => {
+            setPrefs((p) => ({ ...p, notificationPreferences: { ...p.notificationPreferences, push: value } }));
+            if (!value) setPushNotificationsEnabled(false).catch(() => null);
+          }}
         />
+        <Text style={[styles.helperText, { color: colors.textMuted }]}>{pushStatus}</Text>
+        <TouchableOpacity
+          style={[styles.linkRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+          onPress={sendTestPush}
+          disabled={testingPush}
+        >
+          <Text style={[styles.linkText, { color: colors.text }]}>{testingPush ? "Sending test..." : "Send Test Push Notification"}</Text>
+        </TouchableOpacity>
         <RowSwitch
           label="SMS Notifications"
           labelColor={colors.text}
