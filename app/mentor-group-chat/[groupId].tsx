@@ -3,9 +3,12 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Image,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -18,18 +21,32 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
 import GlobalHeader from "@/components/global-header";
+import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
+import { pickAndUploadProgramDocument } from "@/utils/programDocumentUpload";
 
 type GroupMeta = {
   id: string;
   name: string;
   domain?: string;
   description?: string;
+  avatarUrl?: string;
+  rules?: string;
+  schedule?: string;
   membersCount?: number;
+  ownedByMe?: boolean;
+  settings?: {
+    joinApproval?: boolean;
+    allowMemberMessages?: boolean;
+    allowMemberMedia?: boolean;
+    allowReactions?: boolean;
+  };
 };
 
 type GroupMessage = {
   id: string;
   text: string;
+  attachments?: { type: "image" | "file"; url: string; name?: string; mimeType?: string }[];
+  reactions?: { emoji: string; count: number; reactedByMe?: boolean }[];
   createdAt: string;
   editedAt?: string | null;
   sender: {
@@ -58,8 +75,22 @@ export default function MentorGroupChatScreen() {
   const [sending, setSending] = useState(false);
   const [editingId, setEditingId] = useState("");
   const scrollRef = useRef<ScrollView | null>(null);
+  const [attachments, setAttachments] = useState<{ type: "image" | "file"; url: string; name?: string; mimeType?: string }[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({
+    name: "",
+    description: "",
+    rules: "",
+    schedule: "",
+    joinApproval: true,
+    allowMemberMessages: true,
+    allowMemberMedia: true,
+    allowReactions: true
+  });
 
   const resolvedGroupId = useMemo(() => String(groupId || "").trim(), [groupId]);
+  const mediaDisabled = !group?.ownedByMe && group?.settings?.allowMemberMedia === false;
 
   const loadThread = useCallback(async () => {
     if (!resolvedGroupId) return;
@@ -70,6 +101,18 @@ export default function MentorGroupChatScreen() {
       );
       setGroup(data.group || null);
       setMessages(data.messages || []);
+      if (data.group) {
+        setSettingsForm({
+          name: data.group.name || "",
+          description: data.group.description || "",
+          rules: data.group.rules || "",
+          schedule: data.group.schedule || "",
+          joinApproval: data.group.settings?.joinApproval !== false,
+          allowMemberMessages: data.group.settings?.allowMemberMessages !== false,
+          allowMemberMedia: data.group.settings?.allowMemberMedia !== false,
+          allowReactions: data.group.settings?.allowReactions !== false
+        });
+      }
     } catch (e: any) {
       Alert.alert("Unable to load group chat", e?.response?.data?.message || "Please try again.");
     } finally {
@@ -97,7 +140,7 @@ export default function MentorGroupChatScreen() {
   }, [messages.length]);
 
   async function sendMessage() {
-    if (!resolvedGroupId || !text.trim()) return;
+    if (!resolvedGroupId || (!text.trim() && !attachments.length)) return;
     try {
       setSending(true);
       if (editingId) {
@@ -106,9 +149,10 @@ export default function MentorGroupChatScreen() {
         });
         setEditingId("");
       } else {
-        await api.post(`/api/network/mentor-groups/${resolvedGroupId}/messages`, { text: text.trim() });
+        await api.post(`/api/network/mentor-groups/${resolvedGroupId}/messages`, { text: text.trim(), attachments });
       }
       setText("");
+      setAttachments([]);
       await loadThread();
     } catch (e: any) {
       Alert.alert("Message failed", e?.response?.data?.message || "Please try again.");
@@ -125,6 +169,84 @@ export default function MentorGroupChatScreen() {
   function cancelEdit() {
     setEditingId("");
     setText("");
+    setAttachments([]);
+  }
+
+  async function attachPhoto() {
+    try {
+      const url = await pickAndUploadPostImage();
+      if (url) setAttachments((current) => [...current, { type: "image", url, name: "Photo" }].slice(0, 4));
+    } catch (e: any) {
+      Alert.alert("Photo failed", e?.message || "Unable to attach photo.");
+    }
+  }
+
+  async function attachFile() {
+    try {
+      const uploaded = await pickAndUploadProgramDocument();
+      if (uploaded?.url) {
+        setAttachments((current) => [
+          ...current,
+          { type: "file", url: uploaded.url, name: uploaded.fileName, mimeType: uploaded.mimeType }
+        ].slice(0, 4));
+      }
+    } catch (e: any) {
+      Alert.alert("File failed", e?.message || "Unable to attach file.");
+    }
+  }
+
+  async function reactToMessage(message: GroupMessage, emoji: string) {
+    if (!resolvedGroupId || !message.id) return;
+    try {
+      const { data } = await api.post<{ chatMessage?: GroupMessage }>(
+        `/api/network/mentor-groups/${resolvedGroupId}/messages/${message.id}/reactions`,
+        { emoji }
+      );
+      if (data.chatMessage) {
+        setMessages((current) => current.map((item) => (item.id === message.id ? data.chatMessage! : item)));
+      } else {
+        await loadThread();
+      }
+    } catch (e: any) {
+      Alert.alert("Reaction failed", e?.response?.data?.message || "Please try again.");
+    }
+  }
+
+  async function uploadGroupDp() {
+    if (!resolvedGroupId) return;
+    try {
+      const url = await pickAndUploadPostImage();
+      if (!url) return;
+      await api.patch(`/api/network/mentor-groups/${resolvedGroupId}`, { avatarUrl: url });
+      await loadThread();
+    } catch (e: any) {
+      Alert.alert("Group photo failed", e?.response?.data?.message || e?.message || "Please try again.");
+    }
+  }
+
+  async function saveSettings() {
+    if (!resolvedGroupId) return;
+    try {
+      setSavingSettings(true);
+      await api.patch(`/api/network/mentor-groups/${resolvedGroupId}`, {
+        name: settingsForm.name,
+        description: settingsForm.description,
+        rules: settingsForm.rules,
+        schedule: settingsForm.schedule,
+        settings: {
+          joinApproval: settingsForm.joinApproval,
+          allowMemberMessages: settingsForm.allowMemberMessages,
+          allowMemberMedia: settingsForm.allowMemberMedia,
+          allowReactions: settingsForm.allowReactions
+        }
+      });
+      setSettingsOpen(false);
+      await loadThread();
+    } catch (e: any) {
+      Alert.alert("Settings failed", e?.response?.data?.message || "Please try again.");
+    } finally {
+      setSavingSettings(false);
+    }
   }
 
   async function deleteMessage(message: GroupMessage) {
@@ -179,6 +301,15 @@ export default function MentorGroupChatScreen() {
             <TouchableOpacity onPress={() => router.back()}>
               <Ionicons name="arrow-back" size={20} color={colors.text} />
             </TouchableOpacity>
+            <TouchableOpacity onPress={group?.ownedByMe ? uploadGroupDp : undefined} activeOpacity={group?.ownedByMe ? 0.8 : 1}>
+              {group?.avatarUrl ? (
+                <Image source={{ uri: group.avatarUrl }} style={styles.groupAvatar} />
+              ) : (
+                <View style={[styles.groupAvatarFallback, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
+                  <Text style={[styles.groupAvatarText, { color: colors.accent }]}>{(group?.name || "G").slice(0, 2).toUpperCase()}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
             <View style={styles.headerMeta}>
               <Text style={[styles.headerTitle, { color: colors.text }]}>{group?.name || "Mentor Group"}</Text>
               <Text style={[styles.headerSubtitle, { color: colors.textMuted }]}>
@@ -187,6 +318,40 @@ export default function MentorGroupChatScreen() {
             </View>
           </View>
           {group?.description ? <Text style={[styles.headerDesc, { color: colors.textMuted }]}>{group.description}</Text> : null}
+          {group?.rules ? <Text style={[styles.headerRules, { color: colors.text }]}>Rules: {group.rules}</Text> : null}
+          {group?.ownedByMe ? (
+            <TouchableOpacity style={[styles.settingsToggle, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => setSettingsOpen((value) => !value)}>
+              <Ionicons name="settings-outline" size={16} color={colors.text} />
+              <Text style={[styles.settingsToggleText, { color: colors.text }]}>{settingsOpen ? "Close settings" : "Group settings"}</Text>
+            </TouchableOpacity>
+          ) : null}
+          {settingsOpen ? (
+            <View style={[styles.settingsPanel, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+              <TextInput style={[styles.settingsInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} value={settingsForm.name} onChangeText={(name) => setSettingsForm((current) => ({ ...current, name }))} placeholder="Group name" placeholderTextColor={colors.textMuted} />
+              <TextInput style={[styles.settingsInput, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} value={settingsForm.schedule} onChangeText={(schedule) => setSettingsForm((current) => ({ ...current, schedule }))} placeholder="Schedule" placeholderTextColor={colors.textMuted} />
+              <TextInput style={[styles.settingsInput, styles.settingsArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} value={settingsForm.description} onChangeText={(description) => setSettingsForm((current) => ({ ...current, description }))} placeholder="Description" placeholderTextColor={colors.textMuted} multiline />
+              <TextInput style={[styles.settingsInput, styles.settingsArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} value={settingsForm.rules} onChangeText={(rules) => setSettingsForm((current) => ({ ...current, rules }))} placeholder="Group rules" placeholderTextColor={colors.textMuted} multiline />
+              {[
+                ["joinApproval", "Approve join requests"],
+                ["allowMemberMessages", "Students can send messages"],
+                ["allowMemberMedia", "Students can send photos/files"],
+                ["allowReactions", "Allow emoji reactions"]
+              ].map(([key, label]) => (
+                <View key={key} style={styles.settingRow}>
+                  <Text style={[styles.settingLabel, { color: colors.text }]}>{label}</Text>
+                  <Switch
+                    value={Boolean((settingsForm as any)[key])}
+                    onValueChange={(value) => setSettingsForm((current) => ({ ...current, [key]: value }))}
+                    trackColor={{ false: colors.border, true: colors.accentSoft }}
+                    thumbColor={Boolean((settingsForm as any)[key]) ? colors.accent : colors.textMuted}
+                  />
+                </View>
+              ))}
+              <TouchableOpacity style={[styles.saveButton, { backgroundColor: colors.accent }]} onPress={saveSettings} disabled={savingSettings}>
+                <Text style={styles.saveButtonText}>{savingSettings ? "Saving..." : "Save Settings"}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
         </View>
 
         {loading ? (
@@ -216,7 +381,31 @@ export default function MentorGroupChatScreen() {
                       {!mine ? (
                         <Text style={[styles.senderName, { color: colors.accent }]}>{message.sender?.name || "Member"}</Text>
                       ) : null}
-                      <Text style={[styles.bubbleText, { color: mine ? "#FFFFFF" : colors.text }]}>{message.text}</Text>
+                      {message.text ? <Text style={[styles.bubbleText, { color: mine ? "#FFFFFF" : colors.text }]}>{message.text}</Text> : null}
+                      {(message.attachments || []).map((attachment, index) => (
+                        <TouchableOpacity key={`${message.id}-${attachment.url}-${index}`} style={[styles.attachmentCard, { backgroundColor: mine ? "rgba(255,255,255,0.14)" : colors.surface, borderColor: mine ? "rgba(255,255,255,0.2)" : colors.border }]} onPress={() => Linking.openURL(attachment.url)}>
+                          {attachment.type === "image" ? (
+                            <Image source={{ uri: attachment.url }} style={styles.attachmentImage} />
+                          ) : (
+                            <View style={styles.fileRow}>
+                              <Ionicons name="document-attach-outline" size={18} color={mine ? "#FFFFFF" : colors.accent} />
+                              <Text style={[styles.fileName, { color: mine ? "#FFFFFF" : colors.text }]} numberOfLines={1}>{attachment.name || "Open file"}</Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                      {group?.settings?.allowReactions !== false ? (
+                        <View style={styles.reactionBar}>
+                          {["👍", "❤️", "✅", "👏"].map((emoji) => {
+                            const reaction = (message.reactions || []).find((item) => item.emoji === emoji);
+                            return (
+                              <TouchableOpacity key={emoji} style={[styles.reactionBtn, { backgroundColor: reaction?.reactedByMe ? "rgba(255,255,255,0.22)" : "transparent", borderColor: mine ? "rgba(255,255,255,0.25)" : colors.border }]} onPress={() => reactToMessage(message, emoji)}>
+                                <Text style={styles.reactionText}>{emoji}{reaction?.count ? ` ${reaction.count}` : ""}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      ) : null}
                       <View style={styles.bubbleFooter}>
                         <Text style={[styles.bubbleMeta, { color: mine ? "#D1FADF" : colors.textMuted }]}>
                           {formatTime(message.createdAt)}
@@ -244,6 +433,33 @@ export default function MentorGroupChatScreen() {
       ) : null}
 
       <View style={[styles.composer, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <TouchableOpacity style={[styles.attachButton, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }, (editingId.length > 0 || mediaDisabled) && styles.disabledControl]} onPress={attachPhoto} disabled={editingId.length > 0 || mediaDisabled}>
+          <Ionicons name="image-outline" size={18} color={colors.text} />
+        </TouchableOpacity>
+        <TouchableOpacity style={[styles.attachButton, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }, (editingId.length > 0 || mediaDisabled) && styles.disabledControl]} onPress={attachFile} disabled={editingId.length > 0 || mediaDisabled}>
+          <Ionicons name="attach-outline" size={18} color={colors.text} />
+        </TouchableOpacity>
+        <View style={styles.composerMain}>
+          {attachments.length ? (
+            <View style={styles.pendingAttachments}>
+              {attachments.map((attachment, index) => (
+                <View key={`${attachment.url}-${index}`} style={[styles.pendingAttachment, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                  <Ionicons name={attachment.type === "image" ? "image-outline" : "document-attach-outline"} size={14} color={colors.accent} />
+                  <Text style={[styles.pendingAttachmentText, { color: colors.text }]} numberOfLines={1}>{attachment.name || (attachment.type === "image" ? "Photo" : "File")}</Text>
+                  <TouchableOpacity onPress={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))}>
+                    <Ionicons name="close" size={14} color={colors.textMuted} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          <View style={styles.quickEmojiRow}>
+            {["👍", "✅", "📌", "🙏", "🔥"].map((emoji) => (
+              <TouchableOpacity key={emoji} style={[styles.quickEmojiBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => setText((current) => `${current}${emoji}`)}>
+                <Text style={styles.quickEmojiText}>{emoji}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
         <TextInput
           style={[styles.input, { color: colors.text }]}
           value={text}
@@ -252,10 +468,11 @@ export default function MentorGroupChatScreen() {
           placeholderTextColor={colors.textMuted}
           multiline
         />
+        </View>
         <TouchableOpacity
-          style={[styles.sendBtn, { backgroundColor: colors.accent }, (!text.trim() || sending) && styles.sendBtnDisabled]}
+          style={[styles.sendBtn, { backgroundColor: colors.accent }, ((!text.trim() && !attachments.length) || sending) && styles.sendBtnDisabled]}
           onPress={sendMessage}
-          disabled={!text.trim() || sending}
+          disabled={(!text.trim() && !attachments.length) || sending}
         >
           <Ionicons name="send" size={16} color="#FFFFFF" />
         </TouchableOpacity>
@@ -289,6 +506,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10
   },
+  groupAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23
+  },
+  groupAvatarFallback: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  groupAvatarText: {
+    fontSize: 15,
+    fontWeight: "900"
+  },
   headerMeta: {
     flex: 1
   },
@@ -303,6 +537,66 @@ const styles = StyleSheet.create({
   headerDesc: {
     marginTop: 8,
     fontWeight: "600"
+  },
+  headerRules: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: "800",
+    lineHeight: 18
+  },
+  settingsToggle: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6
+  },
+  settingsToggleText: {
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  settingsPanel: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 10,
+    gap: 8
+  },
+  settingsInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    fontWeight: "700"
+  },
+  settingsArea: {
+    minHeight: 70,
+    textAlignVertical: "top"
+  },
+  settingRow: {
+    minHeight: 38,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  settingLabel: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  saveButton: {
+    borderRadius: 12,
+    paddingVertical: 11,
+    alignItems: "center"
+  },
+  saveButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "900"
   },
   messageList: {
     gap: 10
@@ -339,6 +633,44 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     lineHeight: 20
   },
+  attachmentCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    marginTop: 8,
+    overflow: "hidden"
+  },
+  attachmentImage: {
+    width: 210,
+    height: 150
+  },
+  fileRow: {
+    minWidth: 180,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    padding: 10
+  },
+  fileName: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  reactionBar: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 8
+  },
+  reactionBtn: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 4
+  },
+  reactionText: {
+    fontSize: 12,
+    fontWeight: "800"
+  },
   bubbleFooter: {
     flexDirection: "row",
     gap: 8,
@@ -360,6 +692,53 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 10
+  },
+  composerMain: {
+    flex: 1
+  },
+  attachButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4
+  },
+  disabledControl: {
+    opacity: 0.45
+  },
+  pendingAttachments: {
+    gap: 6,
+    marginBottom: 6
+  },
+  pendingAttachment: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6
+  },
+  pendingAttachmentText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  quickEmojiRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginBottom: 6
+  },
+  quickEmojiBtn: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4
+  },
+  quickEmojiText: {
+    fontSize: 13
   },
   input: {
     flex: 1,

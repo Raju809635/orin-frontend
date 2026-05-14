@@ -1,10 +1,11 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Image, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { getAppErrorMessage, handleAppError } from "@/lib/appError";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
+import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
 import {
   AcademicCard,
   AcademicEmpty,
@@ -19,10 +20,19 @@ type MentorGroupItem = {
   name: string;
   domain?: string;
   description?: string;
+  avatarUrl?: string;
+  rules?: string;
   membersCount?: number;
-  mentor?: { name?: string } | null;
+  maxStudents?: number;
+  mentor?: { id?: string; name?: string } | null;
   topicTags?: string[];
   schedule?: string;
+  settings?: {
+    joinApproval?: boolean;
+    allowMemberMessages?: boolean;
+    allowMemberMedia?: boolean;
+    allowReactions?: boolean;
+  };
   joined?: boolean;
   requestPending?: boolean;
   ownedByMe?: boolean;
@@ -51,9 +61,15 @@ export default function HighSchoolStudyGroupsScreen() {
     name: "",
     domain: "",
     description: "",
+    avatarUrl: "",
+    rules: "",
     schedule: "",
     maxStudents: "50",
-    topicTags: ""
+    topicTags: "",
+    joinApproval: true,
+    allowMemberMessages: true,
+    allowMemberMedia: true,
+    allowReactions: true
   });
 
   const load = useCallback(async (refresh = false) => {
@@ -98,11 +114,32 @@ export default function HighSchoolStudyGroupsScreen() {
         name,
         domain: form.domain.trim(),
         description: form.description.trim(),
+        avatarUrl: form.avatarUrl.trim(),
+        rules: form.rules.trim(),
         schedule: form.schedule.trim() || "Weekly sessions",
         maxStudents: Number(form.maxStudents || 50),
-        topicTags: form.topicTags.split(",").map((item) => item.trim()).filter(Boolean)
+        topicTags: form.topicTags.split(",").map((item) => item.trim()).filter(Boolean),
+        settings: {
+          joinApproval: form.joinApproval,
+          allowMemberMessages: form.allowMemberMessages,
+          allowMemberMedia: form.allowMemberMedia,
+          allowReactions: form.allowReactions
+        }
       });
-      setForm({ name: "", domain: "", description: "", schedule: "", maxStudents: "50", topicTags: "" });
+      setForm({
+        name: "",
+        domain: "",
+        description: "",
+        avatarUrl: "",
+        rules: "",
+        schedule: "",
+        maxStudents: "50",
+        topicTags: "",
+        joinApproval: true,
+        allowMemberMessages: true,
+        allowMemberMedia: true,
+        allowReactions: true
+      });
       await load(true);
     } catch (e) {
       handleAppError(e, { mode: "alert", title: "Create Group", fallbackMessage: "Unable to create the study group right now." });
@@ -150,6 +187,15 @@ export default function HighSchoolStudyGroupsScreen() {
     joinGroup(group);
   }
 
+  async function uploadGroupDp() {
+    try {
+      const url = await pickAndUploadPostImage();
+      if (url) setForm((current) => ({ ...current, avatarUrl: url }));
+    } catch (e) {
+      handleAppError(e, { mode: "alert", title: "Group DP", fallbackMessage: "Unable to upload group photo right now." });
+    }
+  }
+
   return (
     <HighSchoolCommunityShell
       title="Study Groups"
@@ -167,13 +213,46 @@ export default function HighSchoolStudyGroupsScreen() {
       {isMentor ? (
         <CommunitySection title="Create Study Group" subtitle="Create academic groups for students. Groups stay inside Community, not the bottom tabs." icon="add-circle">
           <View style={[styles.formCard, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
-            <Text style={[styles.formTitle, { color: colors.text }]}>New Group</Text>
+            <View style={styles.formHeader}>
+              {form.avatarUrl ? (
+                <Image source={{ uri: form.avatarUrl }} style={styles.groupDp} />
+              ) : (
+                <View style={[styles.groupDpFallback, { backgroundColor: colors.accentSoft, borderColor: colors.border }]}>
+                  <Text style={[styles.groupDpText, { color: colors.accent }]}>SG</Text>
+                </View>
+              )}
+              <View style={styles.formHeaderText}>
+                <Text style={[styles.formTitle, { color: colors.text }]}>New Study Group</Text>
+                <TouchableOpacity onPress={uploadGroupDp}>
+                  <Text style={[styles.linkText, { color: colors.accent }]}>{form.avatarUrl ? "Change group DP" : "Add group DP"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
             <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Group name, e.g. SSC 10 Maths Revision" placeholderTextColor={colors.textMuted} value={form.name} onChangeText={(name) => setForm((current) => ({ ...current, name }))} />
             <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Subject / domain" placeholderTextColor={colors.textMuted} value={form.domain} onChangeText={(domain) => setForm((current) => ({ ...current, domain }))} />
             <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Schedule, e.g. Mon-Wed 7 PM" placeholderTextColor={colors.textMuted} value={form.schedule} onChangeText={(schedule) => setForm((current) => ({ ...current, schedule }))} />
             <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Max students" placeholderTextColor={colors.textMuted} value={form.maxStudents} keyboardType="number-pad" onChangeText={(maxStudents) => setForm((current) => ({ ...current, maxStudents }))} />
             <TextInput style={[styles.input, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Tags, comma separated" placeholderTextColor={colors.textMuted} value={form.topicTags} onChangeText={(topicTags) => setForm((current) => ({ ...current, topicTags }))} />
             <TextInput style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="What will students do in this group?" placeholderTextColor={colors.textMuted} multiline value={form.description} onChangeText={(description) => setForm((current) => ({ ...current, description }))} />
+            <TextInput style={[styles.input, styles.textArea, { backgroundColor: colors.surface, borderColor: colors.border, color: colors.text }]} placeholder="Group rules, homework policy, permissions" placeholderTextColor={colors.textMuted} multiline value={form.rules} onChangeText={(rules) => setForm((current) => ({ ...current, rules }))} />
+            <View style={[styles.permissionBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              {[
+                ["joinApproval", "Approve join requests"],
+                ["allowMemberMessages", "Students can send messages"],
+                ["allowMemberMedia", "Students can send photos/files"],
+                ["allowReactions", "Allow emoji reactions"]
+              ].map(([key, label]) => (
+                <View key={key} style={styles.permissionRow}>
+                  <Text style={[styles.permissionLabel, { color: colors.text }]}>{label}</Text>
+                  <Switch
+                    value={Boolean((form as any)[key])}
+                    onValueChange={(value) => setForm((current) => ({ ...current, [key]: value }))}
+                    trackColor={{ false: colors.border, true: colors.accentSoft }}
+                    thumbColor={Boolean((form as any)[key]) ? colors.accent : colors.textMuted}
+                  />
+                </View>
+              ))}
+            </View>
             <TouchableOpacity style={[styles.primaryButton, { backgroundColor: colors.accent }]} onPress={createGroup} disabled={creating}>
               <Text style={styles.primaryButtonText}>{creating ? "Creating..." : "Create Group"}</Text>
             </TouchableOpacity>
@@ -300,6 +379,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "900"
   },
+  formHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  formHeaderText: {
+    flex: 1
+  },
+  groupDp: {
+    width: 58,
+    height: 58,
+    borderRadius: 29
+  },
+  groupDpFallback: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  groupDpText: {
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  linkText: {
+    marginTop: 4,
+    fontSize: 13,
+    fontWeight: "900"
+  },
   input: {
     borderWidth: 1,
     borderRadius: 13,
@@ -319,6 +428,24 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     color: "#FFFFFF",
     fontWeight: "900"
+  },
+  permissionBox: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 6
+  },
+  permissionRow: {
+    minHeight: 42,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  permissionLabel: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "800"
   },
   groupStack: {
     gap: 8
