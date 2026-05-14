@@ -9,7 +9,7 @@ import {
   View
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
@@ -66,9 +66,15 @@ function titleLabel(item: SubmissionRow) {
 export default function GlobalTeacherDashboard() {
   const router = useRouter();
   const params = useLocalSearchParams<{ section?: string }>();
+  const pathname = usePathname();
   const { user } = useAuth();
   const { colors, isDark } = useAppTheme();
-  const selected = String(params.section || "overview") as SectionKey;
+  const routeSection: SectionKey =
+    pathname.startsWith("/global-teacher-community") ? "community" :
+      pathname.startsWith("/global-teacher-mentorship") ? "mentorship" :
+        pathname.startsWith("/global-teacher-reviews") ? "reviews" :
+          "overview";
+  const selected = String(params.section || routeSection) as SectionKey;
   const activeSection: SectionKey = SECTIONS.some((item) => item.key === selected) ? selected : "overview";
 
   const [loading, setLoading] = useState(true);
@@ -197,7 +203,12 @@ export default function GlobalTeacherDashboard() {
   }, [reviews]);
 
   function go(section: SectionKey) {
-    router.replace(`/global-teacher-dashboard?section=${section}` as never);
+    const path =
+      section === "community" ? "/global-teacher-community" :
+        section === "mentorship" ? "/global-teacher-mentorship" :
+          section === "reviews" ? "/global-teacher-reviews" :
+            "/global-teacher-dashboard";
+    router.replace(path as never);
   }
 
   function open(path: string) {

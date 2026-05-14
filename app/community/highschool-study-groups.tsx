@@ -199,7 +199,7 @@ export default function HighSchoolStudyGroupsScreen() {
   return (
     <HighSchoolCommunityShell
       title="Study Groups"
-      subtitle="Real mentor-group data with WhatsApp-like academic group entry. Joined groups open the existing group chat directly."
+      subtitle="Teacher-created academic groups for revision, doubts, exams, and subject discussion. Joined groups open the live group chat."
       stats={[
         { icon: "people", label: "Groups", value: String(groups.length) },
         { icon: "chatbubbles", label: "Joined", value: String(joinedGroups.length) },

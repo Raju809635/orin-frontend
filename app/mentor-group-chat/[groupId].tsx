@@ -20,7 +20,6 @@ import * as Clipboard from "expo-clipboard";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useAppTheme } from "@/context/ThemeContext";
-import GlobalHeader from "@/components/global-header";
 import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
 import { pickAndUploadProgramDocument } from "@/utils/programDocumentUpload";
 
@@ -92,10 +91,10 @@ export default function MentorGroupChatScreen() {
   const resolvedGroupId = useMemo(() => String(groupId || "").trim(), [groupId]);
   const mediaDisabled = !group?.ownedByMe && group?.settings?.allowMemberMedia === false;
 
-  const loadThread = useCallback(async () => {
+  const loadThread = useCallback(async (silent = false) => {
     if (!resolvedGroupId) return;
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
       const { data } = await api.get<{ group: GroupMeta; messages: GroupMessage[] }>(
         `/api/network/mentor-groups/${resolvedGroupId}/messages`
       );
@@ -114,9 +113,9 @@ export default function MentorGroupChatScreen() {
         });
       }
     } catch (e: any) {
-      Alert.alert("Unable to load group chat", e?.response?.data?.message || "Please try again.");
+      if (!silent) Alert.alert("Unable to load group chat", e?.response?.data?.message || "Please try again.");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [resolvedGroupId]);
 
@@ -126,8 +125,8 @@ export default function MentorGroupChatScreen() {
 
   useEffect(() => {
     const interval = setInterval(() => {
-      loadThread();
-    }, 7000);
+      loadThread(true);
+    }, 4000);
     return () => clearInterval(interval);
   }, [loadThread]);
 
@@ -294,8 +293,6 @@ export default function MentorGroupChatScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: 120 }]}
         keyboardShouldPersistTaps="handled"
       >
-        <GlobalHeader title={group?.name || "Mentor Group"} subtitle={group?.domain || ""} />
-
         <View style={[styles.headerCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
           <View style={styles.headerRow}>
             <TouchableOpacity onPress={() => router.back()}>
