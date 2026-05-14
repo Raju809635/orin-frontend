@@ -75,6 +75,7 @@ export default function MentorGroupChatScreen() {
   const [editingId, setEditingId] = useState("");
   const scrollRef = useRef<ScrollView | null>(null);
   const [attachments, setAttachments] = useState<{ type: "image" | "file"; url: string; name?: string; mimeType?: string }[]>([]);
+  const [activeReactionMessageId, setActiveReactionMessageId] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsForm, setSettingsForm] = useState({
@@ -206,6 +207,7 @@ export default function MentorGroupChatScreen() {
       } else {
         await loadThread();
       }
+      setActiveReactionMessageId("");
     } catch (e: any) {
       Alert.alert("Reaction failed", e?.response?.data?.message || "Please try again.");
     }
@@ -263,6 +265,7 @@ export default function MentorGroupChatScreen() {
   }
 
   function handleMessageActions(message: GroupMessage) {
+    setActiveReactionMessageId(message.id);
     const mine = String(message.sender?.id || "") === String(user?.id || "");
     const actions = [
       { text: "Copy", onPress: () => copyMessage(message) },
@@ -366,6 +369,7 @@ export default function MentorGroupChatScreen() {
                 return (
                   <View key={message.id} style={[styles.messageRow, mine ? styles.messageRowMine : styles.messageRowOther]}>
                     <TouchableOpacity
+                      onPress={() => setActiveReactionMessageId((current) => (current === message.id ? "" : message.id))}
                       onLongPress={() => handleMessageActions(message)}
                       style={[
                         styles.bubble,
@@ -391,8 +395,8 @@ export default function MentorGroupChatScreen() {
                           )}
                         </TouchableOpacity>
                       ))}
-                      {group?.settings?.allowReactions !== false ? (
-                        <View style={styles.reactionBar}>
+                      {group?.settings?.allowReactions !== false && activeReactionMessageId === message.id ? (
+                        <View style={[styles.reactionPicker, { backgroundColor: colors.surface, borderColor: colors.border }]}>
                           {["👍", "❤️", "✅", "👏"].map((emoji) => {
                             const reaction = (message.reactions || []).find((item) => item.emoji === emoji);
                             return (
@@ -401,6 +405,13 @@ export default function MentorGroupChatScreen() {
                               </TouchableOpacity>
                             );
                           })}
+                        </View>
+                      ) : null}
+                      {(message.reactions || []).some((item) => item.count > 0) && activeReactionMessageId !== message.id ? (
+                        <View style={[styles.reactionSummary, { backgroundColor: mine ? "rgba(255,255,255,0.16)" : colors.surface, borderColor: mine ? "rgba(255,255,255,0.25)" : colors.border }]}>
+                          {(message.reactions || []).filter((item) => item.count > 0).slice(0, 4).map((item) => (
+                            <Text key={item.emoji} style={styles.reactionSummaryText}>{item.emoji}{item.count > 1 ? ` ${item.count}` : ""}</Text>
+                          ))}
                         </View>
                       ) : null}
                       <View style={styles.bubbleFooter}>
@@ -652,11 +663,15 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800"
   },
-  reactionBar: {
+  reactionPicker: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 6,
-    marginTop: 8
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 6,
+    alignSelf: "flex-start"
   },
   reactionBtn: {
     borderWidth: 1,
@@ -665,6 +680,20 @@ const styles = StyleSheet.create({
     paddingVertical: 4
   },
   reactionText: {
+    fontSize: 12,
+    fontWeight: "800"
+  },
+  reactionSummary: {
+    borderWidth: 1,
+    borderRadius: 999,
+    flexDirection: "row",
+    gap: 4,
+    alignSelf: "flex-start",
+    marginTop: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3
+  },
+  reactionSummaryText: {
     fontSize: 12,
     fontWeight: "800"
   },
