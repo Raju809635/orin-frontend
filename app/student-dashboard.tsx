@@ -193,6 +193,7 @@ type DailyDashboard = {
   xp: number;
   levelTag: string;
   reputationScore: number;
+  reputationBreakdown?: ReputationBreakdown;
   dailyQuiz?: {
     completedToday: boolean;
     domain: string;
@@ -419,6 +420,19 @@ type ReputationSummary = {
   score: number;
   levelTag: string;
   topPercent: number;
+  breakdown?: ReputationBreakdown;
+};
+type ReputationBreakdown = {
+  projectUploads?: number;
+  skillEndorsements?: number;
+  dailyChallenges?: number;
+  mentorReviews?: number;
+  activityPosts?: number;
+  dailyQuizXp?: number;
+  quizBattleXp?: number;
+  roadmapXp?: number;
+  challengeXp?: number;
+  resourceXp?: number;
 };
 type StudentProfileLite = {
   institutionName?: string;
@@ -598,6 +612,22 @@ export default function StudentDashboard() {
   const [knowledgeLibrary, setKnowledgeLibrary] = useState<LibraryItem[]>([]);
   const [institutionKnowledgeLibrary, setInstitutionKnowledgeLibrary] = useState<LibraryItem[]>([]);
   const [reputationSummary, setReputationSummary] = useState<ReputationSummary | null>(null);
+  const connectedXp = useMemo(() => {
+    const breakdown = dailyDashboard?.reputationBreakdown || reputationSummary?.breakdown || {};
+    const rows = [
+      { label: "Daily Quiz", value: Number(breakdown.dailyQuizXp || 0), route: "/student-dashboard?section=overview" },
+      { label: "Quiz Battle", value: Number(breakdown.quizBattleXp || 0), route: "/community/highschool-quiz-battle" },
+      { label: "Roadmaps", value: Number(breakdown.roadmapXp || 0), route: "/ai/highschool-study-roadmap" },
+      { label: "Challenges", value: Number(breakdown.challengeXp || 0), route: "/community/highschool-school-challenges" },
+      { label: "Resources", value: Number(breakdown.resourceXp || 0), route: "/community/highschool-resource-library" }
+    ];
+    return {
+      score: Number(reputationSummary?.score || dailyDashboard?.reputationScore || 0),
+      levelTag: reputationSummary?.levelTag || dailyDashboard?.levelTag || "Starter",
+      rows,
+      totalConnected: rows.reduce((sum, item) => sum + item.value, 0)
+    };
+  }, [dailyDashboard?.levelTag, dailyDashboard?.reputationBreakdown, dailyDashboard?.reputationScore, reputationSummary]);
   const [activeNewsTab, setActiveNewsTab] = useState<NewsCategoryKey>("tech");
   const [newsByCategory, setNewsByCategory] = useState<Record<NewsCategoryKey, NewsArticle[]>>({
     tech: [],
@@ -700,7 +730,8 @@ export default function StudentDashboard() {
       skillGapRes,
       verifiedMentorsRes,
       institutionRoadmapsRes,
-      studentProfileRes
+      studentProfileRes,
+      reputationSummaryRes
     ] = await Promise.allSettled([
       api.get<{ recommendations: MentorMatch[] }>("/api/network/mentor-matches"),
       api.get<CareerRoadmapResponse>("/api/network/career-roadmap"),
@@ -709,7 +740,8 @@ export default function StudentDashboard() {
       api.get<SkillGapResponse>("/api/network/skill-gap"),
       api.get<VerifiedMentor[]>("/api/network/verified-mentors"),
       api.get<{ roadmaps: InstitutionRoadmapItem[] }>("/api/network/institution-roadmaps"),
-      api.get<{ profile?: StudentProfileLite }>("/api/profiles/student/me")
+      api.get<{ profile?: StudentProfileLite }>("/api/profiles/student/me"),
+      api.get<ReputationSummary>("/api/network/reputation-summary")
     ]);
     setMentorMatches(mentorMatchesRes.status === "fulfilled" ? mentorMatchesRes.value.data?.recommendations || [] : []);
     setRoadmap(roadmapRes.status === "fulfilled" ? roadmapRes.value.data || null : null);
@@ -732,6 +764,7 @@ export default function StudentDashboard() {
         ? String(studentProfileRes.value.data?.profile?.className || "").trim()
         : ""
     );
+    setReputationSummary(reputationSummaryRes.status === "fulfilled" ? reputationSummaryRes.value.data || null : null);
   }, [markSectionFetched, shouldSkipSectionFetch]);
 
   const loadGrowthCommunitySection = useCallback(async (refresh = false, force = false) => {
@@ -1754,6 +1787,33 @@ export default function StudentDashboard() {
   const renderHighSchoolOverview = () => (
     <>
       {renderHighSchoolHero()}
+      <View style={[styles.xpSystemCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        <View style={styles.xpSystemHeader}>
+          <View>
+            <Text style={[styles.xpSystemEyebrow, { color: colors.accent }]}>Connected XP System</Text>
+            <Text style={[styles.xpSystemTitle, { color: colors.text }]}>Level: {connectedXp.levelTag}</Text>
+            <Text style={[styles.xpSystemMeta, { color: colors.textMuted }]}>
+              Total score {connectedXp.score}. Daily Quiz, Quiz Battle, Roadmaps, Challenges, and Resources all feed this board.
+            </Text>
+          </View>
+          <View style={[styles.xpScoreBadge, { backgroundColor: colors.accentSoft, borderColor: colors.accent }]}>
+            <Ionicons name="flash" size={18} color={colors.accent} />
+            <Text style={[styles.xpScoreText, { color: colors.accent }]}>{connectedXp.totalConnected}</Text>
+          </View>
+        </View>
+        <View style={styles.xpSourceGrid}>
+          {connectedXp.rows.map((item) => (
+            <TouchableOpacity
+              key={item.label}
+              style={[styles.xpSourceTile, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+              onPress={() => router.push(item.route as never)}
+            >
+              <Text style={[styles.xpSourceValue, { color: colors.text }]}>{item.value}</Text>
+              <Text style={[styles.xpSourceLabel, { color: colors.textMuted }]}>{item.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
       <View style={[styles.institutionHubCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <TouchableOpacity activeOpacity={0.92} style={styles.institutionHubHeaderRow} onPress={() => setInstitutionExpanded((prev) => !prev)}>
           <View style={styles.institutionHubHeader}>
@@ -3551,6 +3611,69 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8F5EE"
   },
   liveBannerBtnText: { color: "#1F7A4C", fontWeight: "800", fontSize: 12 },
+  xpSystemCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14,
+    gap: 12,
+    marginBottom: 12
+  },
+  xpSystemHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  xpSystemEyebrow: {
+    fontSize: 11,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.5
+  },
+  xpSystemTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    marginTop: 2
+  },
+  xpSystemMeta: {
+    marginTop: 4,
+    lineHeight: 18,
+    fontWeight: "600"
+  },
+  xpScoreBadge: {
+    minWidth: 74,
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    alignItems: "center",
+    gap: 4
+  },
+  xpScoreText: {
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  xpSourceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  xpSourceTile: {
+    width: "31.5%",
+    minWidth: 96,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 10,
+    gap: 3
+  },
+  xpSourceValue: {
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  xpSourceLabel: {
+    fontSize: 11,
+    fontWeight: "800"
+  },
   matchWrap: { gap: 9, marginBottom: 10 },
   matchCard: {
     backgroundColor: "#FFFFFF",
