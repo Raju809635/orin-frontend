@@ -33,13 +33,6 @@ type SubmissionRow = AnyRow & {
   student?: { name?: string; email?: string };
 };
 
-const SECTIONS: { key: SectionKey; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: "overview", label: "Home", icon: "home" },
-  { key: "community", label: "Community", icon: "grid" },
-  { key: "mentorship", label: "Mentorship", icon: "school" },
-  { key: "reviews", label: "Reviews", icon: "checkmark-done" }
-];
-
 function asArray<T = AnyRow>(value: any): T[] {
   if (Array.isArray(value)) return value;
   if (Array.isArray(value?.roadmaps)) return value.roadmaps;
@@ -243,18 +236,6 @@ export default function GlobalTeacherDashboard() {
         </Text>
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sectionTabs}>
-        {SECTIONS.map((item) => {
-          const active = activeSection === item.key;
-          return (
-            <TouchableOpacity key={item.key} style={[styles.sectionTab, active && { backgroundColor: colors.accentSoft, borderColor: colors.accent }]} onPress={() => go(item.key)}>
-              <Ionicons name={item.icon} size={16} color={active ? colors.accent : colors.textMuted} />
-              <Text style={[styles.sectionTabText, { color: active ? colors.accent : colors.textMuted }]}>{item.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
       {error ? <Notice text={error} /> : null}
       {loading ? (
         <View style={styles.loading}>
@@ -442,9 +423,6 @@ const styles = StyleSheet.create({
   eyebrow: { fontSize: 12, fontWeight: "900", letterSpacing: 0.8, textTransform: "uppercase" },
   title: { fontSize: 26, lineHeight: 31, fontWeight: "900" },
   subtitle: { fontSize: 14, lineHeight: 21, fontWeight: "600" },
-  sectionTabs: { gap: 8, paddingRight: 18 },
-  sectionTab: { borderWidth: 1, borderColor: "transparent", borderRadius: 999, paddingHorizontal: 13, paddingVertical: 9, flexDirection: "row", alignItems: "center", gap: 7 },
-  sectionTabText: { fontSize: 13, fontWeight: "900" },
   loading: { padding: 30, alignItems: "center", gap: 8 },
   notice: { borderWidth: 1, borderRadius: 16, padding: 13, flexDirection: "row", gap: 8, alignItems: "center" },
   metrics: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
