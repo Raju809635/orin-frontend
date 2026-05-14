@@ -31,6 +31,7 @@ import { sharePost } from "@/utils/sharePost";
 import HighSchoolHeader from "@/components/high-school/HighSchoolHeader";
 import { sanitizeDisplayText } from "@/utils/textSanitize";
 import GlobalHeader from "@/components/global-header";
+import MentorAudienceSelector, { MentorAudienceValue } from "@/components/MentorAudienceSelector";
 
 function normalizeUrl(rawUrl: string) {
   const cleaned = rawUrl.replace(/[),.;!?]+$/, "");
@@ -72,6 +73,10 @@ type FeedPost = {
   userReaction?: "like" | "love" | "care" | "haha" | "wow" | "sad" | "angry" | null;
   isSaved?: boolean;
   saveCount?: number;
+  scope?: "global" | "institution" | "class";
+  audienceStage?: "all" | "highschool" | "after12";
+  institutionName?: string;
+  className?: string;
   reactionCounts?: {
     like?: number;
     love?: number;
@@ -194,6 +199,7 @@ export default function NetworkScreen() {
   const [postText, setPostText] = useState("");
   const [postImageUrls, setPostImageUrls] = useState<string[]>([]);
   const [postType, setPostType] = useState<FeedPost["postType"]>("learning_progress");
+  const [postAudience, setPostAudience] = useState<MentorAudienceValue>({ scope: "global", institutionName: "", className: "" });
   const [followingState, setFollowingState] = useState<Record<string, boolean>>({});
   const [viewer, setViewer] = useState<{ visible: boolean; postId: string; images: string[]; index: number }>({
     visible: false,
@@ -229,9 +235,9 @@ export default function NetworkScreen() {
     const sections = isKid ? networkSections.filter((item) => item.id === "institution") : networkSections;
     return sections.map((item) => {
       if (isTeacherMentor) {
-        if (item.id === "feed") return { ...item, label: "Class Posts" };
-        if (item.id === "institution") return { ...item, label: "Class Feed" };
-        if (item.id === "compose") return { ...item, label: "Announce" };
+        if (item.id === "feed") return { ...item, label: "Global Posts" };
+        if (item.id === "institution") return { ...item, label: "Institution Posts" };
+        if (item.id === "compose") return { ...item, label: "Post" };
         if (item.id === "connections") return { ...item, label: "Students" };
       }
       if (isHeadMentor) {
@@ -593,18 +599,37 @@ export default function NetworkScreen() {
     try {
       setSubmitting(true);
       setError(null);
+      if (isTeacherMentor && postAudience.scope !== "global" && !postAudience.institutionName.trim()) {
+        setError("Select an institution for this post.");
+        return;
+      }
+      if (isTeacherMentor && postAudience.scope === "class" && !postAudience.className.trim()) {
+        setError("Select a class for this post.");
+        return;
+      }
       await api.post("/api/network/feed", {
         content,
         postType,
         mediaUrls: postImageUrls.slice(0, 5),
-        visibility: "public"
+        visibility: "public",
+        scope: isTeacherMentor ? postAudience.scope : "global",
+        audienceStage: isTeacherMentor ? "highschool" : "all",
+        institutionName: isTeacherMentor ? postAudience.institutionName : "",
+        className: isTeacherMentor ? postAudience.className : ""
       });
       setPostText("");
       setPostImageUrls([]);
+      if (postAudience.scope === "global") setPostAudience({ scope: "global", institutionName: "", className: "" });
       notify("Post published.");
-      await loadFeedSection(true, true);
-      sectionFetchAtRef.current.institution = 0;
-      setActiveSection("feed");
+      if (isTeacherMentor && postAudience.scope !== "global") {
+        await loadInstitutionSection(true, true);
+        sectionFetchAtRef.current.feed = 0;
+        setActiveSection("institution");
+      } else {
+        await loadFeedSection(true, true);
+        sectionFetchAtRef.current.institution = 0;
+        setActiveSection("feed");
+      }
     } catch (e: any) {
       const message = handleAppError(e, { fallbackMessage: "Failed to publish post." });
       setError(message);
@@ -1129,10 +1154,10 @@ export default function NetworkScreen() {
           />
         ) : (
           <>
-            <Text style={[styles.heading, { color: colors.text }]}>{isTeacherMentor ? "Class Posts" : isHeadMentor ? "Global Schools Posts" : isKid ? "School Posts" : "Posts"}</Text>
+            <Text style={[styles.heading, { color: colors.text }]}>{isTeacherMentor ? "Global Posts" : isHeadMentor ? "Global Schools Posts" : isKid ? "School Posts" : "Posts"}</Text>
             <Text style={[styles.subheading, { color: colors.textMuted }]}>
               {isTeacherMentor
-                ? "Post class announcements, quiz reminders, student wins, activity updates, and motivation."
+                ? "Share ORIN high-school updates globally, to a selected institution, or to one class."
                 : isHeadMentor
                   ? "Share school notices, event updates, winners, teacher guidance, and institution announcements."
                   : user?.role === "mentor"
@@ -1143,7 +1168,7 @@ export default function NetworkScreen() {
         )}
         {isTeacherMentor ? (
           <Text style={[styles.meta, { color: colors.textMuted }]}>
-            Use Announce for daily quiz reminders, top performer appreciation, homework proof instructions, and class motivation.
+            Use Post to choose Global, Institution, or Class audience before publishing.
           </Text>
         ) : isHeadMentor ? (
           <Text style={[styles.meta, { color: colors.textMuted }]}>
@@ -1182,7 +1207,15 @@ export default function NetworkScreen() {
 
         {activeSection === "compose" ? (
           <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Create class announcement" : isHeadMentor ? "Create school notice" : "Start a post"}</Text>
+            <Text style={[styles.cardTitle, { color: colors.text }]}>{isTeacherMentor ? "Create Global / Institution Post" : isHeadMentor ? "Create school notice" : "Start a post"}</Text>
+            {isTeacherMentor ? (
+              <MentorAudienceSelector
+                value={postAudience}
+                onChange={setPostAudience}
+                audienceStage="highschool"
+                label="Post Audience"
+              />
+            ) : null}
             <View style={styles.chipsRow}>
               {(isTeacherMentor
                 ? [
@@ -1215,7 +1248,7 @@ export default function NetworkScreen() {
             </View>
             <TextInput
               style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
-              placeholder={isTeacherMentor ? "Write a class reminder, winner note, activity update, or feedback..." : isHeadMentor ? "Write a school notice, event update, recognition post, or teacher message..." : "Share update, achievement, project or question..."}
+              placeholder={isTeacherMentor ? "Write an update, quiz reminder, winner note, activity post, or class instruction..." : isHeadMentor ? "Write a school notice, event update, recognition post, or teacher message..." : "Share update, achievement, project or question..."}
               placeholderTextColor={colors.textMuted}
               value={postText}
               onChangeText={setPostText}
@@ -1261,7 +1294,7 @@ export default function NetworkScreen() {
             ) : null}
               <Text style={[styles.meta, { color: colors.textMuted }]}>Images selected: {postImageUrls.length}/5</Text>
             <TouchableOpacity style={styles.primaryButton} onPress={publishPost} disabled={submitting}>
-              <Text style={styles.primaryButtonText}>{submitting ? "Posting..." : isTeacherMentor ? "Publish Class Update" : isHeadMentor ? "Publish School Notice" : "Publish Insight"}</Text>
+              <Text style={styles.primaryButtonText}>{submitting ? "Posting..." : isTeacherMentor ? "Publish Post" : isHeadMentor ? "Publish School Notice" : "Publish Insight"}</Text>
             </TouchableOpacity>
               <Text style={[styles.cardTitle, { marginTop: 14, color: colors.text }]}>People You May Know</Text>
               {filteredSuggestions.length === 0 ? (
