@@ -58,18 +58,32 @@ type CompetitionItem = {
     qualifiedForLevel2?: boolean;
     level2BatchIndex?: number;
   } | null;
+  myLevel1Attempt?: {
+    score: number;
+    correctCount: number;
+    percentage: number;
+    grade?: string;
+    submittedAt?: string | null;
+  } | null;
+  myLevel1Rank?: {
+    overall: number;
+    score: number;
+    percentage: number;
+    correctCount: number;
+  } | null;
 };
 
 type CompetitionQuestion = {
   id?: string;
   text: string;
   options: string[];
-  correctOption: string;
+  correctOption?: string;
   explanation?: string;
   durationSec?: number;
 };
 
 type CompetitionManagerTab = "registration" | "level1" | "level2" | "reports";
+type StudentCompetitionTab = "info" | "level1" | "level2";
 
 type CompetitionReports = {
   qualificationFunnel?: {
@@ -183,6 +197,12 @@ function splitIsoToLocalFields(value?: string | null) {
   };
 }
 
+function hasStarted(value?: string | null) {
+  if (!value) return false;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) && Date.now() >= time;
+}
+
 type TimeFieldProps = {
   label: string;
   value: string;
@@ -291,6 +311,12 @@ export default function HighSchoolProgramsScreen() {
   const [competitions, setCompetitions] = useState<CompetitionItem[]>([]);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selected, setSelected] = useState<OpportunityItem | null>(null);
+  const [selectedCompetition, setSelectedCompetition] = useState<CompetitionItem | null>(null);
+  const [studentCompetitionTab, setStudentCompetitionTab] = useState<StudentCompetitionTab>("info");
+  const [level1Answers, setLevel1Answers] = useState<Record<string, { selectedOption: string; responseMs: number }>>({});
+  const [level1StartedAtMs, setLevel1StartedAtMs] = useState<number>(0);
+  const [submittingLevel1, setSubmittingLevel1] = useState(false);
+  const [openingLevel2, setOpeningLevel2] = useState(false);
   const [showChampionshipForm, setShowChampionshipForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
@@ -459,6 +485,99 @@ export default function HighSchoolProgramsScreen() {
     openQuestionEditor(item);
     if (tab === "reports") {
       loadCompetitionReports(item._id);
+    }
+  }
+
+  function openStudentCompetition(item: CompetitionItem, tab: StudentCompetitionTab = "info") {
+    setSelected(null);
+    setSelectedCompetition(item);
+    setStudentCompetitionTab(tab);
+    setLevel1Answers({});
+    setLevel1StartedAtMs(Date.now());
+  }
+
+  function closeStudentCompetition() {
+    setSelectedCompetition(null);
+    setLevel1Answers({});
+    setLevel1StartedAtMs(0);
+  }
+
+  function selectLevel1Answer(question: CompetitionQuestion, index: number, selectedOption: string) {
+    const key = question.id || `L1-${index + 1}`;
+    const base = level1StartedAtMs || Date.now();
+    setLevel1Answers((prev) => ({
+      ...prev,
+      [key]: {
+        selectedOption,
+        responseMs: Math.max(500, Date.now() - base)
+      }
+    }));
+  }
+
+  async function submitLevel1Attempt() {
+    if (!selectedCompetition) return;
+    const questions = selectedCompetition.level1Questions || [];
+    if (!questions.length) {
+      Alert.alert("Level 1", "Questions are not ready yet.");
+      return;
+    }
+    const missing = questions.some((question, index) => !level1Answers[question.id || `L1-${index + 1}`]?.selectedOption);
+    if (missing) {
+      Alert.alert("Complete Level 1", "Answer every question before submitting.");
+      return;
+    }
+    try {
+      setSubmittingLevel1(true);
+      const answers = questions.map((question, index) => {
+        const key = question.id || `L1-${index + 1}`;
+        return level1Answers[key] || { selectedOption: "", responseMs: Number(question.durationSec || selectedCompetition.level1TimeModeSec || 30) * 1000 };
+      });
+      const { data } = await api.post(`/api/network/highschool-competitions/${selectedCompetition._id}/level1/submit`, { answers });
+      Alert.alert("Level 1 submitted", `Score ${data?.score || 0}. ${data?.percentage || 0}%`);
+      await load(true);
+      setSelectedCompetition((prev) => prev ? {
+        ...prev,
+        myLevel1Attempt: {
+          score: Number(data?.score || 0),
+          correctCount: Number(data?.correctCount || 0),
+          percentage: Number(data?.percentage || 0),
+          grade: String(data?.grade || ""),
+          submittedAt: new Date().toISOString()
+        },
+        myLevel1Rank: data?.rank
+          ? {
+              overall: Number(data.rank),
+              score: Number(data?.score || 0),
+              percentage: Number(data?.percentage || 0),
+              correctCount: Number(data?.correctCount || 0)
+            }
+          : prev.myLevel1Rank || null
+      } : prev);
+    } catch (e) {
+      setError(getAppErrorMessage(e, "Unable to submit Level 1 right now."));
+    } finally {
+      setSubmittingLevel1(false);
+    }
+  }
+
+  async function openLevel2Batch() {
+    if (!selectedCompetition?.myRegistration?.qualifiedForLevel2) {
+      Alert.alert("Level 2", "You are not qualified for Level 2 yet.");
+      return;
+    }
+    const batchIndex = Number(selectedCompetition.myRegistration.level2BatchIndex ?? -1);
+    if (batchIndex < 0) {
+      Alert.alert("Level 2", "Your Level 2 batch is not created yet.");
+      return;
+    }
+    try {
+      setOpeningLevel2(true);
+      await api.post(`/api/network/highschool-competitions/${selectedCompetition._id}/level2/batches/${batchIndex}/join`, {});
+      Alert.alert("Level 2 ready", `You joined Batch ${batchIndex + 1}. Live quiz screen will open here when the round starts.`);
+    } catch (e) {
+      setError(getAppErrorMessage(e, "Unable to open Level 2 right now."));
+    } finally {
+      setOpeningLevel2(false);
     }
   }
 
@@ -1119,10 +1238,10 @@ export default function HighSchoolProgramsScreen() {
                   ownedByMe
                     ? "Manage Championship"
                     : item.myRegistration
-                      ? "View Student Flow"
+                      ? "Open Full Event"
                       : canRegister
                         ? "Register"
-                        : "View Schedule"
+                        : "Open Full Event"
                 }
                 secondaryLabel={ownedByMe ? "Delete" : undefined}
                 onPress={async () => {
@@ -1131,17 +1250,7 @@ export default function HighSchoolProgramsScreen() {
                     return;
                   }
                   if (item.myRegistration || !canRegister) {
-                    setSelected({
-                      _id: item._id,
-                      title: item.title,
-                      company: item.institutionName || "ORIN",
-                      type: "competition",
-                      category: scopeLabel,
-                      role: item.subject,
-                      duration: item.level2At ? "2 Levels" : "Level 1",
-                      description: item.description || "Students register first. At Level 1 time, they answer the configured timed quiz. Top-N ranked students qualify for Level 2, where live batches decide winners.",
-                      bannerImageUrl: item.bannerImageUrl || ""
-                    });
+                    openStudentCompetition(item, "info");
                     return;
                   }
                   try {
@@ -1160,6 +1269,128 @@ export default function HighSchoolProgramsScreen() {
           <AcademicEmpty label="No championship programs are live right now." />
         )}
       </CommunitySection>
+
+      {selectedCompetition ? (
+        <CommunitySection
+          title={`Full Event - ${selectedCompetition.title}`}
+          subtitle="Event info, Level 1 attempt/status, and Level 2 qualification in one place."
+          icon="reader"
+        >
+          <TouchableOpacity
+            style={[styles.backButton, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+            onPress={closeStudentCompetition}
+          >
+            <Text style={[styles.backButtonText, { color: colors.textMuted }]}>Close Event</Text>
+          </TouchableOpacity>
+          <View style={styles.filterRow}>
+            {([
+              ["info", "Event Info"],
+              ["level1", "Level 1"],
+              ["level2", "Level 2"]
+            ] as const).map(([key, label]) => {
+              const active = studentCompetitionTab === key;
+              return (
+                <TouchableOpacity
+                  key={`student-event-${key}`}
+                  onPress={() => {
+                    setStudentCompetitionTab(key);
+                    if (key === "level1") setLevel1StartedAtMs(Date.now());
+                  }}
+                  style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                >
+                  <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {studentCompetitionTab === "info" ? (
+            <>
+              {selectedCompetition.bannerImageUrl ? <Image source={{ uri: selectedCompetition.bannerImageUrl }} style={styles.detailBanner} resizeMode="contain" /> : null}
+              <View style={styles.detailHead}>
+                <Text style={[styles.detailTitle, { color: colors.text }]}>{selectedCompetition.title}</Text>
+                <StatusBadge label={selectedCompetition.myRegistration ? "Registered" : selectedCompetition.status.replace(/_/g, " ")} tone="success" />
+              </View>
+              <Text style={[styles.detailMeta, { color: colors.textMuted }]}>
+                {[selectedCompetition.subject, selectedCompetition.chapter, selectedCompetition.scopeType === "open_highschool" ? "Global Schools" : selectedCompetition.institutionName].filter(Boolean).join(" · ")}
+              </Text>
+              <Text style={[styles.detailText, { color: colors.textMuted }]}>
+                {selectedCompetition.description || "This championship has registration, Level 1 qualification, and Level 2 finalist rounds."}
+              </Text>
+              <View style={styles.eventMilestoneGrid}>
+                <AcademicCard icon="calendar-outline" title="Registration" meta={new Date(selectedCompetition.registrationDeadline).toLocaleString("en-IN")} note={selectedCompetition.myRegistration ? "You are registered." : "Register before this time."} />
+                <AcademicCard icon="create-outline" title="Level 1" meta={new Date(selectedCompetition.level1At).toLocaleString("en-IN")} note={hasStarted(selectedCompetition.level1At) ? "Level 1 has started." : "Attempt unlocks at this time."} />
+                <AcademicCard icon="flash-outline" title="Level 2" meta={selectedCompetition.level2At ? new Date(selectedCompetition.level2At).toLocaleString("en-IN") : "Will be announced"} note={selectedCompetition.myRegistration?.qualifiedForLevel2 ? "You qualified for Level 2." : "Top scorers qualify after Level 1."} />
+              </View>
+            </>
+          ) : null}
+
+          {studentCompetitionTab === "level1" ? (
+            <>
+              {!selectedCompetition.myRegistration ? (
+                <AcademicEmpty label="Register first to attempt Level 1." />
+              ) : !hasStarted(selectedCompetition.level1At) ? (
+                <AcademicCard icon="time-outline" title="Level 1 Not Started" meta={new Date(selectedCompetition.level1At).toLocaleString("en-IN")} note="Come back at the start time to attempt the quiz." />
+              ) : selectedCompetition.myLevel1Attempt ? (
+                <>
+                  <View style={styles.eventMilestoneGrid}>
+                    <AcademicCard icon="trophy-outline" title="Your Score" meta={String(selectedCompetition.myLevel1Attempt.score)} note={`${selectedCompetition.myLevel1Attempt.percentage}% · Grade ${selectedCompetition.myLevel1Attempt.grade || "-"}`} />
+                    <AcademicCard icon="podium-outline" title="Your Rank" meta={selectedCompetition.myLevel1Rank?.overall ? `#${selectedCompetition.myLevel1Rank.overall}` : "Pending"} note={selectedCompetition.myRegistration?.qualifiedForLevel2 ? "Qualified for Level 2" : "Qualification updates after teacher finalizes Level 1."} />
+                    <AcademicCard icon="checkmark-circle-outline" title="Correct" meta={String(selectedCompetition.myLevel1Attempt.correctCount)} note={`Submitted ${selectedCompetition.myLevel1Attempt.submittedAt ? new Date(selectedCompetition.myLevel1Attempt.submittedAt).toLocaleString("en-IN") : ""}`} />
+                  </View>
+                </>
+              ) : !(selectedCompetition.level1Questions || []).length ? (
+                <AcademicCard icon="help-circle-outline" title="Questions Not Ready" meta="Teacher setup pending" note="Level 1 questions will appear after the teacher saves them." />
+              ) : (
+                <>
+                  <AcademicCard icon="flash-outline" title="Level 1 Attempt" meta={`${selectedCompetition.level1Questions?.length || 0} questions`} note={`${selectedCompetition.level1TimeModeSec || 30}s per question. Answer all questions and submit once.`} />
+                  {(selectedCompetition.level1Questions || []).map((question, index) => {
+                    const key = question.id || `L1-${index + 1}`;
+                    const picked = level1Answers[key]?.selectedOption || "";
+                    return (
+                      <View key={key} style={[styles.questionCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                        <Text style={[styles.questionTitle, { color: colors.text }]}>Q{index + 1}. {question.text}</Text>
+                        {question.options.map((option) => {
+                          const active = picked === option;
+                          return (
+                            <TouchableOpacity
+                              key={`${key}-${option}`}
+                              style={[styles.studentOption, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surface }]}
+                              onPress={() => selectLevel1Answer(question, index, option)}
+                            >
+                              <Text style={[styles.studentOptionText, { color: active ? "#15803D" : colors.text }]}>{option}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    );
+                  })}
+                  <ActionButton label={submittingLevel1 ? "Submitting..." : "Submit Level 1"} icon="send-outline" onPress={submitLevel1Attempt} />
+                </>
+              )}
+            </>
+          ) : null}
+
+          {studentCompetitionTab === "level2" ? (
+            <>
+              {!selectedCompetition.myRegistration ? (
+                <AcademicEmpty label="Register and complete Level 1 first." />
+              ) : !selectedCompetition.myLevel1Attempt ? (
+                <AcademicCard icon="lock-closed-outline" title="Level 2 Locked" meta="Finish Level 1 first" note="Your Level 2 status appears after Level 1 results are finalized." />
+              ) : !selectedCompetition.myRegistration.qualifiedForLevel2 ? (
+                <AcademicCard icon="hourglass-outline" title="Qualification Pending" meta={selectedCompetition.myLevel1Rank?.overall ? `Current rank #${selectedCompetition.myLevel1Rank.overall}` : "Rank pending"} note="If you are inside Top N after finalization, Level 2 will unlock here." />
+              ) : !hasStarted(selectedCompetition.level2At) ? (
+                <AcademicCard icon="time-outline" title="Level 2 Not Started" meta={selectedCompetition.level2At ? new Date(selectedCompetition.level2At).toLocaleString("en-IN") : "Will be announced"} note="You qualified. Come back when Level 2 starts." />
+              ) : (
+                <>
+                  <AcademicCard icon="medal-outline" title="Level 2 Ready" meta={`Batch ${(selectedCompetition.myRegistration.level2BatchIndex ?? 0) + 1}`} note="Join your assigned live batch round." />
+                  <ActionButton label={openingLevel2 ? "Opening..." : "Open Level 2 Batch"} icon="rocket-outline" onPress={openLevel2Batch} />
+                </>
+              )}
+            </>
+          ) : null}
+        </CommunitySection>
+      ) : null}
 
       {isInstitutionTeacher && managerCompetition ? (
         <CommunitySection
@@ -1537,5 +1768,8 @@ const styles = StyleSheet.create({
   detailHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   detailTitle: { flex: 1, fontSize: 20, fontWeight: "900" },
   detailMeta: { fontWeight: "800", lineHeight: 20 },
-  detailText: { lineHeight: 21, fontWeight: "600" }
+  detailText: { lineHeight: 21, fontWeight: "600" },
+  eventMilestoneGrid: { gap: 10 },
+  studentOption: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  studentOptionText: { fontWeight: "800", lineHeight: 18 }
 });
