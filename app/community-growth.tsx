@@ -117,9 +117,9 @@ export default function CommunityGrowthScreen() {
     },
     {
       id: "opportunities",
-      label: isTeacherMentor ? "Quiz Battle" : isHeadMentor ? "Programs & Events" : isHighSchool ? "Programs & Opportunities" : "Internship Opportunities",
+      label: isTeacherMentor ? "Championship Programs" : isHeadMentor ? "Programs & Events" : isHighSchool ? "Programs & Opportunities" : "Internship Opportunities",
       description: isTeacherMentor
-        ? "Open game-style practice for quiz battles, speed math, streaks, and subject mini games."
+        ? "Create and manage school championships with registration, Level-1 qualification, and live Level-2 rounds."
         : isHeadMentor
           ? "Plan school events, ORIN champions programs, competitions, and special awards."
           : isMentor
@@ -127,9 +127,9 @@ export default function CommunityGrowthScreen() {
             : isHighSchool
           ? "Discover selected school-friendly programs, camps, and future opportunities."
           : "Discover internships and career opportunities.",
-      icon: isTeacherMentor ? "game-controller" : isHeadMentor ? "calendar" : "briefcase",
+      icon: isTeacherMentor ? "calendar" : isHeadMentor ? "calendar" : "briefcase",
       emoji: isHighSchool ? "🚀" : undefined,
-      path: isTeacherMentor ? "/community/learning-games" : isHeadMentor ? "/community/challenges" : isHighSchool ? "/community/highschool-programs" : "/community/opportunities",
+      path: isTeacherMentor ? "/community/highschool-programs" : isHeadMentor ? "/community/challenges" : isHighSchool ? "/community/highschool-programs" : "/community/opportunities",
       iconColor: "#15803D",
       iconBg: "#DCFCE7",
       darkIconBg: "rgba(21,128,61,0.18)",
