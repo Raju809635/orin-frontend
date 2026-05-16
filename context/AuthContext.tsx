@@ -91,6 +91,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
+    async function refreshFromStoredToken(storedRefreshToken: string, fallbackUser: AuthUser | null) {
+      const { data } = await api.post<RefreshResponse>("/api/auth/refresh", { refreshToken: storedRefreshToken });
+      const nextToken = data.token;
+      const nextRefreshToken = data.refreshToken || storedRefreshToken;
+      const nextUser = (data.user || fallbackUser) as AuthUser | null;
+      if (!nextToken || !nextUser) {
+        throw new Error("Invalid refresh response");
+      }
+      setApiAuthToken(nextToken);
+      setToken(nextToken);
+      setRefreshToken(nextRefreshToken);
+      setUser(nextUser);
+      await saveAuthSession(nextToken, nextRefreshToken, nextUser);
+      return { token: nextToken, refreshToken: nextRefreshToken, user: nextUser };
+    }
+
     async function bootstrap() {
       try {
         const session = await loadAuthSession();
@@ -102,6 +118,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setToken(session.token);
         setRefreshToken(session.refreshToken);
 
+        let activeSession = session;
         if (session.user.role === "mentor") {
           try {
             const { data } = await api.get("/api/profiles/mentor/me");
@@ -109,7 +126,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(nextUser);
             await saveAuthSession(session.token, session.refreshToken, nextUser);
           } catch {
-            setUser(session.user);
+            try {
+              const refreshed = await refreshFromStoredToken(session.refreshToken, session.user);
+              activeSession = refreshed;
+            } catch {
+              await clearAuthSession();
+              setApiAuthToken(null);
+              setToken(null);
+              setRefreshToken(null);
+              setUser(null);
+              return;
+            }
           }
         } else {
           try {
@@ -126,10 +153,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             setUser(nextUser);
             await saveAuthSession(session.token, session.refreshToken, nextUser);
           } catch {
-            setUser(session.user);
+            try {
+              const refreshed = await refreshFromStoredToken(session.refreshToken, session.user);
+              activeSession = refreshed;
+              const { data } = await api.get("/api/profiles/student/me");
+              const profile = data?.profile || {};
+              const learnerStage = profile?.learnerStage === "highschool" ? "highschool" : "after12";
+              const nextUser = {
+                ...(refreshed.user as AuthUser),
+                learnerStage,
+                className: profile?.className || "",
+                institutionName: profile?.institutionName || profile?.collegeName || "",
+                institutionType: profile?.institutionType || ""
+              } as AuthUser;
+              setUser(nextUser);
+              await saveAuthSession(refreshed.token, refreshed.refreshToken, nextUser);
+            } catch {
+              await clearAuthSession();
+              setApiAuthToken(null);
+              setToken(null);
+              setRefreshToken(null);
+              setUser(null);
+              return;
+            }
           }
         }
 
+        if (!mounted) return;
+        setApiAuthToken(activeSession.token);
         registerForPushNotifications().catch(() => null);
       } finally {
         if (mounted) {

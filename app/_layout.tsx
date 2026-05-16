@@ -249,6 +249,9 @@ function RootDrawer() {
     if (isBootstrapping) {
       return;
     }
+    if (isAuthenticated && user?.role === "student" && learnerLoading) {
+      return;
+    }
 
     const isAuthScreen = pathname === "/login" || pathname === "/register" || pathname === "/verify-email";
     const isProtected =
@@ -316,7 +319,7 @@ function RootDrawer() {
         }
       }
     }
-  }, [hasPendingLearnerOnboarding, isBootstrapping, isAuthenticated, isCompletingLearnerOnboarding, pathname, router, user]);
+  }, [hasPendingLearnerOnboarding, isBootstrapping, isAuthenticated, isCompletingLearnerOnboarding, learnerLoading, pathname, router, user]);
 
   useEffect(() => {
     if (Platform.OS !== "android") return;
