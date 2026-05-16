@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Image, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
@@ -55,6 +55,7 @@ type CompetitionItem = {
 };
 
 type InstitutionSearchResult = {
+  id?: string;
   name: string;
   institutionType?: string;
   district?: string;
@@ -73,10 +74,11 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 ];
 const CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => String(index + 1));
 const SECTION_OPTIONS = ["A", "B", "C", "D", "E", "F"];
-const TIME_SLOT_OPTIONS = ["08:00", "09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"];
 const TOP_N_OPTIONS = [5, 10, 20, 30, 50, 100];
 const QUESTION_COUNT_OPTIONS = [10, 15, 20, 25, 30];
 const SUBJECT_OPTIONS = ["Mathematics", "Science", "Biology", "Physics", "Chemistry", "Social Science", "English", "Telugu", "Hindi"];
+const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
+const MINUTE_OPTIONS = [0, 15, 30, 45];
 
 function academicBucket(item: OpportunityItem): FilterKey {
   const text = `${item.title} ${item.type} ${item.category} ${item.role} ${item.description}`.toLowerCase();
@@ -95,6 +97,122 @@ function dateAfter(days: number) {
   const date = new Date();
   date.setDate(date.getDate() + days);
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function parseTimeSlot(value: string) {
+  const [rawHour, rawMinute] = value.split(":").map((item) => Number(item || 0));
+  const period: "AM" | "PM" = rawHour >= 12 ? "PM" : "AM";
+  const hour = rawHour % 12 || 12;
+  const minute = Number.isFinite(rawMinute) ? rawMinute : 0;
+  return { hour, minute, period };
+}
+
+function toTimeSlot(hour: number, minute: number, period: "AM" | "PM") {
+  const normalizedHour = period === "PM" ? (hour === 12 ? 12 : hour + 12) : hour === 12 ? 0 : hour;
+  return `${pad(normalizedHour)}:${pad(minute)}`;
+}
+
+function formatDisplayTime(value: string) {
+  const parsed = parseTimeSlot(value);
+  return `${pad(parsed.hour)}:${pad(parsed.minute)} ${parsed.period}`;
+}
+
+type TimeFieldProps = {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  colors: { text: string; textMuted: string; border: string; surface: string; surfaceAlt: string };
+};
+
+function TimeField({ label, value, onChange, colors }: TimeFieldProps) {
+  const parsed = parseTimeSlot(value);
+  const [open, setOpen] = useState(false);
+  const [hour, setHour] = useState(parsed.hour);
+  const [minute, setMinute] = useState(parsed.minute);
+  const [period, setPeriod] = useState<"AM" | "PM">(parsed.period);
+
+  function openPicker() {
+    const current = parseTimeSlot(value);
+    setHour(current.hour);
+    setMinute(current.minute);
+    setPeriod(current.period);
+    setOpen(true);
+  }
+
+  function apply() {
+    onChange(toTimeSlot(hour, minute, period));
+    setOpen(false);
+  }
+
+  return (
+    <>
+      <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>{label}</Text>
+      <TouchableOpacity style={[styles.timeField, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={openPicker}>
+        <Text style={[styles.timeFieldText, { color: colors.text }]}>{formatDisplayTime(value)}</Text>
+        <Text style={[styles.timeFieldMeta, { color: colors.textMuted }]}>Change</Text>
+      </TouchableOpacity>
+      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
+        <Pressable style={styles.modalBackdrop} onPress={() => setOpen(false)}>
+          <Pressable style={[styles.timeModal, { backgroundColor: colors.surface }]} onPress={(event) => event.stopPropagation()}>
+            <Text style={[styles.timeModalTitle, { color: colors.text }]}>{label}</Text>
+            <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Hour</Text>
+            <View style={styles.filterRow}>
+              {HOUR_OPTIONS.map((item) => {
+                const active = hour === item;
+                return (
+                  <TouchableOpacity
+                    key={`hour-${item}`}
+                    style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                    onPress={() => setHour(item)}
+                  >
+                    <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Minute</Text>
+            <View style={styles.filterRow}>
+              {MINUTE_OPTIONS.map((item) => {
+                const active = minute === item;
+                return (
+                  <TouchableOpacity
+                    key={`minute-${item}`}
+                    style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                    onPress={() => setMinute(item)}
+                  >
+                    <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{pad(item)}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>AM / PM</Text>
+            <View style={styles.filterRow}>
+              {(["AM", "PM"] as const).map((item) => {
+                const active = period === item;
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                    onPress={() => setPeriod(item)}
+                  >
+                    <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.modalButton, { borderColor: colors.border }]} onPress={() => setOpen(false)}>
+                <Text style={[styles.modalButtonText, { color: colors.textMuted }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalButton, styles.modalButtonPrimary]} onPress={apply}>
+                <Text style={[styles.modalButtonText, { color: "#FFFFFF" }]}>Set time</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
+  );
 }
 
 export default function HighSchoolProgramsScreen() {
@@ -179,10 +297,19 @@ export default function HighSchoolProgramsScreen() {
     }
     try {
       setSearchingInstitutions(true);
-      const { data } = await api.get<InstitutionSearchResult[]>("/api/profiles/institutions/search", {
-        params: { q: clean, institutionType: "School" }
+      const authSearch = await api.get("/api/auth/institutions/search", {
+        params: { q: clean, limit: 10 }
       });
-      setInstitutionResults((data || []).slice(0, 10));
+      const authResults = Array.isArray(authSearch.data?.results) ? authSearch.data.results : [];
+      if (authResults.length) {
+        setInstitutionResults(authResults.slice(0, 10));
+        return;
+      }
+
+      const profileSearch = await api.get<InstitutionSearchResult[]>("/api/profiles/institutions/search", {
+        params: { q: clean }
+      });
+      setInstitutionResults((profileSearch.data || []).slice(0, 10));
     } catch {
       setInstitutionResults([]);
     } finally {
@@ -484,36 +611,25 @@ export default function HighSchoolProgramsScreen() {
               <DateField label="Date" value={registrationDate} onChange={setRegistrationDate} />
             </View>
             <View style={styles.inlineSelect}>
-              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Time</Text>
-              <View style={styles.filterRow}>
-                {TIME_SLOT_OPTIONS.map((t) => (
-                  <TouchableOpacity key={`reg-time-${t}`} onPress={() => setRegistrationTimeSlot(t)} style={[styles.filterChip, { borderColor: registrationTimeSlot === t ? "#16A34A" : colors.border, backgroundColor: registrationTimeSlot === t ? "#ECFDF3" : colors.surfaceAlt }]}>
-                    <Text style={[styles.filterText, { color: registrationTimeSlot === t ? "#15803D" : colors.textMuted }]}>{t}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <TimeField label="Time" value={registrationTimeSlot} onChange={setRegistrationTimeSlot} colors={colors} />
             </View>
           </View>
 
           <Text style={[styles.scopeHeading, { color: colors.text }]}>Level Schedules</Text>
-          <View style={styles.inlineSelect}>
-            <DateField label="Level 1 date" value={level1Date} onChange={setLevel1Date} />
-            <View style={styles.filterRow}>
-              {TIME_SLOT_OPTIONS.map((t) => (
-                <TouchableOpacity key={`l1-time-${t}`} onPress={() => setLevel1TimeSlot(t)} style={[styles.filterChip, { borderColor: level1TimeSlot === t ? "#16A34A" : colors.border, backgroundColor: level1TimeSlot === t ? "#ECFDF3" : colors.surfaceAlt }]}>
-                  <Text style={[styles.filterText, { color: level1TimeSlot === t ? "#15803D" : colors.textMuted }]}>{t}</Text>
-                </TouchableOpacity>
-              ))}
+          <View style={styles.row}>
+            <View style={styles.inlineSelect}>
+              <DateField label="Level 1 date" value={level1Date} onChange={setLevel1Date} />
+            </View>
+            <View style={styles.inlineSelect}>
+              <TimeField label="Level 1 time" value={level1TimeSlot} onChange={setLevel1TimeSlot} colors={colors} />
             </View>
           </View>
-          <View style={styles.inlineSelect}>
-            <DateField label="Level 2 date" value={level2Date} onChange={setLevel2Date} />
-            <View style={styles.filterRow}>
-              {TIME_SLOT_OPTIONS.map((t) => (
-                <TouchableOpacity key={`l2-time-${t}`} onPress={() => setLevel2TimeSlot(t)} style={[styles.filterChip, { borderColor: level2TimeSlot === t ? "#16A34A" : colors.border, backgroundColor: level2TimeSlot === t ? "#ECFDF3" : colors.surfaceAlt }]}>
-                  <Text style={[styles.filterText, { color: level2TimeSlot === t ? "#15803D" : colors.textMuted }]}>{t}</Text>
-                </TouchableOpacity>
-              ))}
+          <View style={styles.row}>
+            <View style={styles.inlineSelect}>
+              <DateField label="Level 2 date" value={level2Date} onChange={setLevel2Date} />
+            </View>
+            <View style={styles.inlineSelect}>
+              <TimeField label="Level 2 time" value={level2TimeSlot} onChange={setLevel2TimeSlot} colors={colors} />
             </View>
           </View>
 
@@ -717,6 +833,16 @@ const styles = StyleSheet.create({
   inlineLabel: { fontWeight: "800", fontSize: 12 },
   inlineSelect: { flex: 1, minWidth: 220, gap: 8 },
   scopeNote: { fontWeight: "700", lineHeight: 19 },
+  timeField: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  timeFieldText: { fontWeight: "900", fontSize: 15 },
+  timeFieldMeta: { fontWeight: "800", fontSize: 12 },
+  modalBackdrop: { flex: 1, backgroundColor: "rgba(15, 23, 42, 0.42)", alignItems: "center", justifyContent: "center", padding: 20 },
+  timeModal: { width: "100%", maxWidth: 420, borderRadius: 18, padding: 16, gap: 12 },
+  timeModalTitle: { fontSize: 18, fontWeight: "900" },
+  modalActions: { flexDirection: "row", justifyContent: "flex-end", gap: 10, marginTop: 4 },
+  modalButton: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
+  modalButtonPrimary: { borderColor: "#16A34A", backgroundColor: "#16A34A" },
+  modalButtonText: { fontWeight: "900" },
   bannerPicker: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11 },
   bannerPickerText: { fontWeight: "900" },
   bannerPickerMeta: { fontWeight: "700", marginTop: 2 },
