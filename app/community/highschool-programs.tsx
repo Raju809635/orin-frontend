@@ -215,11 +215,12 @@ export default function HighSchoolProgramsScreen() {
             onChangeText={setDescription}
           />
 
+          <Text style={[styles.scopeHeading, { color: colors.text }]}>Competition Audience</Text>
           <View style={styles.filterRow}>
             {[
-              { key: "institution_only", label: "Institution only" },
-              { key: "multi_institution", label: "Multi institution" },
-              { key: "open_highschool", label: "Open highschool" }
+              { key: "institution_only", label: "Specific Institution" },
+              { key: "open_highschool", label: "Global Schools" },
+              { key: "multi_institution", label: "Inter-School (Selected)" }
             ].map((item) => {
               const active = scopeType === item.key;
               return (
@@ -233,11 +234,18 @@ export default function HighSchoolProgramsScreen() {
               );
             })}
           </View>
+          <Text style={[styles.scopeNote, { color: colors.textMuted }]}>
+            {scopeType === "institution_only"
+              ? "Only students from your institution can register."
+              : scopeType === "open_highschool"
+                ? "Any high-school student across institutions can register."
+                : "Only students from the schools you list below can register."}
+          </Text>
 
           {scopeType === "multi_institution" ? (
             <TextInput
               style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
-              placeholder="Allowed institutions (comma-separated)"
+              placeholder="Selected schools (comma-separated, min 2)"
               placeholderTextColor={colors.textMuted}
               value={allowedInstitutions}
               onChangeText={setAllowedInstitutions}
@@ -432,6 +440,8 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 10 },
   halfInput: { flex: 1 },
   filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  scopeHeading: { fontWeight: "900", fontSize: 14 },
+  scopeNote: { fontWeight: "700", lineHeight: 19 },
   filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   filterText: { fontWeight: "900", fontSize: 12 },
   detailHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
