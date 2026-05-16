@@ -69,6 +69,34 @@ type CompetitionQuestion = {
   durationSec?: number;
 };
 
+type CompetitionManagerTab = "registration" | "level1" | "level2" | "reports";
+
+type CompetitionReports = {
+  qualificationFunnel?: {
+    registered: number;
+    level1Attempted: number;
+    level2Qualified: number;
+    winners: number;
+  };
+  overallLeaderboard?: {
+    rank: number;
+    studentId: string;
+    studentName: string;
+    institutionName?: string;
+    className?: string;
+    score: number;
+    percentage: number;
+  }[];
+  institutionLeaderboard?: {
+    rank: number;
+    institutionName: string;
+    participants: number;
+    totalScore: number;
+    avgScore: number;
+    topStudent?: string;
+  }[];
+};
+
 type InstitutionSearchResult = {
   id?: string;
   name: string;
@@ -141,6 +169,17 @@ function blankCompetitionQuestion(index: number, durationSec: number): Competiti
     correctOption: "Option A",
     explanation: "",
     durationSec
+  };
+}
+
+function splitIsoToLocalFields(value?: string | null) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    return { date: dateAfter(1), time: "10:00" };
+  }
+  return {
+    date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    time: `${pad(date.getHours())}:${pad(date.getMinutes())}`
   };
 }
 
@@ -255,9 +294,17 @@ export default function HighSchoolProgramsScreen() {
   const [showChampionshipForm, setShowChampionshipForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [managerCompetition, setManagerCompetition] = useState<CompetitionItem | null>(null);
+  const [managerTab, setManagerTab] = useState<CompetitionManagerTab>("registration");
   const [questionEditorCompetition, setQuestionEditorCompetition] = useState<CompetitionItem | null>(null);
   const [questionDrafts, setQuestionDrafts] = useState<CompetitionQuestion[]>([]);
   const [savingQuestions, setSavingQuestions] = useState(false);
+  const [level2QuestionDrafts, setLevel2QuestionDrafts] = useState<CompetitionQuestion[]>([]);
+  const [savingLevel2, setSavingLevel2] = useState(false);
+  const [reports, setReports] = useState<CompetitionReports | null>(null);
+  const [loadingReports, setLoadingReports] = useState(false);
+  const [savingCompetitionMeta, setSavingCompetitionMeta] = useState(false);
+  const [generatingQuestionDraft, setGeneratingQuestionDraft] = useState(false);
   const [scopeType, setScopeType] = useState<"institution_only" | "multi_institution" | "open_highschool">("institution_only");
   const [selectedInstitutionName, setSelectedInstitutionName] = useState("");
   const [institutionQuery, setInstitutionQuery] = useState("");
@@ -370,6 +417,127 @@ export default function HighSchoolProgramsScreen() {
     if (!selectedSections.length) return selectedClasses;
     return selectedClasses.flatMap((className) => selectedSections.map((section) => `${className} ${section}`));
   }, [selectedClasses, selectedSections]);
+
+  async function loadCompetitionReports(competitionId: string) {
+    try {
+      setLoadingReports(true);
+      const res = await api.get<CompetitionReports>(`/api/network/highschool-competitions/${competitionId}/reports`);
+      setReports(res.data || null);
+    } catch (e) {
+      setError(getAppErrorMessage(e, "Unable to load championship reports."));
+      setReports(null);
+    } finally {
+      setLoadingReports(false);
+    }
+  }
+
+  function openCompetitionManager(item: CompetitionItem, tab: CompetitionManagerTab = "registration") {
+    setManagerCompetition(item);
+    setManagerTab(tab);
+    setQuestionEditorCompetition(item);
+    setReports(null);
+    const registrationFields = splitIsoToLocalFields(item.registrationDeadline);
+    const level1Fields = splitIsoToLocalFields(item.level1At);
+    const level2Fields = splitIsoToLocalFields(item.level2At || undefined);
+    setRegistrationDate(registrationFields.date);
+    setRegistrationTimeSlot(registrationFields.time);
+    setLevel1Date(level1Fields.date);
+    setLevel1TimeSlot(level1Fields.time);
+    setLevel2Date(level2Fields.date);
+    setLevel2TimeSlot(level2Fields.time);
+    setQualificationTopN(Math.max(1, Number(item.qualificationTopN || 20)));
+    setLevel1QuestionCount(Math.max(5, Number(item.level1QuestionCount || 15)));
+    setLevel1TimeModeSec([10, 30].includes(Number(item.level1TimeModeSec)) ? Number(item.level1TimeModeSec) as 10 | 30 : 30);
+    setQuestionDrafts([]);
+    setLevel2QuestionDrafts(Array.from({ length: 15 }, (_, index) => blankCompetitionQuestion(index, 30)));
+    openQuestionEditor(item);
+    if (tab === "reports") {
+      loadCompetitionReports(item._id);
+    }
+  }
+
+  async function saveCompetitionSchedule() {
+    if (!managerCompetition?._id) return;
+    try {
+      setSavingCompetitionMeta(true);
+      setError(null);
+      const res = await api.patch<{ competition: CompetitionItem }>(`/api/network/highschool-competitions/${managerCompetition._id}`, {
+        registrationDeadline: toIso(registrationDate, registrationTimeSlot),
+        level1At: toIso(level1Date, level1TimeSlot),
+        level2At: toIso(level2Date, level2TimeSlot),
+        qualificationTopN,
+        level1QuestionCount,
+        level1TimeModeSec
+      });
+      const updated = res.data?.competition || managerCompetition;
+      setManagerCompetition(updated);
+      setQuestionEditorCompetition(updated);
+      Alert.alert("Saved", "Championship schedule and settings updated.");
+      await load(true);
+    } catch (e) {
+      setError(getAppErrorMessage(e, "Unable to update championship schedule."));
+    } finally {
+      setSavingCompetitionMeta(false);
+    }
+  }
+
+  async function generateQuestionDraft(level: "L1" | "L2") {
+    const target = managerCompetition || questionEditorCompetition;
+    if (!target) return;
+    try {
+      setGeneratingQuestionDraft(true);
+      setError(null);
+      const questionCount = level === "L1" ? Math.max(5, Number(target.level1QuestionCount || level1QuestionCount || 15)) : 15;
+      const durationSec = level === "L1" ? Number(target.level1TimeModeSec || level1TimeModeSec || 30) : 30;
+      const res = await api.post<{ questions: CompetitionQuestion[] }>("/api/network/highschool-competitions/question-draft", {
+        subject: target.subject || subject,
+        topic: target.chapter || chapter,
+        classLevel: "10",
+        level,
+        questionCount,
+        durationSec
+      });
+      const generated = Array.isArray(res.data?.questions) ? res.data.questions : [];
+      if (level === "L1") setQuestionDrafts(generated);
+      else setLevel2QuestionDrafts(generated);
+      Alert.alert("AI draft ready", `${level} questions are generated. Review and edit before saving.`);
+    } catch (e) {
+      setError(getAppErrorMessage(e, "Unable to generate AI question draft."));
+    } finally {
+      setGeneratingQuestionDraft(false);
+    }
+  }
+
+  async function saveLevel2QuestionsAndCreateBatches() {
+    if (!managerCompetition?._id) return;
+    const sanitized = level2QuestionDrafts.map((item, index) => ({
+      id: item.id || `L2-${index + 1}`,
+      text: item.text.trim(),
+      options: item.options.map((opt) => opt.trim()).filter(Boolean),
+      correctOption: item.correctOption.trim(),
+      explanation: item.explanation?.trim() || "",
+      durationSec: 30
+    }));
+    const invalid = sanitized.find((item) => !item.text || item.options.length < 4 || !item.options.some((opt) => opt === item.correctOption));
+    if (invalid) {
+      Alert.alert("Complete all questions", "Each Level 2 question needs text, 4 options, and one correct answer.");
+      return;
+    }
+    try {
+      setSavingLevel2(true);
+      setError(null);
+      await api.post(`/api/network/highschool-competitions/${managerCompetition._id}/level2/batches`, {
+        questionSets: [{ questions: sanitized }]
+      });
+      Alert.alert("Level 2 ready", "Level 2 batches were created with the saved question set.");
+      await load(true);
+      await loadCompetitionReports(managerCompetition._id);
+    } catch (e) {
+      setError(getAppErrorMessage(e, "Unable to create Level 2 batches."));
+    } finally {
+      setSavingLevel2(false);
+    }
+  }
 
   function openQuestionEditor(item: CompetitionItem) {
     const expectedCount = Math.max(5, Number(item.level1QuestionCount || 15));
@@ -930,7 +1098,7 @@ export default function HighSchoolProgramsScreen() {
                 badgeTone={item.myRegistration?.qualifiedForLevel2 ? "success" : "primary"}
                 actionLabel={
                   ownedByMe
-                    ? (Array.isArray(item.level1Questions) && item.level1Questions.length ? "Edit L1 Questions" : "Set L1 Questions")
+                    ? "Manage Championship"
                     : item.myRegistration
                       ? "View Student Flow"
                       : canRegister
@@ -940,7 +1108,7 @@ export default function HighSchoolProgramsScreen() {
                 secondaryLabel={ownedByMe ? "Delete" : undefined}
                 onPress={async () => {
                   if (ownedByMe) {
-                    openQuestionEditor(item);
+                    openCompetitionManager(item, "registration");
                     return;
                   }
                   if (item.myRegistration || !canRegister) {
@@ -974,7 +1142,125 @@ export default function HighSchoolProgramsScreen() {
         )}
       </CommunitySection>
 
-      {isInstitutionTeacher && questionEditorCompetition ? (
+      {isInstitutionTeacher && managerCompetition ? (
+        <CommunitySection
+          title={`Manage Championship - ${managerCompetition.title}`}
+          subtitle="Teacher control centre for dates, Level 1, Level 2, participation, and winners."
+          icon="settings-outline"
+        >
+          <View style={styles.filterRow}>
+            {([
+              ["registration", "Registration"],
+              ["level1", "Level 1"],
+              ["level2", "Level 2"],
+              ["reports", "Reports"]
+            ] as const).map(([key, label]) => {
+              const active = managerTab === key;
+              return (
+                <TouchableOpacity
+                  key={key}
+                  onPress={() => {
+                    setManagerTab(key);
+                    if (key === "reports") loadCompetitionReports(managerCompetition._id);
+                  }}
+                  style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                >
+                  <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <TouchableOpacity
+            style={[styles.backButton, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+            onPress={() => {
+              setManagerCompetition(null);
+              setQuestionEditorCompetition(null);
+              setQuestionDrafts([]);
+              setLevel2QuestionDrafts([]);
+              setReports(null);
+            }}
+          >
+            <Text style={[styles.backButtonText, { color: colors.textMuted }]}>Close Manager</Text>
+          </TouchableOpacity>
+
+          {managerTab === "registration" ? (
+            <>
+              <Text style={[styles.scopeHeading, { color: colors.text }]}>Registration Deadline</Text>
+              <View style={styles.row}>
+                <View style={styles.inlineSelect}>
+                  <DateField label="Date" value={registrationDate} onChange={setRegistrationDate} />
+                </View>
+                <View style={styles.inlineSelect}>
+                  <TimeField label="Time" value={registrationTimeSlot} onChange={setRegistrationTimeSlot} colors={colors} />
+                </View>
+              </View>
+              <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 1</Text>
+              <View style={styles.row}>
+                <View style={styles.inlineSelect}>
+                  <DateField label="Date" value={level1Date} onChange={setLevel1Date} />
+                </View>
+                <View style={styles.inlineSelect}>
+                  <TimeField label="Time" value={level1TimeSlot} onChange={setLevel1TimeSlot} colors={colors} />
+                </View>
+              </View>
+              <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 2</Text>
+              <View style={styles.row}>
+                <View style={styles.inlineSelect}>
+                  <DateField label="Date" value={level2Date} onChange={setLevel2Date} />
+                </View>
+                <View style={styles.inlineSelect}>
+                  <TimeField label="Time" value={level2TimeSlot} onChange={setLevel2TimeSlot} colors={colors} />
+                </View>
+              </View>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Top N qualify</Text>
+              <View style={styles.filterRow}>
+                {TOP_N_OPTIONS.map((item) => {
+                  const active = qualificationTopN === item;
+                  return (
+                    <TouchableOpacity key={`manage-topn-${item}`} onPress={() => setQualificationTopN(item)} style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}>
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <ActionButton label={savingCompetitionMeta ? "Saving..." : "Save Registration Settings"} icon="save-outline" onPress={saveCompetitionSchedule} />
+            </>
+          ) : null}
+
+          {managerTab === "level1" ? (
+            <>
+              <ActionButton label={generatingQuestionDraft ? "Generating..." : "AI Draft Level 1 Questions"} icon="sparkles-outline" onPress={() => generateQuestionDraft("L1")} />
+              <Text style={[styles.helpText, { color: colors.textMuted }]}>AI drafts questions from subject, topic, and class context. Review them before saving.</Text>
+            </>
+          ) : null}
+
+          {managerTab === "level2" ? (
+            <>
+              <ActionButton label={generatingQuestionDraft ? "Generating..." : "AI Draft Level 2 Questions"} icon="sparkles-outline" onPress={() => generateQuestionDraft("L2")} />
+              <Text style={[styles.helpText, { color: colors.textMuted }]}>Create the live Level 2 question set here. Saving creates the Level 2 batches for qualified students.</Text>
+            </>
+          ) : null}
+
+          {managerTab === "reports" ? (
+            <>
+              {loadingReports ? <Text style={[styles.helpText, { color: colors.textMuted }]}>Loading reports...</Text> : null}
+              {reports?.qualificationFunnel ? (
+                <View style={styles.filterRow}>
+                  <AcademicCard icon="people-outline" title="Registered" meta={String(reports.qualificationFunnel.registered || 0)} />
+                  <AcademicCard icon="create-outline" title="L1 Attempted" meta={String(reports.qualificationFunnel.level1Attempted || 0)} />
+                  <AcademicCard icon="medal-outline" title="Qualified L2" meta={String(reports.qualificationFunnel.level2Qualified || 0)} />
+                  <AcademicCard icon="trophy-outline" title="Winners" meta={String(reports.qualificationFunnel.winners || 0)} />
+                </View>
+              ) : null}
+              {(reports?.overallLeaderboard || []).slice(0, 10).map((row) => (
+                <AcademicCard key={`${row.studentId}-${row.rank}`} icon="podium-outline" title={`#${row.rank} ${row.studentName}`} meta={`${row.institutionName || "School"}${row.className ? ` · ${row.className}` : ""}`} note={`Score ${row.score} · ${row.percentage}%`} />
+              ))}
+            </>
+          ) : null}
+        </CommunitySection>
+      ) : null}
+
+      {isInstitutionTeacher && managerTab === "level1" && questionEditorCompetition ? (
         <CommunitySection
           title={`Level 1 Questions - ${questionEditorCompetition.title}`}
           subtitle={`Create ${questionEditorCompetition.level1QuestionCount || 15} timed questions. Students will answer this exact set in Level 1.`}
@@ -1036,6 +1322,49 @@ export default function HighSchoolProgramsScreen() {
             </View>
           ))}
           <ActionButton label={savingQuestions ? "Saving..." : "Save Level 1 Questions"} icon="save-outline" onPress={saveLevel1Questions} />
+        </CommunitySection>
+      ) : null}
+
+      {isInstitutionTeacher && managerTab === "level2" && managerCompetition ? (
+        <CommunitySection
+          title={`Level 2 Questions - ${managerCompetition.title}`}
+          subtitle="Qualified students will receive these questions in their live batch round."
+          icon="flash-outline"
+        >
+          {level2QuestionDrafts.map((item, index) => (
+            <View key={item.id || `level2-${index}`} style={[styles.questionCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.questionTitle, { color: colors.text }]}>L2 Question {index + 1}</Text>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+                placeholder="Enter the Level 2 question"
+                placeholderTextColor={colors.textMuted}
+                value={item.text}
+                onChangeText={(value) => setLevel2QuestionDrafts((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, text: value } : row))}
+                multiline
+              />
+              {item.options.map((option, optionIndex) => {
+                const active = item.correctOption === option;
+                return (
+                  <View key={`${item.id || index}-l2-option-${optionIndex}`} style={styles.optionRow}>
+                    <TouchableOpacity
+                      style={[styles.correctChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surface }]}
+                      onPress={() => setLevel2QuestionDrafts((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, correctOption: row.options[optionIndex] || "" } : row))}
+                    >
+                      <Text style={[styles.correctChipText, { color: active ? "#15803D" : colors.textMuted }]}>{active ? "Correct" : `Option ${String.fromCharCode(65 + optionIndex)}`}</Text>
+                    </TouchableOpacity>
+                    <TextInput
+                      style={[styles.input, styles.optionInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+                      placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                      placeholderTextColor={colors.textMuted}
+                      value={option}
+                      onChangeText={(value) => setLevel2QuestionDrafts((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, options: row.options.map((opt, optIndex) => optIndex === optionIndex ? value : opt) } : row))}
+                    />
+                  </View>
+                );
+              })}
+            </View>
+          ))}
+          <ActionButton label={savingLevel2 ? "Creating Level 2..." : "Save Level 2 Questions and Create Batches"} icon="rocket-outline" onPress={saveLevel2QuestionsAndCreateBatches} />
         </CommunitySection>
       ) : null}
 
