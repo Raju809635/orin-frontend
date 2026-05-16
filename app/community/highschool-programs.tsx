@@ -77,7 +77,7 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 ];
 const CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => String(index + 1));
 const SECTION_OPTIONS = ["A", "B", "C", "D", "E", "F"];
-const TOP_N_OPTIONS = [5, 10, 20, 30, 50, 100];
+const TOP_N_OPTIONS = [1, 2, 3, 4, 5, 10, 20, 30, 50, 100];
 const QUESTION_COUNT_OPTIONS = [10, 15, 20, 25, 30];
 const SUBJECT_OPTIONS = ["Mathematics", "Science", "Biology", "Physics", "Chemistry", "Social Science", "English", "Telugu", "Hindi"];
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
@@ -742,7 +742,7 @@ export default function HighSchoolProgramsScreen() {
           <ActionButton label={creating ? "Creating..." : "Create Championship"} icon="sparkles-outline" onPress={createCompetition} />
           <Text style={[styles.helpTitle, { color: colors.text }]}>How this works</Text>
           <Text style={[styles.helpText, { color: colors.textMuted }]}>
-            Top N qualify means after Level 1, only the highest N scoring students move to Level 2. Example: Top N = 20 means best 20 students qualify.
+            Top N qualify is the maximum number of Level-1 students who move to Level 2. Example: if Top N = 3 and 4 students participate, only the best 3 qualify. If Top N = 5 and only 4 students participate, all 4 can qualify.
           </Text>
           <Text style={[styles.helpText, { color: colors.textMuted }]}>
             Quiz questions are added right after program creation in the next teacher step: Level-1 question set and Level-2 batch question sets (15 each), with manual + AI assist.
