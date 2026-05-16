@@ -47,6 +47,7 @@ type CompetitionItem = {
   storedStatus?: string;
   qualificationTopN?: number;
   institutionName?: string;
+  createdBy?: string | { _id?: string };
   myRegistration?: {
     status?: string;
     qualifiedForLevel2?: boolean;
@@ -418,6 +419,36 @@ export default function HighSchoolProgramsScreen() {
     }
   }
 
+  function isCompetitionOwner(item: CompetitionItem) {
+    const createdBy = typeof item.createdBy === "object" ? item.createdBy?._id : item.createdBy;
+    const currentUser = user as { _id?: string; id?: string } | null;
+    const currentUserId = String(currentUser?._id || currentUser?.id || "");
+    return Boolean(currentUserId && String(createdBy || "") === currentUserId);
+  }
+
+  function confirmDeleteCompetition(item: CompetitionItem) {
+    Alert.alert(
+      "Delete championship?",
+      `This will permanently delete "${item.title}" for everyone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setError(null);
+              await api.delete(`/api/network/highschool-competitions/${item._id}`);
+              await load(true);
+            } catch (e) {
+              setError(getAppErrorMessage(e, "Unable to delete championship."));
+            }
+          }
+        }
+      ]
+    );
+  }
+
   return (
     <HighSchoolCommunityShell
       title="School Programs"
@@ -756,6 +787,7 @@ export default function HighSchoolProgramsScreen() {
                         ? "Level 2 Ready"
                   : item.status.replace(/_/g, " ");
             const canRegister = item.status === "registration_open" && !item.myRegistration;
+            const ownedByMe = isCompetitionOwner(item);
             return (
               <AcademicCard
                 key={item._id}
@@ -766,6 +798,7 @@ export default function HighSchoolProgramsScreen() {
                 badge={statusLabel}
                 badgeTone={item.myRegistration?.qualifiedForLevel2 ? "success" : "primary"}
                 actionLabel={item.myRegistration ? "View Status" : canRegister ? "Register" : "View Schedule"}
+                secondaryLabel={ownedByMe ? "Delete" : undefined}
                 onPress={async () => {
                   if (item.myRegistration || !canRegister) {
                     setSelected({
@@ -787,6 +820,7 @@ export default function HighSchoolProgramsScreen() {
                     setError(getAppErrorMessage(e, "Unable to register right now."));
                   }
                 }}
+                onSecondaryPress={ownedByMe ? () => confirmDeleteCompetition(item) : undefined}
               />
             );
           })
