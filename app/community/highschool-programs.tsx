@@ -30,6 +30,26 @@ type OpportunityItem = {
   location?: string;
 };
 
+type CompetitionItem = {
+  _id: string;
+  title: string;
+  subject: string;
+  chapter?: string;
+  description?: string;
+  scopeType: "institution_only" | "multi_institution" | "open_highschool";
+  registrationDeadline: string;
+  level1At: string;
+  level2At?: string | null;
+  status: string;
+  qualificationTopN?: number;
+  institutionName?: string;
+  myRegistration?: {
+    status?: string;
+    qualifiedForLevel2?: boolean;
+    level2BatchIndex?: number;
+  } | null;
+};
+
 type FilterKey = "all" | "workshop" | "olympiad" | "bootcamp" | "scholarship" | "event";
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
@@ -53,6 +73,7 @@ export default function HighSchoolProgramsScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
   const [programs, setPrograms] = useState<OpportunityItem[]>([]);
+  const [competitions, setCompetitions] = useState<CompetitionItem[]>([]);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selected, setSelected] = useState<OpportunityItem | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,8 +85,12 @@ export default function HighSchoolProgramsScreen() {
       if (refresh) setRefreshing(true);
       else setLoading(true);
       setError(null);
-      const { data } = await api.get<OpportunityItem[]>("/api/network/opportunities");
-      setPrograms((data || []).filter((item) => item.isActive !== false));
+      const [competitionRes, opportunityRes] = await Promise.all([
+        api.get<{ competitions: CompetitionItem[] }>("/api/network/highschool-competitions"),
+        api.get<OpportunityItem[]>("/api/network/opportunities")
+      ]);
+      setCompetitions(competitionRes.data?.competitions || []);
+      setPrograms((opportunityRes.data || []).filter((item) => item.isActive !== false));
     } catch (e) {
       setError(getAppErrorMessage(e, "Failed to load school programs."));
       setPrograms([]);
@@ -88,7 +113,7 @@ export default function HighSchoolProgramsScreen() {
       title="School Programs"
       subtitle="After-12 opportunities engine, filtered and presented for academic-safe workshops, scholarships, bootcamps and school events."
       stats={[
-        { icon: "briefcase", label: "Programs", value: String(programs.length) },
+        { icon: "briefcase", label: "Programs", value: String(competitions.length || programs.length) },
         { icon: "filter", label: "Filter", value: FILTERS.find((item) => item.key === filter)?.label || "All" },
         { icon: "school", label: "Mode", value: "Academic" }
       ]}
@@ -112,6 +137,61 @@ export default function HighSchoolProgramsScreen() {
             );
           })}
         </View>
+      </CommunitySection>
+
+      <CommunitySection title="Championship Programs" subtitle="Cross-institution events with registration, Level-1 qualification, and live Level-2 rounds." icon="trophy">
+        {competitions.length ? (
+          competitions.map((item) => {
+            const scopeLabel =
+              item.scopeType === "open_highschool"
+                ? "Open High School"
+                : item.scopeType === "multi_institution"
+                  ? "Multi Institution"
+                  : "Institution Only";
+            const statusLabel = item.myRegistration?.qualifiedForLevel2
+              ? "Qualified L2"
+              : item.myRegistration?.status === "registered"
+                ? "Registered"
+                : item.status === "registration_open"
+                  ? "Open"
+                  : item.status.replace(/_/g, " ");
+            return (
+              <AcademicCard
+                key={item._id}
+                icon="trophy-outline"
+                title={item.title}
+                meta={`${item.subject}${item.chapter ? ` · ${item.chapter}` : ""} · ${scopeLabel}`}
+                note={`Register by ${new Date(item.registrationDeadline).toLocaleString("en-IN")} · L1 ${new Date(item.level1At).toLocaleString("en-IN")}${item.level2At ? ` · L2 ${new Date(item.level2At).toLocaleString("en-IN")}` : ""}`}
+                badge={statusLabel}
+                badgeTone={item.myRegistration?.qualifiedForLevel2 ? "success" : "primary"}
+                actionLabel={item.myRegistration ? "View Status" : "Register"}
+                onPress={async () => {
+                  if (item.myRegistration) {
+                    setSelected({
+                      _id: item._id,
+                      title: item.title,
+                      company: item.institutionName || "ORIN",
+                      type: "competition",
+                      category: scopeLabel,
+                      role: item.subject,
+                      duration: item.level2At ? "2 Levels" : "Level 1",
+                      description: item.description || "Championship program"
+                    });
+                    return;
+                  }
+                  try {
+                    await api.post(`/api/network/highschool-competitions/${item._id}/register`, {});
+                    await load(true);
+                  } catch (e) {
+                    setError(getAppErrorMessage(e, "Unable to register right now."));
+                  }
+                }}
+              />
+            );
+          })
+        ) : (
+          <AcademicEmpty label="No championship programs are live right now." />
+        )}
       </CommunitySection>
 
       <CommunitySection title="Available Academic Programs" subtitle="Real records from Opportunities API, academically labelled." icon="briefcase">
