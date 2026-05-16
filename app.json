@@ -31,6 +31,7 @@
     "plugins": [
       "expo-router",
       "./plugins/withAdiRegistration",
+      "./plugins/withAndroidKotlinKsp",
       [
         "expo-image-picker",
         {
@@ -62,7 +63,7 @@
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "2.0.21"
+            "kotlinVersion": "2.1.20"
           }
         }
       ]
