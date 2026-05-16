@@ -52,6 +52,14 @@ type CompetitionItem = {
   } | null;
 };
 
+type InstitutionSearchResult = {
+  name: string;
+  institutionType?: string;
+  district?: string;
+  state?: string;
+  source?: string;
+};
+
 type FilterKey = "all" | "workshop" | "olympiad" | "bootcamp" | "scholarship" | "event";
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "All" },
@@ -90,6 +98,9 @@ export default function HighSchoolProgramsScreen() {
   const [creating, setCreating] = useState(false);
   const [scopeType, setScopeType] = useState<"institution_only" | "multi_institution" | "open_highschool">("institution_only");
   const [selectedInstitutionName, setSelectedInstitutionName] = useState("");
+  const [institutionQuery, setInstitutionQuery] = useState("");
+  const [institutionResults, setInstitutionResults] = useState<InstitutionSearchResult[]>([]);
+  const [searchingInstitutions, setSearchingInstitutions] = useState(false);
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("Mathematics");
   const [chapter, setChapter] = useState("");
@@ -146,6 +157,42 @@ export default function HighSchoolProgramsScreen() {
     return [...set].filter(Boolean);
   }, [competitions, user?.institutionName]);
 
+  async function searchInstitutions(query: string) {
+    setInstitutionQuery(query);
+    const clean = query.trim();
+    if (clean.length < 2) {
+      setInstitutionResults([]);
+      return;
+    }
+    try {
+      setSearchingInstitutions(true);
+      const { data } = await api.get<InstitutionSearchResult[]>("/api/profiles/institutions/search", {
+        params: { q: clean, institutionType: "School" }
+      });
+      setInstitutionResults((data || []).slice(0, 10));
+    } catch {
+      setInstitutionResults([]);
+    } finally {
+      setSearchingInstitutions(false);
+    }
+  }
+
+  function selectInstitution(name: string) {
+    const clean = name.trim();
+    if (!clean) return;
+    if (scopeType === "multi_institution") {
+      setAllowedInstitutions((prev) => (prev.includes(clean) ? prev : [...prev, clean]));
+    } else {
+      setSelectedInstitutionName(clean);
+    }
+    setInstitutionQuery(clean);
+    setInstitutionResults([]);
+  }
+
+  function removeAllowedInstitution(name: string) {
+    setAllowedInstitutions((prev) => prev.filter((item) => item !== name));
+  }
+
   function toIso(offsetDays: number, timeSlot: string) {
     const [h, m] = timeSlot.split(":").map((item) => Number(item || 0));
     const date = new Date();
@@ -180,7 +227,7 @@ export default function HighSchoolProgramsScreen() {
       Alert.alert("Select schools", "For Inter-School mode, select at least 2 institutions.");
       return;
     }
-    if (scopeType === "institution_only" && !selectedInstitutionName && !user?.institutionName) {
+    if (scopeType === "institution_only" && !selectedInstitutionName.trim()) {
       Alert.alert("Select institution", "Pick the institution for this competition.");
       return;
     }
@@ -194,7 +241,7 @@ export default function HighSchoolProgramsScreen() {
         description: description.trim(),
         bannerImageUrl: bannerImageUrl.trim(),
         scopeType,
-        selectedInstitutionName: scopeType === "institution_only" ? (selectedInstitutionName || user?.institutionName || "") : "",
+        selectedInstitutionName: scopeType === "institution_only" ? selectedInstitutionName.trim() : "",
         allowedInstitutions: scopeType === "multi_institution" ? allowedInstitutions : [],
         classLevelFilter,
         registrationDeadline: toIso(registrationDateOffset, registrationTimeSlot),
@@ -209,6 +256,9 @@ export default function HighSchoolProgramsScreen() {
       setChapter("");
       setDescription("");
       setAllowedInstitutions([]);
+      setSelectedInstitutionName("");
+      setInstitutionQuery("");
+      setInstitutionResults([]);
       setClassLevelFilter([]);
       setBannerImageUrl("");
       await load(true);
@@ -300,44 +350,74 @@ export default function HighSchoolProgramsScreen() {
           </View>
           <Text style={[styles.scopeNote, { color: colors.textMuted }]}>
             {scopeType === "institution_only"
-              ? "Only students from your institution can register."
+              ? "Only students from the selected institution can register."
               : scopeType === "open_highschool"
                 ? "Any high-school student across institutions can register."
                 : "Only students from the schools you list below can register."}
           </Text>
 
-          {scopeType === "multi_institution" ? (
-            <View style={styles.filterRow}>
-              {institutionChoices.map((item) => {
-                const active = allowedInstitutions.includes(item);
-                return (
-                  <TouchableOpacity
-                    key={item}
-                    onPress={() =>
-                      setAllowedInstitutions((prev) => (active ? prev.filter((x) => x !== item) : [...prev, item]))
-                    }
-                    style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
-                  >
-                    <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+          {scopeType !== "open_highschool" ? (
+            <View style={styles.institutionBox}>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+                placeholder={scopeType === "institution_only" ? "Search and select institution" : "Search school and add to Inter-School list"}
+                placeholderTextColor={colors.textMuted}
+                value={institutionQuery}
+                onChangeText={searchInstitutions}
+              />
+              {searchingInstitutions ? <Text style={[styles.scopeNote, { color: colors.textMuted }]}>Searching schools...</Text> : null}
+              {institutionResults.length ? (
+                <View style={[styles.searchResults, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                  {institutionResults.map((item) => (
+                    <TouchableOpacity key={`${item.name}-${item.district || ""}`} style={[styles.searchResultRow, { borderBottomColor: colors.border }]} onPress={() => selectInstitution(item.name)}>
+                      <Text style={[styles.searchResultName, { color: colors.text }]}>{item.name}</Text>
+                      <Text style={[styles.searchResultMeta, { color: colors.textMuted }]}>
+                        {[item.institutionType, item.district, item.state].filter(Boolean).join(" | ") || "School"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : null}
+
+              {scopeType === "institution_only" && selectedInstitutionName ? (
+                <View style={styles.filterRow}>
+                  <TouchableOpacity style={[styles.filterChip, { borderColor: "#16A34A", backgroundColor: "#ECFDF3" }]} onPress={() => setSelectedInstitutionName("")}>
+                    <Text style={[styles.filterText, { color: "#15803D" }]}>Selected: {selectedInstitutionName}</Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
-          ) : null}
-          {scopeType === "institution_only" ? (
-            <View style={styles.filterRow}>
-              {(institutionChoices.length ? institutionChoices : [user?.institutionName || ""]).filter(Boolean).map((item) => {
-                const active = (selectedInstitutionName || user?.institutionName || "") === item;
-                return (
-                  <TouchableOpacity
-                    key={item}
-                    onPress={() => setSelectedInstitutionName(item)}
-                    style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
-                  >
-                    <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
-                  </TouchableOpacity>
-                );
-              })}
+                </View>
+              ) : null}
+
+              {scopeType === "multi_institution" ? (
+                <>
+                  {institutionChoices.length ? (
+                    <>
+                      <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Quick picks from existing listed schools</Text>
+                      <View style={styles.filterRow}>
+                        {institutionChoices.map((item) => {
+                          const active = allowedInstitutions.includes(item);
+                          return (
+                            <TouchableOpacity
+                              key={item}
+                              onPress={() => (active ? removeAllowedInstitution(item) : selectInstitution(item))}
+                              style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                            >
+                              <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </>
+                  ) : null}
+                  <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Selected schools ({allowedInstitutions.length})</Text>
+                  <View style={styles.filterRow}>
+                    {allowedInstitutions.map((item) => (
+                      <TouchableOpacity key={item} style={[styles.filterChip, { borderColor: "#16A34A", backgroundColor: "#ECFDF3" }]} onPress={() => removeAllowedInstitution(item)}>
+                        <Text style={[styles.filterText, { color: "#15803D" }]}>{item} x</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              ) : null}
             </View>
           ) : null}
 
@@ -603,6 +683,11 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 10 },
   halfInput: { flex: 1 },
   filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  institutionBox: { gap: 8 },
+  searchResults: { borderWidth: 1, borderRadius: 12, overflow: "hidden" },
+  searchResultRow: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1 },
+  searchResultName: { fontWeight: "900" },
+  searchResultMeta: { marginTop: 2, fontSize: 12, fontWeight: "700" },
   scopeHeading: { fontWeight: "900", fontSize: 14 },
   inlineLabel: { fontWeight: "800", fontSize: 12 },
   inlineSelect: { gap: 8 },
