@@ -43,7 +43,8 @@ type CompetitionItem = {
   registrationDeadline: string;
   level1At: string;
   level2At?: string | null;
-  status: string;
+  status: "registration_open" | "registration_closed" | "level1_live" | "level1_closed" | "level2_ready" | "level2_live" | "completed" | string;
+  storedStatus?: string;
   qualificationTopN?: number;
   institutionName?: string;
   myRegistration?: {
@@ -611,7 +612,14 @@ export default function HighSchoolProgramsScreen() {
                 ? "Registered"
                 : item.status === "registration_open"
                   ? "Open"
+                  : item.status === "registration_closed"
+                    ? "Registration Closed"
+                    : item.status === "level1_live"
+                      ? "Level 1 Live"
+                      : item.status === "level2_ready"
+                        ? "Level 2 Ready"
                   : item.status.replace(/_/g, " ");
+            const canRegister = item.status === "registration_open" && !item.myRegistration;
             return (
               <AcademicCard
                 key={item._id}
@@ -621,9 +629,9 @@ export default function HighSchoolProgramsScreen() {
                 note={`Register by ${new Date(item.registrationDeadline).toLocaleString("en-IN")} · L1 ${new Date(item.level1At).toLocaleString("en-IN")}${item.level2At ? ` · L2 ${new Date(item.level2At).toLocaleString("en-IN")}` : ""}`}
                 badge={statusLabel}
                 badgeTone={item.myRegistration?.qualifiedForLevel2 ? "success" : "primary"}
-                actionLabel={item.myRegistration ? "View Status" : "Register"}
+                actionLabel={item.myRegistration ? "View Status" : canRegister ? "Register" : "View Schedule"}
                 onPress={async () => {
-                  if (item.myRegistration) {
+                  if (item.myRegistration || !canRegister) {
                     setSelected({
                       _id: item._id,
                       title: item.title,
