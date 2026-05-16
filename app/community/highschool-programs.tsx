@@ -42,10 +42,13 @@ type CompetitionItem = {
   description?: string;
   bannerImageUrl?: string;
   scopeType: "institution_only" | "multi_institution" | "open_highschool";
+  registrationStartAt?: string | null;
   registrationDeadline: string;
   level1At: string;
+  level1EndAt?: string | null;
   level2At?: string | null;
-  status: "registration_open" | "registration_closed" | "level1_live" | "level1_closed" | "level2_ready" | "level2_live" | "completed" | string;
+  level2EndAt?: string | null;
+  status: "registration_not_started" | "registration_open" | "registration_closed" | "level1_live" | "level1_closed" | "level2_ready" | "level2_live" | "completed" | string;
   storedStatus?: string;
   qualificationTopN?: number;
   level1QuestionCount?: number;
@@ -71,6 +74,7 @@ type CompetitionItem = {
     percentage: number;
     correctCount: number;
   } | null;
+  createdAt?: string;
 };
 
 type CompetitionQuestion = {
@@ -201,6 +205,25 @@ function hasStarted(value?: string | null) {
   if (!value) return false;
   const time = new Date(value).getTime();
   return Number.isFinite(time) && Date.now() >= time;
+}
+
+function hasEnded(value?: string | null) {
+  if (!value) return false;
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) && Date.now() > time;
+}
+
+function formatDateTime(value?: string | null) {
+  if (!value) return "Will be announced";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "Will be announced" : date.toLocaleString("en-IN");
+}
+
+function formatWindow(start?: string | null, end?: string | null) {
+  if (!start && !end) return "Will be announced";
+  if (!start) return `Until ${formatDateTime(end)}`;
+  if (!end) return `Starts ${formatDateTime(start)}`;
+  return `${formatDateTime(start)} - ${formatDateTime(end)}`;
 }
 
 type TimeFieldProps = {
@@ -347,12 +370,18 @@ export default function HighSchoolProgramsScreen() {
   const [allowedInstitutions, setAllowedInstitutions] = useState<string[]>([]);
   const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [registrationStartDate, setRegistrationStartDate] = useState(dateAfter(0));
+  const [registrationStartTimeSlot, setRegistrationStartTimeSlot] = useState("09:00");
   const [registrationDate, setRegistrationDate] = useState(dateAfter(7));
   const [registrationTimeSlot, setRegistrationTimeSlot] = useState("17:00");
   const [level1Date, setLevel1Date] = useState(dateAfter(10));
   const [level1TimeSlot, setLevel1TimeSlot] = useState("10:00");
+  const [level1EndDate, setLevel1EndDate] = useState(dateAfter(10));
+  const [level1EndTimeSlot, setLevel1EndTimeSlot] = useState("11:00");
   const [level2Date, setLevel2Date] = useState(dateAfter(12));
   const [level2TimeSlot, setLevel2TimeSlot] = useState("10:00");
+  const [level2EndDate, setLevel2EndDate] = useState(dateAfter(12));
+  const [level2EndTimeSlot, setLevel2EndTimeSlot] = useState("11:00");
   const [qualificationTopN, setQualificationTopN] = useState(20);
   const [level1QuestionCount, setLevel1QuestionCount] = useState(15);
   const [level1TimeModeSec, setLevel1TimeModeSec] = useState<10 | 30>(30);
@@ -369,7 +398,11 @@ export default function HighSchoolProgramsScreen() {
         api.get<{ competitions: CompetitionItem[] }>("/api/network/highschool-competitions"),
         api.get<OpportunityItem[]>("/api/network/opportunities")
       ]);
-      setCompetitions(competitionRes.data?.competitions || []);
+      const competitionItems = competitionRes.data?.competitions || [];
+      setCompetitions(competitionItems);
+      setSelectedCompetition((prev) => prev ? competitionItems.find((item) => item._id === prev._id) || prev : prev);
+      setManagerCompetition((prev) => prev ? competitionItems.find((item) => item._id === prev._id) || prev : prev);
+      setQuestionEditorCompetition((prev) => prev ? competitionItems.find((item) => item._id === prev._id) || prev : prev);
       setPrograms((opportunityRes.data || []).filter((item) => item.isActive !== false));
     } catch (e) {
       setError(getAppErrorMessage(e, "Failed to load school programs."));
@@ -468,15 +501,24 @@ export default function HighSchoolProgramsScreen() {
     setAiDraftClassLevel("10");
     setAiDraftSubject(item.subject || "Mathematics");
     setAiDraftTopic(item.chapter || "");
+    const registrationStartFields = splitIsoToLocalFields(item.registrationStartAt || item.createdAt || undefined);
     const registrationFields = splitIsoToLocalFields(item.registrationDeadline);
     const level1Fields = splitIsoToLocalFields(item.level1At);
+    const level1EndFields = splitIsoToLocalFields(item.level1EndAt || item.level2At || undefined);
     const level2Fields = splitIsoToLocalFields(item.level2At || undefined);
+    const level2EndFields = splitIsoToLocalFields(item.level2EndAt || undefined);
+    setRegistrationStartDate(registrationStartFields.date);
+    setRegistrationStartTimeSlot(registrationStartFields.time);
     setRegistrationDate(registrationFields.date);
     setRegistrationTimeSlot(registrationFields.time);
     setLevel1Date(level1Fields.date);
     setLevel1TimeSlot(level1Fields.time);
+    setLevel1EndDate(level1EndFields.date);
+    setLevel1EndTimeSlot(level1EndFields.time);
     setLevel2Date(level2Fields.date);
     setLevel2TimeSlot(level2Fields.time);
+    setLevel2EndDate(level2EndFields.date);
+    setLevel2EndTimeSlot(level2EndFields.time);
     setQualificationTopN(Math.max(1, Number(item.qualificationTopN || 20)));
     setLevel1QuestionCount(Math.max(5, Number(item.level1QuestionCount || 15)));
     setLevel1TimeModeSec([10, 30].includes(Number(item.level1TimeModeSec)) ? Number(item.level1TimeModeSec) as 10 | 30 : 30);
@@ -587,9 +629,12 @@ export default function HighSchoolProgramsScreen() {
       setSavingCompetitionMeta(true);
       setError(null);
       const res = await api.patch<{ competition: CompetitionItem }>(`/api/network/highschool-competitions/${managerCompetition._id}`, {
+        registrationStartAt: toIso(registrationStartDate, registrationStartTimeSlot),
         registrationDeadline: toIso(registrationDate, registrationTimeSlot),
         level1At: toIso(level1Date, level1TimeSlot),
+        level1EndAt: toIso(level1EndDate, level1EndTimeSlot),
         level2At: toIso(level2Date, level2TimeSlot),
+        level2EndAt: toIso(level2EndDate, level2EndTimeSlot),
         qualificationTopN,
         level1QuestionCount,
         level1TimeModeSec
@@ -818,9 +863,12 @@ export default function HighSchoolProgramsScreen() {
         selectedInstitutionName: scopeType === "institution_only" ? selectedInstitutionName.trim() : "",
         allowedInstitutions: scopeType === "multi_institution" ? allowedInstitutions : [],
         classLevelFilter,
+        registrationStartAt: toIso(registrationStartDate, registrationStartTimeSlot),
         registrationDeadline: toIso(registrationDate, registrationTimeSlot),
         level1At: toIso(level1Date, level1TimeSlot),
+        level1EndAt: toIso(level1EndDate, level1EndTimeSlot),
         level2At: toIso(level2Date, level2TimeSlot),
+        level2EndAt: toIso(level2EndDate, level2EndTimeSlot),
         qualificationTopN: Math.max(1, Number(qualificationTopN || 20)),
         level1QuestionCount: Math.max(5, Number(level1QuestionCount || 15)),
         level1TimeModeSec
@@ -1086,31 +1134,57 @@ export default function HighSchoolProgramsScreen() {
             <Text style={[styles.scopeNote, { color: colors.textMuted }]}>Selected: {classLevelFilter.join(", ")}</Text>
           ) : null}
 
-          <Text style={[styles.scopeHeading, { color: colors.text }]}>Registration Deadline</Text>
+          <Text style={[styles.scopeHeading, { color: colors.text }]}>Registration Window</Text>
           <View style={styles.row}>
             <View style={styles.inlineSelect}>
-              <DateField label="Date" value={registrationDate} onChange={setRegistrationDate} />
+              <DateField label="Start date" value={registrationStartDate} onChange={setRegistrationStartDate} />
             </View>
             <View style={styles.inlineSelect}>
-              <TimeField label="Time" value={registrationTimeSlot} onChange={setRegistrationTimeSlot} colors={colors} />
+              <TimeField label="Start time" value={registrationStartTimeSlot} onChange={setRegistrationStartTimeSlot} colors={colors} />
+            </View>
+          </View>
+          <View style={styles.row}>
+            <View style={styles.inlineSelect}>
+              <DateField label="End date" value={registrationDate} onChange={setRegistrationDate} />
+            </View>
+            <View style={styles.inlineSelect}>
+              <TimeField label="End time" value={registrationTimeSlot} onChange={setRegistrationTimeSlot} colors={colors} />
             </View>
           </View>
 
-          <Text style={[styles.scopeHeading, { color: colors.text }]}>Level Schedules</Text>
+          <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 1 Window</Text>
           <View style={styles.row}>
             <View style={styles.inlineSelect}>
-              <DateField label="Level 1 date" value={level1Date} onChange={setLevel1Date} />
+              <DateField label="Start date" value={level1Date} onChange={setLevel1Date} />
             </View>
             <View style={styles.inlineSelect}>
-              <TimeField label="Level 1 time" value={level1TimeSlot} onChange={setLevel1TimeSlot} colors={colors} />
+              <TimeField label="Start time" value={level1TimeSlot} onChange={setLevel1TimeSlot} colors={colors} />
             </View>
           </View>
           <View style={styles.row}>
             <View style={styles.inlineSelect}>
-              <DateField label="Level 2 date" value={level2Date} onChange={setLevel2Date} />
+              <DateField label="End date" value={level1EndDate} onChange={setLevel1EndDate} />
             </View>
             <View style={styles.inlineSelect}>
-              <TimeField label="Level 2 time" value={level2TimeSlot} onChange={setLevel2TimeSlot} colors={colors} />
+              <TimeField label="End time" value={level1EndTimeSlot} onChange={setLevel1EndTimeSlot} colors={colors} />
+            </View>
+          </View>
+
+          <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 2 Window</Text>
+          <View style={styles.row}>
+            <View style={styles.inlineSelect}>
+              <DateField label="Start date" value={level2Date} onChange={setLevel2Date} />
+            </View>
+            <View style={styles.inlineSelect}>
+              <TimeField label="Start time" value={level2TimeSlot} onChange={setLevel2TimeSlot} colors={colors} />
+            </View>
+          </View>
+          <View style={styles.row}>
+            <View style={styles.inlineSelect}>
+              <DateField label="End date" value={level2EndDate} onChange={setLevel2EndDate} />
+            </View>
+            <View style={styles.inlineSelect}>
+              <TimeField label="End time" value={level2EndTimeSlot} onChange={setLevel2EndTimeSlot} colors={colors} />
             </View>
           </View>
 
@@ -1207,7 +1281,9 @@ export default function HighSchoolProgramsScreen() {
               ? "Qualified L2"
               : item.myRegistration?.status === "registered"
                 ? "Registered"
-                : item.status === "registration_open"
+                : item.status === "registration_not_started"
+                  ? "Registration Soon"
+                  : item.status === "registration_open"
                   ? "Open"
                   : item.status === "registration_closed"
                     ? "Registration Closed"
@@ -1231,7 +1307,7 @@ export default function HighSchoolProgramsScreen() {
                 icon="trophy-outline"
                 title={item.title}
                 meta={`${item.subject}${item.chapter ? ` · ${item.chapter}` : ""} · ${scopeLabel}`}
-                note={`Register by ${new Date(item.registrationDeadline).toLocaleString("en-IN")} · L1 ${new Date(item.level1At).toLocaleString("en-IN")}${item.level2At ? ` · L2 ${new Date(item.level2At).toLocaleString("en-IN")}` : ""}`}
+                note={`Registration ${formatWindow(item.registrationStartAt, item.registrationDeadline)} · L1 ${formatWindow(item.level1At, item.level1EndAt)}${item.level2At ? ` · L2 ${formatWindow(item.level2At, item.level2EndAt)}` : ""}`}
                 badge={statusLabel}
                 badgeTone={item.myRegistration?.qualifiedForLevel2 ? "success" : "primary"}
                 actionLabel={
@@ -1318,9 +1394,9 @@ export default function HighSchoolProgramsScreen() {
                 {selectedCompetition.description || "This championship has registration, Level 1 qualification, and Level 2 finalist rounds."}
               </Text>
               <View style={styles.eventMilestoneGrid}>
-                <AcademicCard icon="calendar-outline" title="Registration" meta={new Date(selectedCompetition.registrationDeadline).toLocaleString("en-IN")} note={selectedCompetition.myRegistration ? "You are registered." : "Register before this time."} />
-                <AcademicCard icon="create-outline" title="Level 1" meta={new Date(selectedCompetition.level1At).toLocaleString("en-IN")} note={hasStarted(selectedCompetition.level1At) ? "Level 1 has started." : "Attempt unlocks at this time."} />
-                <AcademicCard icon="flash-outline" title="Level 2" meta={selectedCompetition.level2At ? new Date(selectedCompetition.level2At).toLocaleString("en-IN") : "Will be announced"} note={selectedCompetition.myRegistration?.qualifiedForLevel2 ? "You qualified for Level 2." : "Top scorers qualify after Level 1."} />
+                <AcademicCard icon="calendar-outline" title="Registration" meta={formatWindow(selectedCompetition.registrationStartAt, selectedCompetition.registrationDeadline)} note={selectedCompetition.myRegistration ? "You are registered. Latest schedule updates appear here." : "Register during this window."} />
+                <AcademicCard icon="create-outline" title="Level 1" meta={formatWindow(selectedCompetition.level1At, selectedCompetition.level1EndAt)} note={hasEnded(selectedCompetition.level1EndAt) ? "Level 1 window is closed." : hasStarted(selectedCompetition.level1At) ? "Level 1 is open now." : "Attempt unlocks at the start time."} />
+                <AcademicCard icon="flash-outline" title="Level 2" meta={formatWindow(selectedCompetition.level2At, selectedCompetition.level2EndAt)} note={selectedCompetition.myRegistration?.qualifiedForLevel2 ? "You qualified for Level 2." : "Top scorers qualify after Level 1."} />
               </View>
             </>
           ) : null}
@@ -1330,7 +1406,7 @@ export default function HighSchoolProgramsScreen() {
               {!selectedCompetition.myRegistration ? (
                 <AcademicEmpty label="Register first to attempt Level 1." />
               ) : !hasStarted(selectedCompetition.level1At) ? (
-                <AcademicCard icon="time-outline" title="Level 1 Not Started" meta={new Date(selectedCompetition.level1At).toLocaleString("en-IN")} note="Come back at the start time to attempt the quiz." />
+                <AcademicCard icon="time-outline" title="Level 1 Not Started" meta={formatWindow(selectedCompetition.level1At, selectedCompetition.level1EndAt)} note="Come back at the start time to attempt the quiz." />
               ) : selectedCompetition.myLevel1Attempt ? (
                 <>
                   <View style={styles.eventMilestoneGrid}>
@@ -1339,6 +1415,8 @@ export default function HighSchoolProgramsScreen() {
                     <AcademicCard icon="checkmark-circle-outline" title="Correct" meta={String(selectedCompetition.myLevel1Attempt.correctCount)} note={`Submitted ${selectedCompetition.myLevel1Attempt.submittedAt ? new Date(selectedCompetition.myLevel1Attempt.submittedAt).toLocaleString("en-IN") : ""}`} />
                   </View>
                 </>
+              ) : hasEnded(selectedCompetition.level1EndAt) ? (
+                <AcademicCard icon="lock-closed-outline" title="Level 1 Closed" meta={formatWindow(selectedCompetition.level1At, selectedCompetition.level1EndAt)} note="The attempt window is over. Your result appears here if you submitted." />
               ) : !(selectedCompetition.level1Questions || []).length ? (
                 <AcademicCard icon="help-circle-outline" title="Questions Not Ready" meta="Teacher setup pending" note="Level 1 questions will appear after the teacher saves them." />
               ) : (
@@ -1380,7 +1458,9 @@ export default function HighSchoolProgramsScreen() {
               ) : !selectedCompetition.myRegistration.qualifiedForLevel2 ? (
                 <AcademicCard icon="hourglass-outline" title="Qualification Pending" meta={selectedCompetition.myLevel1Rank?.overall ? `Current rank #${selectedCompetition.myLevel1Rank.overall}` : "Rank pending"} note="If you are inside Top N after finalization, Level 2 will unlock here." />
               ) : !hasStarted(selectedCompetition.level2At) ? (
-                <AcademicCard icon="time-outline" title="Level 2 Not Started" meta={selectedCompetition.level2At ? new Date(selectedCompetition.level2At).toLocaleString("en-IN") : "Will be announced"} note="You qualified. Come back when Level 2 starts." />
+                <AcademicCard icon="time-outline" title="Level 2 Not Started" meta={formatWindow(selectedCompetition.level2At, selectedCompetition.level2EndAt)} note="You qualified. Come back when Level 2 starts." />
+              ) : hasEnded(selectedCompetition.level2EndAt) ? (
+                <AcademicCard icon="lock-closed-outline" title="Level 2 Closed" meta={formatWindow(selectedCompetition.level2At, selectedCompetition.level2EndAt)} note="The Level 2 window is over." />
               ) : (
                 <>
                   <AcademicCard icon="medal-outline" title="Level 2 Ready" meta={`Batch ${(selectedCompetition.myRegistration.level2BatchIndex ?? 0) + 1}`} note="Join your assigned live batch round." />
@@ -1435,31 +1515,55 @@ export default function HighSchoolProgramsScreen() {
 
           {managerTab === "registration" ? (
             <>
-              <Text style={[styles.scopeHeading, { color: colors.text }]}>Registration Deadline</Text>
+              <Text style={[styles.scopeHeading, { color: colors.text }]}>Registration Window</Text>
               <View style={styles.row}>
                 <View style={styles.inlineSelect}>
-                  <DateField label="Date" value={registrationDate} onChange={setRegistrationDate} />
+                  <DateField label="Start date" value={registrationStartDate} onChange={setRegistrationStartDate} />
                 </View>
                 <View style={styles.inlineSelect}>
-                  <TimeField label="Time" value={registrationTimeSlot} onChange={setRegistrationTimeSlot} colors={colors} />
+                  <TimeField label="Start time" value={registrationStartTimeSlot} onChange={setRegistrationStartTimeSlot} colors={colors} />
                 </View>
               </View>
-              <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 1</Text>
               <View style={styles.row}>
                 <View style={styles.inlineSelect}>
-                  <DateField label="Date" value={level1Date} onChange={setLevel1Date} />
+                  <DateField label="End date" value={registrationDate} onChange={setRegistrationDate} />
                 </View>
                 <View style={styles.inlineSelect}>
-                  <TimeField label="Time" value={level1TimeSlot} onChange={setLevel1TimeSlot} colors={colors} />
+                  <TimeField label="End time" value={registrationTimeSlot} onChange={setRegistrationTimeSlot} colors={colors} />
                 </View>
               </View>
-              <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 2</Text>
+              <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 1 Window</Text>
               <View style={styles.row}>
                 <View style={styles.inlineSelect}>
-                  <DateField label="Date" value={level2Date} onChange={setLevel2Date} />
+                  <DateField label="Start date" value={level1Date} onChange={setLevel1Date} />
                 </View>
                 <View style={styles.inlineSelect}>
-                  <TimeField label="Time" value={level2TimeSlot} onChange={setLevel2TimeSlot} colors={colors} />
+                  <TimeField label="Start time" value={level1TimeSlot} onChange={setLevel1TimeSlot} colors={colors} />
+                </View>
+              </View>
+              <View style={styles.row}>
+                <View style={styles.inlineSelect}>
+                  <DateField label="End date" value={level1EndDate} onChange={setLevel1EndDate} />
+                </View>
+                <View style={styles.inlineSelect}>
+                  <TimeField label="End time" value={level1EndTimeSlot} onChange={setLevel1EndTimeSlot} colors={colors} />
+                </View>
+              </View>
+              <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 2 Window</Text>
+              <View style={styles.row}>
+                <View style={styles.inlineSelect}>
+                  <DateField label="Start date" value={level2Date} onChange={setLevel2Date} />
+                </View>
+                <View style={styles.inlineSelect}>
+                  <TimeField label="Start time" value={level2TimeSlot} onChange={setLevel2TimeSlot} colors={colors} />
+                </View>
+              </View>
+              <View style={styles.row}>
+                <View style={styles.inlineSelect}>
+                  <DateField label="End date" value={level2EndDate} onChange={setLevel2EndDate} />
+                </View>
+                <View style={styles.inlineSelect}>
+                  <TimeField label="End time" value={level2EndTimeSlot} onChange={setLevel2EndTimeSlot} colors={colors} />
                 </View>
               </View>
               <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Top N qualify</Text>
@@ -1473,7 +1577,7 @@ export default function HighSchoolProgramsScreen() {
                   );
                 })}
               </View>
-              <ActionButton label={savingCompetitionMeta ? "Saving..." : "Save Registration Settings"} icon="save-outline" onPress={saveCompetitionSchedule} />
+              <ActionButton label={savingCompetitionMeta ? "Saving..." : "Save Event Schedule"} icon="save-outline" onPress={saveCompetitionSchedule} />
             </>
           ) : null}
 
