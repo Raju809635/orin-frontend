@@ -101,17 +101,27 @@ export async function pickAndUploadPostImages(maxSelection = 5): Promise<string[
     const mimeType = asset.mimeType || "image/jpeg";
 
     const formData = new FormData();
-    formData.append("file", {
-      uri,
-      name: fileName,
-      type: mimeType
-    } as any);
+    if (Platform.OS === "web" && asset.file instanceof File) {
+      formData.append("file", asset.file, fileName);
+    } else {
+      formData.append("file", {
+        uri,
+        name: fileName,
+        type: mimeType
+      } as any);
+    }
 
-    const { data } = await api.post<UploadResponse>("/api/uploads/post-media", formData, {
-      headers: {
-        "Content-Type": "multipart/form-data"
-      }
-    });
+    const { data } = await api.post<UploadResponse>(
+      "/api/uploads/post-media",
+      formData,
+      Platform.OS === "web"
+        ? undefined
+        : {
+            headers: {
+              "Content-Type": "multipart/form-data"
+            }
+          }
+    );
     if (data?.url) uploadedUrls.push(data.url);
   }
 
