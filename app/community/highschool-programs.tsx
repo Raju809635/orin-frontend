@@ -1,4 +1,5 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
 import { Alert, Image, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
@@ -67,6 +68,9 @@ type CompetitionItem = {
     percentage: number;
     grade?: string;
     submittedAt?: string | null;
+    totalTimeMs?: number;
+    averageResponseMs?: number;
+    review?: Level1ReviewRow[];
   } | null;
   myLevel1Rank?: {
     overall: number;
@@ -84,6 +88,16 @@ type CompetitionQuestion = {
   correctOption?: string;
   explanation?: string;
   durationSec?: number;
+};
+
+type Level1ReviewRow = {
+  questionId: string;
+  questionText?: string;
+  selectedOption: string;
+  correctOption?: string;
+  isCorrect: boolean;
+  responseMs: number;
+  explanation?: string;
 };
 
 type CompetitionManagerTab = "registration" | "level1" | "level2" | "reports";
@@ -337,7 +351,10 @@ export default function HighSchoolProgramsScreen() {
   const [selectedCompetition, setSelectedCompetition] = useState<CompetitionItem | null>(null);
   const [studentCompetitionTab, setStudentCompetitionTab] = useState<StudentCompetitionTab>("info");
   const [level1Answers, setLevel1Answers] = useState<Record<string, { selectedOption: string; responseMs: number }>>({});
-  const [level1StartedAtMs, setLevel1StartedAtMs] = useState<number>(0);
+  const [level1QuizStarted, setLevel1QuizStarted] = useState(false);
+  const [level1CurrentIndex, setLevel1CurrentIndex] = useState(0);
+  const [level1QuestionStartedAtMs, setLevel1QuestionStartedAtMs] = useState(0);
+  const [level1TimeLeftSec, setLevel1TimeLeftSec] = useState(0);
   const [submittingLevel1, setSubmittingLevel1] = useState(false);
   const [openingLevel2, setOpeningLevel2] = useState(false);
   const [showChampionshipForm, setShowChampionshipForm] = useState(false);
@@ -541,12 +558,15 @@ export default function HighSchoolProgramsScreen() {
   function closeStudentCompetition() {
     setSelectedCompetition(null);
     setLevel1Answers({});
-    setLevel1StartedAtMs(0);
+    setLevel1QuizStarted(false);
+    setLevel1CurrentIndex(0);
+    setLevel1QuestionStartedAtMs(0);
+    setLevel1TimeLeftSec(0);
   }
 
   function selectLevel1Answer(question: CompetitionQuestion, index: number, selectedOption: string) {
     const key = question.id || `L1-${index + 1}`;
-    const base = level1StartedAtMs || Date.now();
+    const base = level1QuestionStartedAtMs || Date.now();
     setLevel1Answers((prev) => ({
       ...prev,
       [key]: {
@@ -556,6 +576,72 @@ export default function HighSchoolProgramsScreen() {
     }));
   }
 
+  function startLevel1Quiz() {
+    const firstQuestion = selectedCompetition?.level1Questions?.[0];
+    const duration = Number(firstQuestion?.durationSec || selectedCompetition?.level1TimeModeSec || 30);
+    setLevel1Answers({});
+    setLevel1CurrentIndex(0);
+    setLevel1QuestionStartedAtMs(Date.now());
+    setLevel1TimeLeftSec(duration);
+    setLevel1QuizStarted(true);
+  }
+
+  const saveCurrentLevel1Answer = useCallback((forceOption?: string) => {
+    const questions = selectedCompetition?.level1Questions || [];
+    const question = questions[level1CurrentIndex];
+    if (!question) return;
+    const key = question.id || `L1-${level1CurrentIndex + 1}`;
+    const duration = Number(question.durationSec || selectedCompetition?.level1TimeModeSec || 30);
+    const elapsed = level1QuestionStartedAtMs ? Date.now() - level1QuestionStartedAtMs : duration * 1000;
+    setLevel1Answers((prev) => ({
+      ...prev,
+      [key]: {
+        selectedOption: forceOption ?? prev[key]?.selectedOption ?? "",
+        responseMs: Math.max(500, Math.min(duration * 1000, elapsed))
+      }
+    }));
+  }, [level1CurrentIndex, level1QuestionStartedAtMs, selectedCompetition]);
+
+  function goToNextLevel1Question() {
+    const questions = selectedCompetition?.level1Questions || [];
+    saveCurrentLevel1Answer();
+    if (level1CurrentIndex >= questions.length - 1) return;
+    const nextIndex = level1CurrentIndex + 1;
+    const nextQuestion = questions[nextIndex];
+    setLevel1CurrentIndex(nextIndex);
+    setLevel1QuestionStartedAtMs(Date.now());
+    setLevel1TimeLeftSec(Number(nextQuestion?.durationSec || selectedCompetition?.level1TimeModeSec || 30));
+  }
+
+  useEffect(() => {
+    if (!level1QuizStarted || selectedCompetition?.myLevel1Attempt || submittingLevel1) return;
+    const questions = selectedCompetition?.level1Questions || [];
+    if (!questions.length) return;
+    const currentQuestion = questions[level1CurrentIndex];
+    const duration = Number(currentQuestion?.durationSec || selectedCompetition?.level1TimeModeSec || 30);
+    const timer = setInterval(() => {
+      const elapsedSec = Math.floor((Date.now() - (level1QuestionStartedAtMs || Date.now())) / 1000);
+      const remaining = Math.max(0, duration - elapsedSec);
+      setLevel1TimeLeftSec(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+        saveCurrentLevel1Answer("");
+        if (level1CurrentIndex >= questions.length - 1) {
+          setTimeout(() => submitLevel1Attempt(), 100);
+        } else {
+          const nextIndex = level1CurrentIndex + 1;
+          const nextQuestion = questions[nextIndex];
+          setLevel1CurrentIndex(nextIndex);
+          setLevel1QuestionStartedAtMs(Date.now());
+          setLevel1TimeLeftSec(Number(nextQuestion?.durationSec || selectedCompetition?.level1TimeModeSec || 30));
+        }
+      }
+    }, 250);
+    return () => clearInterval(timer);
+  // submitLevel1Attempt intentionally stays outside the dependency list to avoid resetting the active timer on every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [level1CurrentIndex, level1QuestionStartedAtMs, level1QuizStarted, saveCurrentLevel1Answer, selectedCompetition, submittingLevel1]);
+
   async function submitLevel1Attempt() {
     if (!selectedCompetition) return;
     const questions = selectedCompetition.level1Questions || [];
@@ -563,8 +649,21 @@ export default function HighSchoolProgramsScreen() {
       Alert.alert("Level 1", "Questions are not ready yet.");
       return;
     }
-    const missing = questions.some((question, index) => !level1Answers[question.id || `L1-${index + 1}`]?.selectedOption);
-    if (missing) {
+    const currentKey = questions[level1CurrentIndex]?.id || `L1-${level1CurrentIndex + 1}`;
+    const currentDuration = Number(questions[level1CurrentIndex]?.durationSec || selectedCompetition.level1TimeModeSec || 30);
+    const currentElapsed = level1QuestionStartedAtMs ? Date.now() - level1QuestionStartedAtMs : currentDuration * 1000;
+    const mergedAnswers = level1QuizStarted && questions[level1CurrentIndex]
+      ? {
+          ...level1Answers,
+          [currentKey]: {
+            selectedOption: level1Answers[currentKey]?.selectedOption || "",
+            responseMs: Math.max(500, Math.min(currentDuration * 1000, currentElapsed))
+          }
+        }
+      : level1Answers;
+    if (level1QuizStarted) setLevel1Answers(mergedAnswers);
+    const missing = questions.some((question, index) => !mergedAnswers[question.id || `L1-${index + 1}`]?.selectedOption);
+    if (missing && !level1QuizStarted) {
       Alert.alert("Complete Level 1", "Answer every question before submitting.");
       return;
     }
@@ -572,7 +671,7 @@ export default function HighSchoolProgramsScreen() {
       setSubmittingLevel1(true);
       const answers = questions.map((question, index) => {
         const key = question.id || `L1-${index + 1}`;
-        return level1Answers[key] || { selectedOption: "", responseMs: Number(question.durationSec || selectedCompetition.level1TimeModeSec || 30) * 1000 };
+        return mergedAnswers[key] || { selectedOption: "", responseMs: Number(question.durationSec || selectedCompetition.level1TimeModeSec || 30) * 1000 };
       });
       const { data } = await api.post(`/api/network/highschool-competitions/${selectedCompetition._id}/level1/submit`, { answers });
       Alert.alert("Level 1 submitted", `Score ${data?.score || 0}. ${data?.percentage || 0}%`);
@@ -584,7 +683,10 @@ export default function HighSchoolProgramsScreen() {
           correctCount: Number(data?.correctCount || 0),
           percentage: Number(data?.percentage || 0),
           grade: String(data?.grade || ""),
-          submittedAt: new Date().toISOString()
+          submittedAt: new Date().toISOString(),
+          totalTimeMs: Number(data?.totalTimeMs || 0),
+          averageResponseMs: Number(data?.averageResponseMs || 0),
+          review: Array.isArray(data?.review) ? data.review : []
         },
         myLevel1Rank: data?.rank
           ? {
@@ -595,6 +697,7 @@ export default function HighSchoolProgramsScreen() {
             }
           : prev.myLevel1Rank || null
       } : prev);
+      setLevel1QuizStarted(false);
     } catch (e) {
       setError(getAppErrorMessage(e, "Unable to submit Level 1 right now."));
     } finally {
@@ -1417,21 +1520,74 @@ export default function HighSchoolProgramsScreen() {
                     <AcademicCard icon="trophy-outline" title="Your Score" meta={String(selectedCompetition.myLevel1Attempt.score)} note={`${selectedCompetition.myLevel1Attempt.percentage}% · Grade ${selectedCompetition.myLevel1Attempt.grade || "-"}`} />
                     <AcademicCard icon="podium-outline" title="Your Rank" meta={selectedCompetition.myLevel1Rank?.overall ? `#${selectedCompetition.myLevel1Rank.overall}` : "Pending"} note={selectedCompetition.myRegistration?.qualifiedForLevel2 ? "Qualified for Level 2" : "Qualification updates after teacher finalizes Level 1."} />
                     <AcademicCard icon="checkmark-circle-outline" title="Correct" meta={String(selectedCompetition.myLevel1Attempt.correctCount)} note={`Submitted ${selectedCompetition.myLevel1Attempt.submittedAt ? new Date(selectedCompetition.myLevel1Attempt.submittedAt).toLocaleString("en-IN") : ""}`} />
+                    <AcademicCard icon="speedometer-outline" title="Avg Time" meta={`${Math.round(Number(selectedCompetition.myLevel1Attempt.averageResponseMs || 0) / 1000)}s`} note="Lower time helps when scores tie." />
                   </View>
+                  <View style={[styles.quizInstructionBox, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                    <Text style={[styles.quizInstructionTitle, { color: colors.text }]}>Quiz Analytics</Text>
+                    <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>Accuracy: {selectedCompetition.myLevel1Attempt.percentage}%</Text>
+                    <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>Total time: {Math.round(Number(selectedCompetition.myLevel1Attempt.totalTimeMs || 0) / 1000)} seconds</Text>
+                    <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>Speed note: faster correct answers add more points.</Text>
+                  </View>
+                  {(selectedCompetition.myLevel1Attempt.review || []).length ? (
+                    <View style={styles.reviewList}>
+                      <Text style={[styles.scopeHeading, { color: colors.text }]}>Answer Review</Text>
+                      {(selectedCompetition.myLevel1Attempt.review || []).map((row, index) => (
+                        <View key={`${row.questionId}-${index}`} style={[styles.reviewCard, { borderColor: row.isCorrect ? "#16A34A" : "#EF4444", backgroundColor: colors.surfaceAlt }]}>
+                          <Text style={[styles.reviewTitle, { color: colors.text }]}>Q{index + 1}. {row.questionText || row.questionId}</Text>
+                          <Text style={[styles.reviewText, { color: row.isCorrect ? "#15803D" : "#DC2626" }]}>
+                            {row.isCorrect ? "Correct" : "Wrong"} - Your answer: {row.selectedOption || "Not answered"} - {Math.round(Number(row.responseMs || 0) / 1000)}s
+                          </Text>
+                          {!row.isCorrect ? <Text style={[styles.reviewText, { color: colors.textMuted }]}>Correct answer: {row.correctOption || "-"}</Text> : null}
+                          {row.explanation ? <Text style={[styles.reviewText, { color: colors.textMuted }]}>{row.explanation}</Text> : null}
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                 </>
               ) : hasEnded(selectedCompetition.level1EndAt) ? (
                 <AcademicCard icon="lock-closed-outline" title="Level 1 Closed" meta={formatWindow(selectedCompetition.level1At, selectedCompetition.level1EndAt)} note="The attempt window is over. Your result appears here if you submitted." />
               ) : !(selectedCompetition.level1Questions || []).length ? (
                 <AcademicCard icon="help-circle-outline" title="Questions Not Ready" meta="Teacher setup pending" note="Level 1 questions will appear after the teacher saves them." />
+              ) : !level1QuizStarted ? (
+                <>
+                  <AcademicCard
+                    icon="information-circle-outline"
+                    title="Level 1 Instructions"
+                    meta={`${selectedCompetition.level1Questions?.length || 0} questions · ${selectedCompetition.level1TimeModeSec || 30}s each`}
+                    note="Questions appear one by one. Faster correct answers get more score. Once time is over, ORIN moves to the next question automatically."
+                  />
+                  <View style={[styles.quizInstructionBox, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                    <Text style={[styles.quizInstructionTitle, { color: colors.text }]}>Before you start</Text>
+                    <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>- Keep your screen open until the quiz ends.</Text>
+                    <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>- Tap an option, then Save & Next.</Text>
+                    <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>- Unanswered questions count as wrong after timeout.</Text>
+                    <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>- Your rank uses score first, then speed.</Text>
+                  </View>
+                  <ActionButton label="Start Level 1 Quiz" icon="play-circle-outline" onPress={startLevel1Quiz} />
+                </>
               ) : (
                 <>
-                  <AcademicCard icon="flash-outline" title="Level 1 Attempt" meta={`${selectedCompetition.level1Questions?.length || 0} questions`} note={`${selectedCompetition.level1TimeModeSec || 30}s per question. Answer all questions and submit once.`} />
-                  {(selectedCompetition.level1Questions || []).map((question, index) => {
-                    const key = question.id || `L1-${index + 1}`;
+                  {(() => {
+                    const questions = selectedCompetition.level1Questions || [];
+                    const question = questions[level1CurrentIndex];
+                    const key = question?.id || `L1-${level1CurrentIndex + 1}`;
                     const picked = level1Answers[key]?.selectedOption || "";
+                    const duration = Number(question?.durationSec || selectedCompetition.level1TimeModeSec || 30);
+                    const progress = duration ? Math.max(0, Math.min(100, (level1TimeLeftSec / duration) * 100)) : 0;
+                    if (!question) return null;
                     return (
-                      <View key={key} style={[styles.questionCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
-                        <Text style={[styles.questionTitle, { color: colors.text }]}>Q{index + 1}. {question.text}</Text>
+                      <View style={[styles.questionCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                        <View style={styles.quizTopRow}>
+                          <Text style={[styles.questionTitle, { color: colors.text }]}>Question {level1CurrentIndex + 1} of {questions.length}</Text>
+                          <View style={[styles.timerPill, { backgroundColor: level1TimeLeftSec <= 5 ? "#FEE2E2" : "#ECFDF3" }]}>
+                            <Ionicons name="timer-outline" size={16} color={level1TimeLeftSec <= 5 ? "#DC2626" : "#15803D"} />
+                            <Text style={[styles.timerText, { color: level1TimeLeftSec <= 5 ? "#DC2626" : "#15803D" }]}>{level1TimeLeftSec}s</Text>
+                          </View>
+                        </View>
+                        <View style={styles.quizTimerTrack}>
+                          <View style={[styles.quizTimerFill, { width: `${progress}%`, backgroundColor: level1TimeLeftSec <= 5 ? "#EF4444" : "#16A34A" }]} />
+                        </View>
+                        <Text style={[styles.quizQuestionText, { color: colors.text }]}>Q{level1CurrentIndex + 1}. {question.text}</Text>
                         {question.options.map((option) => {
                           const active = picked === option;
                           return (
@@ -1444,10 +1600,20 @@ export default function HighSchoolProgramsScreen() {
                             </TouchableOpacity>
                           );
                         })}
+                        <View style={styles.quizNavRow}>
+                          <ActionButton
+                            label={level1CurrentIndex >= questions.length - 1 ? "Save Answer" : "Save & Next"}
+                            icon="arrow-forward-circle-outline"
+                            onPress={goToNextLevel1Question}
+                            variant="secondary"
+                          />
+                          {level1CurrentIndex >= questions.length - 1 ? (
+                            <ActionButton label={submittingLevel1 ? "Submitting..." : "Submit Quiz"} icon="send-outline" onPress={submitLevel1Attempt} />
+                          ) : null}
+                        </View>
                       </View>
                     );
-                  })}
-                  <ActionButton label={submittingLevel1 ? "Submitting..." : "Submit Level 1"} icon="send-outline" onPress={submitLevel1Attempt} />
+                  })()}
                 </>
               )}
             </>
@@ -1864,6 +2030,20 @@ const styles = StyleSheet.create({
   competitionBannerPlaceholderText: { fontWeight: "900" },
   questionCard: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 10 },
   questionTitle: { fontWeight: "900", fontSize: 15 },
+  quizTopRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  timerPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 5 },
+  timerText: { fontWeight: "900", fontSize: 13 },
+  quizTimerTrack: { height: 9, borderRadius: 999, overflow: "hidden", backgroundColor: "#E5E7EB" },
+  quizTimerFill: { height: "100%", borderRadius: 999 },
+  quizQuestionText: { fontWeight: "900", fontSize: 16, lineHeight: 23 },
+  quizNavRow: { gap: 8 },
+  quizInstructionBox: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 6 },
+  quizInstructionTitle: { fontSize: 15, fontWeight: "900" },
+  quizInstructionText: { fontSize: 13, fontWeight: "700", lineHeight: 19 },
+  reviewList: { gap: 10 },
+  reviewCard: { borderWidth: 1, borderRadius: 14, padding: 11, gap: 6 },
+  reviewTitle: { fontWeight: "900", lineHeight: 20 },
+  reviewText: { fontWeight: "700", lineHeight: 18 },
   optionRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   optionInput: { flex: 1 },
   correctChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 10, minWidth: 94, alignItems: "center" },
