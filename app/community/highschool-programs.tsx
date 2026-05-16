@@ -64,6 +64,9 @@ const FILTERS: { key: FilterKey; label: string }[] = [
 const CLASS_OPTIONS = ["8", "9", "10", "11", "12", "10 A", "10 B", "10 C"];
 const TIME_SLOT_OPTIONS = ["08:00", "09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"];
 const DATE_OFFSET_OPTIONS = [1, 3, 7, 14, 21];
+const TOP_N_OPTIONS = [5, 10, 20, 30, 50, 100];
+const QUESTION_COUNT_OPTIONS = [10, 15, 20, 25, 30];
+const SUBJECT_OPTIONS = ["Mathematics", "Science", "Biology", "Physics", "Chemistry", "Social Science", "English", "Telugu", "Hindi"];
 
 function academicBucket(item: OpportunityItem): FilterKey {
   const text = `${item.title} ${item.type} ${item.category} ${item.role} ${item.description}`.toLowerCase();
@@ -100,8 +103,8 @@ export default function HighSchoolProgramsScreen() {
   const [level1TimeSlot, setLevel1TimeSlot] = useState("10:00");
   const [level2DateOffset, setLevel2DateOffset] = useState(12);
   const [level2TimeSlot, setLevel2TimeSlot] = useState("10:00");
-  const [qualificationTopN, setQualificationTopN] = useState("20");
-  const [level1QuestionCount, setLevel1QuestionCount] = useState("15");
+  const [qualificationTopN, setQualificationTopN] = useState(20);
+  const [level1QuestionCount, setLevel1QuestionCount] = useState(15);
   const [level1TimeModeSec, setLevel1TimeModeSec] = useState<10 | 30>(30);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -158,7 +161,7 @@ export default function HighSchoolProgramsScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ["images"],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 0.8
     });
@@ -197,8 +200,8 @@ export default function HighSchoolProgramsScreen() {
         registrationDeadline: toIso(registrationDateOffset, registrationTimeSlot),
         level1At: toIso(level1DateOffset, level1TimeSlot),
         level2At: toIso(level2DateOffset, level2TimeSlot),
-        qualificationTopN: Math.max(1, Number(qualificationTopN || "20")),
-        level1QuestionCount: Math.max(5, Number(level1QuestionCount || "15")),
+        qualificationTopN: Math.max(1, Number(qualificationTopN || 20)),
+        level1QuestionCount: Math.max(5, Number(level1QuestionCount || 15)),
         level1TimeModeSec
       });
       Alert.alert("Created", "Championship program created.");
@@ -239,13 +242,21 @@ export default function HighSchoolProgramsScreen() {
             value={title}
             onChangeText={setTitle}
           />
-          <TextInput
-            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
-            placeholder="Subject"
-            placeholderTextColor={colors.textMuted}
-            value={subject}
-            onChangeText={setSubject}
-          />
+          <Text style={[styles.scopeHeading, { color: colors.text }]}>Subject</Text>
+          <View style={styles.filterRow}>
+            {SUBJECT_OPTIONS.map((item) => {
+              const active = subject === item;
+              return (
+                <TouchableOpacity
+                  key={item}
+                  onPress={() => setSubject(item)}
+                  style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                >
+                  <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
           <TextInput
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
             placeholder="Chapter / topic scope (optional)"
@@ -409,22 +420,40 @@ export default function HighSchoolProgramsScreen() {
           </View>
 
           <View style={styles.row}>
-            <TextInput
-              style={[styles.input, styles.halfInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
-              placeholder="Top N qualify"
-              placeholderTextColor={colors.textMuted}
-              value={qualificationTopN}
-              keyboardType="numeric"
-              onChangeText={setQualificationTopN}
-            />
-            <TextInput
-              style={[styles.input, styles.halfInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
-              placeholder="L1 question count"
-              placeholderTextColor={colors.textMuted}
-              value={level1QuestionCount}
-              keyboardType="numeric"
-              onChangeText={setLevel1QuestionCount}
-            />
+            <View style={styles.halfInput}>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Top N qualify</Text>
+              <View style={styles.filterRow}>
+                {TOP_N_OPTIONS.map((item) => {
+                  const active = qualificationTopN === item;
+                  return (
+                    <TouchableOpacity
+                      key={`topn-${item}`}
+                      onPress={() => setQualificationTopN(item)}
+                      style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                    >
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+            <View style={styles.halfInput}>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>L1 question count</Text>
+              <View style={styles.filterRow}>
+                {QUESTION_COUNT_OPTIONS.map((item) => {
+                  const active = level1QuestionCount === item;
+                  return (
+                    <TouchableOpacity
+                      key={`qcount-${item}`}
+                      onPress={() => setLevel1QuestionCount(item)}
+                      style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                    >
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
           </View>
 
           <View style={styles.filterRow}>
