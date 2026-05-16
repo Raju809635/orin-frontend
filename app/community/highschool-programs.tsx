@@ -356,7 +356,11 @@ export default function HighSchoolProgramsScreen() {
     try {
       setUploadingBanner(true);
       const url = await pickAndUploadPostImage();
-      if (url) setBannerImageUrl(url);
+      if (url) {
+        setBannerImageUrl(url);
+      } else {
+        Alert.alert("Banner not selected", "Choose a JPG or PNG banner sized 1600 x 600 px for the cleanest student view.");
+      }
     } catch (e) {
       setError(getAppErrorMessage(e, "Unable to upload event banner."));
     } finally {
@@ -521,7 +525,7 @@ export default function HighSchoolProgramsScreen() {
           <TouchableOpacity style={[styles.bannerPicker, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={pickBannerImage}>
             <Text style={[styles.bannerPickerText, { color: colors.text }]}>Select Event Banner</Text>
             <Text style={[styles.bannerPickerMeta, { color: colors.textMuted }]}>
-              {uploadingBanner ? "Uploading banner..." : bannerImageUrl ? "Uploaded. Tap to change image." : "Tap to choose image from gallery"}
+              {uploadingBanner ? "Uploading banner..." : bannerImageUrl ? "Uploaded. Tap to change image." : "Recommended: JPG/PNG, 1600 x 600 px, keep title/logo centered"}
             </Text>
           </TouchableOpacity>
           {bannerImageUrl ? (
@@ -915,7 +919,7 @@ const styles = StyleSheet.create({
   bannerPicker: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11 },
   bannerPickerText: { fontWeight: "900" },
   bannerPickerMeta: { fontWeight: "700", marginTop: 2 },
-  bannerPreviewFrame: { width: "100%", aspectRatio: 16 / 5, borderWidth: 1, borderRadius: 14, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  bannerPreviewFrame: { width: "100%", aspectRatio: 16 / 6, borderWidth: 1, borderRadius: 14, overflow: "hidden", alignItems: "center", justifyContent: "center" },
   bannerPreview: { width: "100%", height: "100%" },
   competitionCardWrap: { borderWidth: 1, borderRadius: 18, padding: 8, gap: 8, overflow: "hidden" },
   competitionBanner: { width: "100%", aspectRatio: 16 / 6, borderRadius: 12 },
