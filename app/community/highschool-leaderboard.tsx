@@ -15,13 +15,31 @@ import {
 } from "@/components/community/highschool-ui";
 
 type BoardEntry = { rank: number; userId?: string | null; name: string; score: number; profilePhotoUrl?: string };
+type ProgramWinnerRow = {
+  rank: number;
+  competitionId: string;
+  title: string;
+  subject: string;
+  winnerStudentId?: string | null;
+  winnerStudentName: string;
+  winnerInstitutionName: string;
+};
+type ProgramInstitutionRow = {
+  rank: number;
+  institutionName: string;
+  wins: number;
+};
 type LeaderboardResponse = {
   collegeTop?: BoardEntry[];
   stateTop?: BoardEntry[];
   globalTop?: BoardEntry[];
   collegeName?: string;
   stateName?: string;
-  me?: { collegeRank?: number | null; stateRank?: number | null; globalRank?: number | null; score?: number };
+  me?: { collegeRank?: number | null; stateRank?: number | null; globalRank?: number | null; score?: number; streakDays?: number };
+  programsLeaderboard?: {
+    competitions?: ProgramWinnerRow[];
+    institutions?: ProgramInstitutionRow[];
+  };
 };
 type ScopeKey = "school" | "state" | "global";
 
@@ -96,7 +114,8 @@ export default function HighSchoolLeaderboardScreen() {
       stats={[
         { icon: "podium", label: "Scope", value: scopeTitle },
         { icon: "person", label: "Your rank", value: myRank ? `#${myRank}` : "-" },
-        { icon: "flash", label: "Points", value: String(data?.me?.score || 0) }
+        { icon: "flash", label: "Points", value: String(data?.me?.score || 0) },
+        { icon: "flame", label: "Streak", value: `${data?.me?.streakDays || 0}d` }
       ]}
       loading={loading}
       error={error}
@@ -159,6 +178,7 @@ export default function HighSchoolLeaderboardScreen() {
                 <View style={styles.positionRow}>
                   <StatusBadge label={`Rank #${myEntry.rank}`} tone="success" />
                   <StatusBadge label={`${myEntry.score} points`} tone="primary" />
+                  <StatusBadge label={`Streak ${data?.me?.streakDays || 0}d`} tone="warning" />
                 </View>
                 <Text style={[styles.positionTitle, { color: colors.text }]}>You are #{myEntry.rank} in {scopeTitle}</Text>
                 <Text style={[styles.positionMeta, { color: colors.textMuted }]}>
@@ -197,6 +217,55 @@ export default function HighSchoolLeaderboardScreen() {
               );
             })}
           </CommunitySection>
+
+          <CommunitySection title="Programs Leaderboard" subtitle="Separate championship winners and institution win table." icon="trophy">
+            {(data?.programsLeaderboard?.competitions || []).length ? (
+              <>
+                <Text style={[styles.blockLabel, { color: colors.text }]}>Recent Program Winners</Text>
+                {(data?.programsLeaderboard?.competitions || []).slice(0, 12).map((row) => (
+                  <View
+                    key={`program-${row.competitionId}`}
+                    style={[styles.rankRow, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                  >
+                    <View style={styles.rankLeft}>
+                      <Text style={[styles.rankIndex, { color: colors.textMuted }]}>#{row.rank}</Text>
+                      <View style={[styles.smallAvatar, styles.avatarFallback]}>
+                        <Text style={styles.smallAvatarText}>{initial(row.winnerStudentName)}</Text>
+                      </View>
+                      <View style={styles.rankText}>
+                        <Text style={[styles.rankName, { color: colors.text }]} numberOfLines={1}>
+                          {row.winnerStudentName} · {row.winnerInstitutionName}
+                        </Text>
+                        <Text style={[styles.metaSmall, { color: colors.textMuted }]} numberOfLines={1}>
+                          {row.title} · {row.subject}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+
+                <Text style={[styles.blockLabel, { color: colors.text, marginTop: 8 }]}>Institution Wins</Text>
+                {(data?.programsLeaderboard?.institutions || []).slice(0, 12).map((row) => (
+                  <View
+                    key={`inst-${row.rank}-${row.institutionName}`}
+                    style={[styles.rankRow, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}
+                  >
+                    <View style={styles.rankLeft}>
+                      <Text style={[styles.rankIndex, { color: "#15803D" }]}>#{row.rank}</Text>
+                      <View style={styles.rankText}>
+                        <Text style={[styles.rankName, { color: colors.text }]} numberOfLines={1}>
+                          {row.institutionName}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.rankScore, { color: colors.textMuted }]}>{row.wins} wins</Text>
+                  </View>
+                ))}
+              </>
+            ) : (
+              <AcademicEmpty label="Program leaderboard appears after completed championships." />
+            )}
+          </CommunitySection>
         </>
       ) : (
         <CommunitySection title="Leaderboard" icon="podium">
@@ -229,5 +298,7 @@ const styles = StyleSheet.create({
   smallAvatarText: { color: "#15803D", fontWeight: "900" },
   rankText: { flex: 1, gap: 6 },
   rankName: { fontWeight: "900" },
-  rankScore: { fontWeight: "900" }
+  rankScore: { fontWeight: "900" },
+  metaSmall: { fontWeight: "700", fontSize: 12 },
+  blockLabel: { fontWeight: "900", fontSize: 14 }
 });
