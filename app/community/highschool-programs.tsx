@@ -6,6 +6,7 @@ import { getAppErrorMessage } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
 import * as ImagePicker from "expo-image-picker";
+import DateField from "@/components/profile/date-field";
 import {
   AcademicCard,
   AcademicEmpty,
@@ -69,9 +70,9 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "scholarship", label: "Scholarships" },
   { key: "event", label: "School Events" }
 ];
-const CLASS_OPTIONS = ["8", "9", "10", "11", "12", "10 A", "10 B", "10 C"];
+const CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => String(index + 1));
+const SECTION_OPTIONS = ["A", "B", "C", "D", "E", "F"];
 const TIME_SLOT_OPTIONS = ["08:00", "09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"];
-const DATE_OFFSET_OPTIONS = [1, 3, 7, 14, 21];
 const TOP_N_OPTIONS = [5, 10, 20, 30, 50, 100];
 const QUESTION_COUNT_OPTIONS = [10, 15, 20, 25, 30];
 const SUBJECT_OPTIONS = ["Mathematics", "Science", "Biology", "Physics", "Chemistry", "Social Science", "English", "Telugu", "Hindi"];
@@ -83,6 +84,16 @@ function academicBucket(item: OpportunityItem): FilterKey {
   if (text.includes("bootcamp") || text.includes("camp")) return "bootcamp";
   if (text.includes("event") || text.includes("school")) return "event";
   return "workshop";
+}
+
+function pad(value: number) {
+  return String(value).padStart(2, "0");
+}
+
+function dateAfter(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
 }
 
 export default function HighSchoolProgramsScreen() {
@@ -107,12 +118,13 @@ export default function HighSchoolProgramsScreen() {
   const [description, setDescription] = useState("");
   const [bannerImageUrl, setBannerImageUrl] = useState("");
   const [allowedInstitutions, setAllowedInstitutions] = useState<string[]>([]);
-  const [classLevelFilter, setClassLevelFilter] = useState<string[]>([]);
-  const [registrationDateOffset, setRegistrationDateOffset] = useState(7);
+  const [selectedClasses, setSelectedClasses] = useState<string[]>([]);
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [registrationDate, setRegistrationDate] = useState(dateAfter(7));
   const [registrationTimeSlot, setRegistrationTimeSlot] = useState("17:00");
-  const [level1DateOffset, setLevel1DateOffset] = useState(10);
+  const [level1Date, setLevel1Date] = useState(dateAfter(10));
   const [level1TimeSlot, setLevel1TimeSlot] = useState("10:00");
-  const [level2DateOffset, setLevel2DateOffset] = useState(12);
+  const [level2Date, setLevel2Date] = useState(dateAfter(12));
   const [level2TimeSlot, setLevel2TimeSlot] = useState("10:00");
   const [qualificationTopN, setQualificationTopN] = useState(20);
   const [level1QuestionCount, setLevel1QuestionCount] = useState(15);
@@ -193,10 +205,16 @@ export default function HighSchoolProgramsScreen() {
     setAllowedInstitutions((prev) => prev.filter((item) => item !== name));
   }
 
-  function toIso(offsetDays: number, timeSlot: string) {
+  const classLevelFilter = useMemo(() => {
+    if (!selectedClasses.length) return [];
+    if (!selectedSections.length) return selectedClasses;
+    return selectedClasses.flatMap((className) => selectedSections.map((section) => `${className} ${section}`));
+  }, [selectedClasses, selectedSections]);
+
+  function toIso(dateValue: string, timeSlot: string) {
     const [h, m] = timeSlot.split(":").map((item) => Number(item || 0));
-    const date = new Date();
-    date.setDate(date.getDate() + offsetDays);
+    const [year, month, day] = dateValue.split("-").map((item) => Number(item || 0));
+    const date = year && month && day ? new Date(year, month - 1, day) : new Date();
     date.setHours(h, m, 0, 0);
     return date.toISOString();
   }
@@ -244,9 +262,9 @@ export default function HighSchoolProgramsScreen() {
         selectedInstitutionName: scopeType === "institution_only" ? selectedInstitutionName.trim() : "",
         allowedInstitutions: scopeType === "multi_institution" ? allowedInstitutions : [],
         classLevelFilter,
-        registrationDeadline: toIso(registrationDateOffset, registrationTimeSlot),
-        level1At: toIso(level1DateOffset, level1TimeSlot),
-        level2At: toIso(level2DateOffset, level2TimeSlot),
+        registrationDeadline: toIso(registrationDate, registrationTimeSlot),
+        level1At: toIso(level1Date, level1TimeSlot),
+        level2At: toIso(level2Date, level2TimeSlot),
         qualificationTopN: Math.max(1, Number(qualificationTopN || 20)),
         level1QuestionCount: Math.max(5, Number(level1QuestionCount || 15)),
         level1TimeModeSec
@@ -259,7 +277,8 @@ export default function HighSchoolProgramsScreen() {
       setSelectedInstitutionName("");
       setInstitutionQuery("");
       setInstitutionResults([]);
-      setClassLevelFilter([]);
+      setSelectedClasses([]);
+      setSelectedSections([]);
       setBannerImageUrl("");
       await load(true);
     } catch (e) {
@@ -422,14 +441,15 @@ export default function HighSchoolProgramsScreen() {
           ) : null}
 
           <Text style={[styles.scopeHeading, { color: colors.text }]}>Class Selection (Optional)</Text>
+          <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Classes</Text>
           <View style={styles.filterRow}>
             {CLASS_OPTIONS.map((item) => {
-              const active = classLevelFilter.includes(item);
+              const active = selectedClasses.includes(item);
               return (
                 <TouchableOpacity
                   key={item}
                   onPress={() =>
-                    setClassLevelFilter((prev) => (active ? prev.filter((x) => x !== item) : [...prev, item]))
+                    setSelectedClasses((prev) => (active ? prev.filter((x) => x !== item) : [...prev, item]))
                   }
                   style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
                 >
@@ -438,18 +458,29 @@ export default function HighSchoolProgramsScreen() {
               );
             })}
           </View>
+          <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Sections</Text>
+          <View style={styles.filterRow}>
+            {SECTION_OPTIONS.map((item) => {
+              const active = selectedSections.includes(item);
+              return (
+                <TouchableOpacity
+                  key={item}
+                  onPress={() => setSelectedSections((prev) => (active ? prev.filter((x) => x !== item) : [...prev, item]))}
+                  style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                >
+                  <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          {classLevelFilter.length ? (
+            <Text style={[styles.scopeNote, { color: colors.textMuted }]}>Selected: {classLevelFilter.join(", ")}</Text>
+          ) : null}
 
           <Text style={[styles.scopeHeading, { color: colors.text }]}>Registration Deadline</Text>
           <View style={styles.row}>
             <View style={styles.inlineSelect}>
-              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>After days</Text>
-              <View style={styles.filterRow}>
-                {DATE_OFFSET_OPTIONS.map((d) => (
-                  <TouchableOpacity key={`reg-${d}`} onPress={() => setRegistrationDateOffset(d)} style={[styles.filterChip, { borderColor: registrationDateOffset === d ? "#16A34A" : colors.border, backgroundColor: registrationDateOffset === d ? "#ECFDF3" : colors.surfaceAlt }]}>
-                    <Text style={[styles.filterText, { color: registrationDateOffset === d ? "#15803D" : colors.textMuted }]}>{d}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
+              <DateField label="Date" value={registrationDate} onChange={setRegistrationDate} />
             </View>
             <View style={styles.inlineSelect}>
               <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Time</Text>
@@ -465,14 +496,7 @@ export default function HighSchoolProgramsScreen() {
 
           <Text style={[styles.scopeHeading, { color: colors.text }]}>Level Schedules</Text>
           <View style={styles.inlineSelect}>
-            <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Level 1</Text>
-            <View style={styles.filterRow}>
-              {DATE_OFFSET_OPTIONS.map((d) => (
-                <TouchableOpacity key={`l1-${d}`} onPress={() => setLevel1DateOffset(d)} style={[styles.filterChip, { borderColor: level1DateOffset === d ? "#16A34A" : colors.border, backgroundColor: level1DateOffset === d ? "#ECFDF3" : colors.surfaceAlt }]}>
-                  <Text style={[styles.filterText, { color: level1DateOffset === d ? "#15803D" : colors.textMuted }]}>{d}d</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <DateField label="Level 1 date" value={level1Date} onChange={setLevel1Date} />
             <View style={styles.filterRow}>
               {TIME_SLOT_OPTIONS.map((t) => (
                 <TouchableOpacity key={`l1-time-${t}`} onPress={() => setLevel1TimeSlot(t)} style={[styles.filterChip, { borderColor: level1TimeSlot === t ? "#16A34A" : colors.border, backgroundColor: level1TimeSlot === t ? "#ECFDF3" : colors.surfaceAlt }]}>
@@ -482,14 +506,7 @@ export default function HighSchoolProgramsScreen() {
             </View>
           </View>
           <View style={styles.inlineSelect}>
-            <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Level 2</Text>
-            <View style={styles.filterRow}>
-              {DATE_OFFSET_OPTIONS.map((d) => (
-                <TouchableOpacity key={`l2-${d}`} onPress={() => setLevel2DateOffset(d)} style={[styles.filterChip, { borderColor: level2DateOffset === d ? "#16A34A" : colors.border, backgroundColor: level2DateOffset === d ? "#ECFDF3" : colors.surfaceAlt }]}>
-                  <Text style={[styles.filterText, { color: level2DateOffset === d ? "#15803D" : colors.textMuted }]}>{d}d</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <DateField label="Level 2 date" value={level2Date} onChange={setLevel2Date} />
             <View style={styles.filterRow}>
               {TIME_SLOT_OPTIONS.map((t) => (
                 <TouchableOpacity key={`l2-time-${t}`} onPress={() => setLevel2TimeSlot(t)} style={[styles.filterChip, { borderColor: level2TimeSlot === t ? "#16A34A" : colors.border, backgroundColor: level2TimeSlot === t ? "#ECFDF3" : colors.surfaceAlt }]}>
@@ -690,7 +707,7 @@ const styles = StyleSheet.create({
   searchResultMeta: { marginTop: 2, fontSize: 12, fontWeight: "700" },
   scopeHeading: { fontWeight: "900", fontSize: 14 },
   inlineLabel: { fontWeight: "800", fontSize: 12 },
-  inlineSelect: { gap: 8 },
+  inlineSelect: { flex: 1, minWidth: 220, gap: 8 },
   scopeNote: { fontWeight: "700", lineHeight: 19 },
   bannerPicker: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11 },
   bannerPickerText: { fontWeight: "900" },
