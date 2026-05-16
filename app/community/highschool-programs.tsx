@@ -48,6 +48,9 @@ type CompetitionItem = {
   status: "registration_open" | "registration_closed" | "level1_live" | "level1_closed" | "level2_ready" | "level2_live" | "completed" | string;
   storedStatus?: string;
   qualificationTopN?: number;
+  level1QuestionCount?: number;
+  level1TimeModeSec?: number;
+  level1Questions?: CompetitionQuestion[];
   institutionName?: string;
   createdBy?: string | { _id?: string };
   myRegistration?: {
@@ -55,6 +58,15 @@ type CompetitionItem = {
     qualifiedForLevel2?: boolean;
     level2BatchIndex?: number;
   } | null;
+};
+
+type CompetitionQuestion = {
+  id?: string;
+  text: string;
+  options: string[];
+  correctOption: string;
+  explanation?: string;
+  durationSec?: number;
 };
 
 type InstitutionSearchResult = {
@@ -82,6 +94,7 @@ const QUESTION_COUNT_OPTIONS = [10, 15, 20, 25, 30];
 const SUBJECT_OPTIONS = ["Mathematics", "Science", "Biology", "Physics", "Chemistry", "Social Science", "English", "Telugu", "Hindi"];
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const MINUTE_OPTIONS = [0, 15, 30, 45];
+const DEFAULT_QUESTION_OPTIONS = ["Option A", "Option B", "Option C", "Option D"];
 
 function academicBucket(item: OpportunityItem): FilterKey {
   const text = `${item.title} ${item.type} ${item.category} ${item.role} ${item.description}`.toLowerCase();
@@ -118,6 +131,17 @@ function toTimeSlot(hour: number, minute: number, period: "AM" | "PM") {
 function formatDisplayTime(value: string) {
   const parsed = parseTimeSlot(value);
   return `${pad(parsed.hour)}:${pad(parsed.minute)} ${parsed.period}`;
+}
+
+function blankCompetitionQuestion(index: number, durationSec: number): CompetitionQuestion {
+  return {
+    id: `L1-${index + 1}`,
+    text: "",
+    options: [...DEFAULT_QUESTION_OPTIONS],
+    correctOption: "Option A",
+    explanation: "",
+    durationSec
+  };
 }
 
 type TimeFieldProps = {
@@ -231,6 +255,9 @@ export default function HighSchoolProgramsScreen() {
   const [showChampionshipForm, setShowChampionshipForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
+  const [questionEditorCompetition, setQuestionEditorCompetition] = useState<CompetitionItem | null>(null);
+  const [questionDrafts, setQuestionDrafts] = useState<CompetitionQuestion[]>([]);
+  const [savingQuestions, setSavingQuestions] = useState(false);
   const [scopeType, setScopeType] = useState<"institution_only" | "multi_institution" | "open_highschool">("institution_only");
   const [selectedInstitutionName, setSelectedInstitutionName] = useState("");
   const [institutionQuery, setInstitutionQuery] = useState("");
@@ -343,6 +370,96 @@ export default function HighSchoolProgramsScreen() {
     if (!selectedSections.length) return selectedClasses;
     return selectedClasses.flatMap((className) => selectedSections.map((section) => `${className} ${section}`));
   }, [selectedClasses, selectedSections]);
+
+  function openQuestionEditor(item: CompetitionItem) {
+    const expectedCount = Math.max(5, Number(item.level1QuestionCount || 15));
+    const durationSec = Number(item.level1TimeModeSec || 30);
+    const existing = Array.isArray(item.level1Questions) ? item.level1Questions.slice(0, expectedCount) : [];
+    const drafts: CompetitionQuestion[] = Array.from({ length: expectedCount }, (_, index) => {
+      const row = existing[index];
+      if (!row) return blankCompetitionQuestion(index, durationSec);
+      const normalizedOptions = Array.isArray(row.options) && row.options.length >= 4
+        ? row.options.slice(0, 4)
+        : [...DEFAULT_QUESTION_OPTIONS];
+      return {
+        id: row.id || `L1-${index + 1}`,
+        text: row.text || "",
+        options: normalizedOptions,
+        correctOption: row.correctOption || normalizedOptions[0] || "Option A",
+        explanation: row.explanation || "",
+        durationSec: Number(row.durationSec || durationSec)
+      };
+    });
+    setQuestionEditorCompetition(item);
+    setQuestionDrafts(drafts);
+  }
+
+  function updateQuestionText(index: number, value: string) {
+    setQuestionDrafts((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, text: value } : item)));
+  }
+
+  function updateQuestionOption(questionIndex: number, optionIndex: number, value: string) {
+    setQuestionDrafts((prev) =>
+      prev.map((item, itemIndex) => {
+        if (itemIndex !== questionIndex) return item;
+        const nextOptions = item.options.map((opt, idx) => (idx === optionIndex ? value : opt));
+        const previousCorrect = item.correctOption;
+        const nextCorrect =
+          item.options[optionIndex] === previousCorrect
+            ? value
+            : nextOptions.find((opt) => opt === previousCorrect) || previousCorrect;
+        return { ...item, options: nextOptions, correctOption: nextCorrect };
+      })
+    );
+  }
+
+  function updateQuestionCorrectOption(questionIndex: number, optionIndex: number) {
+    setQuestionDrafts((prev) =>
+      prev.map((item, itemIndex) => (itemIndex === questionIndex ? { ...item, correctOption: item.options[optionIndex] || "" } : item))
+    );
+  }
+
+  function updateQuestionExplanation(index: number, value: string) {
+    setQuestionDrafts((prev) => prev.map((item, itemIndex) => (itemIndex === index ? { ...item, explanation: value } : item)));
+  }
+
+  async function saveLevel1Questions() {
+    if (!questionEditorCompetition?._id) return;
+    const sanitized = questionDrafts.map((item, index) => ({
+      id: item.id || `L1-${index + 1}`,
+      text: item.text.trim(),
+      options: item.options.map((opt) => opt.trim()).filter(Boolean),
+      correctOption: item.correctOption.trim(),
+      explanation: item.explanation?.trim() || "",
+      durationSec: Number(item.durationSec || questionEditorCompetition.level1TimeModeSec || 30)
+    }));
+    const invalid = sanitized.find(
+      (item) =>
+        !item.text ||
+        item.options.length < 4 ||
+        !item.correctOption ||
+        !item.options.some((opt) => opt === item.correctOption)
+    );
+    if (invalid) {
+      Alert.alert("Complete all questions", "Each Level 1 question needs text, 4 options, and one correct option.");
+      return;
+    }
+    try {
+      setSavingQuestions(true);
+      setError(null);
+      await api.patch(`/api/network/highschool-competitions/${questionEditorCompetition._id}/level1/questions`, {
+        questions: sanitized
+      });
+      Alert.alert("Saved", "Level 1 questions are ready for students.");
+      setQuestionEditorCompetition(null);
+      setQuestionDrafts([]);
+      await load(true);
+    } catch (e) {
+      setError(getAppErrorMessage(e, "Unable to save Level 1 questions."));
+    } finally {
+      setSavingQuestions(false);
+    }
+  }
 
   function toIso(dateValue: string, timeSlot: string) {
     const [h, m] = timeSlot.split(":").map((item) => Number(item || 0));
@@ -811,9 +928,21 @@ export default function HighSchoolProgramsScreen() {
                 note={`Register by ${new Date(item.registrationDeadline).toLocaleString("en-IN")} · L1 ${new Date(item.level1At).toLocaleString("en-IN")}${item.level2At ? ` · L2 ${new Date(item.level2At).toLocaleString("en-IN")}` : ""}`}
                 badge={statusLabel}
                 badgeTone={item.myRegistration?.qualifiedForLevel2 ? "success" : "primary"}
-                actionLabel={item.myRegistration ? "View Student Flow" : canRegister ? "Register" : "View Schedule"}
+                actionLabel={
+                  ownedByMe
+                    ? (Array.isArray(item.level1Questions) && item.level1Questions.length ? "Edit L1 Questions" : "Set L1 Questions")
+                    : item.myRegistration
+                      ? "View Student Flow"
+                      : canRegister
+                        ? "Register"
+                        : "View Schedule"
+                }
                 secondaryLabel={ownedByMe ? "Delete" : undefined}
                 onPress={async () => {
+                  if (ownedByMe) {
+                    openQuestionEditor(item);
+                    return;
+                  }
                   if (item.myRegistration || !canRegister) {
                     setSelected({
                       _id: item._id,
@@ -844,6 +973,71 @@ export default function HighSchoolProgramsScreen() {
           <AcademicEmpty label="No championship programs are live right now." />
         )}
       </CommunitySection>
+
+      {isInstitutionTeacher && questionEditorCompetition ? (
+        <CommunitySection
+          title={`Level 1 Questions - ${questionEditorCompetition.title}`}
+          subtitle={`Create ${questionEditorCompetition.level1QuestionCount || 15} timed questions. Students will answer this exact set in Level 1.`}
+          icon="help-circle"
+        >
+          <TouchableOpacity
+            style={[styles.backButton, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+            onPress={() => {
+              setQuestionEditorCompetition(null);
+              setQuestionDrafts([]);
+            }}
+          >
+            <Text style={[styles.backButtonText, { color: colors.textMuted }]}>Close Editor</Text>
+          </TouchableOpacity>
+          <Text style={[styles.helpText, { color: colors.textMuted }]}>
+            Time mode: {questionEditorCompetition.level1TimeModeSec || 30}s per question. Add all questions before Level 1 goes live.
+          </Text>
+          {questionDrafts.map((item, index) => (
+            <View key={item.id || `draft-${index}`} style={[styles.questionCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.questionTitle, { color: colors.text }]}>Question {index + 1}</Text>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+                placeholder="Enter the question"
+                placeholderTextColor={colors.textMuted}
+                value={item.text}
+                onChangeText={(value) => updateQuestionText(index, value)}
+                multiline
+              />
+              {item.options.map((option, optionIndex) => {
+                const active = item.correctOption === option;
+                return (
+                  <View key={`${item.id || index}-option-${optionIndex}`} style={styles.optionRow}>
+                    <TouchableOpacity
+                      style={[styles.correctChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surface }]}
+                      onPress={() => updateQuestionCorrectOption(index, optionIndex)}
+                    >
+                      <Text style={[styles.correctChipText, { color: active ? "#15803D" : colors.textMuted }]}>
+                        {active ? "Correct" : `Option ${String.fromCharCode(65 + optionIndex)}`}
+                      </Text>
+                    </TouchableOpacity>
+                    <TextInput
+                      style={[styles.input, styles.optionInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+                      placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
+                      placeholderTextColor={colors.textMuted}
+                      value={option}
+                      onChangeText={(value) => updateQuestionOption(index, optionIndex, value)}
+                    />
+                  </View>
+                );
+              })}
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+                placeholder="Explanation for review (optional)"
+                placeholderTextColor={colors.textMuted}
+                value={item.explanation || ""}
+                onChangeText={(value) => updateQuestionExplanation(index, value)}
+                multiline
+              />
+            </View>
+          ))}
+          <ActionButton label={savingQuestions ? "Saving..." : "Save Level 1 Questions"} icon="save-outline" onPress={saveLevel1Questions} />
+        </CommunitySection>
+      ) : null}
 
       <CommunitySection title="Available Academic Programs" subtitle="Real records from Opportunities API, academically labelled." icon="briefcase">
         {visible.length ? (
@@ -925,6 +1119,12 @@ const styles = StyleSheet.create({
   competitionBanner: { width: "100%", aspectRatio: 16 / 6, borderRadius: 12 },
   competitionBannerPlaceholder: { width: "100%", aspectRatio: 16 / 6, borderWidth: 1, borderRadius: 12, alignItems: "center", justifyContent: "center" },
   competitionBannerPlaceholderText: { fontWeight: "900" },
+  questionCard: { borderWidth: 1, borderRadius: 16, padding: 12, gap: 10 },
+  questionTitle: { fontWeight: "900", fontSize: 15 },
+  optionRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  optionInput: { flex: 1 },
+  correctChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 10, minWidth: 94, alignItems: "center" },
+  correctChipText: { fontWeight: "900", fontSize: 12 },
   detailBanner: { width: "100%", aspectRatio: 16 / 6, borderRadius: 14, marginVertical: 4 },
   helpTitle: { fontWeight: "900", marginTop: 4 },
   helpText: { fontWeight: "700", lineHeight: 19 },
