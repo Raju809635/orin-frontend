@@ -1,10 +1,11 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import { Alert, Image, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
+import * as ImagePicker from "expo-image-picker";
 import {
   AcademicCard,
   AcademicEmpty,
@@ -60,6 +61,9 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "scholarship", label: "Scholarships" },
   { key: "event", label: "School Events" }
 ];
+const CLASS_OPTIONS = ["8", "9", "10", "11", "12", "10 A", "10 B", "10 C"];
+const TIME_SLOT_OPTIONS = ["08:00", "09:00", "10:00", "11:00", "14:00", "15:00", "16:00", "17:00"];
+const DATE_OFFSET_OPTIONS = [1, 3, 7, 14, 21];
 
 function academicBucket(item: OpportunityItem): FilterKey {
   const text = `${item.title} ${item.type} ${item.category} ${item.role} ${item.description}`.toLowerCase();
@@ -82,15 +86,20 @@ export default function HighSchoolProgramsScreen() {
   const [selected, setSelected] = useState<OpportunityItem | null>(null);
   const [creating, setCreating] = useState(false);
   const [scopeType, setScopeType] = useState<"institution_only" | "multi_institution" | "open_highschool">("institution_only");
+  const [selectedInstitutionName, setSelectedInstitutionName] = useState("");
   const [title, setTitle] = useState("");
   const [subject, setSubject] = useState("Mathematics");
   const [chapter, setChapter] = useState("");
   const [description, setDescription] = useState("");
-  const [allowedInstitutions, setAllowedInstitutions] = useState("");
-  const [classLevelFilter, setClassLevelFilter] = useState("");
-  const [registrationDeadline, setRegistrationDeadline] = useState("");
-  const [level1At, setLevel1At] = useState("");
-  const [level2At, setLevel2At] = useState("");
+  const [bannerImageUrl, setBannerImageUrl] = useState("");
+  const [allowedInstitutions, setAllowedInstitutions] = useState<string[]>([]);
+  const [classLevelFilter, setClassLevelFilter] = useState<string[]>([]);
+  const [registrationDateOffset, setRegistrationDateOffset] = useState(7);
+  const [registrationTimeSlot, setRegistrationTimeSlot] = useState("17:00");
+  const [level1DateOffset, setLevel1DateOffset] = useState(10);
+  const [level1TimeSlot, setLevel1TimeSlot] = useState("10:00");
+  const [level2DateOffset, setLevel2DateOffset] = useState(12);
+  const [level2TimeSlot, setLevel2TimeSlot] = useState("10:00");
   const [qualificationTopN, setQualificationTopN] = useState("20");
   const [level1QuestionCount, setLevel1QuestionCount] = useState("15");
   const [level1TimeModeSec, setLevel1TimeModeSec] = useState<10 | 30>(30);
@@ -125,11 +134,51 @@ export default function HighSchoolProgramsScreen() {
   );
 
   const visible = useMemo(() => programs.filter((item) => filter === "all" || academicBucket(item) === filter), [filter, programs]);
+  const institutionChoices = useMemo(() => {
+    const set = new Set<string>();
+    if (user?.institutionName) set.add(user.institutionName);
+    competitions.forEach((item) => {
+      if (item.institutionName) set.add(item.institutionName);
+    });
+    return [...set].filter(Boolean);
+  }, [competitions, user?.institutionName]);
+
+  function toIso(offsetDays: number, timeSlot: string) {
+    const [h, m] = timeSlot.split(":").map((item) => Number(item || 0));
+    const date = new Date();
+    date.setDate(date.getDate() + offsetDays);
+    date.setHours(h, m, 0, 0);
+    return date.toISOString();
+  }
+
+  async function pickBannerImage() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert("Permission needed", "Allow gallery access to pick an event banner.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      quality: 0.8
+    });
+    if (result.canceled) return;
+    const uri = result.assets?.[0]?.uri || "";
+    if (uri) setBannerImageUrl(uri);
+  }
 
   async function createCompetition() {
     if (!isInstitutionTeacher) return;
-    if (!title.trim() || !subject.trim() || !registrationDeadline.trim() || !level1At.trim()) {
-      Alert.alert("Required fields", "Please fill title, subject, registration deadline and Level-1 date/time.");
+    if (!title.trim() || !subject.trim()) {
+      Alert.alert("Required fields", "Please fill title and subject.");
+      return;
+    }
+    if (scopeType === "multi_institution" && allowedInstitutions.length < 2) {
+      Alert.alert("Select schools", "For Inter-School mode, select at least 2 institutions.");
+      return;
+    }
+    if (scopeType === "institution_only" && !selectedInstitutionName && !user?.institutionName) {
+      Alert.alert("Select institution", "Pick the institution for this competition.");
       return;
     }
     try {
@@ -140,15 +189,14 @@ export default function HighSchoolProgramsScreen() {
         subject: subject.trim(),
         chapter: chapter.trim(),
         description: description.trim(),
+        bannerImageUrl: bannerImageUrl.trim(),
         scopeType,
-        allowedInstitutions:
-          scopeType === "multi_institution"
-            ? allowedInstitutions.split(",").map((item) => item.trim()).filter(Boolean)
-            : [],
-        classLevelFilter: classLevelFilter.split(",").map((item) => item.trim()).filter(Boolean),
-        registrationDeadline: new Date(registrationDeadline).toISOString(),
-        level1At: new Date(level1At).toISOString(),
-        level2At: level2At.trim() ? new Date(level2At).toISOString() : null,
+        selectedInstitutionName: scopeType === "institution_only" ? (selectedInstitutionName || user?.institutionName || "") : "",
+        allowedInstitutions: scopeType === "multi_institution" ? allowedInstitutions : [],
+        classLevelFilter,
+        registrationDeadline: toIso(registrationDateOffset, registrationTimeSlot),
+        level1At: toIso(level1DateOffset, level1TimeSlot),
+        level2At: toIso(level2DateOffset, level2TimeSlot),
         qualificationTopN: Math.max(1, Number(qualificationTopN || "20")),
         level1QuestionCount: Math.max(5, Number(level1QuestionCount || "15")),
         level1TimeModeSec
@@ -157,11 +205,9 @@ export default function HighSchoolProgramsScreen() {
       setTitle("");
       setChapter("");
       setDescription("");
-      setAllowedInstitutions("");
-      setClassLevelFilter("");
-      setRegistrationDeadline("");
-      setLevel1At("");
-      setLevel2At("");
+      setAllowedInstitutions([]);
+      setClassLevelFilter([]);
+      setBannerImageUrl("");
       await load(true);
     } catch (e) {
       setError(getAppErrorMessage(e, "Unable to create championship program."));
@@ -214,6 +260,13 @@ export default function HighSchoolProgramsScreen() {
             value={description}
             onChangeText={setDescription}
           />
+          <TouchableOpacity style={[styles.bannerPicker, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={pickBannerImage}>
+            <Text style={[styles.bannerPickerText, { color: colors.text }]}>Select Event Banner</Text>
+            <Text style={[styles.bannerPickerMeta, { color: colors.textMuted }]}>Tap to choose image from gallery</Text>
+          </TouchableOpacity>
+          {bannerImageUrl ? (
+            <Image source={{ uri: bannerImageUrl }} style={styles.bannerPreview} />
+          ) : null}
 
           <Text style={[styles.scopeHeading, { color: colors.text }]}>Competition Audience</Text>
           <View style={styles.filterRow}>
@@ -243,43 +296,117 @@ export default function HighSchoolProgramsScreen() {
           </Text>
 
           {scopeType === "multi_institution" ? (
-            <TextInput
-              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
-              placeholder="Selected schools (comma-separated, min 2)"
-              placeholderTextColor={colors.textMuted}
-              value={allowedInstitutions}
-              onChangeText={setAllowedInstitutions}
-            />
+            <View style={styles.filterRow}>
+              {institutionChoices.map((item) => {
+                const active = allowedInstitutions.includes(item);
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    onPress={() =>
+                      setAllowedInstitutions((prev) => (active ? prev.filter((x) => x !== item) : [...prev, item]))
+                    }
+                    style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                  >
+                    <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ) : null}
+          {scopeType === "institution_only" ? (
+            <View style={styles.filterRow}>
+              {(institutionChoices.length ? institutionChoices : [user?.institutionName || ""]).filter(Boolean).map((item) => {
+                const active = (selectedInstitutionName || user?.institutionName || "") === item;
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    onPress={() => setSelectedInstitutionName(item)}
+                    style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                  >
+                    <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           ) : null}
 
-          <TextInput
-            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
-            placeholder="Class filter (comma-separated, optional e.g., 10 A,10 B)"
-            placeholderTextColor={colors.textMuted}
-            value={classLevelFilter}
-            onChangeText={setClassLevelFilter}
-          />
-          <TextInput
-            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
-            placeholder="Registration deadline (YYYY-MM-DDTHH:mm)"
-            placeholderTextColor={colors.textMuted}
-            value={registrationDeadline}
-            onChangeText={setRegistrationDeadline}
-          />
-          <TextInput
-            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
-            placeholder="Level-1 date/time (YYYY-MM-DDTHH:mm)"
-            placeholderTextColor={colors.textMuted}
-            value={level1At}
-            onChangeText={setLevel1At}
-          />
-          <TextInput
-            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
-            placeholder="Level-2 date/time (optional, YYYY-MM-DDTHH:mm)"
-            placeholderTextColor={colors.textMuted}
-            value={level2At}
-            onChangeText={setLevel2At}
-          />
+          <Text style={[styles.scopeHeading, { color: colors.text }]}>Class Selection (Optional)</Text>
+          <View style={styles.filterRow}>
+            {CLASS_OPTIONS.map((item) => {
+              const active = classLevelFilter.includes(item);
+              return (
+                <TouchableOpacity
+                  key={item}
+                  onPress={() =>
+                    setClassLevelFilter((prev) => (active ? prev.filter((x) => x !== item) : [...prev, item]))
+                  }
+                  style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                >
+                  <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={[styles.scopeHeading, { color: colors.text }]}>Registration Deadline</Text>
+          <View style={styles.row}>
+            <View style={styles.inlineSelect}>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>After days</Text>
+              <View style={styles.filterRow}>
+                {DATE_OFFSET_OPTIONS.map((d) => (
+                  <TouchableOpacity key={`reg-${d}`} onPress={() => setRegistrationDateOffset(d)} style={[styles.filterChip, { borderColor: registrationDateOffset === d ? "#16A34A" : colors.border, backgroundColor: registrationDateOffset === d ? "#ECFDF3" : colors.surfaceAlt }]}>
+                    <Text style={[styles.filterText, { color: registrationDateOffset === d ? "#15803D" : colors.textMuted }]}>{d}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+            <View style={styles.inlineSelect}>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Time</Text>
+              <View style={styles.filterRow}>
+                {TIME_SLOT_OPTIONS.map((t) => (
+                  <TouchableOpacity key={`reg-time-${t}`} onPress={() => setRegistrationTimeSlot(t)} style={[styles.filterChip, { borderColor: registrationTimeSlot === t ? "#16A34A" : colors.border, backgroundColor: registrationTimeSlot === t ? "#ECFDF3" : colors.surfaceAlt }]}>
+                    <Text style={[styles.filterText, { color: registrationTimeSlot === t ? "#15803D" : colors.textMuted }]}>{t}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </View>
+
+          <Text style={[styles.scopeHeading, { color: colors.text }]}>Level Schedules</Text>
+          <View style={styles.inlineSelect}>
+            <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Level 1</Text>
+            <View style={styles.filterRow}>
+              {DATE_OFFSET_OPTIONS.map((d) => (
+                <TouchableOpacity key={`l1-${d}`} onPress={() => setLevel1DateOffset(d)} style={[styles.filterChip, { borderColor: level1DateOffset === d ? "#16A34A" : colors.border, backgroundColor: level1DateOffset === d ? "#ECFDF3" : colors.surfaceAlt }]}>
+                  <Text style={[styles.filterText, { color: level1DateOffset === d ? "#15803D" : colors.textMuted }]}>{d}d</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.filterRow}>
+              {TIME_SLOT_OPTIONS.map((t) => (
+                <TouchableOpacity key={`l1-time-${t}`} onPress={() => setLevel1TimeSlot(t)} style={[styles.filterChip, { borderColor: level1TimeSlot === t ? "#16A34A" : colors.border, backgroundColor: level1TimeSlot === t ? "#ECFDF3" : colors.surfaceAlt }]}>
+                  <Text style={[styles.filterText, { color: level1TimeSlot === t ? "#15803D" : colors.textMuted }]}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <View style={styles.inlineSelect}>
+            <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Level 2</Text>
+            <View style={styles.filterRow}>
+              {DATE_OFFSET_OPTIONS.map((d) => (
+                <TouchableOpacity key={`l2-${d}`} onPress={() => setLevel2DateOffset(d)} style={[styles.filterChip, { borderColor: level2DateOffset === d ? "#16A34A" : colors.border, backgroundColor: level2DateOffset === d ? "#ECFDF3" : colors.surfaceAlt }]}>
+                  <Text style={[styles.filterText, { color: level2DateOffset === d ? "#15803D" : colors.textMuted }]}>{d}d</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.filterRow}>
+              {TIME_SLOT_OPTIONS.map((t) => (
+                <TouchableOpacity key={`l2-time-${t}`} onPress={() => setLevel2TimeSlot(t)} style={[styles.filterChip, { borderColor: level2TimeSlot === t ? "#16A34A" : colors.border, backgroundColor: level2TimeSlot === t ? "#ECFDF3" : colors.surfaceAlt }]}>
+                  <Text style={[styles.filterText, { color: level2TimeSlot === t ? "#15803D" : colors.textMuted }]}>{t}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
 
           <View style={styles.row}>
             <TextInput
@@ -316,6 +443,13 @@ export default function HighSchoolProgramsScreen() {
           </View>
 
           <ActionButton label={creating ? "Creating..." : "Create Championship"} icon="sparkles-outline" onPress={createCompetition} />
+          <Text style={[styles.helpTitle, { color: colors.text }]}>How this works</Text>
+          <Text style={[styles.helpText, { color: colors.textMuted }]}>
+            Top N qualify means after Level 1, only the highest N scoring students move to Level 2. Example: Top N = 20 means best 20 students qualify.
+          </Text>
+          <Text style={[styles.helpText, { color: colors.textMuted }]}>
+            Quiz questions are added right after program creation in the next teacher step: Level-1 question set and Level-2 batch question sets (15 each), with manual + AI assist.
+          </Text>
         </CommunitySection>
       ) : null}
 
@@ -441,7 +575,15 @@ const styles = StyleSheet.create({
   halfInput: { flex: 1 },
   filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   scopeHeading: { fontWeight: "900", fontSize: 14 },
+  inlineLabel: { fontWeight: "800", fontSize: 12 },
+  inlineSelect: { gap: 8 },
   scopeNote: { fontWeight: "700", lineHeight: 19 },
+  bannerPicker: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11 },
+  bannerPickerText: { fontWeight: "900" },
+  bannerPickerMeta: { fontWeight: "700", marginTop: 2 },
+  bannerPreview: { width: "100%", height: 140, borderRadius: 12, resizeMode: "cover" },
+  helpTitle: { fontWeight: "900", marginTop: 4 },
+  helpText: { fontWeight: "700", lineHeight: 19 },
   filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   filterText: { fontWeight: "900", fontSize: 12 },
   detailHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
