@@ -5,8 +5,8 @@ import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
 import { useAuth } from "@/context/AuthContext";
-import * as ImagePicker from "expo-image-picker";
 import DateField from "@/components/profile/date-field";
+import { pickAndUploadPostImage } from "@/utils/postMediaUpload";
 import {
   AcademicCard,
   AcademicEmpty,
@@ -25,6 +25,7 @@ type OpportunityItem = {
   category?: string;
   duration?: string;
   description?: string;
+  bannerImageUrl?: string;
   isActive?: boolean;
   recommendationReason?: string;
   applicationUrl?: string;
@@ -39,6 +40,7 @@ type CompetitionItem = {
   subject: string;
   chapter?: string;
   description?: string;
+  bannerImageUrl?: string;
   scopeType: "institution_only" | "multi_institution" | "open_highschool";
   registrationDeadline: string;
   level1At: string;
@@ -228,6 +230,7 @@ export default function HighSchoolProgramsScreen() {
   const [selected, setSelected] = useState<OpportunityItem | null>(null);
   const [showChampionshipForm, setShowChampionshipForm] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [uploadingBanner, setUploadingBanner] = useState(false);
   const [scopeType, setScopeType] = useState<"institution_only" | "multi_institution" | "open_highschool">("institution_only");
   const [selectedInstitutionName, setSelectedInstitutionName] = useState("");
   const [institutionQuery, setInstitutionQuery] = useState("");
@@ -350,19 +353,15 @@ export default function HighSchoolProgramsScreen() {
   }
 
   async function pickBannerImage() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert("Permission needed", "Allow gallery access to pick an event banner.");
-      return;
+    try {
+      setUploadingBanner(true);
+      const url = await pickAndUploadPostImage();
+      if (url) setBannerImageUrl(url);
+    } catch (e) {
+      setError(getAppErrorMessage(e, "Unable to upload event banner."));
+    } finally {
+      setUploadingBanner(false);
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      quality: 0.8
-    });
-    if (result.canceled) return;
-    const uri = result.assets?.[0]?.uri || "";
-    if (uri) setBannerImageUrl(uri);
   }
 
   async function createCompetition() {
@@ -521,10 +520,14 @@ export default function HighSchoolProgramsScreen() {
           />
           <TouchableOpacity style={[styles.bannerPicker, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={pickBannerImage}>
             <Text style={[styles.bannerPickerText, { color: colors.text }]}>Select Event Banner</Text>
-            <Text style={[styles.bannerPickerMeta, { color: colors.textMuted }]}>Tap to choose image from gallery</Text>
+            <Text style={[styles.bannerPickerMeta, { color: colors.textMuted }]}>
+              {uploadingBanner ? "Uploading banner..." : bannerImageUrl ? "Uploaded. Tap to change image." : "Tap to choose image from gallery"}
+            </Text>
           </TouchableOpacity>
           {bannerImageUrl ? (
-            <Image source={{ uri: bannerImageUrl }} style={styles.bannerPreview} />
+            <View style={[styles.bannerPreviewFrame, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+              <Image source={{ uri: bannerImageUrl }} style={styles.bannerPreview} resizeMode="contain" />
+            </View>
           ) : null}
 
           <Text style={[styles.scopeHeading, { color: colors.text }]}>Competition Audience</Text>
@@ -789,15 +792,22 @@ export default function HighSchoolProgramsScreen() {
             const canRegister = item.status === "registration_open" && !item.myRegistration;
             const ownedByMe = isCompetitionOwner(item);
             return (
-              <AcademicCard
-                key={item._id}
+              <View key={item._id} style={[styles.competitionCardWrap, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]}>
+                {item.bannerImageUrl ? (
+                  <Image source={{ uri: item.bannerImageUrl }} style={styles.competitionBanner} resizeMode="contain" />
+                ) : (
+                  <View style={[styles.competitionBannerPlaceholder, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                    <Text style={[styles.competitionBannerPlaceholderText, { color: colors.textMuted }]}>{item.subject} Championship</Text>
+                  </View>
+                )}
+                <AcademicCard
                 icon="trophy-outline"
                 title={item.title}
                 meta={`${item.subject}${item.chapter ? ` · ${item.chapter}` : ""} · ${scopeLabel}`}
                 note={`Register by ${new Date(item.registrationDeadline).toLocaleString("en-IN")} · L1 ${new Date(item.level1At).toLocaleString("en-IN")}${item.level2At ? ` · L2 ${new Date(item.level2At).toLocaleString("en-IN")}` : ""}`}
                 badge={statusLabel}
                 badgeTone={item.myRegistration?.qualifiedForLevel2 ? "success" : "primary"}
-                actionLabel={item.myRegistration ? "View Status" : canRegister ? "Register" : "View Schedule"}
+                actionLabel={item.myRegistration ? "View Student Flow" : canRegister ? "Register" : "View Schedule"}
                 secondaryLabel={ownedByMe ? "Delete" : undefined}
                 onPress={async () => {
                   if (item.myRegistration || !canRegister) {
@@ -809,7 +819,8 @@ export default function HighSchoolProgramsScreen() {
                       category: scopeLabel,
                       role: item.subject,
                       duration: item.level2At ? "2 Levels" : "Level 1",
-                      description: item.description || "Championship program"
+                      description: item.description || "Students register first. At Level 1 time, they answer the configured timed quiz. Top-N ranked students qualify for Level 2, where live batches decide winners.",
+                      bannerImageUrl: item.bannerImageUrl || ""
                     });
                     return;
                   }
@@ -821,7 +832,8 @@ export default function HighSchoolProgramsScreen() {
                   }
                 }}
                 onSecondaryPress={ownedByMe ? () => confirmDeleteCompetition(item) : undefined}
-              />
+                />
+              </View>
             );
           })
         ) : (
@@ -860,6 +872,7 @@ export default function HighSchoolProgramsScreen() {
             <Text style={[styles.detailTitle, { color: colors.text }]}>{selected.title}</Text>
             <StatusBadge label={FILTERS.find((item) => item.key === academicBucket(selected))?.label || "Program"} tone="success" />
           </View>
+          {selected.bannerImageUrl ? <Image source={{ uri: selected.bannerImageUrl }} style={styles.detailBanner} resizeMode="cover" /> : null}
           <Text style={[styles.detailMeta, { color: colors.textMuted }]}>
             {[selected.company, selected.role, selected.duration, selected.deadline ? `Deadline ${new Date(selected.deadline).toLocaleDateString("en-IN")}` : ""]
               .filter(Boolean)
@@ -902,7 +915,13 @@ const styles = StyleSheet.create({
   bannerPicker: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11 },
   bannerPickerText: { fontWeight: "900" },
   bannerPickerMeta: { fontWeight: "700", marginTop: 2 },
-  bannerPreview: { width: "100%", height: 140, borderRadius: 12, resizeMode: "cover" },
+  bannerPreviewFrame: { width: "100%", aspectRatio: 16 / 5, borderWidth: 1, borderRadius: 14, overflow: "hidden", alignItems: "center", justifyContent: "center" },
+  bannerPreview: { width: "100%", height: "100%" },
+  competitionCardWrap: { borderWidth: 1, borderRadius: 18, padding: 8, gap: 8, overflow: "hidden" },
+  competitionBanner: { width: "100%", aspectRatio: 16 / 6, borderRadius: 12 },
+  competitionBannerPlaceholder: { width: "100%", aspectRatio: 16 / 6, borderWidth: 1, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  competitionBannerPlaceholderText: { fontWeight: "900" },
+  detailBanner: { width: "100%", aspectRatio: 16 / 6, borderRadius: 14, marginVertical: 4 },
   helpTitle: { fontWeight: "900", marginTop: 4 },
   helpText: { fontWeight: "700", lineHeight: 19 },
   filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
