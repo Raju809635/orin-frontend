@@ -62,6 +62,9 @@ function formatTime(value?: string) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
+const MESSAGE_REACTIONS = ["\u{1F44D}", "\u2764\uFE0F", "\u2705", "\u{1F44F}"];
+const COMPOSER_EMOJIS = ["\u{1F44D}", "\u2705", "\u{1F4CC}", "\u{1F64F}", "\u{1F525}"];
+
 export default function MentorGroupChatScreen() {
   const router = useRouter();
   const { groupId } = useLocalSearchParams<{ groupId?: string }>();
@@ -397,7 +400,7 @@ export default function MentorGroupChatScreen() {
                       ))}
                       {group?.settings?.allowReactions !== false && activeReactionMessageId === message.id ? (
                         <View style={[styles.reactionPicker, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-                          {["👍", "❤️", "✅", "👏"].map((emoji) => {
+                          {MESSAGE_REACTIONS.map((emoji) => {
                             const reaction = (message.reactions || []).find((item) => item.emoji === emoji);
                             return (
                               <TouchableOpacity key={emoji} style={[styles.reactionBtn, { backgroundColor: reaction?.reactedByMe ? "rgba(255,255,255,0.22)" : "transparent", borderColor: mine ? "rgba(255,255,255,0.25)" : colors.border }]} onPress={() => reactToMessage(message, emoji)}>
@@ -462,7 +465,7 @@ export default function MentorGroupChatScreen() {
             </View>
           ) : null}
           <View style={styles.quickEmojiRow}>
-            {["👍", "✅", "📌", "🙏", "🔥"].map((emoji) => (
+            {COMPOSER_EMOJIS.map((emoji) => (
               <TouchableOpacity key={emoji} style={[styles.quickEmojiBtn, { backgroundColor: colors.surfaceAlt, borderColor: colors.border }]} onPress={() => setText((current) => `${current}${emoji}`)}>
                 <Text style={styles.quickEmojiText}>{emoji}</Text>
               </TouchableOpacity>
