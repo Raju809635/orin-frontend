@@ -254,9 +254,9 @@ const styles = StyleSheet.create({
   navTitle: { fontSize: 15, fontWeight: "700" },
   weekRow: { flexDirection: "row", marginBottom: 8 },
   weekDay: { flex: 1, textAlign: "center", fontSize: 12, fontWeight: "700" },
-  dayGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  dayGrid: { flexDirection: "row", flexWrap: "wrap" },
   dayCell: {
-    width: "12.38%",
+    width: "14.2857%",
     aspectRatio: 1,
     borderRadius: 12,
     borderWidth: 1,
