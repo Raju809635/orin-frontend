@@ -305,6 +305,9 @@ export default function HighSchoolProgramsScreen() {
   const [loadingReports, setLoadingReports] = useState(false);
   const [savingCompetitionMeta, setSavingCompetitionMeta] = useState(false);
   const [generatingQuestionDraft, setGeneratingQuestionDraft] = useState(false);
+  const [aiDraftClassLevel, setAiDraftClassLevel] = useState("10");
+  const [aiDraftSubject, setAiDraftSubject] = useState("Mathematics");
+  const [aiDraftTopic, setAiDraftTopic] = useState("");
   const [scopeType, setScopeType] = useState<"institution_only" | "multi_institution" | "open_highschool">("institution_only");
   const [selectedInstitutionName, setSelectedInstitutionName] = useState("");
   const [institutionQuery, setInstitutionQuery] = useState("");
@@ -436,6 +439,9 @@ export default function HighSchoolProgramsScreen() {
     setManagerTab(tab);
     setQuestionEditorCompetition(item);
     setReports(null);
+    setAiDraftClassLevel("10");
+    setAiDraftSubject(item.subject || "Mathematics");
+    setAiDraftTopic(item.chapter || "");
     const registrationFields = splitIsoToLocalFields(item.registrationDeadline);
     const level1Fields = splitIsoToLocalFields(item.level1At);
     const level2Fields = splitIsoToLocalFields(item.level2At || undefined);
@@ -490,16 +496,29 @@ export default function HighSchoolProgramsScreen() {
       const questionCount = level === "L1" ? Math.max(5, Number(target.level1QuestionCount || level1QuestionCount || 15)) : 15;
       const durationSec = level === "L1" ? Number(target.level1TimeModeSec || level1TimeModeSec || 30) : 30;
       const res = await api.post<{ questions: CompetitionQuestion[] }>("/api/network/highschool-competitions/question-draft", {
-        subject: target.subject || subject,
-        topic: target.chapter || chapter,
-        classLevel: "10",
+        subject: aiDraftSubject || target.subject || subject,
+        topic: aiDraftTopic || target.chapter || chapter,
+        classLevel: aiDraftClassLevel || "10",
         level,
         questionCount,
         durationSec
       });
       const generated = Array.isArray(res.data?.questions) ? res.data.questions : [];
-      if (level === "L1") setQuestionDrafts(generated);
-      else setLevel2QuestionDrafts(generated);
+      const fillCount = level === "L1" ? questionCount : 15;
+      const filled = Array.from({ length: fillCount }, (_, index) => {
+        const row = generated[index];
+        if (!row) return blankCompetitionQuestion(index, durationSec);
+        return {
+          id: row.id || `${level}-${index + 1}`,
+          text: row.text || "",
+          options: Array.isArray(row.options) && row.options.length >= 4 ? row.options.slice(0, 4) : [...DEFAULT_QUESTION_OPTIONS],
+          correctOption: row.correctOption || (Array.isArray(row.options) ? row.options[0] : "Option A"),
+          explanation: row.explanation || "",
+          durationSec: Number(row.durationSec || durationSec)
+        };
+      });
+      if (level === "L1") setQuestionDrafts(filled);
+      else setLevel2QuestionDrafts(filled);
       Alert.alert("AI draft ready", `${level} questions are generated. Review and edit before saving.`);
     } catch (e) {
       setError(getAppErrorMessage(e, "Unable to generate AI question draft."));
@@ -1229,6 +1248,34 @@ export default function HighSchoolProgramsScreen() {
 
           {managerTab === "level1" ? (
             <>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>AI Draft Context</Text>
+              <View style={styles.filterRow}>
+                {CLASS_OPTIONS.map((item) => {
+                  const active = aiDraftClassLevel === item;
+                  return (
+                    <TouchableOpacity key={`draft-class-${item}`} onPress={() => setAiDraftClassLevel(item)} style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}>
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <View style={styles.filterRow}>
+                {SUBJECT_OPTIONS.map((item) => {
+                  const active = aiDraftSubject === item;
+                  return (
+                    <TouchableOpacity key={`draft-subject-${item}`} onPress={() => setAiDraftSubject(item)} style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}>
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+                placeholder="Topic / chapter for AI draft"
+                placeholderTextColor={colors.textMuted}
+                value={aiDraftTopic}
+                onChangeText={setAiDraftTopic}
+              />
               <ActionButton label={generatingQuestionDraft ? "Generating..." : "AI Draft Level 1 Questions"} icon="sparkles-outline" onPress={() => generateQuestionDraft("L1")} />
               <Text style={[styles.helpText, { color: colors.textMuted }]}>AI drafts questions from subject, topic, and class context. Review them before saving.</Text>
             </>
@@ -1236,6 +1283,34 @@ export default function HighSchoolProgramsScreen() {
 
           {managerTab === "level2" ? (
             <>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>AI Draft Context</Text>
+              <View style={styles.filterRow}>
+                {CLASS_OPTIONS.map((item) => {
+                  const active = aiDraftClassLevel === item;
+                  return (
+                    <TouchableOpacity key={`draft-l2-class-${item}`} onPress={() => setAiDraftClassLevel(item)} style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}>
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <View style={styles.filterRow}>
+                {SUBJECT_OPTIONS.map((item) => {
+                  const active = aiDraftSubject === item;
+                  return (
+                    <TouchableOpacity key={`draft-l2-subject-${item}`} onPress={() => setAiDraftSubject(item)} style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}>
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+                placeholder="Topic / chapter for AI draft"
+                placeholderTextColor={colors.textMuted}
+                value={aiDraftTopic}
+                onChangeText={setAiDraftTopic}
+              />
               <ActionButton label={generatingQuestionDraft ? "Generating..." : "AI Draft Level 2 Questions"} icon="sparkles-outline" onPress={() => generateQuestionDraft("L2")} />
               <Text style={[styles.helpText, { color: colors.textMuted }]}>Create the live Level 2 question set here. Saving creates the Level 2 batches for qualified students.</Text>
             </>
