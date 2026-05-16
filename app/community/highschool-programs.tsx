@@ -1,9 +1,10 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Alert, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { api } from "@/lib/api";
 import { getAppErrorMessage } from "@/lib/appError";
 import { useAppTheme } from "@/context/ThemeContext";
+import { useAuth } from "@/context/AuthContext";
 import {
   AcademicCard,
   AcademicEmpty,
@@ -72,10 +73,27 @@ function academicBucket(item: OpportunityItem): FilterKey {
 export default function HighSchoolProgramsScreen() {
   const router = useRouter();
   const { colors } = useAppTheme();
+  const { user } = useAuth();
+  const mentorOrgRole = String(user?.mentorOrgRole || "");
+  const isInstitutionTeacher = user?.role === "mentor" && (mentorOrgRole === "institution_teacher" || mentorOrgRole === "global_teacher" || mentorOrgRole === "teacher");
   const [programs, setPrograms] = useState<OpportunityItem[]>([]);
   const [competitions, setCompetitions] = useState<CompetitionItem[]>([]);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selected, setSelected] = useState<OpportunityItem | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [scopeType, setScopeType] = useState<"institution_only" | "multi_institution" | "open_highschool">("institution_only");
+  const [title, setTitle] = useState("");
+  const [subject, setSubject] = useState("Mathematics");
+  const [chapter, setChapter] = useState("");
+  const [description, setDescription] = useState("");
+  const [allowedInstitutions, setAllowedInstitutions] = useState("");
+  const [classLevelFilter, setClassLevelFilter] = useState("");
+  const [registrationDeadline, setRegistrationDeadline] = useState("");
+  const [level1At, setLevel1At] = useState("");
+  const [level2At, setLevel2At] = useState("");
+  const [qualificationTopN, setQualificationTopN] = useState("20");
+  const [level1QuestionCount, setLevel1QuestionCount] = useState("15");
+  const [level1TimeModeSec, setLevel1TimeModeSec] = useState<10 | 30>(30);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +126,50 @@ export default function HighSchoolProgramsScreen() {
 
   const visible = useMemo(() => programs.filter((item) => filter === "all" || academicBucket(item) === filter), [filter, programs]);
 
+  async function createCompetition() {
+    if (!isInstitutionTeacher) return;
+    if (!title.trim() || !subject.trim() || !registrationDeadline.trim() || !level1At.trim()) {
+      Alert.alert("Required fields", "Please fill title, subject, registration deadline and Level-1 date/time.");
+      return;
+    }
+    try {
+      setCreating(true);
+      setError(null);
+      await api.post("/api/network/highschool-competitions", {
+        title: title.trim(),
+        subject: subject.trim(),
+        chapter: chapter.trim(),
+        description: description.trim(),
+        scopeType,
+        allowedInstitutions:
+          scopeType === "multi_institution"
+            ? allowedInstitutions.split(",").map((item) => item.trim()).filter(Boolean)
+            : [],
+        classLevelFilter: classLevelFilter.split(",").map((item) => item.trim()).filter(Boolean),
+        registrationDeadline: new Date(registrationDeadline).toISOString(),
+        level1At: new Date(level1At).toISOString(),
+        level2At: level2At.trim() ? new Date(level2At).toISOString() : null,
+        qualificationTopN: Math.max(1, Number(qualificationTopN || "20")),
+        level1QuestionCount: Math.max(5, Number(level1QuestionCount || "15")),
+        level1TimeModeSec
+      });
+      Alert.alert("Created", "Championship program created.");
+      setTitle("");
+      setChapter("");
+      setDescription("");
+      setAllowedInstitutions("");
+      setClassLevelFilter("");
+      setRegistrationDeadline("");
+      setLevel1At("");
+      setLevel2At("");
+      await load(true);
+    } catch (e) {
+      setError(getAppErrorMessage(e, "Unable to create championship program."));
+    } finally {
+      setCreating(false);
+    }
+  }
+
   return (
     <HighSchoolCommunityShell
       title="School Programs"
@@ -122,6 +184,133 @@ export default function HighSchoolProgramsScreen() {
       refreshing={refreshing}
       onRefresh={() => load(true)}
     >
+      {isInstitutionTeacher ? (
+        <CommunitySection title="Create Championship Program" subtitle="Teacher-only panel to create Level-1 and Level-2 school competitions." icon="add-circle">
+          <TextInput
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+            placeholder="Program title (e.g., Maths Championship 2026)"
+            placeholderTextColor={colors.textMuted}
+            value={title}
+            onChangeText={setTitle}
+          />
+          <TextInput
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+            placeholder="Subject"
+            placeholderTextColor={colors.textMuted}
+            value={subject}
+            onChangeText={setSubject}
+          />
+          <TextInput
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+            placeholder="Chapter / topic scope (optional)"
+            placeholderTextColor={colors.textMuted}
+            value={chapter}
+            onChangeText={setChapter}
+          />
+          <TextInput
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+            placeholder="Description (optional)"
+            placeholderTextColor={colors.textMuted}
+            value={description}
+            onChangeText={setDescription}
+          />
+
+          <View style={styles.filterRow}>
+            {[
+              { key: "institution_only", label: "Institution only" },
+              { key: "multi_institution", label: "Multi institution" },
+              { key: "open_highschool", label: "Open highschool" }
+            ].map((item) => {
+              const active = scopeType === item.key;
+              return (
+                <TouchableOpacity
+                  key={item.key}
+                  onPress={() => setScopeType(item.key as "institution_only" | "multi_institution" | "open_highschool")}
+                  style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                >
+                  <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {scopeType === "multi_institution" ? (
+            <TextInput
+              style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+              placeholder="Allowed institutions (comma-separated)"
+              placeholderTextColor={colors.textMuted}
+              value={allowedInstitutions}
+              onChangeText={setAllowedInstitutions}
+            />
+          ) : null}
+
+          <TextInput
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+            placeholder="Class filter (comma-separated, optional e.g., 10 A,10 B)"
+            placeholderTextColor={colors.textMuted}
+            value={classLevelFilter}
+            onChangeText={setClassLevelFilter}
+          />
+          <TextInput
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+            placeholder="Registration deadline (YYYY-MM-DDTHH:mm)"
+            placeholderTextColor={colors.textMuted}
+            value={registrationDeadline}
+            onChangeText={setRegistrationDeadline}
+          />
+          <TextInput
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+            placeholder="Level-1 date/time (YYYY-MM-DDTHH:mm)"
+            placeholderTextColor={colors.textMuted}
+            value={level1At}
+            onChangeText={setLevel1At}
+          />
+          <TextInput
+            style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+            placeholder="Level-2 date/time (optional, YYYY-MM-DDTHH:mm)"
+            placeholderTextColor={colors.textMuted}
+            value={level2At}
+            onChangeText={setLevel2At}
+          />
+
+          <View style={styles.row}>
+            <TextInput
+              style={[styles.input, styles.halfInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+              placeholder="Top N qualify"
+              placeholderTextColor={colors.textMuted}
+              value={qualificationTopN}
+              keyboardType="numeric"
+              onChangeText={setQualificationTopN}
+            />
+            <TextInput
+              style={[styles.input, styles.halfInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+              placeholder="L1 question count"
+              placeholderTextColor={colors.textMuted}
+              value={level1QuestionCount}
+              keyboardType="numeric"
+              onChangeText={setLevel1QuestionCount}
+            />
+          </View>
+
+          <View style={styles.filterRow}>
+            {[10, 30].map((item) => {
+              const active = level1TimeModeSec === item;
+              return (
+                <TouchableOpacity
+                  key={item}
+                  onPress={() => setLevel1TimeModeSec(item as 10 | 30)}
+                  style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                >
+                  <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}s mode</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <ActionButton label={creating ? "Creating..." : "Create Championship"} icon="sparkles-outline" onPress={createCompetition} />
+        </CommunitySection>
+      ) : null}
+
       <CommunitySection title="Program Filters" subtitle="Challenges do not appear here. They stay in Challenges." icon="options">
         <View style={styles.filterRow}>
           {FILTERS.map((item) => {
@@ -239,6 +428,9 @@ export default function HighSchoolProgramsScreen() {
 }
 
 const styles = StyleSheet.create({
+  input: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
+  row: { flexDirection: "row", gap: 10 },
+  halfInput: { flex: 1 },
   filterRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   filterChip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
   filterText: { fontWeight: "900", fontSize: 12 },
