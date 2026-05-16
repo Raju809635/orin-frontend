@@ -225,6 +225,7 @@ export default function HighSchoolProgramsScreen() {
   const [competitions, setCompetitions] = useState<CompetitionItem[]>([]);
   const [filter, setFilter] = useState<FilterKey>("all");
   const [selected, setSelected] = useState<OpportunityItem | null>(null);
+  const [showChampionshipForm, setShowChampionshipForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [scopeType, setScopeType] = useState<"institution_only" | "multi_institution" | "open_highschool">("institution_only");
   const [selectedInstitutionName, setSelectedInstitutionName] = useState("");
@@ -408,6 +409,7 @@ export default function HighSchoolProgramsScreen() {
       setSelectedClasses([]);
       setSelectedSections([]);
       setBannerImageUrl("");
+      setShowChampionshipForm(false);
       await load(true);
     } catch (e) {
       setError(getAppErrorMessage(e, "Unable to create championship program."));
@@ -430,8 +432,26 @@ export default function HighSchoolProgramsScreen() {
       refreshing={refreshing}
       onRefresh={() => load(true)}
     >
-      {isInstitutionTeacher ? (
+      {isInstitutionTeacher && !showChampionshipForm ? (
+        <CommunitySection title="Create" subtitle="Teacher-only creation starts from one clear action." icon="add-circle">
+          <AcademicCard
+            icon="trophy-outline"
+            title="Create Championship"
+            meta="Level-1 and Level-2 school competition"
+            note="Choose schools, classes, registration date, round dates, scoring rules, and event banner inside the creation flow."
+            badge="Teacher"
+            badgeTone="success"
+            actionLabel="Create Championship"
+            onPress={() => setShowChampionshipForm(true)}
+          />
+        </CommunitySection>
+      ) : null}
+
+      {isInstitutionTeacher && showChampionshipForm ? (
         <CommunitySection title="Create Championship Program" subtitle="Teacher-only panel to create Level-1 and Level-2 school competitions." icon="add-circle">
+          <TouchableOpacity style={[styles.backButton, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => setShowChampionshipForm(false)}>
+            <Text style={[styles.backButtonText, { color: colors.textMuted }]}>Back to Create</Text>
+          </TouchableOpacity>
           <TextInput
             style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
             placeholder="Program title (e.g., Maths Championship 2026)"
@@ -843,6 +863,8 @@ const styles = StyleSheet.create({
   modalButton: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10 },
   modalButtonPrimary: { borderColor: "#16A34A", backgroundColor: "#16A34A" },
   modalButtonText: { fontWeight: "900" },
+  backButton: { alignSelf: "flex-start", borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 8 },
+  backButtonText: { fontWeight: "900", fontSize: 12 },
   bannerPicker: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11 },
   bannerPickerText: { fontWeight: "900" },
   bannerPickerMeta: { fontWeight: "700", marginTop: 2 },
