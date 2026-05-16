@@ -55,8 +55,25 @@ type CompetitionItem = {
   level1QuestionCount?: number;
   level1TimeModeSec?: number;
   level1Questions?: CompetitionQuestion[];
+  level2QuestionCount?: number;
+  level2TimeModeSec?: number;
+  level2BatchSize?: number;
+  level2Questions?: CompetitionQuestion[];
+  level2Batches?: { index: number; label?: string; status?: string; participants?: unknown[]; questionSet?: CompetitionQuestion[] }[];
   institutionName?: string;
+  allowedInstitutions?: string[];
+  classLevelFilter?: string[];
   createdBy?: string | { _id?: string };
+  registrations?: {
+    studentId?: string;
+    status?: string;
+    qualifiedForLevel2?: boolean;
+    level2BatchIndex?: number;
+  }[];
+  attempts?: {
+    level?: number;
+    batchIndex?: number;
+  }[];
   myRegistration?: {
     status?: string;
     qualifiedForLevel2?: boolean;
@@ -97,28 +114,78 @@ type Level1ReviewRow = {
   correctOption?: string;
   isCorrect: boolean;
   responseMs: number;
+  awardedScore?: number;
   explanation?: string;
 };
 
-type CompetitionManagerTab = "registration" | "level1" | "level2" | "reports";
-type StudentCompetitionTab = "info" | "level1" | "level2";
-
-type CompetitionReports = {
-  qualificationFunnel?: {
-    registered: number;
-    level1Attempted: number;
-    level2Qualified: number;
-    winners: number;
-  };
-  overallLeaderboard?: {
+type Level2Room = {
+  competitionId: string;
+  title: string;
+  batchIndex: number;
+  label: string;
+  status: "waiting" | "live" | "completed" | string;
+  participantCount?: number;
+  questionIndex: number;
+  totalQuestions: number;
+  answeredCurrentQuestion?: boolean;
+  question?: {
+    id: string;
+    text: string;
+    options: string[];
+    durationSec?: number;
+    startedAt?: string | null;
+  } | null;
+  leaderboard: {
     rank: number;
     studentId: string;
     studentName: string;
     institutionName?: string;
     className?: string;
     score: number;
-    percentage: number;
+    correctCount?: number;
+    answeredCount?: number;
+    avgResponseMs?: number;
   }[];
+  me?: {
+    rank: number;
+    studentId: string;
+    studentName: string;
+    score: number;
+    correctCount?: number;
+    answeredCount?: number;
+    avgResponseMs?: number;
+  } | null;
+  winner?: {
+    rank: number;
+    studentId: string;
+    studentName: string;
+    score: number;
+  } | null;
+  review?: Level1ReviewRow[];
+};
+
+type CompetitionManagerTab = "registration" | "level1" | "level2" | "reports";
+type StudentCompetitionTab = "info" | "level1" | "level2";
+
+type CompetitionReportLeaderboardRow = {
+  rank: number;
+  studentId: string;
+  studentName: string;
+  institutionName?: string;
+  className?: string;
+  score: number;
+  percentage: number;
+};
+
+type CompetitionReports = {
+  qualificationFunnel?: {
+    registered: number;
+    level1Attempted: number;
+    level2Attempted?: number;
+    level2Qualified: number;
+    winners: number;
+  };
+  overallLeaderboard?: CompetitionReportLeaderboardRow[];
   institutionLeaderboard?: {
     rank: number;
     institutionName: string;
@@ -126,6 +193,16 @@ type CompetitionReports = {
     totalScore: number;
     avgScore: number;
     topStudent?: string;
+  }[];
+  level2Leaderboard?: CompetitionReportLeaderboardRow[];
+  level2Batches?: {
+    index: number;
+    label: string;
+    status: string;
+    participants: number;
+    questionIndex: number;
+    totalQuestions: number;
+    winnerStudentName?: string;
   }[];
 };
 
@@ -151,6 +228,8 @@ const CLASS_OPTIONS = Array.from({ length: 12 }, (_, index) => String(index + 1)
 const SECTION_OPTIONS = ["A", "B", "C", "D", "E", "F"];
 const TOP_N_OPTIONS = [1, 2, 3, 4, 5, 10, 20, 30, 50, 100];
 const QUESTION_COUNT_OPTIONS = [10, 15, 20, 25, 30];
+const BATCH_SIZE_OPTIONS = [2, 5, 10, 15, 20, 30];
+const TIME_MODE_OPTIONS = [10, 30] as const;
 const SUBJECT_OPTIONS = ["Mathematics", "Science", "Biology", "Physics", "Chemistry", "Social Science", "English", "Telugu", "Hindi"];
 const HOUR_OPTIONS = Array.from({ length: 12 }, (_, index) => index + 1);
 const MINUTE_OPTIONS = [0, 15, 30, 45];
@@ -225,6 +304,36 @@ function hasEnded(value?: string | null) {
   if (!value) return false;
   const time = new Date(value).getTime();
   return Number.isFinite(time) && Date.now() > time;
+}
+
+function getCompetitionEditState(item?: CompetitionItem | null) {
+  const now = Date.now();
+  const registrationStarted = item?.registrationStartAt ? new Date(item.registrationStartAt).getTime() <= now : true;
+  const level2StartedByTime = item?.level2At ? new Date(item.level2At).getTime() <= now : false;
+  const level1AttemptsExist = (item?.attempts || []).some((attempt) => Number(attempt.level) === 1) || Boolean(item?.myLevel1Attempt);
+  const level2Started =
+    level2StartedByTime ||
+    (item?.attempts || []).some((attempt) => Number(attempt.level) === 2) ||
+    (item?.level2Batches || []).some((batch) => batch.status !== "waiting");
+
+  return {
+    registrationStarted,
+    level1AttemptsExist,
+    level2Started,
+    canEditAudience: !registrationStarted,
+    canEditLevel1Settings: !level1AttemptsExist,
+    canEditLevel2Settings: !level2Started,
+    audienceLockReason: registrationStarted ? "Audience and class targeting are locked after registration starts." : "",
+    level1LockReason: level1AttemptsExist ? "Level 1 question count, timer, and questions are locked after students attempt Level 1." : "",
+    level2LockReason: level2Started ? "Level 2 questions, timer, and batch settings are locked after Level 2 starts." : ""
+  };
+}
+
+function getAssignedLevel2ParticipantCount(item?: CompetitionItem | null) {
+  const batchIndex = Number(item?.myRegistration?.level2BatchIndex ?? -1);
+  if (!item || batchIndex < 0) return 0;
+  const batch = item.level2Batches?.[batchIndex];
+  return Array.isArray(batch?.participants) ? batch.participants.length : 0;
 }
 
 function formatDateTime(value?: string | null) {
@@ -357,6 +466,11 @@ export default function HighSchoolProgramsScreen() {
   const [level1TimeLeftSec, setLevel1TimeLeftSec] = useState(0);
   const [submittingLevel1, setSubmittingLevel1] = useState(false);
   const [openingLevel2, setOpeningLevel2] = useState(false);
+  const [level2Room, setLevel2Room] = useState<Level2Room | null>(null);
+  const [level2SelectedOption, setLevel2SelectedOption] = useState("");
+  const [level2QuestionStartedAtMs, setLevel2QuestionStartedAtMs] = useState(0);
+  const [level2TimeLeftSec, setLevel2TimeLeftSec] = useState(0);
+  const [submittingLevel2Answer, setSubmittingLevel2Answer] = useState(false);
   const [showChampionshipForm, setShowChampionshipForm] = useState(false);
   const [creating, setCreating] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
@@ -402,6 +516,9 @@ export default function HighSchoolProgramsScreen() {
   const [qualificationTopN, setQualificationTopN] = useState(20);
   const [level1QuestionCount, setLevel1QuestionCount] = useState(15);
   const [level1TimeModeSec, setLevel1TimeModeSec] = useState<10 | 30>(30);
+  const [level2QuestionCount, setLevel2QuestionCount] = useState(15);
+  const [level2TimeModeSec, setLevel2TimeModeSec] = useState<10 | 30>(30);
+  const [level2BatchSize, setLevel2BatchSize] = useState(10);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -437,6 +554,7 @@ export default function HighSchoolProgramsScreen() {
   );
 
   const visible = useMemo(() => programs.filter((item) => filter === "all" || academicBucket(item) === filter), [filter, programs]);
+  const managerEditState = useMemo(() => getCompetitionEditState(managerCompetition), [managerCompetition]);
   const institutionChoices = useMemo(() => {
     const set = new Set<string>();
     if (user?.institutionName) set.add(user.institutionName);
@@ -510,6 +628,25 @@ export default function HighSchoolProgramsScreen() {
     }
   }
 
+  function buildLevel2Drafts(item: CompetitionItem, count = Math.max(5, Number(item.level2QuestionCount || 15)), durationSec = Number(item.level2TimeModeSec || 30)) {
+    const existing = Array.isArray(item.level2Questions) ? item.level2Questions.slice(0, count) : [];
+    return Array.from({ length: count }, (_, index) => {
+      const row = existing[index];
+      if (!row) return { ...blankCompetitionQuestion(index, durationSec), id: `L2-${index + 1}` };
+      const normalizedOptions = Array.isArray(row.options) && row.options.length >= 4
+        ? row.options.slice(0, 4)
+        : [...DEFAULT_QUESTION_OPTIONS];
+      return {
+        id: row.id || `L2-${index + 1}`,
+        text: row.text || "",
+        options: normalizedOptions,
+        correctOption: row.correctOption || normalizedOptions[0] || "Option A",
+        explanation: row.explanation || "",
+        durationSec: Number(row.durationSec || durationSec)
+      };
+    });
+  }
+
   function openCompetitionManager(item: CompetitionItem, tab: CompetitionManagerTab = "registration") {
     setManagerCompetition(item);
     setManagerTab(tab);
@@ -518,6 +655,24 @@ export default function HighSchoolProgramsScreen() {
     setAiDraftClassLevel("10");
     setAiDraftSubject(item.subject || "Mathematics");
     setAiDraftTopic(item.chapter || "");
+    setTitle(item.title || "");
+    setSubject(item.subject || "Mathematics");
+    setChapter(item.chapter || "");
+    setDescription(item.description || "");
+    setBannerImageUrl(item.bannerImageUrl || "");
+    setScopeType(item.scopeType || "institution_only");
+    setSelectedInstitutionName(item.institutionName || "");
+    setAllowedInstitutions(Array.isArray(item.allowedInstitutions) ? item.allowedInstitutions : []);
+    const classFilters = Array.isArray(item.classLevelFilter) ? item.classLevelFilter : [];
+    const nextClasses = new Set<string>();
+    const nextSections = new Set<string>();
+    classFilters.forEach((entry) => {
+      const [className, section] = String(entry || "").trim().split(/\s+/);
+      if (className) nextClasses.add(className);
+      if (section) nextSections.add(section.toUpperCase());
+    });
+    setSelectedClasses([...nextClasses]);
+    setSelectedSections([...nextSections].filter((section) => SECTION_OPTIONS.includes(section)));
     const registrationStartFields = splitIsoToLocalFields(item.registrationStartAt || item.createdAt || undefined);
     const registrationFields = splitIsoToLocalFields(item.registrationDeadline);
     const level1Fields = splitIsoToLocalFields(item.level1At);
@@ -539,8 +694,11 @@ export default function HighSchoolProgramsScreen() {
     setQualificationTopN(Math.max(1, Number(item.qualificationTopN || 20)));
     setLevel1QuestionCount(Math.max(5, Number(item.level1QuestionCount || 15)));
     setLevel1TimeModeSec([10, 30].includes(Number(item.level1TimeModeSec)) ? Number(item.level1TimeModeSec) as 10 | 30 : 30);
+    setLevel2QuestionCount(Math.max(5, Number(item.level2QuestionCount || 15)));
+    setLevel2TimeModeSec([10, 30].includes(Number(item.level2TimeModeSec)) ? Number(item.level2TimeModeSec) as 10 | 30 : 30);
+    setLevel2BatchSize(Math.max(2, Number(item.level2BatchSize || 10)));
     setQuestionDrafts([]);
-    setLevel2QuestionDrafts(Array.from({ length: 15 }, (_, index) => blankCompetitionQuestion(index, 30)));
+    setLevel2QuestionDrafts(buildLevel2Drafts(item));
     openQuestionEditor(item);
     if (tab === "reports") {
       loadCompetitionReports(item._id);
@@ -552,7 +710,10 @@ export default function HighSchoolProgramsScreen() {
     setSelectedCompetition(item);
     setStudentCompetitionTab(tab);
     setLevel1Answers({});
-    setLevel1StartedAtMs(Date.now());
+    setLevel2Room(null);
+    setLevel2SelectedOption("");
+    setLevel2QuestionStartedAtMs(0);
+    setLevel2TimeLeftSec(0);
   }
 
   function closeStudentCompetition() {
@@ -562,6 +723,10 @@ export default function HighSchoolProgramsScreen() {
     setLevel1CurrentIndex(0);
     setLevel1QuestionStartedAtMs(0);
     setLevel1TimeLeftSec(0);
+    setLevel2Room(null);
+    setLevel2SelectedOption("");
+    setLevel2QuestionStartedAtMs(0);
+    setLevel2TimeLeftSec(0);
   }
 
   function selectLevel1Answer(question: CompetitionQuestion, index: number, selectedOption: string) {
@@ -717,12 +882,87 @@ export default function HighSchoolProgramsScreen() {
     }
     try {
       setOpeningLevel2(true);
-      await api.post(`/api/network/highschool-competitions/${selectedCompetition._id}/level2/batches/${batchIndex}/join`, {});
-      Alert.alert("Level 2 ready", `You joined Batch ${batchIndex + 1}. Live quiz screen will open here when the round starts.`);
+      const { data } = await api.post<{ room: Level2Room }>(`/api/network/highschool-competitions/${selectedCompetition._id}/level2/batches/${batchIndex}/join`, {});
+      syncLevel2Room(data?.room || null);
     } catch (e) {
       setError(getAppErrorMessage(e, "Unable to open Level 2 right now."));
     } finally {
       setOpeningLevel2(false);
+    }
+  }
+
+  function syncLevel2Room(room: Level2Room | null) {
+    setLevel2Room((prev) => {
+      if (room?.question?.id && room.question.id !== prev?.question?.id) {
+        setLevel2SelectedOption("");
+      }
+      return room;
+    });
+    if (room?.question?.startedAt) {
+      setLevel2QuestionStartedAtMs(new Date(room.question.startedAt).getTime());
+    }
+    const duration = Number(room?.question?.durationSec || selectedCompetition?.level2TimeModeSec || 30);
+    if (room?.question?.startedAt) {
+      const elapsedSec = Math.floor((Date.now() - new Date(room.question.startedAt).getTime()) / 1000);
+      setLevel2TimeLeftSec(Math.max(0, duration - elapsedSec));
+    } else {
+      setLevel2TimeLeftSec(duration);
+    }
+  }
+
+  async function refreshLevel2Room() {
+    if (!selectedCompetition?.myRegistration?.qualifiedForLevel2) return;
+    const batchIndex = Number(selectedCompetition.myRegistration.level2BatchIndex ?? -1);
+    if (batchIndex < 0) return;
+    try {
+      const { data } = await api.get<Level2Room>(`/api/network/highschool-competitions/${selectedCompetition._id}/level2/batches/${batchIndex}/state`);
+      syncLevel2Room(data || null);
+    } catch (e) {
+      if (level2Room) setError(getAppErrorMessage(e, "Unable to refresh Level 2 battle."));
+    }
+  }
+
+  useEffect(() => {
+    if (studentCompetitionTab !== "level2" || !level2Room || level2Room.status === "completed") return;
+    const timer = setInterval(() => {
+      refreshLevel2Room();
+    }, 1000);
+    return () => clearInterval(timer);
+  // refreshLevel2Room reads the latest selected competition and room state; keeping deps tight prevents duplicate pollers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studentCompetitionTab, level2Room?.competitionId, level2Room?.batchIndex, level2Room?.status]);
+
+  useEffect(() => {
+    if (!level2Room?.question || level2Room.status !== "live") return;
+    const timer = setInterval(() => {
+      const duration = Number(level2Room.question?.durationSec || selectedCompetition?.level2TimeModeSec || 30);
+      const startedAt = level2QuestionStartedAtMs || (level2Room.question?.startedAt ? new Date(level2Room.question.startedAt).getTime() : Date.now());
+      const elapsedSec = Math.floor((Date.now() - startedAt) / 1000);
+      setLevel2TimeLeftSec(Math.max(0, duration - elapsedSec));
+    }, 250);
+    return () => clearInterval(timer);
+  }, [level2QuestionStartedAtMs, level2Room?.question, level2Room?.status, selectedCompetition?.level2TimeModeSec]);
+
+  async function submitLevel2Answer() {
+    if (!selectedCompetition || !level2Room?.question || !level2SelectedOption) {
+      Alert.alert("Select answer", "Choose an option before saving your answer.");
+      return;
+    }
+    try {
+      setSubmittingLevel2Answer(true);
+      const duration = Number(level2Room.question.durationSec || selectedCompetition.level2TimeModeSec || 30);
+      const elapsed = level2QuestionStartedAtMs ? Date.now() - level2QuestionStartedAtMs : duration * 1000;
+      const responseMs = Math.max(500, Math.min(duration * 1000, elapsed));
+      const { data } = await api.post<{ room: Level2Room }>(
+        `/api/network/highschool-competitions/${selectedCompetition._id}/level2/batches/${level2Room.batchIndex}/answer`,
+        { selectedOption: level2SelectedOption, responseMs }
+      );
+      syncLevel2Room(data?.room || null);
+      setLevel2SelectedOption("");
+    } catch (e) {
+      setError(getAppErrorMessage(e, "Unable to save Level 2 answer."));
+    } finally {
+      setSubmittingLevel2Answer(false);
     }
   }
 
@@ -732,6 +972,15 @@ export default function HighSchoolProgramsScreen() {
       setSavingCompetitionMeta(true);
       setError(null);
       const res = await api.patch<{ competition: CompetitionItem }>(`/api/network/highschool-competitions/${managerCompetition._id}`, {
+        title: title.trim(),
+        subject: subject.trim(),
+        chapter: chapter.trim(),
+        description: description.trim(),
+        bannerImageUrl: bannerImageUrl.trim(),
+        scopeType,
+        selectedInstitutionName: scopeType === "institution_only" ? selectedInstitutionName.trim() : "",
+        allowedInstitutions: scopeType === "multi_institution" ? allowedInstitutions : [],
+        classLevelFilter,
         registrationStartAt: toIso(registrationStartDate, registrationStartTimeSlot),
         registrationDeadline: toIso(registrationDate, registrationTimeSlot),
         level1At: toIso(level1Date, level1TimeSlot),
@@ -740,7 +989,10 @@ export default function HighSchoolProgramsScreen() {
         level2EndAt: toIso(level2EndDate, level2EndTimeSlot),
         qualificationTopN,
         level1QuestionCount,
-        level1TimeModeSec
+        level1TimeModeSec,
+        level2QuestionCount,
+        level2TimeModeSec,
+        level2BatchSize
       });
       const updated = res.data?.competition || managerCompetition;
       setManagerCompetition(updated);
@@ -764,8 +1016,12 @@ export default function HighSchoolProgramsScreen() {
     try {
       setGeneratingQuestionDraft(true);
       setError(null);
-      const questionCount = level === "L1" ? Math.max(5, Number(target.level1QuestionCount || level1QuestionCount || 15)) : 15;
-      const durationSec = level === "L1" ? Number(target.level1TimeModeSec || level1TimeModeSec || 30) : 30;
+      const questionCount = level === "L1"
+        ? Math.max(5, Number(target.level1QuestionCount || level1QuestionCount || 15))
+        : Math.max(5, Number(target.level2QuestionCount || level2QuestionCount || 15));
+      const durationSec = level === "L1"
+        ? Number(target.level1TimeModeSec || level1TimeModeSec || 30)
+        : Number(target.level2TimeModeSec || level2TimeModeSec || 30);
       const res = await api.post<{ questions: CompetitionQuestion[] }>("/api/network/highschool-competitions/question-draft", {
         subject: aiDraftSubject || target.subject || subject,
         topic: aiDraftTopic || target.chapter || chapter,
@@ -775,7 +1031,7 @@ export default function HighSchoolProgramsScreen() {
         durationSec
       });
       const generated = Array.isArray(res.data?.questions) ? res.data.questions : [];
-      const fillCount = level === "L1" ? questionCount : 15;
+      const fillCount = questionCount;
       const filled = Array.from({ length: fillCount }, (_, index) => {
         const row = generated[index];
         if (!row) return blankCompetitionQuestion(index, durationSec);
@@ -798,15 +1054,19 @@ export default function HighSchoolProgramsScreen() {
     }
   }
 
-  async function saveLevel2QuestionsAndCreateBatches() {
+  async function saveLevel2Questions() {
     if (!managerCompetition?._id) return;
+    if (!managerEditState.canEditLevel2Settings) {
+      Alert.alert("Level 2 locked", managerEditState.level2LockReason || "Level 2 settings are locked.");
+      return;
+    }
     const sanitized = level2QuestionDrafts.map((item, index) => ({
       id: item.id || `L2-${index + 1}`,
       text: item.text.trim(),
       options: item.options.map((opt) => opt.trim()).filter(Boolean),
       correctOption: item.correctOption.trim(),
       explanation: item.explanation?.trim() || "",
-      durationSec: 30
+      durationSec: Number(item.durationSec || level2TimeModeSec || 30)
     }));
     const invalid = sanitized.find((item) => !item.text || item.options.length < 4 || !item.options.some((opt) => opt === item.correctOption));
     if (invalid) {
@@ -816,10 +1076,32 @@ export default function HighSchoolProgramsScreen() {
     try {
       setSavingLevel2(true);
       setError(null);
-      await api.post(`/api/network/highschool-competitions/${managerCompetition._id}/level2/batches`, {
-        questionSets: [{ questions: sanitized }]
+      const res = await api.patch<{ competition: CompetitionItem }>(`/api/network/highschool-competitions/${managerCompetition._id}/level2/questions`, {
+        questions: sanitized
       });
-      Alert.alert("Level 2 ready", "Level 2 batches were created with the saved question set.");
+      const updated = res.data?.competition || managerCompetition;
+      setManagerCompetition(updated);
+      setLevel2QuestionDrafts(buildLevel2Drafts(updated));
+      Alert.alert("Saved", "Level 2 questions are ready. Create batches after Level 1 is finalized.");
+      await load(true);
+    } catch (e) {
+      setError(getAppErrorMessage(e, "Unable to save Level 2 questions."));
+    } finally {
+      setSavingLevel2(false);
+    }
+  }
+
+  async function createLevel2Batches() {
+    if (!managerCompetition?._id) return;
+    if (!managerEditState.canEditLevel2Settings) {
+      Alert.alert("Level 2 locked", managerEditState.level2LockReason || "Level 2 batches cannot be changed now.");
+      return;
+    }
+    try {
+      setSavingLevel2(true);
+      setError(null);
+      await api.post(`/api/network/highschool-competitions/${managerCompetition._id}/level2/batches`, {});
+      Alert.alert("Level 2 batches ready", "Qualified students have been assigned to batches. Battles auto-start at the Level 2 start time.");
       await load(true);
       await loadCompetitionReports(managerCompetition._id);
     } catch (e) {
@@ -883,6 +1165,10 @@ export default function HighSchoolProgramsScreen() {
 
   async function saveLevel1Questions() {
     if (!questionEditorCompetition?._id) return;
+    if (!managerEditState.canEditLevel1Settings) {
+      Alert.alert("Level 1 locked", managerEditState.level1LockReason || "Level 1 questions are locked.");
+      return;
+    }
     const sanitized = questionDrafts.map((item, index) => ({
       id: item.id || `L1-${index + 1}`,
       text: item.text.trim(),
@@ -978,7 +1264,10 @@ export default function HighSchoolProgramsScreen() {
         level2EndAt: toIso(level2EndDate, level2EndTimeSlot),
         qualificationTopN: Math.max(1, Number(qualificationTopN || 20)),
         level1QuestionCount: Math.max(5, Number(level1QuestionCount || 15)),
-        level1TimeModeSec
+        level1TimeModeSec,
+        level2QuestionCount: Math.max(5, Number(level2QuestionCount || 15)),
+        level2TimeModeSec,
+        level2BatchSize: Math.max(2, Number(level2BatchSize || 10))
       });
       Alert.alert("Created", "Championship program created.");
       setTitle("");
@@ -1333,7 +1622,7 @@ export default function HighSchoolProgramsScreen() {
           </View>
 
           <View style={styles.filterRow}>
-            {[10, 30].map((item) => {
+            {TIME_MODE_OPTIONS.map((item) => {
               const active = level1TimeModeSec === item;
               return (
                 <TouchableOpacity
@@ -1342,6 +1631,52 @@ export default function HighSchoolProgramsScreen() {
                   style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
                 >
                   <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}s mode</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 2 Battle Settings</Text>
+          <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>L2 question count</Text>
+          <View style={styles.filterRow}>
+            {QUESTION_COUNT_OPTIONS.map((item) => {
+              const active = level2QuestionCount === item;
+              return (
+                <TouchableOpacity
+                  key={`l2-qcount-${item}`}
+                  onPress={() => setLevel2QuestionCount(item)}
+                  style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                >
+                  <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>L2 seconds per question</Text>
+          <View style={styles.filterRow}>
+            {TIME_MODE_OPTIONS.map((item) => {
+              const active = level2TimeModeSec === item;
+              return (
+                <TouchableOpacity
+                  key={`l2-time-${item}`}
+                  onPress={() => setLevel2TimeModeSec(item)}
+                  style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                >
+                  <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}s</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>L2 batch size</Text>
+          <View style={styles.filterRow}>
+            {BATCH_SIZE_OPTIONS.map((item) => {
+              const active = level2BatchSize === item;
+              return (
+                <TouchableOpacity
+                  key={`l2-batch-${item}`}
+                  onPress={() => setLevel2BatchSize(item)}
+                  style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                >
+                  <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -1477,7 +1812,6 @@ export default function HighSchoolProgramsScreen() {
                   key={`student-event-${key}`}
                   onPress={() => {
                     setStudentCompetitionTab(key);
-                    if (key === "level1") setLevel1StartedAtMs(Date.now());
                   }}
                   style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
                 >
@@ -1631,10 +1965,98 @@ export default function HighSchoolProgramsScreen() {
                 <AcademicCard icon="time-outline" title="Level 2 Not Started" meta={formatWindow(selectedCompetition.level2At, selectedCompetition.level2EndAt)} note="You qualified. Come back when Level 2 starts." />
               ) : hasEnded(selectedCompetition.level2EndAt) ? (
                 <AcademicCard icon="lock-closed-outline" title="Level 2 Closed" meta={formatWindow(selectedCompetition.level2At, selectedCompetition.level2EndAt)} note="The Level 2 window is over." />
+              ) : level2Room?.status === "completed" ? (
+                <>
+                  <View style={styles.eventMilestoneGrid}>
+                    <AcademicCard icon="podium-outline" title="Your Rank" meta={level2Room.me?.rank ? `#${level2Room.me.rank}` : "Pending"} note={`${level2Room.label} completed`} />
+                    <AcademicCard icon="trophy-outline" title="Your Score" meta={String(level2Room.me?.score || 0)} note={`${level2Room.me?.correctCount || 0}/${level2Room.totalQuestions} correct`} />
+                    <AcademicCard icon="speedometer-outline" title="Avg Time" meta={`${Math.round(Number(level2Room.me?.avgResponseMs || 0) / 1000)}s`} note="Score first, speed breaks ties." />
+                    <AcademicCard icon="medal-outline" title="Winner" meta={level2Room.winner?.studentName || "-"} note={level2Room.winner ? `Score ${level2Room.winner.score}` : "Winner pending"} />
+                  </View>
+                  <Text style={[styles.scopeHeading, { color: colors.text }]}>Batch Leaderboard</Text>
+                  {(level2Room.leaderboard || []).slice(0, 10).map((row) => (
+                    <AcademicCard key={`l2-rank-${row.studentId}`} icon="podium-outline" title={`#${row.rank} ${row.studentName}`} meta={`Score ${row.score}`} note={`${row.correctCount || 0}/${level2Room.totalQuestions} correct · Avg ${Math.round(Number(row.avgResponseMs || 0) / 1000)}s`} />
+                  ))}
+                  {(level2Room.review || []).length ? (
+                    <View style={styles.reviewList}>
+                      <Text style={[styles.scopeHeading, { color: colors.text }]}>Answer Review</Text>
+                      {(level2Room.review || []).map((row, index) => (
+                        <View key={`l2-review-${row.questionId}-${index}`} style={[styles.reviewCard, { borderColor: row.isCorrect ? "#16A34A" : "#EF4444", backgroundColor: colors.surfaceAlt }]}>
+                          <Text style={[styles.reviewTitle, { color: colors.text }]}>Q{index + 1}. {row.questionText || row.questionId}</Text>
+                          <Text style={[styles.reviewText, { color: row.isCorrect ? "#15803D" : "#DC2626" }]}>
+                            {row.isCorrect ? "Correct" : "Wrong"} - Your answer: {row.selectedOption || "Not answered"} - Score +{row.awardedScore || 0}
+                          </Text>
+                          {!row.isCorrect ? <Text style={[styles.reviewText, { color: colors.textMuted }]}>Correct answer: {row.correctOption || "-"}</Text> : null}
+                          {row.explanation ? <Text style={[styles.reviewText, { color: colors.textMuted }]}>{row.explanation}</Text> : null}
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </>
+              ) : level2Room?.status === "live" && level2Room.question ? (
+                <View style={[styles.questionCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                  <View style={styles.quizTopRow}>
+                    <Text style={[styles.questionTitle, { color: colors.text }]}>Level 2 Q{level2Room.questionIndex + 1} of {level2Room.totalQuestions}</Text>
+                    <View style={[styles.timerPill, { backgroundColor: level2TimeLeftSec <= 5 ? "#FEE2E2" : "#ECFDF3" }]}>
+                      <Ionicons name="timer-outline" size={16} color={level2TimeLeftSec <= 5 ? "#DC2626" : "#15803D"} />
+                      <Text style={[styles.timerText, { color: level2TimeLeftSec <= 5 ? "#DC2626" : "#15803D" }]}>{level2TimeLeftSec}s</Text>
+                    </View>
+                  </View>
+                  <View style={styles.quizTimerTrack}>
+                    <View style={[styles.quizTimerFill, { width: `${Math.max(0, Math.min(100, (level2TimeLeftSec / Number(level2Room.question.durationSec || selectedCompetition.level2TimeModeSec || 30)) * 100))}%`, backgroundColor: level2TimeLeftSec <= 5 ? "#EF4444" : "#16A34A" }]} />
+                  </View>
+                  <Text style={[styles.quizQuestionText, { color: colors.text }]}>{level2Room.question.text}</Text>
+                  {(level2Room.question.options || []).map((option) => {
+                    const active = level2SelectedOption === option;
+                    return (
+                      <TouchableOpacity
+                        key={`l2-option-${level2Room.question?.id}-${option}`}
+                        disabled={Boolean(level2Room.answeredCurrentQuestion)}
+                        style={[styles.studentOption, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surface }]}
+                        onPress={() => setLevel2SelectedOption(option)}
+                      >
+                        <Text style={[styles.studentOptionText, { color: active ? "#15803D" : colors.text }]}>{option}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {level2Room.answeredCurrentQuestion ? (
+                    <View style={[styles.quizInstructionBox, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                      <Text style={[styles.quizInstructionTitle, { color: colors.text }]}>{Number(level2Room.participantCount || 0) <= 1 ? "Answer saved" : "Answer saved"}</Text>
+                      <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>
+                        {Number(level2Room.participantCount || 0) <= 1
+                          ? "Moving to the next question. Keep this screen open."
+                          : "Waiting for everyone or the timer to finish. Leaderboard updates after the question closes."}
+                      </Text>
+                    </View>
+                  ) : (
+                    <ActionButton label={submittingLevel2Answer ? "Saving..." : "Save Answer"} icon="checkmark-circle-outline" onPress={submitLevel2Answer} />
+                  )}
+                  <Text style={[styles.scopeHeading, { color: colors.text }]}>Live Leaderboard</Text>
+                  {(level2Room.leaderboard || []).slice(0, 5).map((row) => (
+                    <AcademicCard key={`l2-live-${row.studentId}`} icon="flash-outline" title={`#${row.rank} ${row.studentName}`} meta={`Score ${row.score}`} note={`${row.answeredCount || 0}/${level2Room.totalQuestions} answered`} />
+                  ))}
+                </View>
+              ) : level2Room ? (
+                <>
+                  <AcademicCard icon="hourglass-outline" title="Waiting for Battle" meta={level2Room.label} note="This batch auto-starts at the Level 2 start time. Keep this screen open." />
+                  <ActionButton label="Refresh Battle" icon="refresh-outline" onPress={refreshLevel2Room} />
+                </>
               ) : (
                 <>
-                  <AcademicCard icon="medal-outline" title="Level 2 Ready" meta={`Batch ${(selectedCompetition.myRegistration.level2BatchIndex ?? 0) + 1}`} note="Join your assigned live batch round." />
-                  <ActionButton label={openingLevel2 ? "Opening..." : "Open Level 2 Batch"} icon="rocket-outline" onPress={openLevel2Batch} />
+                  <AcademicCard
+                    icon="medal-outline"
+                    title="Level 2 Battle Instructions"
+                    meta={`${getAssignedLevel2ParticipantCount(selectedCompetition) === 1 ? "Solo Level 2 Battle" : `Batch ${(selectedCompetition.myRegistration.level2BatchIndex ?? 0) + 1}`} · ${selectedCompetition.level2QuestionCount || 15} questions · ${selectedCompetition.level2TimeModeSec || 30}s each`}
+                    note="Answer one shared question at a time. Correct answers score more when submitted faster, and the first correct answer in the batch earns a battle bonus."
+                  />
+                  <View style={[styles.quizInstructionBox, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                    <Text style={[styles.quizInstructionTitle, { color: colors.text }]}>Before you enter</Text>
+                    <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>- Keep this screen open; the battle uses a shared batch timer.</Text>
+                    <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>- Save one option before the timer ends.</Text>
+                    <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>- Unanswered timeout questions count as wrong.</Text>
+                    <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>- Final rank uses score first, then average response time.</Text>
+                  </View>
+                  <ActionButton label={openingLevel2 ? "Opening..." : "Enter Level 2 Battle"} icon="rocket-outline" onPress={openLevel2Batch} />
                 </>
               )}
             </>
@@ -1682,9 +2104,151 @@ export default function HighSchoolProgramsScreen() {
           >
             <Text style={[styles.backButtonText, { color: colors.textMuted }]}>Close Manager</Text>
           </TouchableOpacity>
+          <View style={[styles.managerNotice, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+            <StatusBadge label={managerCompetition.status.replace(/_/g, " ")} tone={managerCompetition.status === "completed" ? "success" : managerCompetition.status.includes("closed") ? "warning" : "primary"} />
+            <Text style={[styles.helpText, { color: colors.textMuted }]}>
+              Event text and banner stay editable. Audience locks after registration starts. Level settings lock after students begin that level.
+            </Text>
+          </View>
 
           {managerTab === "registration" ? (
             <>
+              <Text style={[styles.scopeHeading, { color: colors.text }]}>Event Info</Text>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+                placeholder="Championship title"
+                placeholderTextColor={colors.textMuted}
+                value={title}
+                onChangeText={setTitle}
+              />
+              <View style={styles.filterRow}>
+                {SUBJECT_OPTIONS.map((item) => {
+                  const active = subject === item;
+                  return (
+                    <TouchableOpacity
+                      key={`manage-subject-${item}`}
+                      onPress={() => setSubject(item)}
+                      style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }]}
+                    >
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+                placeholder="Chapter / topic"
+                placeholderTextColor={colors.textMuted}
+                value={chapter}
+                onChangeText={setChapter}
+              />
+              <TextInput
+                style={[styles.input, styles.textArea, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}
+                placeholder="Description"
+                placeholderTextColor={colors.textMuted}
+                value={description}
+                onChangeText={setDescription}
+                multiline
+              />
+              <TouchableOpacity style={[styles.bannerPicker, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={pickBannerImage}>
+                <Text style={[styles.bannerPickerText, { color: colors.text }]}>{uploadingBanner ? "Uploading Banner..." : bannerImageUrl ? "Change Event Banner" : "Select Event Banner"}</Text>
+                <Text style={[styles.bannerPickerMeta, { color: colors.textMuted }]}>Event text and banner can be updated while running.</Text>
+              </TouchableOpacity>
+              {bannerImageUrl ? <Image source={{ uri: bannerImageUrl }} style={styles.bannerPreview} /> : null}
+
+              <Text style={[styles.scopeHeading, { color: colors.text }]}>Audience</Text>
+              {managerEditState.audienceLockReason ? <Text style={[styles.lockNote, { color: "#B45309" }]}>{managerEditState.audienceLockReason}</Text> : null}
+              <View style={styles.filterRow}>
+                {[
+                  { key: "institution_only", label: "Specific Institution" },
+                  { key: "open_highschool", label: "Global Schools" },
+                  { key: "multi_institution", label: "Inter-School (Selected)" }
+                ].map((item) => {
+                  const active = scopeType === item.key;
+                  return (
+                    <TouchableOpacity
+                      key={`manage-scope-${item.key}`}
+                      disabled={!managerEditState.canEditAudience}
+                      onPress={() => setScopeType(item.key as "institution_only" | "multi_institution" | "open_highschool")}
+                      style={[
+                        styles.filterChip,
+                        { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt },
+                        !managerEditState.canEditAudience && styles.disabledChip
+                      ]}
+                    >
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              {scopeType !== "open_highschool" ? (
+                <View style={styles.institutionBox}>
+                  <TextInput
+                    style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surfaceAlt }, !managerEditState.canEditAudience && styles.disabledInput]}
+                    placeholder={scopeType === "institution_only" ? "Search and select institution" : "Search school and add to Inter-School list"}
+                    placeholderTextColor={colors.textMuted}
+                    value={institutionQuery}
+                    editable={managerEditState.canEditAudience}
+                    onChangeText={searchInstitutions}
+                  />
+                  {institutionResults.length > 0 && managerEditState.canEditAudience ? (
+                    <View style={[styles.searchResults, { borderColor: colors.border, backgroundColor: colors.surface }]}>
+                      {institutionResults.map((item) => (
+                        <TouchableOpacity key={`manage-${item.name}-${item.district || ""}`} style={[styles.searchResultRow, { borderBottomColor: colors.border }]} onPress={() => selectInstitution(item.name)}>
+                          <Text style={[styles.searchResultName, { color: colors.text }]}>{item.name}</Text>
+                          <Text style={[styles.searchResultMeta, { color: colors.textMuted }]}>
+                            {[item.institutionType, item.district, item.state].filter(Boolean).join(" | ") || "School"}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : null}
+                  {scopeType === "institution_only" && selectedInstitutionName ? (
+                    <Text style={[styles.scopeNote, { color: colors.textMuted }]}>Selected: {selectedInstitutionName}</Text>
+                  ) : null}
+                  {scopeType === "multi_institution" ? (
+                    <View style={styles.filterRow}>
+                      {allowedInstitutions.map((item) => (
+                        <TouchableOpacity key={`manage-school-${item}`} disabled={!managerEditState.canEditAudience} style={[styles.filterChip, { borderColor: "#16A34A", backgroundColor: "#ECFDF3" }, !managerEditState.canEditAudience && styles.disabledChip]} onPress={() => removeAllowedInstitution(item)}>
+                          <Text style={[styles.filterText, { color: "#15803D" }]}>{item} x</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Classes</Text>
+              <View style={styles.filterRow}>
+                {CLASS_OPTIONS.map((item) => {
+                  const active = selectedClasses.includes(item);
+                  return (
+                    <TouchableOpacity
+                      key={`manage-class-${item}`}
+                      disabled={!managerEditState.canEditAudience}
+                      onPress={() => setSelectedClasses((prev) => (active ? prev.filter((x) => x !== item) : [...prev, item]))}
+                      style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }, !managerEditState.canEditAudience && styles.disabledChip]}
+                    >
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Sections</Text>
+              <View style={styles.filterRow}>
+                {SECTION_OPTIONS.map((item) => {
+                  const active = selectedSections.includes(item);
+                  return (
+                    <TouchableOpacity
+                      key={`manage-section-${item}`}
+                      disabled={!managerEditState.canEditAudience}
+                      onPress={() => setSelectedSections((prev) => (active ? prev.filter((x) => x !== item) : [...prev, item]))}
+                      style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }, !managerEditState.canEditAudience && styles.disabledChip]}
+                    >
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
               <Text style={[styles.scopeHeading, { color: colors.text }]}>Registration Window</Text>
               <View style={styles.row}>
                 <View style={styles.inlineSelect}>
@@ -1747,12 +2311,82 @@ export default function HighSchoolProgramsScreen() {
                   );
                 })}
               </View>
+              <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 1 Quiz Settings</Text>
+              {managerEditState.level1LockReason ? <Text style={[styles.lockNote, { color: "#B45309" }]}>{managerEditState.level1LockReason}</Text> : null}
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Question count</Text>
+              <View style={styles.filterRow}>
+                {QUESTION_COUNT_OPTIONS.map((item) => {
+                  const active = level1QuestionCount === item;
+                  return (
+                    <TouchableOpacity
+                      key={`manage-l1-count-${item}`}
+                      disabled={!managerEditState.canEditLevel1Settings}
+                      onPress={() => setLevel1QuestionCount(item)}
+                      style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }, !managerEditState.canEditLevel1Settings && styles.disabledChip]}
+                    >
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Seconds per question</Text>
+              <View style={styles.filterRow}>
+                {TIME_MODE_OPTIONS.map((item) => {
+                  const active = level1TimeModeSec === item;
+                  return (
+                    <TouchableOpacity
+                      key={`manage-l1-time-${item}`}
+                      disabled={!managerEditState.canEditLevel1Settings}
+                      onPress={() => setLevel1TimeModeSec(item)}
+                      style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }, !managerEditState.canEditLevel1Settings && styles.disabledChip]}
+                    >
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}s</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 2 Battle Settings</Text>
+              {managerEditState.level2LockReason ? <Text style={[styles.lockNote, { color: "#B45309" }]}>{managerEditState.level2LockReason}</Text> : null}
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Question count</Text>
+              <View style={styles.filterRow}>
+                {QUESTION_COUNT_OPTIONS.map((item) => {
+                  const active = level2QuestionCount === item;
+                  return (
+                    <TouchableOpacity key={`manage-l2-count-${item}`} disabled={!managerEditState.canEditLevel2Settings} onPress={() => setLevel2QuestionCount(item)} style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }, !managerEditState.canEditLevel2Settings && styles.disabledChip]}>
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Seconds per question</Text>
+              <View style={styles.filterRow}>
+                {TIME_MODE_OPTIONS.map((item) => {
+                  const active = level2TimeModeSec === item;
+                  return (
+                    <TouchableOpacity key={`manage-l2-time-${item}`} disabled={!managerEditState.canEditLevel2Settings} onPress={() => setLevel2TimeModeSec(item)} style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }, !managerEditState.canEditLevel2Settings && styles.disabledChip]}>
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}s</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Batch size</Text>
+              <View style={styles.filterRow}>
+                {BATCH_SIZE_OPTIONS.map((item) => {
+                  const active = level2BatchSize === item;
+                  return (
+                    <TouchableOpacity key={`manage-l2-batch-${item}`} disabled={!managerEditState.canEditLevel2Settings} onPress={() => setLevel2BatchSize(item)} style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }, !managerEditState.canEditLevel2Settings && styles.disabledChip]}>
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
               <ActionButton label={savingCompetitionMeta ? "Saving..." : "Save Event Schedule"} icon="save-outline" onPress={saveCompetitionSchedule} />
             </>
           ) : null}
 
           {managerTab === "level1" ? (
             <>
+              {managerEditState.level1LockReason ? <Text style={[styles.lockNote, { color: "#B45309" }]}>{managerEditState.level1LockReason}</Text> : null}
               <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>AI Draft Context</Text>
               <View style={styles.filterRow}>
                 {CLASS_OPTIONS.map((item) => {
@@ -1781,13 +2415,74 @@ export default function HighSchoolProgramsScreen() {
                 value={aiDraftTopic}
                 onChangeText={setAiDraftTopic}
               />
-              <ActionButton label={generatingQuestionDraft ? "Generating..." : "AI Draft Level 1 Questions"} icon="sparkles-outline" onPress={() => generateQuestionDraft("L1")} />
+              <ActionButton label={generatingQuestionDraft ? "Generating..." : "AI Draft Level 1 Questions"} icon="sparkles-outline" onPress={() => generateQuestionDraft("L1")} disabled={!managerEditState.canEditLevel1Settings} />
               <Text style={[styles.helpText, { color: colors.textMuted }]}>AI drafts questions from subject, topic, and class context. Review them before saving.</Text>
             </>
           ) : null}
 
           {managerTab === "level2" ? (
             <>
+              <View style={[styles.quizInstructionBox, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                <Text style={[styles.quizInstructionTitle, { color: colors.text }]}>Level 2 Battle Setup</Text>
+                <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>Save schedule/settings first, save questions second, then create batches after Level 1 is finalized.</Text>
+                <Text style={[styles.quizInstructionText, { color: colors.textMuted }]}>Current setup: {level2QuestionCount} questions · {level2TimeModeSec}s each · {level2BatchSize} students per batch.</Text>
+              </View>
+              {managerEditState.level2LockReason ? <Text style={[styles.lockNote, { color: "#B45309" }]}>{managerEditState.level2LockReason}</Text> : null}
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Question count</Text>
+              <View style={styles.filterRow}>
+                {QUESTION_COUNT_OPTIONS.map((item) => {
+                  const active = level2QuestionCount === item;
+                  return (
+                    <TouchableOpacity
+                      key={`l2-editor-count-${item}`}
+                      onPress={() => {
+                        if (managerEditState.canEditLevel2Settings) {
+                          setLevel2QuestionCount(item);
+                          const nextCompetition = { ...managerCompetition, level2QuestionCount: item, level2TimeModeSec } as CompetitionItem;
+                          setLevel2QuestionDrafts(buildLevel2Drafts(nextCompetition, item, level2TimeModeSec));
+                        }
+                      }}
+                      disabled={!managerEditState.canEditLevel2Settings}
+                      style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }, !managerEditState.canEditLevel2Settings && styles.disabledChip]}
+                    >
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Seconds per question</Text>
+              <View style={styles.filterRow}>
+                {TIME_MODE_OPTIONS.map((item) => {
+                  const active = level2TimeModeSec === item;
+                  return (
+                    <TouchableOpacity
+                      key={`l2-editor-time-${item}`}
+                      onPress={() => {
+                        if (managerEditState.canEditLevel2Settings) {
+                          setLevel2TimeModeSec(item);
+                          setLevel2QuestionDrafts((prev) => prev.map((row) => ({ ...row, durationSec: item })));
+                        }
+                      }}
+                      disabled={!managerEditState.canEditLevel2Settings}
+                      style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }, !managerEditState.canEditLevel2Settings && styles.disabledChip]}
+                    >
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}s</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>Batch size</Text>
+              <View style={styles.filterRow}>
+                {BATCH_SIZE_OPTIONS.map((item) => {
+                  const active = level2BatchSize === item;
+                  return (
+                    <TouchableOpacity key={`l2-editor-batch-${item}`} disabled={!managerEditState.canEditLevel2Settings} onPress={() => setLevel2BatchSize(item)} style={[styles.filterChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surfaceAlt }, !managerEditState.canEditLevel2Settings && styles.disabledChip]}>
+                      <Text style={[styles.filterText, { color: active ? "#15803D" : colors.textMuted }]}>{item}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <ActionButton label={savingCompetitionMeta ? "Saving..." : "Save Level 2 Settings"} icon="save-outline" onPress={saveCompetitionSchedule} variant="secondary" />
               <Text style={[styles.inlineLabel, { color: colors.textMuted }]}>AI Draft Context</Text>
               <View style={styles.filterRow}>
                 {CLASS_OPTIONS.map((item) => {
@@ -1816,8 +2511,8 @@ export default function HighSchoolProgramsScreen() {
                 value={aiDraftTopic}
                 onChangeText={setAiDraftTopic}
               />
-              <ActionButton label={generatingQuestionDraft ? "Generating..." : "AI Draft Level 2 Questions"} icon="sparkles-outline" onPress={() => generateQuestionDraft("L2")} />
-              <Text style={[styles.helpText, { color: colors.textMuted }]}>Create the live Level 2 question set here. Saving creates the Level 2 batches for qualified students.</Text>
+              <ActionButton label={generatingQuestionDraft ? "Generating..." : "AI Draft Level 2 Questions"} icon="sparkles-outline" onPress={() => generateQuestionDraft("L2")} disabled={!managerEditState.canEditLevel2Settings} />
+              <Text style={[styles.helpText, { color: colors.textMuted }]}>Create the live Level 2 question set here. Save questions first, then create batches for qualified students.</Text>
             </>
           ) : null}
 
@@ -1832,6 +2527,18 @@ export default function HighSchoolProgramsScreen() {
                   <AcademicCard icon="trophy-outline" title="Winners" meta={String(reports.qualificationFunnel.winners || 0)} />
                 </View>
               ) : null}
+              {(reports?.level2Batches || []).length ? (
+                <>
+                  <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 2 Batches</Text>
+                  {(reports?.level2Batches || []).map((batch) => (
+                    <AcademicCard key={`report-l2-batch-${batch.index}`} icon="flash-outline" title={batch.label} meta={`${batch.status} · ${batch.participants} students`} note={`Progress ${batch.questionIndex}/${batch.totalQuestions}${batch.winnerStudentName ? ` · Winner ${batch.winnerStudentName}` : ""}`} />
+                  ))}
+                </>
+              ) : null}
+              {(reports?.level2Leaderboard || []).length ? <Text style={[styles.scopeHeading, { color: colors.text }]}>Level 2 Leaderboard</Text> : null}
+              {(reports?.level2Leaderboard || []).slice(0, 10).map((row) => (
+                <AcademicCard key={`l2-report-${row.studentId}-${row.rank}`} icon="medal-outline" title={`#${row.rank} ${row.studentName}`} meta={`${row.institutionName || "School"}${row.className ? ` · ${row.className}` : ""}`} note={`Score ${row.score} · ${row.percentage}%`} />
+              ))}
               {(reports?.overallLeaderboard || []).slice(0, 10).map((row) => (
                 <AcademicCard key={`${row.studentId}-${row.rank}`} icon="podium-outline" title={`#${row.rank} ${row.studentName}`} meta={`${row.institutionName || "School"}${row.className ? ` · ${row.className}` : ""}`} note={`Score ${row.score} · ${row.percentage}%`} />
               ))}
@@ -1858,6 +2565,7 @@ export default function HighSchoolProgramsScreen() {
           <Text style={[styles.helpText, { color: colors.textMuted }]}>
             Time mode: {questionEditorCompetition.level1TimeModeSec || 30}s per question. Add all questions before Level 1 goes live.
           </Text>
+          {managerEditState.level1LockReason ? <Text style={[styles.lockNote, { color: "#B45309" }]}>{managerEditState.level1LockReason}</Text> : null}
           {questionDrafts.map((item, index) => (
             <View key={item.id || `draft-${index}`} style={[styles.questionCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
               <Text style={[styles.questionTitle, { color: colors.text }]}>Question {index + 1}</Text>
@@ -1866,6 +2574,7 @@ export default function HighSchoolProgramsScreen() {
                 placeholder="Enter the question"
                 placeholderTextColor={colors.textMuted}
                 value={item.text}
+                editable={managerEditState.canEditLevel1Settings}
                 onChangeText={(value) => updateQuestionText(index, value)}
                 multiline
               />
@@ -1874,6 +2583,7 @@ export default function HighSchoolProgramsScreen() {
                 return (
                   <View key={`${item.id || index}-option-${optionIndex}`} style={styles.optionRow}>
                     <TouchableOpacity
+                      disabled={!managerEditState.canEditLevel1Settings}
                       style={[styles.correctChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surface }]}
                       onPress={() => updateQuestionCorrectOption(index, optionIndex)}
                     >
@@ -1886,6 +2596,7 @@ export default function HighSchoolProgramsScreen() {
                       placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
                       placeholderTextColor={colors.textMuted}
                       value={option}
+                      editable={managerEditState.canEditLevel1Settings}
                       onChangeText={(value) => updateQuestionOption(index, optionIndex, value)}
                     />
                   </View>
@@ -1896,12 +2607,13 @@ export default function HighSchoolProgramsScreen() {
                 placeholder="Explanation for review (optional)"
                 placeholderTextColor={colors.textMuted}
                 value={item.explanation || ""}
+                editable={managerEditState.canEditLevel1Settings}
                 onChangeText={(value) => updateQuestionExplanation(index, value)}
                 multiline
               />
             </View>
           ))}
-          <ActionButton label={savingQuestions ? "Saving..." : "Save Level 1 Questions"} icon="save-outline" onPress={saveLevel1Questions} />
+          <ActionButton label={savingQuestions ? "Saving..." : "Save Level 1 Questions"} icon="save-outline" onPress={saveLevel1Questions} disabled={!managerEditState.canEditLevel1Settings} />
         </CommunitySection>
       ) : null}
 
@@ -1911,6 +2623,7 @@ export default function HighSchoolProgramsScreen() {
           subtitle="Qualified students will receive these questions in their live batch round."
           icon="flash-outline"
         >
+          {managerEditState.level2LockReason ? <Text style={[styles.lockNote, { color: "#B45309" }]}>{managerEditState.level2LockReason}</Text> : null}
           {level2QuestionDrafts.map((item, index) => (
             <View key={item.id || `level2-${index}`} style={[styles.questionCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
               <Text style={[styles.questionTitle, { color: colors.text }]}>L2 Question {index + 1}</Text>
@@ -1919,6 +2632,7 @@ export default function HighSchoolProgramsScreen() {
                 placeholder="Enter the Level 2 question"
                 placeholderTextColor={colors.textMuted}
                 value={item.text}
+                editable={managerEditState.canEditLevel2Settings}
                 onChangeText={(value) => setLevel2QuestionDrafts((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, text: value } : row))}
                 multiline
               />
@@ -1927,6 +2641,7 @@ export default function HighSchoolProgramsScreen() {
                 return (
                   <View key={`${item.id || index}-l2-option-${optionIndex}`} style={styles.optionRow}>
                     <TouchableOpacity
+                      disabled={!managerEditState.canEditLevel2Settings}
                       style={[styles.correctChip, { borderColor: active ? "#16A34A" : colors.border, backgroundColor: active ? "#ECFDF3" : colors.surface }]}
                       onPress={() => setLevel2QuestionDrafts((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, correctOption: row.options[optionIndex] || "" } : row))}
                     >
@@ -1937,14 +2652,25 @@ export default function HighSchoolProgramsScreen() {
                       placeholder={`Option ${String.fromCharCode(65 + optionIndex)}`}
                       placeholderTextColor={colors.textMuted}
                       value={option}
+                      editable={managerEditState.canEditLevel2Settings}
                       onChangeText={(value) => setLevel2QuestionDrafts((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, options: row.options.map((opt, optIndex) => optIndex === optionIndex ? value : opt) } : row))}
                     />
                   </View>
                 );
               })}
+              <TextInput
+                style={[styles.input, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+                placeholder="Explanation for review (optional)"
+                placeholderTextColor={colors.textMuted}
+                value={item.explanation || ""}
+                editable={managerEditState.canEditLevel2Settings}
+                onChangeText={(value) => setLevel2QuestionDrafts((prev) => prev.map((row, rowIndex) => rowIndex === index ? { ...row, explanation: value } : row))}
+                multiline
+              />
             </View>
           ))}
-          <ActionButton label={savingLevel2 ? "Creating Level 2..." : "Save Level 2 Questions and Create Batches"} icon="rocket-outline" onPress={saveLevel2QuestionsAndCreateBatches} />
+          <ActionButton label={savingLevel2 ? "Saving..." : "Save Level 2 Questions"} icon="save-outline" onPress={saveLevel2Questions} disabled={!managerEditState.canEditLevel2Settings} />
+          <ActionButton label={savingLevel2 ? "Creating..." : "Create/Refresh Level 2 Batches"} icon="rocket-outline" onPress={createLevel2Batches} variant="secondary" disabled={!managerEditState.canEditLevel2Settings} />
         </CommunitySection>
       ) : null}
 
@@ -2007,6 +2733,11 @@ const styles = StyleSheet.create({
   inlineLabel: { fontWeight: "800", fontSize: 12 },
   inlineSelect: { flex: 1, minWidth: 220, gap: 8 },
   scopeNote: { fontWeight: "700", lineHeight: 19 },
+  textArea: { minHeight: 90, textAlignVertical: "top" },
+  managerNotice: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 8 },
+  lockNote: { fontWeight: "800", lineHeight: 19 },
+  disabledChip: { opacity: 0.55 },
+  disabledInput: { opacity: 0.65 },
   timeField: { borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 11, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   timeFieldText: { fontWeight: "900", fontSize: 15 },
   timeFieldMeta: { fontWeight: "800", fontSize: 12 },
