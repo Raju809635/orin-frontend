@@ -642,10 +642,14 @@ export default function HighSchoolProgramsScreen() {
       const updated = res.data?.competition || managerCompetition;
       setManagerCompetition(updated);
       setQuestionEditorCompetition(updated);
+      setSelectedCompetition((prev) => (prev?._id === updated._id ? updated : prev));
+      setCompetitions((prev) => prev.map((item) => (item._id === updated._id ? updated : item)));
       Alert.alert("Saved", "Championship schedule and settings updated.");
       await load(true);
     } catch (e) {
-      setError(getAppErrorMessage(e, "Unable to update championship schedule."));
+      const message = getAppErrorMessage(e, "Unable to update championship schedule.");
+      setError(message);
+      Alert.alert("Schedule not saved", message);
     } finally {
       setSavingCompetitionMeta(false);
     }
