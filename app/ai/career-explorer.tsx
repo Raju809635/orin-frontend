@@ -239,7 +239,7 @@ export default function CareerExplorerScreen() {
         </View>
         <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={() => explore()} disabled={loading}>
           {loading ? <ActivityIndicator color={colors.accentText} /> : <Ionicons name="sparkles" size={18} color={colors.accentText} />}
-          <Text style={[styles.primaryText, { color: colors.accentText }]}>{loading ? "Exploring..." : "Start AI Career Quiz"}</Text>
+          <Text style={[styles.primaryText, { color: colors.accentText }]}>{loading ? "Exploring..." : "Explore Career Paths"}</Text>
         </TouchableOpacity>
       </View>
 

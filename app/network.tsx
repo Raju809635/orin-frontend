@@ -404,10 +404,6 @@ export default function NetworkScreen() {
   );
 
   useEffect(() => {
-    void loadData(false);
-  }, [activeSection, loadData]);
-
-  useEffect(() => {
     let cancelled = false;
     const missingIds = suggestions
       .filter((item) => !item.profilePhotoUrl && !suggestionPhotoById[item.id])

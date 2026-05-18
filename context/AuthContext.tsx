@@ -1,7 +1,9 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { api, setApiAuthToken } from "@/lib/api";
 import { recordAppMetric } from "@/lib/appMetrics";
 import { registerForPushNotifications, unregisterLastPushToken } from "@/lib/pushNotifications";
+import { LEARNER_ONBOARDING_COMPLETING_KEY, LEARNER_ONBOARDING_PENDING_KEY, LEARNER_STAGE_CACHE_KEY } from "@/lib/learnerExperience";
 import {
   AuthUser,
   clearAuthSession,
@@ -88,6 +90,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isBootstrapping, setIsBootstrapping] = useState(true);
   const refreshRequestRef = useRef<Promise<string> | null>(null);
 
+  const hydrateLoginUser = useCallback(async (baseUser: AuthUser, nextToken: string, nextRefreshToken: string) => {
+    if (baseUser.role === "mentor") {
+      try {
+        const { data } = await api.get("/api/profiles/mentor/me");
+        const nextUser = mergeMentorProfileIntoUser(baseUser, data?.profile, data?.user);
+        setUser(nextUser);
+        await saveAuthSession(nextToken, nextRefreshToken, nextUser);
+        return nextUser;
+      } catch {
+        return baseUser;
+      }
+    }
+
+    try {
+      const { data } = await api.get("/api/profiles/student/me");
+      const profile = data?.profile || {};
+      const learnerStage = profile?.learnerStage === "highschool" ? "highschool" : "after12";
+      const nextUser = {
+        ...baseUser,
+        learnerStage,
+        className: profile?.className || "",
+        institutionName: profile?.institutionName || profile?.collegeName || "",
+        institutionType: profile?.institutionType || ""
+      } as AuthUser;
+      setUser(nextUser);
+      await saveAuthSession(nextToken, nextRefreshToken, nextUser);
+      return nextUser;
+    } catch {
+      return baseUser;
+    }
+  }, []);
+
   useEffect(() => {
     let mounted = true;
 
@@ -169,12 +203,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setUser(nextUser);
               await saveAuthSession(refreshed.token, refreshed.refreshToken, nextUser);
             } catch {
-              await clearAuthSession();
-              setApiAuthToken(null);
-              setToken(null);
-              setRefreshToken(null);
-              setUser(null);
-              return;
+              setUser((activeSession.user || session.user) as AuthUser);
+              await saveAuthSession(activeSession.token, activeSession.refreshToken, (activeSession.user || session.user) as AuthUser);
             }
           }
         }
@@ -202,6 +232,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRefreshToken(null);
     setUser(null);
     setApiAuthToken(null);
+    await AsyncStorage.multiRemove([
+      LEARNER_STAGE_CACHE_KEY,
+      LEARNER_ONBOARDING_PENDING_KEY,
+      LEARNER_ONBOARDING_COMPLETING_KEY
+    ]);
     await clearAuthSession();
   }, []);
 
@@ -212,9 +247,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(data.user);
     setApiAuthToken(data.token);
     await saveAuthSession(data.token, data.refreshToken, data.user);
+    await hydrateLoginUser(data.user, data.token, data.refreshToken);
     recordAppMetric("login", { role: data.user.role, learnerStage: (data.user as any)?.learnerStage || "" });
     registerForPushNotifications().catch(() => null);
-  }, []);
+  }, [hydrateLoginUser]);
 
   const register = useCallback(async (payload: RegisterPayload) => {
     const { data } = await api.post<RegisterResponse>("/api/auth/register", payload);

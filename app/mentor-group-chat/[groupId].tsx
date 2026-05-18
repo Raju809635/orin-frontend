@@ -15,7 +15,7 @@ import {
   View
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import * as Clipboard from "expo-clipboard";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -123,16 +123,15 @@ export default function MentorGroupChatScreen() {
     }
   }, [resolvedGroupId]);
 
-  useEffect(() => {
-    loadThread();
-  }, [loadThread]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      loadThread(true);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [loadThread]);
+  useFocusEffect(
+    useCallback(() => {
+      void loadThread();
+      const interval = setInterval(() => {
+        void loadThread(true);
+      }, 10000);
+      return () => clearInterval(interval);
+    }, [loadThread])
+  );
 
   useEffect(() => {
     if (!scrollRef.current) return;
