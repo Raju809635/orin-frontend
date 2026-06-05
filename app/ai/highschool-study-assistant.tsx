@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -120,7 +120,7 @@ function formatCareerAnswer(explorer?: CareerExplorer) {
 export default function HighSchoolStudyAssistantScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
-  const { className, institutionName } = useLearner();
+  const { className } = useLearner();
   const scrollRef = useRef<ScrollView | null>(null);
 
   const [mode, setMode] = useState<AssistantMode>("academic");
@@ -146,14 +146,6 @@ export default function HighSchoolStudyAssistantScreen() {
   const [careerInterest, setCareerInterest] = useState("Science");
   const [careerStrengths, setCareerStrengths] = useState("problem solving, curiosity, school subjects");
   const [careerLoading, setCareerLoading] = useState(false);
-
-  const promptChips = useMemo(
-    () =>
-      mode === "general"
-        ? ["Explain this simply", "Give quick summary", "Translate to easy English"]
-        : ["Make exam answer", "Give step-by-step", "Create revision points"],
-    [mode]
-  );
 
   const loadHistory = useCallback(async (refresh = false) => {
     try {
@@ -348,24 +340,6 @@ export default function HighSchoolStudyAssistantScreen() {
       >
         {loadingHistory ? <ActivityIndicator color={colors.accent} /> : null}
         {error ? <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text> : null}
-        {!thread.length ? (
-          <View style={[styles.emptyCard, { borderColor: colors.border, backgroundColor: colors.surface }]}>
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>Ask anything</Text>
-            <Text style={[styles.emptyMeta, { color: colors.textMuted }]}>
-              {mode === "academic"
-                ? `Academic mode is ready${institutionName ? ` for ${institutionName}` : ""}.`
-                : "General mode is ready for any prompt."}
-            </Text>
-            <View style={styles.chipRow}>
-              {promptChips.map((chip) => (
-                <TouchableOpacity key={chip} style={[styles.chip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => void sendPrompt(chip)}>
-                  <Text style={[styles.chipText, { color: colors.text }]}>{chip}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        ) : null}
-
         {thread.map((item, idx) => (
           <View key={`${item.createdAt || idx}-${idx}`} style={styles.messageBlock}>
             <View style={[styles.userBubble, { backgroundColor: colors.accentSoft }]}>
@@ -590,9 +564,6 @@ const styles = StyleSheet.create({
   composerWrap: { borderTopWidth: 1, paddingHorizontal: 12, paddingTop: 10, flexDirection: "row", alignItems: "flex-end", gap: 8 },
   input: { flex: 1, borderWidth: 1, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, minHeight: 44, maxHeight: 120, fontWeight: "500" },
   sendBtn: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  emptyCard: { borderWidth: 1, borderRadius: 14, padding: 12, gap: 8 },
-  emptyTitle: { fontSize: 16, fontWeight: "900" },
-  emptyMeta: { fontSize: 13, lineHeight: 19 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
   chip: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   chipText: { fontSize: 12, fontWeight: "700" },
