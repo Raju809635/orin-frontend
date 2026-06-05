@@ -185,6 +185,9 @@ export default function HighSchoolStudyRoadmapScreen() {
   const router = useRouter();
   const { colors, isDark } = useAppTheme();
   const { className } = useLearner();
+  React.useEffect(() => {
+    router.replace("/ai/study-planner?mode=roadmap" as never);
+  }, [router]);
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [roadmapView, setRoadmapView] = useState<RoadmapView>("app");
   const [board, setBoard] = useState("SSC");

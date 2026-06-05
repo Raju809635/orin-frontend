@@ -204,7 +204,8 @@ export default function AiHubScreen() {
     }
   ];
 
-  const filteredModules = modules.filter((item) =>
+  const visibleModules = isHighSchool ? modules.filter((item) => item.id !== "mentor_matching" && item.id !== "roadmap") : modules;
+  const filteredModules = visibleModules.filter((item) =>
     `${item.label} ${item.description}`.toLowerCase().includes(searchQuery.trim().toLowerCase())
   );
 

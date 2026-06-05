@@ -21,6 +21,7 @@ import { useLearner } from "@/context/LearnerContext";
 import { notify } from "@/utils/notify";
 
 type AssistantMode = "general" | "academic";
+type AssistantTool = "chat" | "career";
 type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
 type AcademicChapter = { chapter_name?: string; title?: string; name?: string };
 type AcademicSubjectResponse = { subject?: { chapters?: AcademicChapter[] }; chapters?: AcademicChapter[]; message?: string };
@@ -33,6 +34,12 @@ type HistoryItem = {
   lastResponsePreview?: string;
 };
 type ThreadMessage = { id?: string; prompt: string; response: string; createdAt?: string };
+type CareerExplorer = {
+  summary?: string;
+  careers?: { title: string; field?: string; fitScore?: number; nextStep?: string; subjects?: string[]; skills?: string[] }[];
+  featuredCareer?: { title?: string; roadmap?: string[]; subjects?: string[]; skills?: string[]; nextStep?: string };
+  assistantPrompts?: string[];
+};
 
 const BOARD_OPTIONS = ["SSC", "CBSE", "ICSE"];
 const CLASS_OPTIONS = ["6", "7", "8", "9", "10", "11", "12"];
@@ -89,6 +96,27 @@ function renderLines(text: string, color: string) {
     ));
 }
 
+function formatCareerAnswer(explorer?: CareerExplorer) {
+  const careers = Array.isArray(explorer?.careers) ? explorer.careers.slice(0, 5) : [];
+  const featured = explorer?.featuredCareer;
+  const lines = [
+    "Career Explorer",
+    "",
+    explorer?.summary || "Here are career directions based on your class context, favourite subjects, and strengths.",
+    "",
+    ...careers.map((career, index) => {
+      const fit = typeof career.fitScore === "number" ? ` (${career.fitScore}% fit)` : "";
+      const next = career.nextStep ? ` Next: ${career.nextStep}` : "";
+      return `${index + 1}. ${career.title}${career.field ? ` - ${career.field}` : ""}${fit}.${next}`;
+    }),
+    featured?.title ? "" : "",
+    featured?.title ? `Suggested focus: ${featured.title}` : "",
+    featured?.roadmap?.length ? `Roadmap: ${featured.roadmap.slice(0, 5).join(" -> ")}` : "",
+    featured?.nextStep ? `Next step: ${featured.nextStep}` : ""
+  ];
+  return lines.map((item) => String(item || "").trim()).filter(Boolean).join("\n");
+}
+
 export default function HighSchoolStudyAssistantScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useAppTheme();
@@ -96,6 +124,7 @@ export default function HighSchoolStudyAssistantScreen() {
   const scrollRef = useRef<ScrollView | null>(null);
 
   const [mode, setMode] = useState<AssistantMode>("academic");
+  const [activeTool, setActiveTool] = useState<AssistantTool>("chat");
   const [message, setMessage] = useState("");
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [thread, setThread] = useState<ThreadMessage[]>([]);
@@ -114,6 +143,9 @@ export default function HighSchoolStudyAssistantScreen() {
   const [chapters, setChapters] = useState<string[]>([]);
   const [renameFor, setRenameFor] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
+  const [careerInterest, setCareerInterest] = useState("Science");
+  const [careerStrengths, setCareerStrengths] = useState("problem solving, curiosity, school subjects");
+  const [careerLoading, setCareerLoading] = useState(false);
 
   const promptChips = useMemo(
     () =>
@@ -222,6 +254,40 @@ export default function HighSchoolStudyAssistantScreen() {
     }
   }
 
+  async function runCareerExplorer() {
+    if (careerLoading) return;
+    setCareerLoading(true);
+    setActiveTool("career");
+    setDrawerVisible(false);
+    const prompt = `Explore careers for ${careerInterest} using Class ${classLevel}${subject ? `, ${subject}` : ""}`;
+    const pending: ThreadMessage = { prompt, response: "", createdAt: new Date().toISOString() };
+    setThread((prev) => [...prev, pending]);
+    try {
+      const { data } = await api.post<{ explorer?: CareerExplorer }>("/api/ai/highschool/career-explorer", {
+        interest: careerInterest,
+        strengths: careerStrengths,
+        academicSubjects: subject ? [subject] : [],
+        board,
+        classLevel
+      });
+      setThread((prev) => prev.map((item) => (item === pending ? { ...pending, response: formatCareerAnswer(data?.explorer) } : item)));
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 120);
+    } catch {
+      setThread((prev) =>
+        prev.map((item) =>
+          item === pending
+            ? {
+                ...pending,
+                response: "Career Explorer is unavailable right now. Try again with your interest, favourite subjects, and strengths."
+              }
+            : item
+        )
+      );
+    } finally {
+      setCareerLoading(false);
+    }
+  }
+
   async function openConversation(item: HistoryItem) {
     setConversationId(item.conversationId);
     setMode(item.assistantMode === "general" ? "general" : "academic");
@@ -231,6 +297,7 @@ export default function HighSchoolStudyAssistantScreen() {
 
   function startNewChat(nextMode?: AssistantMode) {
     if (nextMode) setMode(nextMode);
+    setActiveTool("chat");
     setConversationId(null);
     setThread([]);
     setMessage("");
@@ -349,6 +416,43 @@ export default function HighSchoolStudyAssistantScreen() {
                   </TouchableOpacity>
                 );
               })}
+            </View>
+
+            <View style={[styles.contextCard, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+              <Text style={[styles.contextTitle, { color: colors.text }]}>Assistant Tools</Text>
+              <TouchableOpacity
+                style={[styles.toolButton, { borderColor: activeTool === "career" ? colors.accent : colors.border, backgroundColor: activeTool === "career" ? colors.accentSoft : colors.surface }]}
+                onPress={() => setActiveTool(activeTool === "career" ? "chat" : "career")}
+              >
+                <Ionicons name="navigate" size={16} color={activeTool === "career" ? colors.accent : colors.textMuted} />
+                <Text style={[styles.toolButtonText, { color: activeTool === "career" ? colors.accent : colors.text }]}>Career Explorer</Text>
+              </TouchableOpacity>
+              {activeTool === "career" ? (
+                <View style={styles.toolPanel}>
+                  <Text style={[styles.historyTitle, { color: colors.textMuted, marginBottom: 0 }]}>Interest</Text>
+                  <View style={styles.chipRow}>
+                    {["Science", "Commerce", "Arts", "Tech", "Design", "Defense"].map((item) => {
+                      const active = careerInterest === item;
+                      return (
+                        <TouchableOpacity key={item} style={[styles.chip, { borderColor: active ? colors.accent : colors.border, backgroundColor: active ? colors.accentSoft : colors.surface }]} onPress={() => setCareerInterest(item)}>
+                          <Text style={[styles.chipText, { color: active ? colors.accent : colors.textMuted }]}>{item}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <TextInput
+                    value={careerStrengths}
+                    onChangeText={setCareerStrengths}
+                    placeholder="Strengths or interests"
+                    placeholderTextColor={colors.textMuted}
+                    style={[styles.contextInput, { borderColor: colors.border, color: colors.text }]}
+                  />
+                  <TouchableOpacity style={[styles.newChatBtn, { backgroundColor: colors.accent, marginBottom: 0 }]} onPress={() => void runCareerExplorer()} disabled={careerLoading}>
+                    {careerLoading ? <ActivityIndicator color={colors.accentText} /> : <Ionicons name="sparkles" size={16} color={colors.accentText} />}
+                    <Text style={[styles.newChatText, { color: colors.accentText }]}>Explore Careers</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </View>
 
             {mode === "academic" ? (
@@ -503,6 +607,9 @@ const styles = StyleSheet.create({
   modeText: { fontWeight: "800", fontSize: 12 },
   contextCard: { borderWidth: 1, borderRadius: 12, padding: 10, gap: 8, marginBottom: 10 },
   contextTitle: { fontWeight: "800", fontSize: 13 },
+  toolButton: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 9, flexDirection: "row", alignItems: "center", gap: 8 },
+  toolButtonText: { fontSize: 13, fontWeight: "800" },
+  toolPanel: { gap: 8 },
   contextInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, fontSize: 13, fontWeight: "600" },
   historyTitle: { fontSize: 12, fontWeight: "800", marginBottom: 8 },
   historyCard: { borderWidth: 1, borderRadius: 10, padding: 9, marginBottom: 8, flexDirection: "row", justifyContent: "space-between", gap: 8 },

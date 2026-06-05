@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Speech from "expo-speech";
-import { useFocusEffect } from "expo-router";
+import { useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 import { api } from "@/lib/api";
@@ -55,6 +55,25 @@ type StudyPlan = {
     updatedWeeks: PlanWeek[];
   };
   reminders: string[];
+};
+type RoadmapStep = {
+  id: string;
+  stepNumber?: number;
+  title: string;
+  status?: "locked" | "active" | "completed";
+  focus?: string;
+  outcome?: string;
+  xpReward?: number;
+  quizQuestions?: { id?: string; question: string; options: string[]; correct: string; explanation?: string }[];
+  tasks?: PlanTask[];
+};
+type StudyRoadmap = {
+  title: string;
+  goal: string;
+  subject: string;
+  summary?: string;
+  steps: RoadmapStep[];
+  progress?: { completedSteps?: number; totalSteps?: number; progressPercent?: number };
 };
 
 type AcademicSubject = { name?: string; subject?: string; key?: string; slug?: string };
@@ -131,8 +150,10 @@ function academicMediaUrl(value = "") {
 }
 
 export default function HighSchoolStudyPlannerScreen() {
+  const params = useLocalSearchParams<{ mode?: string }>();
   const { colors, isDark } = useAppTheme();
   const { className } = useLearner();
+  const [pageMode, setPageMode] = useState<"planner" | "roadmap">(params.mode === "roadmap" ? "roadmap" : "planner");
   const [board, setBoard] = useState("SSC");
   const [classLevel, setClassLevel] = useState(className || "10");
   const [subjects, setSubjects] = useState<string[]>(SUBJECTS);
@@ -146,6 +167,10 @@ export default function HighSchoolStudyPlannerScreen() {
   const [studyProfile, setStudyProfile] = useState<StudyProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [plan, setPlan] = useState<StudyPlan | null>(null);
+  const [roadmap, setRoadmap] = useState<StudyRoadmap | null>(null);
+  const [roadmapLoading, setRoadmapLoading] = useState(false);
+  const [roadmapStatus, setRoadmapStatus] = useState("");
+  const [selectedRoadmapStep, setSelectedRoadmapStep] = useState<RoadmapStep | null>(null);
   const [checked, setChecked] = useState<Record<string, boolean>>({});
   const [selectedWeek, setSelectedWeek] = useState<PlanWeek | null>(null);
   const [loading, setLoading] = useState(false);
@@ -212,6 +237,10 @@ export default function HighSchoolStudyPlannerScreen() {
   useEffect(() => {
     void loadStudyProfile();
   }, [loadStudyProfile]);
+
+  useEffect(() => {
+    if (params.mode === "roadmap") setPageMode("roadmap");
+  }, [params.mode]);
 
   async function generatePlan() {
     if (plannerMode === "manual" && !goal.trim()) {
@@ -288,6 +317,44 @@ export default function HighSchoolStudyPlannerScreen() {
     }
   }
 
+  async function generateRoadmap() {
+    const selectedChapter = skills.split(",").map((item) => item.trim()).filter(Boolean)[0] || chapters[0] || "";
+    setRoadmapLoading(true);
+    setRoadmapStatus("");
+    setError("");
+    try {
+      const { data } = await api.post<{
+        source?: "ai" | "fallback" | "lesson_dataset" | string;
+        roadmap?: StudyRoadmap;
+        meta?: { aiEngine?: { enabled?: boolean; reason?: string; hits?: number } };
+      }>("/api/ai/highschool/study-roadmap", {
+        classLevel,
+        board,
+        subject,
+        chapter: selectedChapter,
+        goal,
+        studyGoal: goal,
+        currentLevel,
+        timePerDay
+      });
+      const next = data?.roadmap || null;
+      setRoadmap(next);
+      setSelectedRoadmapStep(null);
+      setRoadmapStatus(
+        String(data?.source || "").includes("lesson")
+          ? "ORIN created a lesson-backed roadmap from academic content."
+          : data?.source === "ai"
+            ? "AI created your academic roadmap."
+            : "Using a safe roadmap until AI is available."
+      );
+    } catch (err) {
+      setRoadmap(null);
+      setRoadmapStatus(getAppErrorMessage(err, "Unable to build roadmap right now."));
+    } finally {
+      setRoadmapLoading(false);
+    }
+  }
+
   return (
     <ScrollView contentContainerStyle={[styles.container, { backgroundColor: colors.background }]} showsVerticalScrollIndicator={false}>
       <View style={[styles.heroCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -298,6 +365,21 @@ export default function HighSchoolStudyPlannerScreen() {
         </Text>
       </View>
 
+      <View style={[styles.modeSwitch, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+        {[
+          { label: "Planner", value: "planner" as const },
+          { label: "Roadmap", value: "roadmap" as const }
+        ].map((item) => {
+          const active = pageMode === item.value;
+          return (
+            <TouchableOpacity key={item.value} style={[styles.modeButton, { backgroundColor: active ? colors.accent : colors.surfaceAlt }]} onPress={() => { setPageMode(item.value); setError(""); }}>
+              <Text style={[styles.modeText, { color: active ? colors.accentText : colors.textMuted }]}>{item.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {pageMode === "planner" ? (
       <View style={[styles.modeSwitch, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         {[
           { label: "Manual Plan", value: "manual" as const },
@@ -311,6 +393,7 @@ export default function HighSchoolStudyPlannerScreen() {
           );
         })}
       </View>
+      ) : null}
 
       {statusMessage ? (
         <View style={[styles.aiNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
@@ -363,9 +446,9 @@ export default function HighSchoolStudyPlannerScreen() {
           })}
         </View>
 
-        {plannerMode === "manual" && chapters.length ? (
+        {(plannerMode === "manual" || pageMode === "roadmap") && chapters.length ? (
           <>
-            <Text style={[styles.label, { color: colors.text }]}>Quick Chapter Focus</Text>
+            <Text style={[styles.label, { color: colors.text }]}>{pageMode === "roadmap" ? "Roadmap Chapter" : "Quick Chapter Focus"}</Text>
             <View style={styles.subjectRow}>
               {chapters.slice(0, 6).map((item) => (
                 <TouchableOpacity key={item} style={[styles.subjectChip, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={() => setSkills(item)}>
@@ -376,7 +459,20 @@ export default function HighSchoolStudyPlannerScreen() {
           </>
         ) : null}
 
-        {plannerMode === "manual" ? (
+        {pageMode === "roadmap" ? (
+          <>
+            <Text style={[styles.label, { color: colors.text }]}>Roadmap Goal</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.surfaceAlt, borderColor: colors.border, color: colors.text }]}
+              placeholder="Example: master Real Numbers and solve exam questions"
+              placeholderTextColor={colors.textMuted}
+              value={goal}
+              onChangeText={setGoal}
+            />
+            <Text style={[styles.label, { color: colors.text }]}>Current Level</Text>
+            <SegmentRow values={LEVELS} selected={currentLevel} onSelect={setCurrentLevel} colors={colors} />
+          </>
+        ) : plannerMode === "manual" ? (
           <>
             <Text style={[styles.label, { color: colors.text }]}>Study Goal</Text>
             <TextInput
@@ -409,13 +505,48 @@ export default function HighSchoolStudyPlannerScreen() {
 
         {error ? <Text style={[styles.error, { color: colors.danger }]}>{error}</Text> : null}
 
-        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={generatePlan} disabled={loading}>
-          {loading ? <ActivityIndicator color={colors.accentText} /> : <Ionicons name="calendar" size={18} color={colors.accentText} />}
-          <Text style={[styles.primaryText, { color: colors.accentText }]}>{loading ? "Creating Plan..." : plannerMode === "adaptive" ? "Generate Smart Plan" : "Create Study Plan"}</Text>
+        <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={pageMode === "roadmap" ? generateRoadmap : generatePlan} disabled={loading || roadmapLoading}>
+          {loading || roadmapLoading ? <ActivityIndicator color={colors.accentText} /> : <Ionicons name={pageMode === "roadmap" ? "map" : "calendar"} size={18} color={colors.accentText} />}
+          <Text style={[styles.primaryText, { color: colors.accentText }]}>
+            {loading || roadmapLoading ? "Creating..." : pageMode === "roadmap" ? "Create Roadmap" : plannerMode === "adaptive" ? "Generate Smart Plan" : "Create Study Plan"}
+          </Text>
         </TouchableOpacity>
       </View>
 
-      {plan ? (
+      {pageMode === "roadmap" ? (
+        <>
+          {roadmapStatus ? (
+            <View style={[styles.aiNotice, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+              <Ionicons name="map" size={18} color={colors.accent} />
+              <Text style={[styles.aiNoticeText, { color: colors.textMuted }]}>{roadmapStatus}</Text>
+            </View>
+          ) : null}
+          {roadmap ? (
+            <>
+              <View style={[styles.planCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <View style={styles.planTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.eyebrow, { color: colors.accent }]}>Roadmap</Text>
+                    <Text style={[styles.planTitle, { color: colors.text }]}>{roadmap.title}</Text>
+                    <Text style={[styles.planMeta, { color: colors.textMuted }]}>{roadmap.summary || roadmap.goal}</Text>
+                  </View>
+                  <View style={[styles.progressRing, { borderColor: colors.accentSoft }]}>
+                    <Text style={[styles.progressRingText, { color: colors.accent }]}>{roadmap.progress?.progressPercent || 0}%</Text>
+                  </View>
+                </View>
+                <ProgressTrack value={roadmap.progress?.progressPercent || 0} color={colors.accent} />
+              </View>
+              <View style={[styles.card, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                <SectionHeader icon="map" title="Roadmap Missions" color="#0EA5E9" />
+                {roadmap.steps.map((step, index) => (
+                  <RoadmapStepRow key={step.id || `${step.title}-${index}`} step={step} colors={colors} onPress={() => setSelectedRoadmapStep(step)} />
+                ))}
+              </View>
+              <RoadmapStepModal step={selectedRoadmapStep} colors={colors} onClose={() => setSelectedRoadmapStep(null)} />
+            </>
+          ) : null}
+        </>
+      ) : plan ? (
         <>
           <View style={[styles.planCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
             <View style={styles.planTop}>
@@ -482,6 +613,66 @@ function SegmentRow({ values, selected, onSelect, colors }: { values: string[]; 
         );
       })}
     </View>
+  );
+}
+
+function RoadmapStepRow({ step, colors, onPress }: { step: RoadmapStep; colors: any; onPress: () => void }) {
+  const status = step.status || "locked";
+  const statusColor = status === "completed" ? "#12B76A" : status === "active" ? "#0EA5E9" : "#98A2B3";
+  return (
+    <TouchableOpacity style={[styles.weekRow, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]} onPress={onPress} activeOpacity={0.82}>
+      <View style={styles.weekTop}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.weekLabel, { color: colors.textMuted }]}>Mission {step.stepNumber || ""}</Text>
+          <Text style={[styles.weekTitle, { color: colors.text }]}>{step.title}</Text>
+          <Text style={[styles.weekFocus, { color: colors.textMuted }]}>{step.focus || step.outcome || "Open to see tasks, quiz, and next action."}</Text>
+        </View>
+        <View style={styles.weekActions}>
+          <View style={[styles.statusPill, { backgroundColor: `${statusColor}22` }]}>
+            <Text style={[styles.statusText, { color: statusColor }]}>{status}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function RoadmapStepModal({ step, colors, onClose }: { step: RoadmapStep | null; colors: any; onClose: () => void }) {
+  if (!step) return null;
+  const tasks = Array.isArray(step.tasks) ? step.tasks : [];
+  const quiz = Array.isArray(step.quizQuestions) ? step.quizQuestions : [];
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View style={styles.modalHeader}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{step.title}</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Ionicons name="close" size={22} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {step.focus ? <Text style={[styles.modalText, { color: colors.textMuted }]}>{step.focus}</Text> : null}
+            {step.outcome ? <Text style={[styles.modalText, { color: colors.textMuted }]}>{step.outcome}</Text> : null}
+            {tasks.length ? <Text style={[styles.modalSubTitle, { color: colors.text }]}>Tasks</Text> : null}
+            {tasks.map((task) => (
+              <View key={task.id || task.title} style={[styles.modalListRow, { borderColor: colors.border }]}>
+                <Ionicons name="checkmark-circle-outline" size={17} color={colors.accent} />
+                <Text style={[styles.modalText, { color: colors.text }]}>{task.title}</Text>
+              </View>
+            ))}
+            {quiz.length ? <Text style={[styles.modalSubTitle, { color: colors.text }]}>Quiz Preview</Text> : null}
+            {quiz.slice(0, 5).map((item, index) => (
+              <View key={item.id || `${item.question}-${index}`} style={[styles.quizPreview, { borderColor: colors.border, backgroundColor: colors.surfaceAlt }]}>
+                <Text style={[styles.modalText, { color: colors.text }]}>{index + 1}. {item.question}</Text>
+                <Text style={[styles.planMeta, { color: colors.textMuted }]}>Answer: {item.correct}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -861,9 +1052,14 @@ const styles = StyleSheet.create({
   adaptiveTitle: { fontSize: 17, fontWeight: "900" },
   adaptiveText: { fontWeight: "700", lineHeight: 19 },
   modalOverlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(15,23,42,0.48)" },
+  modalCard: { maxHeight: "82%", borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, padding: 16, gap: 12 },
   modalSheet: { maxHeight: "88%", borderTopLeftRadius: 24, borderTopRightRadius: 24, borderWidth: 1, padding: 16, gap: 12 },
   modalHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
   modalTitle: { fontSize: 20, lineHeight: 26, fontWeight: "900" },
+  modalSubTitle: { fontSize: 14, fontWeight: "900", marginTop: 14, marginBottom: 6 },
+  modalText: { fontSize: 13, lineHeight: 20, fontWeight: "700" },
+  modalListRow: { borderBottomWidth: 1, paddingVertical: 9, flexDirection: "row", gap: 8, alignItems: "flex-start" },
+  quizPreview: { borderWidth: 1, borderRadius: 14, padding: 11, gap: 5, marginBottom: 8 },
   modalActions: { alignItems: "flex-end", gap: 8 },
   closeButton: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   readerButton: { minHeight: 38, borderRadius: 19, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
